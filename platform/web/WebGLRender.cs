@@ -2,6 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Numerics;
+using System.Runtime.InteropServices;
 using Microsoft.JSInterop;
 
 namespace noz;
@@ -53,5 +55,145 @@ public class WebGLRender : IRender
     public void SetViewport(int x, int y, int width, int height)
     {
         _module?.InvokeVoidAsync("setViewport", x, y, width, height);
+    }
+
+    // === Buffer Management ===
+
+    public BufferHandle CreateVertexBuffer(int sizeInBytes, BufferUsage usage)
+    {
+        if (_module == null) return BufferHandle.Invalid;
+        var id = _module.InvokeAsync<uint>("createVertexBuffer", sizeInBytes, (int)usage).AsTask().Result;
+        return new BufferHandle(id);
+    }
+
+    public BufferHandle CreateIndexBuffer(int sizeInBytes, BufferUsage usage)
+    {
+        if (_module == null) return BufferHandle.Invalid;
+        var id = _module.InvokeAsync<uint>("createIndexBuffer", sizeInBytes, (int)usage).AsTask().Result;
+        return new BufferHandle(id);
+    }
+
+    public void DestroyBuffer(BufferHandle handle)
+    {
+        _module?.InvokeVoidAsync("destroyBuffer", handle.Id);
+    }
+
+    public void UpdateVertexBufferRange(BufferHandle buffer, int offsetBytes, ReadOnlySpan<MeshVertex> data)
+    {
+        if (_module == null) return;
+
+        // Convert MeshVertex span to byte array for JS interop
+        var bytes = MemoryMarshal.AsBytes(data).ToArray();
+        _module.InvokeVoidAsync("updateVertexBufferRange", buffer.Id, offsetBytes, bytes);
+    }
+
+    public void UpdateIndexBufferRange(BufferHandle buffer, int offsetBytes, ReadOnlySpan<ushort> data)
+    {
+        if (_module == null) return;
+
+        // Convert ushort span to byte array for JS interop
+        var bytes = MemoryMarshal.AsBytes(data).ToArray();
+        _module.InvokeVoidAsync("updateIndexBufferRange", buffer.Id, offsetBytes, bytes);
+    }
+
+    public void BindVertexBuffer(BufferHandle buffer)
+    {
+        _module?.InvokeVoidAsync("bindVertexBuffer", buffer.Id);
+    }
+
+    public void BindIndexBuffer(BufferHandle buffer)
+    {
+        _module?.InvokeVoidAsync("bindIndexBuffer", buffer.Id);
+    }
+
+    // === Texture Management ===
+
+    public TextureHandle CreateTexture(int width, int height, ReadOnlySpan<byte> data)
+    {
+        if (_module == null) return TextureHandle.Invalid;
+        var id = _module.InvokeAsync<ushort>("createTexture", width, height, data.ToArray()).AsTask().Result;
+        return new TextureHandle(id);
+    }
+
+    public void DestroyTexture(TextureHandle handle)
+    {
+        _module?.InvokeVoidAsync("destroyTexture", handle.Id);
+    }
+
+    public void BindTexture(int slot, TextureHandle handle)
+    {
+        _module?.InvokeVoidAsync("bindTexture", slot, handle.Id);
+    }
+
+    // === Shader Management ===
+
+    public ShaderHandle CreateShader(string vertexSource, string fragmentSource)
+    {
+        if (_module == null) return ShaderHandle.Invalid;
+        var id = _module.InvokeAsync<byte>("createShader", vertexSource, fragmentSource).AsTask().Result;
+        return new ShaderHandle(id);
+    }
+
+    public void DestroyShader(ShaderHandle handle)
+    {
+        _module?.InvokeVoidAsync("destroyShader", handle.Id);
+    }
+
+    public void BindShader(ShaderHandle handle)
+    {
+        _module?.InvokeVoidAsync("bindShader", handle.Id);
+    }
+
+    public void SetUniformMatrix4x4(string name, in Matrix4x4 value)
+    {
+        if (_module == null) return;
+
+        // Convert to column-major array for WebGL
+        float[] data =
+        [
+            value.M11, value.M21, value.M31, value.M41,
+            value.M12, value.M22, value.M32, value.M42,
+            value.M13, value.M23, value.M33, value.M43,
+            value.M14, value.M24, value.M34, value.M44
+        ];
+        _module.InvokeVoidAsync("setUniformMatrix4x4", name, data);
+    }
+
+    public void SetUniformInt(string name, int value)
+    {
+        _module?.InvokeVoidAsync("setUniformInt", name, value);
+    }
+
+    // === State Management ===
+
+    public void SetBlendMode(BlendMode mode)
+    {
+        _module?.InvokeVoidAsync("setBlendMode", (int)mode);
+    }
+
+    // === Drawing ===
+
+    public void DrawIndexedRange(int firstIndex, int indexCount, int baseVertex = 0)
+    {
+        _module?.InvokeVoidAsync("drawIndexedRange", firstIndex, indexCount, baseVertex);
+    }
+
+    // === Synchronization ===
+
+    public FenceHandle CreateFence()
+    {
+        if (_module == null) return FenceHandle.Invalid;
+        var id = _module.InvokeAsync<ulong>("createFence").AsTask().Result;
+        return new FenceHandle(id);
+    }
+
+    public void WaitFence(FenceHandle fence)
+    {
+        _module?.InvokeVoidAsync("waitFence", fence.Id);
+    }
+
+    public void DeleteFence(FenceHandle fence)
+    {
+        _module?.InvokeVoidAsync("deleteFence", fence.Id);
     }
 }
