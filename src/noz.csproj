@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <PackageReference Include="ppy.SDL3-CS" Version="2025.1205.0" />
+  </ItemGroup>
+
+</Project>

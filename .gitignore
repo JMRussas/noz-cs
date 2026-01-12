@@ -1,0 +1,16 @@
+out/
+build/
+bin/
+obj/
+.vs/
+vs/
+_deps/
+
+# Large binary library files - track separately
+*.lib
+*.dll
+
+# Generated files
+src/game_assets_build.cpp
+
+tmpclaude-*
