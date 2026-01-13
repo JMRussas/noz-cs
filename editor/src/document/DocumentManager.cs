@@ -120,8 +120,7 @@ public static class DocumentManager
 
     public static void LoadMetadata(Document doc)
     {
-        string metaPath = doc.Path + ".meta";
-        var props = PropertySet.LoadFile(metaPath);
+        var props = PropertySet.LoadFile(doc.Path + ".meta");
         if (props == null)
             return;
 
@@ -131,7 +130,7 @@ public static class DocumentManager
 
     public static void SaveMetadata(Document doc)
     {
-        string metaPath = doc.Path + ".meta";
+        var metaPath = doc.Path + ".meta";
         var props = PropertySet.LoadFile(metaPath) ?? new PropertySet();
 
         props.SetVec2("editor", "position", doc.Position);
@@ -178,15 +177,15 @@ public static class DocumentManager
 
     public static string GetTargetPath(Document doc)
     {
-        string typeName = doc.Def.Type.ToString().ToLowerInvariant();
-        string filename = Path.GetFileNameWithoutExtension(doc.Path);
-        string safeName = MakeCanonicalName(filename);
+        var typeName = doc.Def.Type.ToString().ToLowerInvariant();
+        var filename = Path.GetFileNameWithoutExtension(doc.Path);
+        var safeName = MakeCanonicalName(filename);
         return Path.Combine(_outputPath, typeName, safeName);
     }
 
     public static string MakeCanonicalName(string path)
     {
-        string name = Path.GetFileNameWithoutExtension(path);
+        var name = Path.GetFileNameWithoutExtension(path);
         return name.ToLowerInvariant()
             .Replace('/', '_')
             .Replace('.', '_')

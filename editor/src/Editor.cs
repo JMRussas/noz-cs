@@ -60,12 +60,23 @@ public static class Editor
         Workspace.Update();
         Workspace.Draw();
 
+        DrawDocuments();
+
         var refSize = Workspace.GetRefSize();
         UI.Begin(refSize.X, refSize.Y);
         UpdateUI();
         UI.End();
 
         Workspace.DrawOverlay();
+    }
+
+    private static void DrawDocuments()
+    {
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (doc.Loaded && doc.PostLoaded)
+                doc.Draw();
+        }
     }
 
     private static void UpdateUI()

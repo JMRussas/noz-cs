@@ -206,6 +206,23 @@ public class SpriteDocument : Document
         }
     }
 
+    public override void Draw()
+    {
+        // TODO: Draw from atlas when available
+        // For now, draw a simple placeholder quad at the sprite's bounds
+        var size = Bounds.Size;
+        if (size.X <= 0 || size.Y <= 0)
+            return;
+
+        Render.DrawQuad(
+            Position.X + Bounds.X,
+            Position.Y + Bounds.Y,
+            size.X, size.Y,
+            new Color32(200, 200, 200, 255),
+            layer: 64
+        );
+    }
+
     public override void Import(string outputPath, PropertySet config, PropertySet meta)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath) ?? "");
