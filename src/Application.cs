@@ -10,6 +10,8 @@ public static class Application
 {
     private static bool _running;
 
+    private static IApplication _vtable = null!;
+
     public static ApplicationConfig Config { get; private set; } = null!;
     public static IPlatform Platform { get; private set; } = null!;
     public static IRender RenderBackend { get; private set; } = null!;
@@ -25,6 +27,9 @@ public static class Application
 
         RenderBackend = config.RenderBackend ?? throw new ArgumentNullException(nameof(config.RenderBackend),
             "RenderBackend must be provided. Use OpenGLRender for desktop or WebGLRender for web.");
+
+        _vtable = config.Vtable ?? throw new ArgumentNullException(nameof(config.Vtable),
+            "App must be provided. Implement IApplication in your game.");
 
         // Initialize platform
         Platform.Init(new PlatformConfig
@@ -62,7 +67,7 @@ public static class Application
             Input.Update();
 
             Render.BeginFrame();
-            Config.Vtable.Update?.Invoke();
+            _vtable.Update();
             Render.EndFrame();
 
             Platform.SwapBuffers();

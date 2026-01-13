@@ -23,15 +23,11 @@ Application.Init(new ApplicationConfig
 
     Platform = new SDLPlatform(),
     RenderBackend = new OpenGLRender(),
+    Vtable = new EditorVtable(),
 
     Render = new RenderConfig
     {
         MaxCommands = 2048
-    },
-
-    Vtable = new ApplicationVtable
-    {
-        Update = Editor.Update
     }
 });
 

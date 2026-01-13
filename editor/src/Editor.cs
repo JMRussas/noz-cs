@@ -6,13 +6,21 @@ using noz.editor;
 
 namespace noz;
 
-internal static class Editor
+internal class EditorVtable : IApplication
+{
+    public void Update() => Editor.Update();
+    public void LoadAsset(Asset asset) => Editor.LoadAsset(asset);
+    public void UnloadAsset(Asset asset) => Editor.UnloadAsset(asset);
+    public void ReloadAsset(Asset asset) => Editor.ReloadAsset(asset);
+}
+
+public static class Editor
 {
     private static InputSet? _input;
 
     public static EditorConfig? Config { get; private set; }
 
-    internal static void Init(string? projectPath = null, bool clean = false)
+    public static void Init(string? projectPath, bool clean)
     {
         _input = new InputSet();
         Input.PushInputSet(_input);
@@ -33,7 +41,7 @@ internal static class Editor
         InitWorkspace(Config.SourcePaths, Config.OutputPath, clean);
     }
 
-    internal static void InitWorkspace(string[] sourcePaths, string outputPath, bool clean = false)
+    private static void InitWorkspace(string[] sourcePaths, string outputPath, bool clean = false)
     {
         DocumentManager.Init(sourcePaths, outputPath);
         Importer.Init(clean);
@@ -42,7 +50,7 @@ internal static class Editor
             AssetManifest.Generate(Config);
     }
 
-    internal static void Shutdown()
+    public static void Shutdown()
     {
         Importer.Shutdown();
         DocumentManager.Shutdown();
@@ -50,7 +58,19 @@ internal static class Editor
         Config = null;
     }
 
-    internal static void Update()
+    public static void Update()
+    {
+    }
+
+    public static void LoadAsset(Asset asset)
+    {
+    }
+
+    public static void UnloadAsset(Asset asset)
+    {
+    }
+
+    public static void ReloadAsset(Asset asset)
     {
     }
 } 

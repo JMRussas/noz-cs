@@ -4,9 +4,12 @@
 
 namespace noz;
 
-public struct ApplicationVtable
+public interface IApplication
 {
-    public Action? Update;
+    void Update();
+    void LoadAsset(Asset asset) { }
+    void UnloadAsset(Asset asset) { }
+    void ReloadAsset(Asset asset) { }
 }
 
 public class ApplicationConfig
@@ -17,7 +20,7 @@ public class ApplicationConfig
     public bool VSync { get; init; } = true;
     public bool Resizable { get; init; } = true;
     public RenderConfig? Render { get; init; }
-    public ApplicationVtable Vtable { get; init; }
+    public IApplication? Vtable { get; init; }
     public IPlatform? Platform { get; init; }
     public IRender? RenderBackend { get; init; }
 }
