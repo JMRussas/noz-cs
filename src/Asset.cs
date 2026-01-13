@@ -36,13 +36,10 @@ public class Asset : IDisposable {
 
         using (stream)
         {
-            if (!ValidateAssetHeader(stream, type))
-            {
-                Log.Error($"Invalid asset header: {type}/{name}");
-                return null;
-            }
+            if (ValidateAssetHeader(stream, type)) return def.Load(stream, name);
+            Log.Error($"Invalid asset header: {type}/{name}");
+            return null;
 
-            return def.Load(stream, name);
         }
     }
 
@@ -69,7 +66,6 @@ public class Asset : IDisposable {
         if (type != expectedType)
             return false;
 
-        // Read version and flags (skip for validation)
         reader.ReadByte();   // version
         reader.ReadUInt16(); // flags
 

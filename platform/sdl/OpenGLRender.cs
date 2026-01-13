@@ -8,7 +8,7 @@ using System.Text;
 using Silk.NET.OpenGL;
 using static SDL.SDL3;
 
-namespace noz;
+namespace noz.Platform;
 
 public unsafe class OpenGLRender : IRender
 {

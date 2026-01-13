@@ -16,18 +16,17 @@ internal class EditorVtable : IApplicationVtable
 
 public static class Editor
 {
-    private static InputSet? _input;
-
     public static EditorConfig? Config { get; private set; }
 
     public static void Init(string? projectPath, bool clean)
     {
-        _input = new InputSet();
-        Input.PushInputSet(_input);
+        EditorStyle.Init();
+        Workspace.Init();
 
         // Register document types
         TextureDocument.RegisterDef();
         ShaderDocument.RegisterDef();
+        SoundDocument.RegisterDef();
 
         Config = string.IsNullOrEmpty(projectPath)
             ? EditorConfig.FindAndLoad()
@@ -39,43 +38,26 @@ public static class Editor
             return;
         }
 
-        InitWorkspace(Config.SourcePaths, Config.OutputPath, clean);
-    }
-
-    private static void InitWorkspace(string[] sourcePaths, string outputPath, bool clean = false)
-    {
-        DocumentManager.Init(sourcePaths, outputPath);
+        DocumentManager.Init(Config.SourcePaths, Config.OutputPath);
         Importer.Init(clean);
-
-        if (Config != null)
-        {
-            PaletteManager.Init(Config);
-            AssetManifest.Generate(Config);
-        }
+        PaletteManager.Init(Config);
+        AssetManifest.Generate(Config);
     }
 
     public static void Shutdown()
     {
+        Workspace.Shutdown();
+        EditorStyle.Shutdown();
         PaletteManager.Shutdown();
         Importer.Shutdown();
         DocumentManager.Shutdown();
-        _input = null;
         Config = null;
     }
 
     public static void Update()
     {
-    }
-
-    public static void LoadAsset(Asset asset)
-    {
-    }
-
-    public static void UnloadAsset(Asset asset)
-    {
-    }
-
-    public static void ReloadAsset(Asset asset)
-    {
+        Workspace.Update();
+        Workspace.Draw();
+        Workspace.DrawOverlay();
     }
 } 

@@ -152,10 +152,10 @@ public class Camera
             viewportSize = new Vector2(_screenSize.X, _screenSize.Y);
         }
 
-        // Convert to NDC (-1 to 1)
+        // Convert to NDC (-1 to 1), flip Y for Y-down coordinate system
         Vector2 ndc = new(
             localPos.X / viewportSize.X * 2f - 1f,
-            localPos.Y / viewportSize.Y * 2f - 1f
+            -(localPos.Y / viewportSize.Y * 2f - 1f)
         );
 
         // Transform by inverse view matrix
@@ -180,10 +180,10 @@ public class Camera
             viewportSize = new Vector2(_screenSize.X, _screenSize.Y);
         }
 
-        // Convert from NDC to screen
+        // Convert from NDC to screen, flip Y for Y-down coordinate system
         return new Vector2(
             (ndc.X + 1f) * 0.5f * viewportSize.X + viewportOffset.X,
-            (ndc.Y + 1f) * 0.5f * viewportSize.Y + viewportOffset.Y
+            (-ndc.Y + 1f) * 0.5f * viewportSize.Y + viewportOffset.Y
         );
     }
 
@@ -220,9 +220,11 @@ public class Camera
         var c = MathF.Cos(Rotation);
         var s = MathF.Sin(Rotation);
 
+        // Matrix3x2 constructor: (m11, m12, m21, m22, m31, m32)
+        // Row 0: (c*zoomX, -s*zoomY)  Row 1: (s*zoomX, c*zoomY)  Row 2: (transX, transY)
         _view = new Matrix3x2(
-            c * zoomX, s * zoomX,
-            -s * zoomY, c * zoomY,
+            c * zoomX, -s * zoomY,
+            s * zoomX, c * zoomY,
             -(c * center.X + s * center.Y) * zoomX,
             -(-s * center.X + c * center.Y) * zoomY
         );

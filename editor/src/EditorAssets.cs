@@ -8,7 +8,17 @@ public static class EditorAssets
 {
     public static class Names
     {
+        public const string Editor = "editor";
+        public const string EditorMesh = "editor_mesh";
+        public const string EditorTexture = "editor_texture";
         public const string EditorPalette = "editor_palette";
+    }
+
+    public static class Shaders
+    {
+        public static Shader? Editor;
+        public static Shader? EditorMesh;
+        public static Shader? EditorTexture;
     }
 
     public static class Textures
@@ -18,6 +28,9 @@ public static class EditorAssets
 
     public static void LoadAssets()
     {
+        Shaders.Editor = (Shader?)Asset.Load(AssetType.Shader, Names.Editor);
+        Shaders.EditorMesh = (Shader?)Asset.Load(AssetType.Shader, Names.EditorMesh);
+        Shaders.EditorTexture = (Shader?)Asset.Load(AssetType.Shader, Names.EditorTexture);
         Textures.EditorPalette = (Texture?)Asset.Load(AssetType.Texture, Names.EditorPalette);
     }
 
@@ -28,6 +41,9 @@ public static class EditorAssets
 
     public static void UnloadAssets()
     {
+        Shaders.Editor?.Dispose();
+        Shaders.EditorMesh?.Dispose();
+        Shaders.EditorTexture?.Dispose();
         Textures.EditorPalette?.Dispose();
     }
 }

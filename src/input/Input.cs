@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using noz.Platform;
 
 namespace noz;
 
@@ -63,11 +64,14 @@ public static class Input
         set.SetActive(true);
     }
 
-    public static void Update()
+    public static void BeginFrame()
     {
         _scrollX = 0;
         _scrollY = 0;
+    }
 
+    public static void Update()
+    {
         CurrentInputSet?.Update();
     }
 

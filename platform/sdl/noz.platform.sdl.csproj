@@ -11,6 +11,7 @@
   <ItemGroup>
     <PackageReference Include="ppy.SDL3-CS" Version="2025.1205.0" />
     <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0" />
+    <PackageReference Include="StbImageSharp" Version="2.30.15" />
   </ItemGroup>
 
   <ItemGroup>

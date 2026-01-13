@@ -2,6 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using noz.Platform;
+
 using noz;
 
 string? projectPath = null;
@@ -20,8 +22,10 @@ Application.Init(new ApplicationConfig
     Title = "NoZ Editor",
     Width = 1600,
     Height = 900,
+    IconPath = "res/windows/nozed.png",
     Platform = new SDLPlatform(),
     RenderBackend = new OpenGLRender(),
+    AudioBackend = new SDLAudio(),
     Vtable = new EditorVtable(),
 
     Render = new RenderConfig

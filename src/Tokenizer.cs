@@ -608,15 +608,13 @@ public ref struct Tokenizer
 
         foreach (var (name, color) in namedColors)
         {
-            if (_position + name.Length <= _length &&
-                _input.Slice(_position, name.Length).Equals(name, StringComparison.OrdinalIgnoreCase))
-            {
-                BeginToken();
-                for (int i = 0; i < name.Length; i++) NextChar();
-                EndToken(TokenType.Color);
-                _nextToken.ColorValue = color;
-                return true;
-            }
+            if (_position + name.Length > _length ||
+                !_input.Slice(_position, name.Length).Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
+            BeginToken();
+            for (var i = 0; i < name.Length; i++) NextChar();
+            EndToken(TokenType.Color);
+            _nextToken.ColorValue = color;
+            return true;
         }
 
         return false;

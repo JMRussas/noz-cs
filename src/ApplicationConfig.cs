@@ -2,6 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using noz.Platform;
+
 namespace noz;
 
 public interface IApplicationVtable
@@ -19,9 +21,11 @@ public class ApplicationConfig
     public int Height { get; init; } = 720;
     public bool VSync { get; init; } = true;
     public bool Resizable { get; init; } = true;
+    public string? IconPath { get; init; }
     public RenderConfig? Render { get; init; }
     public IApplicationVtable? Vtable { get; init; }
     public IPlatform? Platform { get; init; }
     public IRender? RenderBackend { get; init; }
+    public IAudio? AudioBackend { get; init; }
     public string AssetPath { get; init; } = "assets/library";
 }

@@ -4,7 +4,15 @@
 
 using System.Numerics;
 
-namespace noz;
+namespace noz.Platform;
+
+public struct NativeTextboxStyle
+{
+    public Color32 BackgroundColor;
+    public Color32 TextColor;
+    public int FontSize;
+    public bool Password;
+}
 
 public class PlatformConfig
 {
@@ -13,6 +21,7 @@ public class PlatformConfig
     public int Height { get; set; } = 720;
     public bool VSync { get; set; } = true;
     public bool Resizable { get; set; } = true;
+    public string? IconPath { get; set; }
 }
 
 public interface IPlatform
@@ -34,4 +43,16 @@ public interface IPlatform
     /// Called when an input event occurs.
     /// </summary>
     event Action<PlatformEvent>? OnEvent;
+
+    /// <summary>
+    /// Set a callback to render a frame during window resize.
+    /// </summary>
+    void SetResizeCallback(Action? callback);
+
+    // Native Text Input
+    void ShowTextbox(Rect rect, string text, NativeTextboxStyle style);
+    void HideTextbox();
+    void UpdateTextboxRect(Rect rect, int fontSize);
+    bool UpdateTextboxText(ref string text);
+    bool IsTextboxVisible { get; }
 }

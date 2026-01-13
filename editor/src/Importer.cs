@@ -133,7 +133,7 @@ public static class Importer
 
             doc.Import(targetDir, _config ?? new PropertySet(), meta);
 
-            Log.Info($"Imported {doc.Name}");
+            Log.Info($"Imported {doc.Def.Type.ToString().ToLowerInvariant()}/{doc.Name}");
             OnImported?.Invoke(doc);
         }
         catch (Exception ex)

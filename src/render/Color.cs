@@ -108,6 +108,8 @@ public readonly struct Color(float r, float g, float b, float a = 1f)
         (byte)(A * 255f)
     );
 
+    public static implicit operator Color32(Color c) => c.ToColor32();
+
     public Color24 ToColor24() => new(
         (byte)(R * 255f),
         (byte)(G * 255f),
@@ -155,8 +157,6 @@ public readonly struct Color(float r, float g, float b, float a = 1f)
     public static Color operator *(Color c, float scalar) => new(c.R * scalar, c.G * scalar, c.B * scalar, c.A * scalar);
     public static Color operator *(float scalar, Color c) => c * scalar;
     public static Color operator *(Color a, Color b) => new(a.R * b.R, a.G * b.G, a.B * b.B, a.A * b.A);
-
-    public static explicit operator Color32(Color c) => c.ToColor32();
 
     // Predefined colors
     public static readonly Color Black = new(0f, 0f, 0f);

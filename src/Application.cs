@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using noz.Platform;
 
 namespace noz;
 
@@ -15,6 +16,7 @@ public static class Application
     public static ApplicationConfig Config { get; private set; } = null!;
     public static IPlatform Platform { get; private set; } = null!;
     public static IRender RenderBackend { get; private set; } = null!;
+    public static IAudio AudioBackend { get; private set; } = null!;
     public static Vector2 WindowSize => Platform.WindowSize;
     public static string AssetPath { get; private set; } = null!;
 
@@ -29,6 +31,9 @@ public static class Application
         RenderBackend = config.RenderBackend ?? throw new ArgumentNullException(nameof(config.RenderBackend),
             "RenderBackend must be provided. Use OpenGLRender for desktop or WebGLRender for web.");
 
+        AudioBackend = config.AudioBackend ?? throw new ArgumentNullException(nameof(config.AudioBackend),
+            "AudioBackend must be provided. Use SDLAudio for desktop or WebAudio for web.");
+
         _vtable = config.Vtable ?? throw new ArgumentNullException(nameof(config.Vtable),
             "App must be provided. Implement IApplication in your game.");
 
@@ -41,16 +46,20 @@ public static class Application
             Width = config.Width,
             Height = config.Height,
             VSync = config.VSync,
-            Resizable = config.Resizable
+            Resizable = config.Resizable,
+            IconPath = config.IconPath
         });
 
         // Subscribe to platform events
         Platform.OnEvent += Input.ProcessEvent;
+        Platform.SetResizeCallback(RenderFrame);
 
         // Initialize subsystems
         Time.Init();
         Input.Init();
+        Audio.Init(AudioBackend);
         Render.Init(config.Render, RenderBackend);
+        UI.Init();
 
         // Register asset types and load assets
         RegisterAssetTypes();
@@ -72,6 +81,7 @@ public static class Application
         while (_running)
         {
             Time.Update();
+            Input.BeginFrame();
 
             if (!Platform.PollEvents())
             {
@@ -93,11 +103,14 @@ public static class Application
     {
         _vtable.UnloadAssets();
 
+        UI.Shutdown();
         Render.Shutdown();
+        Audio.Shutdown();
         Input.Shutdown();
         Time.Shutdown();
 
         Platform.OnEvent -= Input.ProcessEvent;
+        Platform.SetResizeCallback(null);
         Platform.Shutdown();
 
         _running = false;
@@ -106,5 +119,16 @@ public static class Application
     public static void Quit()
     {
         _running = false;
+    }
+
+    private static void RenderFrame()
+    {
+        Time.Update();
+        Input.BeginFrame();
+        Input.Update();
+
+        Render.BeginFrame();
+        _vtable.Update();
+        Render.EndFrame();
     }
 }

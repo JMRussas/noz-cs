@@ -2,81 +2,75 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using noz.Platform;
+
 namespace noz;
 
 public static class Audio
 {
-    internal static void Init()
+    public static IAudio Backend { get; private set; } = null!;
+
+    internal static void Init(IAudio backend)
     {
-        //PlatformInitAudio();
-        
+        Backend = backend;
+        Backend.Init();
     }
 
     internal static void Shutdown()
     {
-        //StopMusic();
-        //PlatformShutdownAudio();
-    }
-    
-    static void SetMasterVolume(float volume)
-    {
-//        PlatformSetMasterVolume(volume);
+        StopMusic();
+        Backend.Shutdown();
     }
 
-    static float GetMasterVolume()
+    // Playback
+    public static SoundHandle Play(Sound sound, float volume = 1f, float pitch = 1f, bool loop = false)
+        => new(Backend.Play(sound.PlatformHandle, volume, pitch, loop));
+
+    public static SoundHandle PlayRandom(Sound[] sounds, float volume = 1f, float pitch = 1f, bool loop = false)
     {
-        //return PlatformGetMasterVolume();
-        return 0.0f;
+        if (sounds.Length == 0) return default;
+        var sound = sounds[Random.Shared.Next(sounds.Length)];
+        return Play(sound, volume, pitch, loop);
     }
 
-    static void SetSoundVolume(float volume)
-    {
-        
-        //PlatformSetSoundVolume(volume);
-    }
+    public static void Stop(SoundHandle handle) => Backend.Stop(handle.Value);
 
-    static float GetSoundVolume()
-    {
-        return 0.0f;
-        //return PlatformGetSoundVolume();
-    }
+    public static bool IsPlaying(SoundHandle handle) => Backend.IsPlaying(handle.Value);
 
-    static void SetMusicVolume(float volume)
-    {
-        //PlatformSetMusicVolume(volume);
-    }
+    // Per-instance control
+    public static void SetVolume(SoundHandle handle, float volume) => Backend.SetVolume(handle.Value, volume);
+    public static void SetPitch(SoundHandle handle, float pitch) => Backend.SetPitch(handle.Value, pitch);
+    public static float GetVolume(SoundHandle handle) => Backend.GetVolume(handle.Value);
+    public static float GetPitch(SoundHandle handle) => Backend.GetPitch(handle.Value);
 
-    static float GetMusicVolume()
-    {
-        return 0.0f;
-        //return PlatformGetMusicVolume();
-    }
-
-    static void PlayMusic(Sound sound)
+    // Music
+    public static void PlayMusic(Sound sound)
     {
         if (IsMusicPlaying())
             StopMusic();
-
-        //PlayMusicInternal(sound);
+        Backend.PlayMusic(sound.PlatformHandle);
     }
 
-    static void StopMusic()
+    public static void StopMusic() => Backend.StopMusic();
+
+    public static bool IsMusicPlaying() => Backend.IsMusicPlaying();
+
+    // Volume hierarchy
+    public static float MasterVolume
     {
-        if (!IsMusicPlaying())
-            return;
-
-//        PlatformStopMusic();
+        get => Backend.MasterVolume;
+        set => Backend.MasterVolume = value;
     }
 
-    static bool IsMusicPlaying()
+    public static float SoundVolume
     {
-        //return PlatformIsMusicPlaying();
-        return false;
+        get => Backend.SoundVolume;
+        set => Backend.SoundVolume = value;
     }
 
-    static void Stop(in SoundHandle handle) {
-//        PlatformStopSound({
-//            handle.value
-//        });
+    public static float MusicVolume
+    {
+        get => Backend.MusicVolume;
+        set => Backend.MusicVolume = value;
     }
 }

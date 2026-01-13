@@ -3,16 +3,20 @@
 //
 
 using System.Numerics;
+using System.Runtime.InteropServices;
 using SDL;
+using StbImageSharp;
 using static SDL.SDL3;
 
-namespace noz;
+namespace noz.Platform;
 
-public unsafe class SDLPlatform : IPlatform
+public unsafe partial class SDLPlatform : IPlatform
 {
     private SDL_Window* _window;
     private SDL_GLContextState* _glContext;
     private Vector2 _windowSize;
+    private Action? _resizeCallback;
+    private static SDLPlatform? _instance;
 
     public Vector2 WindowSize => _windowSize;
 
@@ -53,10 +57,73 @@ public unsafe class SDLPlatform : IPlatform
         SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
 
         _windowSize = new Vector2(config.Width, config.Height);
+
+        _instance = this;
+        SDL_AddEventWatch(&ResizeEventWatch, nint.Zero);
+
+        if (!string.IsNullOrEmpty(config.IconPath) && File.Exists(config.IconPath))
+            SetWindowIcon(config.IconPath);
+
+        InitNativeTextInput();
+    }
+
+    private void SetWindowIcon(string iconPath)
+    {
+        using var stream = File.OpenRead(iconPath);
+        var image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
+
+        fixed (byte* pixels = image.Data)
+        {
+            var surface = SDL_CreateSurfaceFrom(
+                image.Width,
+                image.Height,
+                SDL_PixelFormat.SDL_PIXELFORMAT_RGBA8888,
+                (nint)pixels,
+                image.Width * 4
+            );
+
+            if (surface != null)
+            {
+                SDL_SetWindowIcon(_window, surface);
+                SDL_DestroySurface(surface);
+            }
+        }
+    }
+
+    public void SetResizeCallback(Action? callback)
+    {
+        _resizeCallback = callback;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
+    private static SDLBool ResizeEventWatch(nint userdata, SDL_Event* evt)
+    {
+        if (_instance == null) return true;
+
+        if (evt->Type == SDL_EventType.SDL_EVENT_WINDOW_RESIZED ||
+            evt->Type == SDL_EventType.SDL_EVENT_WINDOW_EXPOSED)
+        {
+            if (evt->Type == SDL_EventType.SDL_EVENT_WINDOW_RESIZED)
+            {
+                _instance._windowSize = new Vector2(evt->window.data1, evt->window.data2);
+                _instance.OnEvent?.Invoke(PlatformEvent.Resize(evt->window.data1, evt->window.data2));
+            }
+
+            _instance._resizeCallback?.Invoke();
+            SDL_GL_SwapWindow(_instance._window);
+        }
+
+        return true;
     }
 
     public void Shutdown()
     {
+        SDL_RemoveEventWatch(&ResizeEventWatch, nint.Zero);
+        _instance = null;
+        _resizeCallback = null;
+
+        ShutdownNativeTextInput();
+
         if (_glContext != null)
         {
             SDL_GL_DestroyContext(_glContext);
@@ -78,9 +145,7 @@ public unsafe class SDLPlatform : IPlatform
         while (SDL_PollEvent(&evt))
         {
             if (evt.Type == SDL_EventType.SDL_EVENT_QUIT)
-            {
                 return false;
-            }
 
             ProcessEvent(evt);
         }
