@@ -4,7 +4,7 @@
 
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("editor")]
+[assembly: InternalsVisibleTo("NoZ.Editor")]
 
 namespace noz;
 

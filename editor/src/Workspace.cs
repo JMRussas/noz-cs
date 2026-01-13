@@ -128,11 +128,18 @@ public static class Workspace
 
     public static void Draw()
     {
-        Render.Clear(EditorStyle.WorkspaceColor);
+        Render.BeginScenePass(EditorStyle.WorkspaceColor);
         Render.BindCamera(_camera);
 
         if (_showGrid)
             Grid.Draw(_camera);
+    }
+
+    public static void DrawComposite()
+    {
+        Render.EndScenePass();
+        Render.BeginCompositePass();
+        Render.EndCompositePass();
     }
 
     public static void DrawOverlay()

@@ -73,6 +73,8 @@ public class EditorConfig
         var basePath = Path.GetFullPath(path);
         var configPath = Path.Combine(basePath, "editor.cfg");
 
+        Log.Info($"Loading Config: {configPath}");
+        
         var props = PropertySet.LoadFile(configPath);
         if (props == null)
             return null;

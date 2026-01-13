@@ -37,6 +37,31 @@ public struct Token
 
 public ref struct Tokenizer
 {
+    private struct NamedColor(string name, Color color)
+    {
+        public readonly string Name = name;
+        public readonly Color Color = color;
+    }
+    
+    private static readonly NamedColor[] NamedColors =
+    [
+        new("black", new Color(0f, 0f, 0f, 1f)),
+        new("white", new Color(1f, 1f, 1f, 1f)),
+        new("red", new Color(1f, 0f, 0f, 1f)),
+        new("green", new Color(0f, 0.5f, 0f, 1f)),
+        new("blue", new Color(0f, 0f, 1f, 1f)),
+        new("yellow", new Color(1f, 1f, 0f, 1f)),
+        new("cyan", new Color(0f, 1f, 1f, 1f)),
+        new("magenta", new Color(1f, 0f, 1f, 1f)),
+        new("gray", new Color(0.5f, 0.5f, 0.5f, 1f)),
+        new("grey", new Color(0.5f, 0.5f, 0.5f, 1f)),
+        new("orange", new Color(1f, 0.65f, 0f, 1f)),
+        new("pink", new Color(1f, 0.75f, 0.8f, 1f)),
+        new("purple", new Color(0.5f, 0f, 0.5f, 1f)),
+        new("brown", new Color(0.65f, 0.16f, 0.16f, 1f)),
+        new("transparent", new Color(0f, 0f, 0f, 0f))
+    ];
+    
     private readonly ReadOnlySpan<char> _input;
     private int _position;
     private readonly int _length;
@@ -586,28 +611,10 @@ public ref struct Tokenizer
             return true;
         }
 
-        // Named colors
-        var namedColors = new (string name, Color color)[]
+        foreach (var namedColor in NamedColors)
         {
-            ("black", new Color(0f, 0f, 0f, 1f)),
-            ("white", new Color(1f, 1f, 1f, 1f)),
-            ("red", new Color(1f, 0f, 0f, 1f)),
-            ("green", new Color(0f, 0.5f, 0f, 1f)),
-            ("blue", new Color(0f, 0f, 1f, 1f)),
-            ("yellow", new Color(1f, 1f, 0f, 1f)),
-            ("cyan", new Color(0f, 1f, 1f, 1f)),
-            ("magenta", new Color(1f, 0f, 1f, 1f)),
-            ("gray", new Color(0.5f, 0.5f, 0.5f, 1f)),
-            ("grey", new Color(0.5f, 0.5f, 0.5f, 1f)),
-            ("orange", new Color(1f, 0.65f, 0f, 1f)),
-            ("pink", new Color(1f, 0.75f, 0.8f, 1f)),
-            ("purple", new Color(0.5f, 0f, 0.5f, 1f)),
-            ("brown", new Color(0.65f, 0.16f, 0.16f, 1f)),
-            ("transparent", new Color(0f, 0f, 0f, 0f)),
-        };
-
-        foreach (var (name, color) in namedColors)
-        {
+            var name = namedColor.Name;
+            var color = namedColor.Color;
             if (_position + name.Length > _length ||
                 !_input.Slice(_position, name.Length).Equals(name, StringComparison.OrdinalIgnoreCase)) continue;
             BeginToken();
@@ -621,13 +628,13 @@ public ref struct Tokenizer
     }
 
     private static bool IsHexDigit(char c) =>
-        (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F');
+        c is >= '0' and <= '9' || c is >= 'a' and <= 'f' || c is >= 'A' and <= 'F';
 
     private static int ParseHexDigit(char c)
     {
-        if (c >= '0' && c <= '9') return c - '0';
-        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-        if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+        if (c is >= '0' and <= '9') return c - '0';
+        if (c is >= 'a' and <= 'f') return c - 'a' + 10;
+        if (c is >= 'A' and <= 'F') return c - 'A' + 10;
         return 0;
     }
 
@@ -636,29 +643,36 @@ public ref struct Tokenizer
 
     private static Color ParseHexColor(ReadOnlySpan<char> hex)
     {
-        if (hex.Length == 3) // #RGB
+        switch (hex.Length)
         {
-            var r = ParseHexDigit(hex[0]);
-            var g = ParseHexDigit(hex[1]);
-            var b = ParseHexDigit(hex[2]);
-            return new Color(r / 15f, g / 15f, b / 15f, 1f);
+            // #RGB
+            case 3:
+            {
+                var r = ParseHexDigit(hex[0]);
+                var g = ParseHexDigit(hex[1]);
+                var b = ParseHexDigit(hex[2]);
+                return new Color(r / 15f, g / 15f, b / 15f, 1f);
+            }
+            // #RRGGBB
+            case 6:
+            {
+                var r = ParseHexByte(hex.Slice(0, 2));
+                var g = ParseHexByte(hex.Slice(2, 2));
+                var b = ParseHexByte(hex.Slice(4, 2));
+                return new Color(r / 255f, g / 255f, b / 255f, 1f);
+            }
+            // #RRGGBBAA
+            case 8:
+            {
+                var r = ParseHexByte(hex.Slice(0, 2));
+                var g = ParseHexByte(hex.Slice(2, 2));
+                var b = ParseHexByte(hex.Slice(4, 2));
+                var a = ParseHexByte(hex.Slice(6, 2));
+                return new Color(r / 255f, g / 255f, b / 255f, a / 255f);
+            }
+            default:
+                return Color.White;
         }
-        if (hex.Length == 6) // #RRGGBB
-        {
-            var r = ParseHexByte(hex.Slice(0, 2));
-            var g = ParseHexByte(hex.Slice(2, 2));
-            var b = ParseHexByte(hex.Slice(4, 2));
-            return new Color(r / 255f, g / 255f, b / 255f, 1f);
-        }
-        if (hex.Length == 8) // #RRGGBBAA
-        {
-            var r = ParseHexByte(hex.Slice(0, 2));
-            var g = ParseHexByte(hex.Slice(2, 2));
-            var b = ParseHexByte(hex.Slice(4, 2));
-            var a = ParseHexByte(hex.Slice(6, 2));
-            return new Color(r / 255f, g / 255f, b / 255f, a / 255f);
-        }
-        return Color.White;
     }
 
     private bool ReadToken()

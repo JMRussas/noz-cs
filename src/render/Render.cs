@@ -66,17 +66,39 @@ public static class Render
     public static void BeginFrame()
     {
         Backend.BeginFrame();
-        Batcher.BeginBatch();
 
-        // Update and apply default camera
+        // Ensure offscreen target matches window size
         var size = Application.WindowSize;
-        Backend.SetViewport(0, 0, (int)size.X, (int)size.Y);
+        Backend.ResizeOffscreenTarget((int)size.X, (int)size.Y, Config.MsaaSamples);
+    }
+
+    public static void BeginScenePass(Color clearColor)
+    {
+        Backend.BeginScenePass(clearColor);
+        Batcher.BeginBatch();
+    }
+
+    public static void EndScenePass()
+    {
+        Batcher.BuildBatches();
+        Batcher.FlushBatches();
+        Backend.EndScenePass();
+    }
+
+    public static void BeginCompositePass()
+    {
+        Backend.BeginCompositePass();
+        Backend.BindSceneTexture();
+        Backend.DrawFullscreenQuad();
+    }
+
+    public static void EndCompositePass()
+    {
+        Backend.EndCompositePass();
     }
 
     public static void EndFrame()
     {
-        Batcher.BuildBatches();
-        Batcher.FlushBatches();
         Backend.EndFrame();
     }
 

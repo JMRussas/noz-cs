@@ -1,21 +1,21 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <ApplicationIcon>res\windows\nozed.ico</ApplicationIcon>
+    <RootNamespace>noz</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ppy.SDL3-CS" Version="2025.1205.0" />
+    <PackageReference Include="Silk.NET.OpenGL" Version="2.22.0" />
     <PackageReference Include="StbImageSharp" Version="2.30.15" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\src\noz.csproj" />
-    <ProjectReference Include="..\platform\sdl\noz.platform.sdl.csproj" />
+    <ProjectReference Include="..\..\src\NoZ.csproj" />
   </ItemGroup>
 
 </Project>

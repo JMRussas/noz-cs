@@ -20,6 +20,8 @@ public static class Editor
 
     public static void Init(string? projectPath, bool clean)
     {
+        Log.Info($"Working Directory: {Environment.CurrentDirectory}");
+        
         EditorStyle.Init();
         Workspace.Init();
 
@@ -77,6 +79,9 @@ public static class Editor
         UI.End();
 
         Workspace.DrawOverlay();
+
+        // Composite pass - renders scene to screen with Y flip
+        Workspace.DrawComposite();
     }
 
     private static void CheckShortcuts()

@@ -34,6 +34,22 @@ public unsafe class OpenGLRender : IRender
     private uint _boundIndexBuffer;
     private uint _boundShader;
 
+    // Offscreen render target
+    private uint _offscreenFramebuffer;
+    private uint _offscreenTexture;
+    private uint _offscreenDepthRenderbuffer;
+    private uint _msaaFramebuffer;
+    private uint _msaaColorRenderbuffer;
+    private uint _msaaDepthRenderbuffer;
+    private int _offscreenWidth;
+    private int _offscreenHeight;
+    private int _msaaSamples;
+
+    // Fullscreen quad for composite pass
+    private uint _fullscreenVao;
+    private uint _fullscreenVbo;
+    private uint _compositeShader;
+
     // Default sprite shader source
     // Matches MeshVertex layout: position, uv, normal, color, opacity, depth, bone, atlas
     private const string SpriteVertexShader = @"#version 330 core
@@ -73,6 +89,32 @@ void main()
 {
     vec4 texColor = texture(uTexture, vUV);
     FragColor = texColor * vColor;
+}";
+
+    // Composite shader - renders fullscreen quad with Y flip
+    private const string CompositeVertexShader = @"#version 330 core
+layout(location = 0) in vec2 aPosition;
+layout(location = 1) in vec2 aUV;
+
+out vec2 vUV;
+
+void main()
+{
+    gl_Position = vec4(aPosition, 0.0, 1.0);
+    // Flip Y: map UV.y from [0,1] to [1,0]
+    vUV = vec2(aUV.x, 1.0 - aUV.y);
+}";
+
+    private const string CompositeFragmentShader = @"#version 330 core
+in vec2 vUV;
+
+uniform sampler2D uTexture;
+
+out vec4 FragColor;
+
+void main()
+{
+    FragColor = texture(uTexture, vUV);
 }";
 
     public void Init(RenderBackendConfig config)
@@ -120,10 +162,60 @@ void main()
         var texLoc = _gl.GetUniformLocation(spriteProgram, "uTexture");
         if (texLoc >= 0)
             _gl.Uniform1(texLoc, 0);
+
+        // Create composite shader
+        _compositeShader = CreateShaderProgram(CompositeVertexShader, CompositeFragmentShader);
+        _gl.UseProgram(_compositeShader);
+        texLoc = _gl.GetUniformLocation(_compositeShader, "uTexture");
+        if (texLoc >= 0)
+            _gl.Uniform1(texLoc, 0);
+
+        // Create fullscreen quad VAO/VBO
+        // Positions and UVs for a fullscreen quad (two triangles)
+        float[] quadVertices =
+        [
+            // Position    UV
+            -1f, -1f,      0f, 0f,
+             1f, -1f,      1f, 0f,
+             1f,  1f,      1f, 1f,
+            -1f, -1f,      0f, 0f,
+             1f,  1f,      1f, 1f,
+            -1f,  1f,      0f, 1f,
+        ];
+
+        _fullscreenVao = _gl.GenVertexArray();
+        _fullscreenVbo = _gl.GenBuffer();
+
+        _gl.BindVertexArray(_fullscreenVao);
+        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, _fullscreenVbo);
+        fixed (float* p = quadVertices)
+        {
+            _gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)(quadVertices.Length * sizeof(float)), p, BufferUsageARB.StaticDraw);
+        }
+
+        // Position attribute
+        _gl.EnableVertexAttribArray(0);
+        _gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), (void*)0);
+        // UV attribute
+        _gl.EnableVertexAttribArray(1);
+        _gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, 4 * sizeof(float), (void*)(2 * sizeof(float)));
+
+        _gl.BindVertexArray(0);
     }
 
     public void Shutdown()
     {
+        // Clean up offscreen target
+        DestroyOffscreenTarget();
+
+        // Clean up composite resources
+        if (_compositeShader != 0)
+            _gl.DeleteProgram(_compositeShader);
+        if (_fullscreenVbo != 0)
+            _gl.DeleteBuffer(_fullscreenVbo);
+        if (_fullscreenVao != 0)
+            _gl.DeleteVertexArray(_fullscreenVao);
+
         // Clean up resources
         foreach (var buffer in _buffers.Values)
             _gl.DeleteBuffer(buffer);
@@ -535,5 +627,169 @@ void main()
         _gl.DeleteShader(fragmentShader);
 
         return program;
+    }
+
+    // === Render Passes ===
+
+    public void ResizeOffscreenTarget(int width, int height, int msaaSamples)
+    {
+        if (width == _offscreenWidth && height == _offscreenHeight && msaaSamples == _msaaSamples)
+            return;
+
+        DestroyOffscreenTarget();
+
+        _offscreenWidth = width;
+        _offscreenHeight = height;
+        _msaaSamples = msaaSamples;
+
+        // Create resolve texture (non-MSAA, for sampling)
+        _offscreenTexture = _gl.GenTexture();
+        _gl.BindTexture(TextureTarget.Texture2D, _offscreenTexture);
+        _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8, (uint)width, (uint)height, 0,
+            PixelFormat.Rgba, PixelType.UnsignedByte, null);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+
+        // Create depth/stencil renderbuffer for resolve framebuffer
+        _offscreenDepthRenderbuffer = _gl.GenRenderbuffer();
+        _gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _offscreenDepthRenderbuffer);
+        _gl.RenderbufferStorage(RenderbufferTarget.Renderbuffer, InternalFormat.Depth24Stencil8, (uint)width, (uint)height);
+
+        // Create resolve framebuffer (non-MSAA)
+        _offscreenFramebuffer = _gl.GenFramebuffer();
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _offscreenFramebuffer);
+        _gl.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0,
+            TextureTarget.Texture2D, _offscreenTexture, 0);
+        _gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthStencilAttachment,
+            RenderbufferTarget.Renderbuffer, _offscreenDepthRenderbuffer);
+
+        if (msaaSamples > 1)
+        {
+            // Create MSAA color renderbuffer
+            _msaaColorRenderbuffer = _gl.GenRenderbuffer();
+            _gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _msaaColorRenderbuffer);
+            _gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)msaaSamples,
+                InternalFormat.Rgba8, (uint)width, (uint)height);
+
+            // Create MSAA depth renderbuffer
+            _msaaDepthRenderbuffer = _gl.GenRenderbuffer();
+            _gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, _msaaDepthRenderbuffer);
+            _gl.RenderbufferStorageMultisample(RenderbufferTarget.Renderbuffer, (uint)msaaSamples,
+                InternalFormat.Depth24Stencil8, (uint)width, (uint)height);
+
+            // Create MSAA framebuffer (for rendering)
+            _msaaFramebuffer = _gl.GenFramebuffer();
+            _gl.BindFramebuffer(FramebufferTarget.Framebuffer, _msaaFramebuffer);
+            _gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0,
+                RenderbufferTarget.Renderbuffer, _msaaColorRenderbuffer);
+            _gl.FramebufferRenderbuffer(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthStencilAttachment,
+                RenderbufferTarget.Renderbuffer, _msaaDepthRenderbuffer);
+        }
+
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        _gl.BindTexture(TextureTarget.Texture2D, 0);
+        _gl.BindRenderbuffer(RenderbufferTarget.Renderbuffer, 0);
+    }
+
+    private void DestroyOffscreenTarget()
+    {
+        if (_offscreenFramebuffer != 0)
+        {
+            _gl.DeleteFramebuffer(_offscreenFramebuffer);
+            _offscreenFramebuffer = 0;
+        }
+        if (_offscreenTexture != 0)
+        {
+            _gl.DeleteTexture(_offscreenTexture);
+            _offscreenTexture = 0;
+        }
+        if (_offscreenDepthRenderbuffer != 0)
+        {
+            _gl.DeleteRenderbuffer(_offscreenDepthRenderbuffer);
+            _offscreenDepthRenderbuffer = 0;
+        }
+        if (_msaaFramebuffer != 0)
+        {
+            _gl.DeleteFramebuffer(_msaaFramebuffer);
+            _msaaFramebuffer = 0;
+        }
+        if (_msaaColorRenderbuffer != 0)
+        {
+            _gl.DeleteRenderbuffer(_msaaColorRenderbuffer);
+            _msaaColorRenderbuffer = 0;
+        }
+        if (_msaaDepthRenderbuffer != 0)
+        {
+            _gl.DeleteRenderbuffer(_msaaDepthRenderbuffer);
+            _msaaDepthRenderbuffer = 0;
+        }
+
+        _offscreenWidth = 0;
+        _offscreenHeight = 0;
+        _msaaSamples = 0;
+    }
+
+    public void BeginScenePass(Color clearColor)
+    {
+        // Bind MSAA framebuffer if available, otherwise resolve framebuffer
+        var fb = _msaaFramebuffer != 0 ? _msaaFramebuffer : _offscreenFramebuffer;
+
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, fb);
+        _gl.Viewport(0, 0, (uint)_offscreenWidth, (uint)_offscreenHeight);
+        _gl.ClearColor(clearColor.R, clearColor.G, clearColor.B, clearColor.A);
+        _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
+
+        // Rebind mesh VAO for scene rendering
+        _gl.BindVertexArray(_meshVao);
+        _boundVertexBuffer = 0;
+        _boundIndexBuffer = 0;
+    }
+
+    public void EndScenePass()
+    {
+        // If using MSAA, blit to resolve framebuffer
+        if (_msaaFramebuffer == 0)
+            return;
+
+        _gl.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _msaaFramebuffer);
+        _gl.BindFramebuffer(FramebufferTarget.DrawFramebuffer, _offscreenFramebuffer);
+        _gl.BlitFramebuffer(
+            0, 0, _offscreenWidth, _offscreenHeight,
+            0, 0, _offscreenWidth, _offscreenHeight,
+            ClearBufferMask.ColorBufferBit, BlitFramebufferFilter.Nearest);
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+    }
+
+    public void BeginCompositePass()
+    {
+        _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
+        _gl.Viewport(0, 0, (uint)_offscreenWidth, (uint)_offscreenHeight);
+        _gl.ClearColor(0f, 0f, 0f, 1f);
+        _gl.Clear(ClearBufferMask.ColorBufferBit);
+        _gl.Disable(EnableCap.DepthTest);
+        _gl.Disable(EnableCap.Blend);
+    }
+
+    public void EndCompositePass()
+    {
+        // Nothing needed
+    }
+
+    public void BindSceneTexture()
+    {
+        _gl.ActiveTexture(TextureUnit.Texture0);
+        _gl.BindTexture(TextureTarget.Texture2D, _offscreenTexture);
+    }
+
+    public void DrawFullscreenQuad()
+    {
+        _gl.UseProgram(_compositeShader);
+        _boundShader = _compositeShader;
+
+        _gl.BindVertexArray(_fullscreenVao);
+        _gl.DrawArrays(PrimitiveType.Triangles, 0, 6);
+        _gl.BindVertexArray(_meshVao);
     }
 }

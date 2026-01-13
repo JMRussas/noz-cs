@@ -67,4 +67,13 @@ public interface IRender
     FenceHandle CreateFence();
     void WaitFence(FenceHandle fence);
     void DeleteFence(FenceHandle fence);
+
+    // === Render Passes ===
+    void ResizeOffscreenTarget(int width, int height, int msaaSamples);
+    void BeginScenePass(Color clearColor);
+    void EndScenePass();
+    void BeginCompositePass();
+    void EndCompositePass();
+    void BindSceneTexture();
+    void DrawFullscreenQuad();
 }

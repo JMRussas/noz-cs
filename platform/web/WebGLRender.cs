@@ -198,4 +198,42 @@ public class WebGLRender : IRender
     {
         _module?.InvokeVoidAsync("deleteFence", fence.Id);
     }
+
+    // === Render Passes (stubs - to be implemented) ===
+
+    public void ResizeOffscreenTarget(int width, int height, int msaaSamples)
+    {
+        // TODO: Implement offscreen rendering for WebGL
+    }
+
+    public void BeginScenePass(Color clearColor)
+    {
+        // For now, just clear - no offscreen rendering
+        Clear(clearColor);
+    }
+
+    public void EndScenePass()
+    {
+        // TODO: Implement MSAA resolve for WebGL
+    }
+
+    public void BeginCompositePass()
+    {
+        // TODO: Implement composite pass for WebGL
+    }
+
+    public void EndCompositePass()
+    {
+        // Nothing needed for now
+    }
+
+    public void BindSceneTexture()
+    {
+        // TODO: Bind offscreen texture for WebGL
+    }
+
+    public void DrawFullscreenQuad()
+    {
+        // TODO: Draw fullscreen quad for WebGL composite
+    }
 }
