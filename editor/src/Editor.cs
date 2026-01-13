@@ -27,6 +27,7 @@ public static class Editor
 
         // Register document types
         TextureDocument.RegisterDef();
+        ShaderDocument.RegisterDef();
 
         Config = string.IsNullOrEmpty(projectPath)
             ? EditorConfig.FindAndLoad()

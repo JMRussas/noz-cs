@@ -64,6 +64,7 @@ public static class Application
         Texture.RegisterDef();
         Sprite.RegisterDef();
         Sound.RegisterDef();
+        Shader.RegisterDef();
     }
 
     public static void Run()
