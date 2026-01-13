@@ -81,6 +81,17 @@ public static class Render
         Backend.EndFrame();
     }
 
+    /// <summary>
+    /// Flush all pending draw commands immediately. Call this before changing cameras
+    /// to ensure previous draws use the correct projection.
+    /// </summary>
+    public static void Flush()
+    {
+        Batcher.BuildBatches();
+        Batcher.FlushBatches();
+        Batcher.BeginBatch();
+    }
+
     public static void Clear(Color color)
     {
         Backend.Clear(color);

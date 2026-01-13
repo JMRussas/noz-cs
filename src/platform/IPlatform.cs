@@ -40,6 +40,12 @@ public interface IPlatform
     Vector2 WindowSize { get; }
 
     /// <summary>
+    /// Gets the display scale factor (DPI scale) for the window.
+    /// Returns 1.0 for standard displays, 1.5 for 150% scaling, 2.0 for 200% scaling, etc.
+    /// </summary>
+    float DisplayScale { get; }
+
+    /// <summary>
     /// Called when an input event occurs.
     /// </summary>
     event Action<PlatformEvent>? OnEvent;

@@ -27,6 +27,7 @@ public static class Editor
         TextureDocument.RegisterDef();
         ShaderDocument.RegisterDef();
         SoundDocument.RegisterDef();
+        SpriteDocument.RegisterDef();
 
         Config = string.IsNullOrEmpty(projectPath)
             ? EditorConfig.FindAndLoad()
@@ -58,6 +59,18 @@ public static class Editor
     {
         Workspace.Update();
         Workspace.Draw();
+
+        var refSize = Workspace.GetRefSize();
+        UI.Begin(refSize.X, refSize.Y);
+        UpdateUI();
+        UI.End();
+
         Workspace.DrawOverlay();
+    }
+
+    private static void UpdateUI()
+    {
+        // UI.BeginCanvas();
+        // UI.EndCanvas();
     }
 } 

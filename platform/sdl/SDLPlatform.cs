@@ -20,6 +20,8 @@ public unsafe partial class SDLPlatform : IPlatform
 
     public Vector2 WindowSize => _windowSize;
 
+    public float DisplayScale => _window != null ? SDL_GetWindowDisplayScale(_window) : 1.0f;
+
     public event Action<PlatformEvent>? OnEvent;
 
     public void Init(PlatformConfig config)
@@ -320,6 +322,12 @@ public unsafe partial class SDLPlatform : IPlatform
             SDL_Scancode.SDL_SCANCODE_LEFT => InputCode.KeyLeft,
             SDL_Scancode.SDL_SCANCODE_DOWN => InputCode.KeyDown,
             SDL_Scancode.SDL_SCANCODE_UP => InputCode.KeyUp,
+            SDL_Scancode.SDL_SCANCODE_DELETE => InputCode.KeyDelete,
+            SDL_Scancode.SDL_SCANCODE_INSERT => InputCode.KeyInsert,
+            SDL_Scancode.SDL_SCANCODE_HOME => InputCode.KeyHome,
+            SDL_Scancode.SDL_SCANCODE_END => InputCode.KeyEnd,
+            SDL_Scancode.SDL_SCANCODE_PAGEUP => InputCode.KeyPageUp,
+            SDL_Scancode.SDL_SCANCODE_PAGEDOWN => InputCode.KeyPageDown,
 
             SDL_Scancode.SDL_SCANCODE_LCTRL => InputCode.KeyLeftCtrl,
             SDL_Scancode.SDL_SCANCODE_LSHIFT => InputCode.KeyLeftShift,

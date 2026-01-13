@@ -60,6 +60,12 @@ public enum ImageStretch : byte
     Uniform
 }
 
+public enum CanvasType : byte
+{
+    Screen,
+    World
+}
+
 public readonly struct EdgeInsets(float top, float left, float bottom, float right)
 {
     public readonly float Top = top;
@@ -252,6 +258,24 @@ public struct SpacerData
     public Vector2 Size;
 }
 
+public struct CanvasData
+{
+    public CanvasType Type;
+    public Color Color;
+    public Vector2Int ColorOffset;
+    public Vector2 WorldPosition;
+    public Vector2 WorldSize;
+
+    public static CanvasData Default => new()
+    {
+        Type = CanvasType.Screen,
+        Color = Color.Transparent,
+        ColorOffset = Vector2Int.Zero,
+        WorldPosition = Vector2.Zero,
+        WorldSize = Vector2.Zero
+    };
+}
+
 [StructLayout(LayoutKind.Explicit)]
 public struct ElementData
 {
@@ -264,6 +288,7 @@ public struct ElementData
     [FieldOffset(0)] public TransformData Transform;
     [FieldOffset(0)] public PopupData Popup;
     [FieldOffset(0)] public SpacerData Spacer;
+    [FieldOffset(0)] public CanvasData Canvas;
 }
 
 public struct Element
@@ -370,6 +395,25 @@ public struct PopupStyle()
     public EdgeInsets Margin = EdgeInsets.Zero;
 }
 
+public struct CanvasStyle()
+{
+    public CanvasType Type = CanvasType.Screen;
+    public Color Color = Color.Transparent;
+    public Vector2Int ColorOffset = Vector2Int.Zero;
+    public Vector2 WorldPosition = Vector2.Zero;
+    public Vector2 WorldSize = Vector2.Zero;
+    public byte Id = 0;
+
+    public CanvasData ToData() => new()
+    {
+        Type = Type,
+        Color = Color,
+        ColorOffset = ColorOffset,
+        WorldPosition = WorldPosition,
+        WorldSize = WorldSize
+    };
+}
+
 public static class UI
 {
     private const int MaxElements = 4096;
@@ -432,8 +476,24 @@ public static class UI
     private static byte _activeScrollId;
     private static float _lastScrollMouseY;
     private static bool _closePopups;
+    private static Camera? _worldCamera;
 
     public static Vector2 Size => _orthoSize;
+    public static Camera? WorldCamera => _worldCamera;
+
+    public static float UserScale { get; set; } = 1.0f;
+
+    public static float GetUIScale() => Application.Platform.DisplayScale * UserScale;
+
+    public static Vector2Int GetRefSize()
+    {
+        var screenSize = Application.WindowSize;
+        var scale = GetUIScale();
+        return new Vector2Int(
+            (int)(screenSize.X / scale),
+            (int)(screenSize.Y / scale)
+        );
+    }
 
     public static void Init()
     {
@@ -566,10 +626,11 @@ public static class UI
         HasCurrentElement() && GetCurrentElement().Type == ElementType.Popup && _closePopups;
 
     // Begin/End methods
-    public static void BeginCanvas()
+    public static void BeginCanvas(CanvasStyle style = default)
     {
         ref var e = ref CreateElement(ElementType.Canvas);
-        e.Data.Container = ContainerData.Default;
+        e.Data.Canvas = style.ToData();
+        SetId(ref e, style.Id);
         PushElement(e.Index);
     }
 
@@ -813,9 +874,10 @@ public static class UI
     }
 
     // Main frame methods
-    public static void Begin(int refWidth, int refHeight)
+    public static void Begin(int refWidth, int refHeight, Camera? worldCamera = null)
     {
         _refSize = new Vector2Int(refWidth, refHeight);
+        _worldCamera = worldCamera;
         _elementStackCount = 0;
         _elementCount = 0;
         _popupCount = 0;
@@ -883,10 +945,9 @@ public static class UI
             transformIndex = CalculateTransforms(transformIndex, Matrix3x2.Identity);
 
         HandleInput();
-    }
 
-    public static void Draw()
-    {
+        // Flush any pending world-space rendering before drawing UI
+        Render.Flush();
         Render.BindCamera(_camera);
 
         var elementIndex = 0;

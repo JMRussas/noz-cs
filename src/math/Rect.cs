@@ -93,6 +93,15 @@ public struct Rect(float x, float y, float width, float height)
         );
     }
 
+    public static Rect Union(Rect a, Rect b)
+    {
+        var minX = MathF.Min(a.X, b.X);
+        var minY = MathF.Min(a.Y, b.Y);
+        var maxX = MathF.Max(a.Right, b.Right);
+        var maxY = MathF.Max(a.Bottom, b.Bottom);
+        return new Rect(minX, minY, maxX - minX, maxY - minY);
+    }
+
     public bool Equals(Rect other)
     {
         return X == other.X && Y == other.Y && Width == other.Width && Height == other.Height;
