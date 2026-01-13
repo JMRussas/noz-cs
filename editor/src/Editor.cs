@@ -57,10 +57,19 @@ public static class Editor
 
     public static void Update()
     {
+        CheckShortcuts();
+
         Workspace.Update();
         Workspace.Draw();
 
         DrawDocuments();
+        DrawSelectionBounds();
+
+        if (Workspace.State == WorkspaceState.Edit && Workspace.ActiveDocument != null)
+        {
+            Workspace.ActiveDocument.UpdateEdit();
+            Workspace.ActiveDocument.DrawEdit();
+        }
 
         var refSize = Workspace.GetRefSize();
         UI.Begin(refSize.X, refSize.Y);
@@ -70,12 +79,47 @@ public static class Editor
         Workspace.DrawOverlay();
     }
 
+    private static void CheckShortcuts()
+    {
+        if (Input.WasButtonPressed(InputCode.KeyTab))
+            Workspace.ToggleEdit();
+
+        if (Input.WasButtonPressed(InputCode.KeyF))
+            Workspace.FrameSelected();
+
+        if (Input.WasButtonPressed(InputCode.KeyS) && Input.IsCtrlDown())
+            DocumentManager.SaveAll();
+    }
+
     private static void DrawDocuments()
     {
         foreach (var doc in DocumentManager.Documents)
         {
-            if (doc.Loaded && doc.PostLoaded)
-                doc.Draw();
+            if (!doc.Loaded || !doc.PostLoaded)
+                continue;
+
+            if (doc.IsEditing)
+                continue;
+
+            doc.Draw();
+        }
+    }
+
+    private static void DrawSelectionBounds()
+    {
+        if (Workspace.ActiveDocument != null)
+        {
+            EditorRender.DrawBounds(Workspace.ActiveDocument, EditorStyle.EdgeColor);
+            return;
+        }
+
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (!doc.Loaded || !doc.PostLoaded)
+                continue;
+
+            if (doc.IsSelected)
+                EditorRender.DrawBounds(doc, EditorStyle.SelectionColor32);
         }
     }
 

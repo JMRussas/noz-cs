@@ -35,6 +35,12 @@ public unsafe partial class SDLPlatform : IPlatform
         SDL_GL_SetAttribute(SDL_GLAttr.SDL_GL_CONTEXT_MINOR_VERSION, 5);
         SDL_GL_SetAttribute(SDL_GLAttr.SDL_GL_CONTEXT_PROFILE_MASK, (int)SDL_GLProfile.SDL_GL_CONTEXT_PROFILE_CORE);
 
+        if (config.MsaaSamples > 0)
+        {
+            SDL_GL_SetAttribute(SDL_GLAttr.SDL_GL_MULTISAMPLEBUFFERS, 1);
+            SDL_GL_SetAttribute(SDL_GLAttr.SDL_GL_MULTISAMPLESAMPLES, config.MsaaSamples);
+        }
+
         var windowFlags = SDL_WindowFlags.SDL_WINDOW_OPENGL;
         if (config.Resizable)
         {

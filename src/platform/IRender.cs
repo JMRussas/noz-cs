@@ -16,7 +16,6 @@ public enum BufferUsage
 public class RenderBackendConfig
 {
     public bool VSync { get; set; } = true;
-    public int MaxCommands { get; set; } = 1024;
 }
 
 public interface IRender

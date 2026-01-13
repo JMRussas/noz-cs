@@ -6,5 +6,7 @@ namespace noz;
 
 public class RenderConfig {
     public bool Vsync = true;
-    public int MaxCommands = 1024;
+    public int MsaaSamples = 4;
+    public int MaxDrawCommands = 16384;
+    public int MaxBatches = 4096;
 }

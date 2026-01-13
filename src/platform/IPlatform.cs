@@ -22,6 +22,7 @@ public class PlatformConfig
     public bool VSync { get; set; } = true;
     public bool Resizable { get; set; } = true;
     public string? IconPath { get; set; }
+    public int MsaaSamples { get; set; } = 4;
 }
 
 public interface IPlatform

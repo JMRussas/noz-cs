@@ -6,6 +6,12 @@ using System.Numerics;
 
 namespace noz.editor;
 
+public enum WorkspaceState
+{
+    Default,
+    Edit
+}
+
 public static class Workspace
 {
     private const float ZoomMin = 0.01f;
@@ -37,6 +43,11 @@ public static class Workspace
     private static bool _isDragging;
     private static bool _dragStarted;
     private static InputCode _dragButton;
+    private static bool _clearSelectionOnRelease;
+
+    private static WorkspaceState _state = WorkspaceState.Default;
+    private static Document? _activeDocument;
+    private static int _selectedCount;
 
     public static Camera Camera => _camera;
     public static float Zoom => _zoom;
@@ -49,6 +60,9 @@ public static class Workspace
     public static Vector2 DragDelta => _dragDelta;
     public static Vector2 DragWorldDelta => _dragWorldDelta;
     public static float UserUIScale => _userUIScale;
+    public static WorkspaceState State => _state;
+    public static Document? ActiveDocument => _activeDocument;
+    public static int SelectedCount => _selectedCount;
 
     public static float GetUIScale() => Application.Platform.DisplayScale * _userUIScale;
 
@@ -105,6 +119,9 @@ public static class Workspace
         UpdateMouse();
         UpdatePan();
         UpdateZoom();
+
+        if (_state == WorkspaceState.Default)
+            UpdateDefaultState();
 
         Grid.Update(_camera);
     }
@@ -277,5 +294,135 @@ public static class Workspace
         _camera.Position = Vector2.Zero;
         _zoom = ZoomDefault;
         UpdateCamera();
+    }
+
+    public static void FrameSelected()
+    {
+        if (_selectedCount == 0)
+            return;
+
+        Rect? bounds = null;
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (!doc.IsSelected)
+                continue;
+
+            var docBounds = doc.Bounds.Offset(doc.Position);
+            bounds = bounds == null ? docBounds : Rect.Union(bounds.Value, docBounds);
+        }
+
+        if (bounds != null)
+            FrameView(bounds.Value);
+    }
+
+    public static Document? HitTestDocuments(Vector2 point)
+    {
+        Document? firstHit = null;
+        for (var i = DocumentManager.Documents.Count - 1; i >= 0; i--)
+        {
+            var doc = DocumentManager.Documents[i];
+            if (!doc.Loaded || !doc.PostLoaded)
+                continue;
+
+            if (!doc.Bounds.Offset(doc.Position).Contains(point))
+                continue;
+
+            firstHit ??= doc;
+            if (!doc.IsSelected)
+                return doc;
+        }
+        return firstHit;
+    }
+
+    public static void ClearSelection()
+    {
+        foreach (var doc in DocumentManager.Documents)
+            doc.IsSelected = false;
+        _selectedCount = 0;
+    }
+
+    public static void SetSelected(Document doc, bool selected)
+    {
+        if (doc.IsSelected == selected)
+            return;
+
+        doc.IsSelected = selected;
+        _selectedCount += selected ? 1 : -1;
+    }
+
+    public static void ToggleSelected(Document doc)
+    {
+        doc.IsSelected = !doc.IsSelected;
+        _selectedCount += doc.IsSelected ? 1 : -1;
+    }
+
+    public static Document? GetFirstSelected()
+    {
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (doc.IsSelected)
+                return doc;
+        }
+        return null;
+    }
+
+    public static void ToggleEdit()
+    {
+        if (_state == WorkspaceState.Edit)
+        {
+            EndEdit();
+            return;
+        }
+
+        if (_selectedCount != 1)
+            return;
+
+        var doc = GetFirstSelected();
+        if (doc == null || !doc.CanEdit())
+            return;
+
+        _activeDocument = doc;
+        doc.IsEditing = true;
+        _state = WorkspaceState.Edit;
+        doc.BeginEdit();
+    }
+
+    public static void EndEdit()
+    {
+        if (_activeDocument == null)
+            return;
+
+        _activeDocument.EndEdit();
+        _activeDocument.IsEditing = false;
+        _activeDocument = null;
+        _state = WorkspaceState.Default;
+
+        DocumentManager.SaveAll();
+    }
+
+    public static void UpdateDefaultState()
+    {
+        if (Input.WasButtonPressed(InputCode.MouseLeft))
+        {
+            var hitDoc = HitTestDocuments(_mouseWorldPosition);
+            if (hitDoc != null)
+            {
+                _clearSelectionOnRelease = false;
+                if (Input.IsShiftDown())
+                    ToggleSelected(hitDoc);
+                else
+                {
+                    ClearSelection();
+                    SetSelected(hitDoc, true);
+                }
+                return;
+            }
+            _clearSelectionOnRelease = !Input.IsShiftDown();
+        }
+
+        if (Input.WasButtonReleased(InputCode.MouseLeft) && _clearSelectionOnRelease)
+        {
+            ClearSelection();
+        }
     }
 }

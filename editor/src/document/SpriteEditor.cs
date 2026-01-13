@@ -31,8 +31,8 @@ public class SpriteEditor
     private SpriteEditorTool _activeTool = SpriteEditorTool.None;
     private Vector2 _dragStartWorld;
     private Vector2 _dragStartScreen;
-    private readonly Vector2[] _savedPositions = new Vector2[ShapeConstants.MaxAnchors];
-    private readonly float[] _savedCurves = new float[ShapeConstants.MaxAnchors];
+    private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
+    private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
     private ushort _curveAnchor = ushort.MaxValue;
     private ushort _pendingSelectAnchor = ushort.MaxValue;
     private bool _selectOnUp;

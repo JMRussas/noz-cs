@@ -50,6 +50,10 @@ public static class EditorStyle
     public static readonly Color Center = new(1f, 1f, 1f, 0.5f);
     public static readonly Color BoneSelected = EdgeSelected;
 
+    // Color32 versions for rendering
+    public static readonly Color32 SelectionColor32 = new(0xFF, 0x79, 0x00, 0xFF);
+    public static readonly Color32 EdgeColor = new(0x00, 0x00, 0x00, 0xFF);
+
     // UI Colors
     public static readonly Color UIBackground = Color.FromRgb(0x262525);
     public static readonly Color UIBorder = Color.FromRgb(0x2c323c);

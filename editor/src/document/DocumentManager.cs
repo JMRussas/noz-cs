@@ -1,3 +1,7 @@
+//
+//  NoZ - Copyright(c) 2026 NoZ Games, LLC
+//
+
 namespace noz.editor;
 
 public static class DocumentManager

@@ -13,9 +13,10 @@ public class MeshBatcher
     // Configuration
     private const int VerticesPerSegment = 65536;   // ~1.5MB per segment at 24 bytes/vertex
     private const int IndicesPerSegment = 196608;   // 3x vertices (worst case: all triangles)
-    private const int MaxDrawCommands = 16384;
-    private const int MaxBatches = 4096;
     private const int BufferSegments = 3;           // Triple buffering
+
+    private readonly int _maxDrawCommands;
+    private readonly int _maxBatches;
 
     // Ring buffer state
     private readonly MeshVertex[] _vertices;
@@ -54,20 +55,23 @@ public class MeshBatcher
 
     // Stats
     public ref readonly RenderStats Stats => ref _stats;
-    
-    public MeshBatcher()
+
+    public MeshBatcher(RenderConfig config)
     {
+        _maxDrawCommands = config.MaxDrawCommands;
+        _maxBatches = config.MaxBatches;
+
         _vertices = new MeshVertex[VerticesPerSegment * BufferSegments];
         _indices = new ushort[IndicesPerSegment * BufferSegments];
-        _commands = new DrawCommand[MaxDrawCommands];
-        _sortedIndices = new int[MaxDrawCommands];
-        _batches = new RenderBatch[MaxBatches];
+        _commands = new DrawCommand[_maxDrawCommands];
+        _sortedIndices = new int[_maxDrawCommands];
+        _batches = new RenderBatch[_maxBatches];
 
         _segmentVertexStart = new int[BufferSegments];
         _segmentIndexStart = new int[BufferSegments];
         _segmentFences = new FenceHandle[BufferSegments];
 
-        for (int i = 0; i < BufferSegments; i++)
+        for (var i = 0; i < BufferSegments; i++)
         {
             _segmentVertexStart[i] = i * VerticesPerSegment;
             _segmentIndexStart[i] = i * IndicesPerSegment;
@@ -148,7 +152,7 @@ public class MeshBatcher
         Color32 tint,
         int atlas = 0)
     {
-        if (_commandCount >= MaxDrawCommands)
+        if (_commandCount >= _maxDrawCommands)
             return;
 
         int segmentVertexEnd = _segmentVertexStart[_currentSegment] + VerticesPerSegment;
@@ -216,7 +220,7 @@ public class MeshBatcher
         ushort depth,
         Color32 tint)
     {
-        if (_commandCount >= MaxDrawCommands)
+        if (_commandCount >= _maxDrawCommands)
             return;
 
         var segmentVertexEnd = _segmentVertexStart[_currentSegment] + VerticesPerSegment;
@@ -316,7 +320,7 @@ public class MeshBatcher
             else
             {
                 // Start new batch
-                if (_batchCount >= MaxBatches)
+                if (_batchCount >= _maxBatches)
                     break;
 
                 _batches[_batchCount++] = new RenderBatch

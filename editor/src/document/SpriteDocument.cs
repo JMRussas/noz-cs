@@ -223,6 +223,63 @@ public class SpriteDocument : Document
         );
     }
 
+    public override bool CanEdit() => true;
+
+    public override void BeginEdit()
+    {
+        _currentFrame = 0;
+    }
+
+    public override void EndEdit()
+    {
+    }
+
+    public override void UpdateEdit()
+    {
+    }
+
+    public override void DrawEdit()
+    {
+        if (FrameCount <= 0)
+            return;
+
+        var frame = Frames[_currentFrame];
+        var shape = frame.Shape;
+
+        for (ushort pIdx = 0; pIdx < shape.PathCount; pIdx++)
+        {
+            var path = shape.GetPath(pIdx);
+            if (path.AnchorCount < 2)
+                continue;
+
+            for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
+            {
+                var anchorIdx = (ushort)(path.AnchorStart + aIdx);
+                var nextIdx = (ushort)(path.AnchorStart + (aIdx + 1) % path.AnchorCount);
+                var a0 = shape.GetAnchor(anchorIdx);
+                var a1 = shape.GetAnchor(nextIdx);
+                var samples = shape.GetSegmentSamples(anchorIdx);
+
+                var v0 = a0.Position + Position;
+                for (var i = 0; i < samples.Length; i++)
+                {
+                    var sample = samples[i] + Position;
+                    EditorRender.DrawLine(v0, sample, EditorStyle.EdgeColor);
+                    v0 = sample;
+                }
+                EditorRender.DrawLine(v0, a1.Position + Position, EditorStyle.EdgeColor);
+            }
+
+            for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
+            {
+                var anchor = shape.GetAnchor((ushort)(path.AnchorStart + aIdx));
+                EditorRender.DrawVertex(anchor.Position + Position, EditorStyle.EdgeColor);
+            }
+        }
+    }
+
+    private ushort _currentFrame;
+
     public override void Import(string outputPath, PropertySet config, PropertySet meta)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath) ?? "");

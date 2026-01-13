@@ -73,6 +73,8 @@ public struct Rect(float x, float y, float width, float height)
         return new Rect(X + offset.X, Y + offset.Y, Width, Height);
     }
 
+    public Rect Offset(Vector2 offset) => Translate(offset);
+
     public static Rect FromMinMax(Vector2 min, Vector2 max)
     {
         return new Rect(min.X, min.Y, max.X - min.X, max.Y - min.Y);

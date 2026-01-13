@@ -86,6 +86,9 @@ void main()
         _gl.Enable(EnableCap.Blend);
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
 
+        // Enable MSAA if available
+        _gl.Enable(EnableCap.Multisample);
+
         // Create VAO for MeshVertex format
         _meshVao = _gl.GenVertexArray();
         _gl.BindVertexArray(_meshVao);

@@ -23,11 +23,10 @@ public static class Render
 
         Backend.Init(new RenderBackendConfig
         {
-            VSync = Config.Vsync,
-            MaxCommands = Config.MaxCommands
+            VSync = Config.Vsync
         });
 
-        Batcher = new MeshBatcher();
+        Batcher = new MeshBatcher(Config);
         Batcher.Init(Backend);
         Camera = new Camera();
     }

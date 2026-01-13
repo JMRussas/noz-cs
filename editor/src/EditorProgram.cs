@@ -28,10 +28,7 @@ Application.Init(new ApplicationConfig
     AudioBackend = new SDLAudio(),
     Vtable = new EditorVtable(),
 
-    Render = new RenderConfig
-    {
-        MaxCommands = 2048
-    }
+    Render = new RenderConfig()
 });
 
 Editor.Init(projectPath, clean);
