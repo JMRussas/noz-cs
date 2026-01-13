@@ -14,6 +14,8 @@ public class WebGLRender : IRender
     private IJSObjectReference? _module;
     private RenderBackendConfig _config = null!;
 
+    public string ShaderExtension => ".gles";
+
     public WebGLRender(IJSRuntime js)
     {
         _js = js;

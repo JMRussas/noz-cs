@@ -13,25 +13,6 @@ public class TextureDocument : Document
             ".png",
             () => new TextureDocument()
         ));
-
-        // Also register other common image formats
-        DocumentDef.Register(new DocumentDef(
-            AssetType.Texture,
-            ".jpg",
-            () => new TextureDocument()
-        ));
-
-        DocumentDef.Register(new DocumentDef(
-            AssetType.Texture,
-            ".jpeg",
-            () => new TextureDocument()
-        ));
-
-        DocumentDef.Register(new DocumentDef(
-            AssetType.Texture,
-            ".tga",
-            () => new TextureDocument()
-        ));
     }
 
     public override void LoadMetadata(PropertySet meta)
@@ -64,13 +45,13 @@ public class TextureDocument : Document
         writer.Write((ushort)0);
 
         // Texture format
-        var formatByte = 0; // RGBA8
-        var filterByte = (byte)(filter == "nearest" || filter == "point" ? 0 : 1);
-        var clampByte = (byte)(clamp == "repeat" ? 0 : 1);
+        var format = TextureFormat.RGBA8;
+        var filterEnum = filter is "nearest" or "point" ? TextureFilter.Nearest : TextureFilter.Linear;
+        var clampEnum = clamp == "repeat" ? TextureClamp.Repeat : TextureClamp.Clamp;
 
-        writer.Write(formatByte);
-        writer.Write(filterByte);
-        writer.Write(clampByte);
+        writer.Write((byte)format);
+        writer.Write((byte)filterEnum);
+        writer.Write((byte)clampEnum);
         writer.Write((uint)image.Width);
         writer.Write((uint)image.Height);
         writer.Write(image.Data);

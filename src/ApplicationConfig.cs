@@ -4,12 +4,12 @@
 
 namespace noz;
 
-public interface IApplication
+public interface IApplicationVtable
 {
     void Update();
-    void LoadAsset(Asset asset) { }
-    void UnloadAsset(Asset asset) { }
-    void ReloadAsset(Asset asset) { }
+    void LoadAssets() { }
+    void UnloadAssets() { }
+    void ReloadAssets() { }
 }
 
 public class ApplicationConfig
@@ -20,7 +20,8 @@ public class ApplicationConfig
     public bool VSync { get; init; } = true;
     public bool Resizable { get; init; } = true;
     public RenderConfig? Render { get; init; }
-    public IApplication? Vtable { get; init; }
+    public IApplicationVtable? Vtable { get; init; }
     public IPlatform? Platform { get; init; }
     public IRender? RenderBackend { get; init; }
+    public string AssetPath { get; init; } = "assets/library";
 }

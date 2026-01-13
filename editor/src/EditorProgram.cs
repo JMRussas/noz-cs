@@ -20,7 +20,6 @@ Application.Init(new ApplicationConfig
     Title = "NoZ Editor",
     Width = 1600,
     Height = 900,
-
     Platform = new SDLPlatform(),
     RenderBackend = new OpenGLRender(),
     Vtable = new EditorVtable(),

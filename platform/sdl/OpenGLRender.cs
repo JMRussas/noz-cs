@@ -15,6 +15,8 @@ public unsafe class OpenGLRender : IRender
     private RenderBackendConfig _config = null!;
     private GL _gl = null!;
 
+    public string ShaderExtension => ".glsl";
+
     // Resource tracking
     private uint _nextBufferId = 1;
     private uint _nextTextureId = 2; // 1 is reserved for white texture

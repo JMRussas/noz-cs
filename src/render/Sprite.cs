@@ -18,6 +18,6 @@ public class Sprite : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Sprite, Load));   
+        RegisterDef(new AssetDef(AssetType.Sprite, typeof(Sprite), Load));
     }
 }

@@ -18,6 +18,6 @@ public class Sound : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Sound, Load));
+        RegisterDef(new AssetDef(AssetType.Sound, typeof(Sound), Load));
     }
 }

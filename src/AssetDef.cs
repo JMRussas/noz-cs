@@ -4,11 +4,12 @@
 
 namespace noz;
 
-internal delegate Asset LoadAssetDelegate(Stream stream, string name);
+public delegate Asset? LoadAssetDelegate(Stream stream, string name);
 
-internal class AssetDef(AssetType type, LoadAssetDelegate load)
+public class AssetDef(AssetType type, Type runtimeType, LoadAssetDelegate load)
 {
     public AssetType Type { get; } = type;
-    public LoadAssetDelegate Load { get; } = load;
+    public Type RuntimeType { get; } = runtimeType;
+    internal LoadAssetDelegate Load { get; } = load;
 }
 

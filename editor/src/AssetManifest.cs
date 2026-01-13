@@ -34,24 +34,78 @@ public static class AssetManifest
         writer.WriteLine("{");
 
         var documentsByType = DocumentManager.Documents
+            .Where(d => !d.IsEditorOnly)
             .GroupBy(d => d.Def.Type)
-            .OrderBy(g => g.Key.ToString());
+            .OrderBy(g => g.Key.ToString())
+            .ToList();
 
+        // Names class
+        writer.WriteLine("    public static class Names");
+        writer.WriteLine("    {");
         foreach (var group in documentsByType)
         {
-            var typeName = group.Key.ToString();
-            writer.WriteLine($"    public static class {typeName}s");
-            writer.WriteLine("    {");
-
             foreach (var doc in group.OrderBy(d => d.Name))
             {
                 var constName = ToPascalCase(doc.Name);
                 writer.WriteLine($"        public const string {constName} = \"{doc.Name}\";");
             }
-
-            writer.WriteLine("    }");
-            writer.WriteLine();
         }
+        writer.WriteLine("    }");
+
+        // Static fields grouped by type
+        foreach (var group in documentsByType)
+        {
+            var typeName = group.Key.ToString();
+            var runtimeType = Asset.GetDef(group.Key)?.RuntimeType.Name ?? "Asset";
+
+            writer.WriteLine();
+            writer.WriteLine($"    public static class {typeName}s");
+            writer.WriteLine("    {");
+            foreach (var doc in group.OrderBy(d => d.Name))
+            {
+                var fieldName = ToPascalCase(doc.Name);
+                writer.WriteLine($"        public static {runtimeType}? {fieldName};");
+            }
+            writer.WriteLine("    }");
+        }
+
+        // LoadAssets method
+        writer.WriteLine();
+        writer.WriteLine("    public static void LoadAssets()");
+        writer.WriteLine("    {");
+        foreach (var group in documentsByType)
+        {
+            var typeName = group.Key.ToString();
+            var runtimeType = Asset.GetDef(group.Key)?.RuntimeType.Name ?? "Asset";
+            foreach (var doc in group.OrderBy(d => d.Name))
+            {
+                var fieldName = ToPascalCase(doc.Name);
+                writer.WriteLine($"        {typeName}s.{fieldName} = ({runtimeType}?)Asset.Load(AssetType.{group.Key}, Names.{fieldName});");
+            }
+        }
+        writer.WriteLine("    }");
+
+        // ReloadAssets method
+        writer.WriteLine();
+        writer.WriteLine("    public static void ReloadAssets()");
+        writer.WriteLine("    {");
+        writer.WriteLine("        // TODO: hot reload");
+        writer.WriteLine("    }");
+
+        // UnloadAssets method
+        writer.WriteLine();
+        writer.WriteLine("    public static void UnloadAssets()");
+        writer.WriteLine("    {");
+        foreach (var group in documentsByType)
+        {
+            var typeName = group.Key.ToString();
+            foreach (var doc in group.OrderBy(d => d.Name))
+            {
+                var fieldName = ToPascalCase(doc.Name);
+                writer.WriteLine($"        {typeName}s.{fieldName}?.Dispose();");
+            }
+        }
+        writer.WriteLine("    }");
 
         writer.WriteLine("}");
 
@@ -75,6 +129,7 @@ public static class AssetManifest
         writer.WriteLine();
 
         var documentsByType = DocumentManager.Documents
+            .Where(d => !d.IsEditorOnly)
             .GroupBy(d => d.Def.Type)
             .OrderBy(g => g.Key.ToString());
 

@@ -6,12 +6,12 @@ using noz.editor;
 
 namespace noz;
 
-internal class EditorVtable : IApplication
+internal class EditorVtable : IApplicationVtable
 {
     public void Update() => Editor.Update();
-    public void LoadAsset(Asset asset) => Editor.LoadAsset(asset);
-    public void UnloadAsset(Asset asset) => Editor.UnloadAsset(asset);
-    public void ReloadAsset(Asset asset) => Editor.ReloadAsset(asset);
+    public void LoadAssets() =>  EditorAssets.LoadAssets();
+    public void UnloadAssets() => EditorAssets.UnloadAssets();
+    public void ReloadAssets() => EditorAssets.ReloadAssets();
 }
 
 public static class Editor
@@ -47,11 +47,15 @@ public static class Editor
         Importer.Init(clean);
 
         if (Config != null)
+        {
+            PaletteManager.Init(Config);
             AssetManifest.Generate(Config);
+        }
     }
 
     public static void Shutdown()
     {
+        PaletteManager.Shutdown();
         Importer.Shutdown();
         DocumentManager.Shutdown();
         _input = null;

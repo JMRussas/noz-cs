@@ -10,12 +10,13 @@ public static class Application
 {
     private static bool _running;
 
-    private static IApplication _vtable = null!;
+    private static IApplicationVtable _vtable = null!;
 
     public static ApplicationConfig Config { get; private set; } = null!;
     public static IPlatform Platform { get; private set; } = null!;
     public static IRender RenderBackend { get; private set; } = null!;
     public static Vector2 WindowSize => Platform.WindowSize;
+    public static string AssetPath { get; private set; } = null!;
 
     public static void Init(ApplicationConfig config)
     {
@@ -30,6 +31,8 @@ public static class Application
 
         _vtable = config.Vtable ?? throw new ArgumentNullException(nameof(config.Vtable),
             "App must be provided. Implement IApplication in your game.");
+
+        AssetPath = Path.Combine(Directory.GetCurrentDirectory(), config.AssetPath);
 
         // Initialize platform
         Platform.Init(new PlatformConfig
@@ -49,7 +52,18 @@ public static class Application
         Input.Init();
         Render.Init(config.Render, RenderBackend);
 
+        // Register asset types and load assets
+        RegisterAssetTypes();
+        _vtable.LoadAssets();
+
         _running = true;
+    }
+
+    private static void RegisterAssetTypes()
+    {
+        Texture.RegisterDef();
+        Sprite.RegisterDef();
+        Sound.RegisterDef();
     }
 
     public static void Run()
@@ -76,6 +90,8 @@ public static class Application
 
     public static void Shutdown()
     {
+        _vtable.UnloadAssets();
+
         Render.Shutdown();
         Input.Shutdown();
         Time.Shutdown();

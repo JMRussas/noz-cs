@@ -21,6 +21,9 @@ public class RenderBackendConfig
 
 public interface IRender
 {
+    // === Properties ===
+    string ShaderExtension { get; }
+
     // === Lifecycle ===
     void Init(RenderBackendConfig config);
     void Shutdown();
