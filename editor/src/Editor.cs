@@ -9,7 +9,15 @@ namespace noz;
 internal class EditorVtable : IApplicationVtable
 {
     public void Update() => Editor.Update();
-    public void LoadAssets() =>  EditorAssets.LoadAssets();
+    public void UpdateUI() => Editor.UpdateUI();
+
+    public void LoadAssets()
+    {
+        Importer.WaitForAllTasks();
+        EditorAssets.LoadAssets();
+        Editor.PostLoadInit();
+    }
+
     public void UnloadAssets() => EditorAssets.UnloadAssets();
     public void ReloadAssets() => EditorAssets.ReloadAssets();
 }
@@ -21,11 +29,7 @@ public static class Editor
     public static void Init(string? projectPath, bool clean)
     {
         Log.Info($"Working Directory: {Environment.CurrentDirectory}");
-        
-        EditorStyle.Init();
-        Workspace.Init();
 
-        // Register document types
         TextureDocument.RegisterDef();
         ShaderDocument.RegisterDef();
         SoundDocument.RegisterDef();
@@ -43,8 +47,17 @@ public static class Editor
 
         DocumentManager.Init(Config.SourcePaths, Config.OutputPath);
         Importer.Init(clean);
-        PaletteManager.Init(Config);
         AssetManifest.Generate(Config);
+    }
+
+    internal static void PostLoadInit()
+    {
+        if (Config == null)
+            return;
+
+        EditorStyle.Init();
+        Workspace.Init();
+        PaletteManager.Init(Config);
     }
 
     public static void Shutdown()
@@ -73,15 +86,11 @@ public static class Editor
             Workspace.ActiveDocument.DrawEdit();
         }
 
-        var refSize = Workspace.GetRefSize();
-        UI.Begin(refSize.X, refSize.Y);
-        UpdateUI();
-        UI.End();
-
         Workspace.DrawOverlay();
+    }
 
-        // Composite pass - renders scene to screen with Y flip
-        Workspace.DrawComposite();
+    public static void UpdateUI()
+    {
     }
 
     private static void CheckShortcuts()
@@ -127,10 +136,4 @@ public static class Editor
                 EditorRender.DrawBounds(doc, EditorStyle.SelectionColor32);
         }
     }
-
-    private static void UpdateUI()
-    {
-        // UI.BeginCanvas();
-        // UI.EndCanvas();
-    }
-} 
+}

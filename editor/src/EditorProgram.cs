@@ -17,6 +17,8 @@ for (var i = 0; i < args.Length; i++)
         clean = true;
 }
 
+Editor.Init(projectPath, clean);
+
 Application.Init(new ApplicationConfig
 {
     Title = "NoZ Editor",
@@ -28,10 +30,11 @@ Application.Init(new ApplicationConfig
     AudioBackend = new SDLAudio(),
     Vtable = new EditorVtable(),
 
-    Render = new RenderConfig()
+    Render = new RenderConfig
+    {
+        CompositeShader = "composite"
+    }
 });
-
-Editor.Init(projectPath, clean);
 
 Application.Run();
 

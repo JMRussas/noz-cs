@@ -10,7 +10,7 @@ public class SoundDocument : Document
 {
     public static void RegisterDef()
     {
-        DocumentDef.Register(new DocumentDef(
+        DocumentManager.RegisterDef(new DocumentDef(
             AssetType.Sound,
             ".wav",
             () => new SoundDocument()

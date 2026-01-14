@@ -5,6 +5,7 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Microsoft.JSInterop;
+using noz.Platform;
 
 namespace noz;
 
@@ -117,6 +118,11 @@ public class WebGLRender : IRender
         return new TextureHandle(id);
     }
 
+    public void UpdateTexture(TextureHandle handle, int width, int height, ReadOnlySpan<byte> data)
+    {
+        _module?.InvokeVoidAsync("updateTexture", handle.Id, width, height, data.ToArray());
+    }
+
     public void DestroyTexture(TextureHandle handle)
     {
         _module?.InvokeVoidAsync("destroyTexture", handle.Id);
@@ -127,12 +133,31 @@ public class WebGLRender : IRender
         _module?.InvokeVoidAsync("bindTexture", slot, handle.Id);
     }
 
+    // === Texture Array Management ===
+
+    public TextureHandle CreateTextureArray(int width, int height, int layers)
+    {
+        if (_module == null) return TextureHandle.Invalid;
+        var id = _module.InvokeAsync<ushort>("createTextureArray", width, height, layers).AsTask().Result;
+        return new TextureHandle(id);
+    }
+
+    public void UpdateTextureArrayLayer(TextureHandle handle, int layer, ReadOnlySpan<byte> data)
+    {
+        _module?.InvokeVoidAsync("updateTextureArrayLayer", handle.Id, layer, data.ToArray());
+    }
+
+    public void BindTextureArray(int slot, TextureHandle handle)
+    {
+        _module?.InvokeVoidAsync("bindTextureArray", slot, handle.Id);
+    }
+
     // === Shader Management ===
 
-    public ShaderHandle CreateShader(string vertexSource, string fragmentSource)
+    public ShaderHandle CreateShader(string name, string vertexSource, string fragmentSource)
     {
         if (_module == null) return ShaderHandle.Invalid;
-        var id = _module.InvokeAsync<byte>("createShader", vertexSource, fragmentSource).AsTask().Result;
+        var id = _module.InvokeAsync<byte>("createShader", name, vertexSource, fragmentSource).AsTask().Result;
         return new ShaderHandle(id);
     }
 
@@ -164,6 +189,41 @@ public class WebGLRender : IRender
     public void SetUniformInt(string name, int value)
     {
         _module?.InvokeVoidAsync("setUniformInt", name, value);
+    }
+
+    public void SetUniformFloat(string name, float value)
+    {
+        _module?.InvokeVoidAsync("setUniformFloat", name, value);
+    }
+
+    public void SetUniformVec2(string name, Vector2 value)
+    {
+        _module?.InvokeVoidAsync("setUniformVec2", name, value.X, value.Y);
+    }
+
+    public void SetUniformVec4(string name, Vector4 value)
+    {
+        _module?.InvokeVoidAsync("setUniformVec4", name, value.X, value.Y, value.Z, value.W);
+    }
+
+    public void SetBoneTransforms(ReadOnlySpan<Matrix3x2> bones)
+    {
+        if (_module == null) return;
+
+        // Pack Matrix3x2 into vec3 pairs for WebGL (same as OpenGL)
+        var data = new float[bones.Length * 6];
+        for (int i = 0; i < bones.Length; i++)
+        {
+            var m = bones[i];
+            int offset = i * 6;
+            data[offset + 0] = m.M11;
+            data[offset + 1] = m.M21;
+            data[offset + 2] = m.M31;
+            data[offset + 3] = m.M12;
+            data[offset + 4] = m.M22;
+            data[offset + 5] = m.M32;
+        }
+        _module.InvokeVoidAsync("setBoneTransforms", data);
     }
 
     // === State Management ===
@@ -217,23 +277,8 @@ public class WebGLRender : IRender
         // TODO: Implement MSAA resolve for WebGL
     }
 
-    public void BeginCompositePass()
+    public void Composite(ShaderHandle compositeShader)
     {
-        // TODO: Implement composite pass for WebGL
-    }
-
-    public void EndCompositePass()
-    {
-        // Nothing needed for now
-    }
-
-    public void BindSceneTexture()
-    {
-        // TODO: Bind offscreen texture for WebGL
-    }
-
-    public void DrawFullscreenQuad()
-    {
-        // TODO: Draw fullscreen quad for WebGL composite
+        // TODO: Implement composite for WebGL
     }
 }

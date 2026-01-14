@@ -67,16 +67,10 @@ public sealed unsafe class PixelData : IDisposable
         var xe = rect.X + rect.Width;
         var ye = rect.Y + rect.Height;
         for (var y = rect.Y; y < ye; y++)
-        {
             for (var x = rect.X; x < xe; x++)
-            {
                 _pixels[y * Size.X + x] = color;
-            }
-        }
     }
 
-    public ReadOnlySpan<byte> AsBytes()
-    {
-        return new ReadOnlySpan<byte>(_memory, Size.X * Size.Y * sizeof(Color32));
-    }
+    public ReadOnlySpan<byte> AsBytes() =>
+        new ReadOnlySpan<byte>(_memory, Size.X * Size.Y * sizeof(Color32));
 }

@@ -14,6 +14,9 @@ public static class DocumentManager
     public static IReadOnlyList<string> SourcePaths => _sourcePaths;
     public static string OutputPath => _outputPath;
 
+    private static readonly Dictionary<AssetType, DocumentDef> _defsByType = new();
+    private static readonly Dictionary<string, DocumentDef> _defsByExtension = new();
+    
     public static void Init(string[] sourcePaths, string outputPath)
     {
         _sourcePaths.Clear();
@@ -33,10 +36,29 @@ public static class DocumentManager
         _sourcePaths.Clear();
     }
 
+    public static void RegisterDef(DocumentDef def)
+    {
+        _defsByType[def.Type] = def;
+        _defsByExtension[def.Extension] = def;
+    }
+
+    public static DocumentDef? GetDef(AssetType type)
+    {
+        return _defsByType.TryGetValue(type, out var def) ? def : null;
+    }
+
+    public static DocumentDef? GetDef(string ext)
+    {
+        ext = ext.ToLowerInvariant();
+        if (!ext.StartsWith('.'))
+            ext = "." + ext;
+        return _defsByExtension.TryGetValue(ext, out var def) ? def : null;
+    }
+    
     public static Document? CreateDocument(string path)
     {
         string ext = Path.GetExtension(path);
-        var def = DocumentDef.GetByExtension(ext);
+        var def = GetDef(ext);
         if (def == null)
             return null;
 
@@ -164,7 +186,7 @@ public static class DocumentManager
                     continue;
 
                 // Skip if no document def for this extension
-                if (DocumentDef.GetByExtension(ext) == null)
+                if (GetDef(ext) == null)
                     continue;
 
                 // Skip if document with this name already exists

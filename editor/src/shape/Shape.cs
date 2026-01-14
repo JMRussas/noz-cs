@@ -165,7 +165,7 @@ public sealed unsafe class Shape : IDisposable
         }
     }
 
-    public void UpdateBounds()
+    public void UpdateBounds(float dpi = 1f)
     {
         if (AnchorCount == 0)
         {
@@ -201,12 +201,13 @@ public sealed unsafe class Shape : IDisposable
         }
 
         Bounds = Rect.FromMinMax(min, max);
-        RasterBounds = new RectInt(
-            (int)MathF.Floor(min.X),
-            (int)MathF.Floor(min.Y),
-            (int)MathF.Ceiling(max.X - min.X),
-            (int)MathF.Ceiling(max.Y - min.Y)
-        );
+
+        var xMin = (int)MathF.Floor(min.X * dpi);
+        var yMin = (int)MathF.Floor(min.Y * dpi);
+        var xMax = (int)MathF.Ceiling(max.X * dpi);
+        var yMax = (int)MathF.Ceiling(max.Y * dpi);
+
+        RasterBounds = new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
     }
 
     public HitResult HitTest(Vector2 point, float anchorRadius = 5f, float segmentRadius = 3f)
@@ -604,5 +605,99 @@ public sealed unsafe class Shape : IDisposable
     public UnsafeSpan<Vector2> GetSegmentSamples(ushort anchorIndex)
     {
         return GetSegmentSamplesSpan(anchorIndex);
+    }
+
+    public void Rasterize(PixelData pixels, Color[] palette, Vector2Int offset, float dpi = 1f)
+    {
+        if (PathCount == 0) return;
+
+        const int maxPolyVerts = 256;
+        Span<Vector2> polyVerts = stackalloc Vector2[maxPolyVerts];
+
+        for (ushort pIdx = 0; pIdx < PathCount; pIdx++)
+        {
+            ref var path = ref _paths[pIdx];
+            if (path.AnchorCount < 3) continue;
+
+            var vertexCount = 0;
+            for (ushort aIdx = 0; aIdx < path.AnchorCount && vertexCount < maxPolyVerts; aIdx++)
+            {
+                var anchorIdx = path.AnchorStart + aIdx;
+                ref var anchor = ref _anchors[anchorIdx];
+
+                polyVerts[vertexCount++] = anchor.Position * dpi;
+
+                if (MathF.Abs(anchor.Curve) > 0.0001f)
+                {
+                    var samples = GetSegmentSamplesSpan(anchorIdx);
+                    for (var s = 0; s < MaxSegmentSamples && vertexCount < maxPolyVerts; s++)
+                    {
+                        polyVerts[vertexCount++] = samples[s] * dpi;
+                    }
+                }
+            }
+
+            if (vertexCount < 3) continue;
+
+            var fillColor = palette[path.FillColor % palette.Length].ToColor32();
+
+            var rb = RasterBounds;
+            for (var y = 0; y < rb.Height; y++)
+            {
+                var py = offset.Y + rb.Y + y;
+                if (py < 0 || py >= pixels.Height) continue;
+
+                var sampleY = rb.Y + y + 0.5f;
+
+                for (var x = 0; x < rb.Width; x++)
+                {
+                    var px = offset.X + rb.X + x;
+                    if (px < 0 || px >= pixels.Width) continue;
+
+                    var sampleX = rb.X + x + 0.5f;
+                    if (IsPointInPolygon(new Vector2(sampleX, sampleY), polyVerts[..vertexCount]))
+                    {
+                        ref var dst = ref pixels[px, py];
+                        if (fillColor.A == 255 || dst.A == 0)
+                        {
+                            dst = fillColor;
+                        }
+                        else if (fillColor.A > 0)
+                        {
+                            dst = Color32.Blend(dst, fillColor);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private static bool IsPointInPolygon(Vector2 point, Span<Vector2> verts)
+    {
+        var winding = 0;
+        var count = verts.Length;
+
+        for (var i = 0; i < count; i++)
+        {
+            var j = (i + 1) % count;
+            var p0 = verts[i];
+            var p1 = verts[j];
+
+            if (p0.Y <= point.Y)
+            {
+                if (p1.Y > point.Y)
+                {
+                    var cross = (p1.X - p0.X) * (point.Y - p0.Y) - (point.X - p0.X) * (p1.Y - p0.Y);
+                    if (cross >= 0) winding++;
+                }
+            }
+            else if (p1.Y <= point.Y)
+            {
+                var cross = (p1.X - p0.X) * (point.Y - p0.Y) - (point.X - p0.X) * (p1.Y - p0.Y);
+                if (cross < 0) winding--;
+            }
+        }
+
+        return winding != 0;
     }
 }

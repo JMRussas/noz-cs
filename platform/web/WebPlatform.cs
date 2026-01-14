@@ -4,6 +4,7 @@
 
 using System.Numerics;
 using Microsoft.JSInterop;
+using noz.Platform;
 
 namespace noz;
 
@@ -16,6 +17,8 @@ public class WebPlatform : IPlatform
     private DotNetObjectReference<WebPlatform>? _dotNetRef;
 
     public Vector2 WindowSize => _windowSize;
+    public float DisplayScale => 1.0f; // TODO: Get from browser
+    public bool IsTextboxVisible => false; // TODO: Implement
     public event Action<PlatformEvent>? OnEvent;
 
     public WebPlatform(IJSRuntime js)
@@ -59,6 +62,32 @@ public class WebPlatform : IPlatform
     public void RequestQuit()
     {
         _shouldQuit = true;
+    }
+
+    public void SetResizeCallback(Action? callback)
+    {
+        // TODO: Implement resize callback for web
+    }
+
+    public void ShowTextbox(Rect rect, string text, NativeTextboxStyle style)
+    {
+        // TODO: Implement native textbox for web
+    }
+
+    public void HideTextbox()
+    {
+        // TODO: Implement native textbox for web
+    }
+
+    public void UpdateTextboxRect(Rect rect, int fontSize)
+    {
+        // TODO: Implement native textbox for web
+    }
+
+    public bool UpdateTextboxText(ref string text)
+    {
+        // TODO: Implement native textbox for web
+        return false;
     }
 
     // Called from JavaScript

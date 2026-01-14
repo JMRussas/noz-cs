@@ -12,7 +12,7 @@ public class TextureDocument : Document
 
     public static void RegisterDef()
     {
-        DocumentDef.Register(new DocumentDef(
+        DocumentManager.RegisterDef(new DocumentDef(
             AssetType.Texture,
             ".png",
             () => new TextureDocument()
@@ -54,6 +54,11 @@ public class TextureDocument : Document
     {
         if (Texture == null)
             return;
+
+        if (EditorAssets.Shaders.Texture is Shader textureShader)
+            Render.BindShader(textureShader);
+
+        Render.Backend.BindTexture(0, Texture.Handle);
 
         var size = Bounds.Size;
         Render.DrawQuad(

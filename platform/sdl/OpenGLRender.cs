@@ -3,8 +3,6 @@
 //
 
 using System.Numerics;
-using System.Runtime.InteropServices;
-using System.Text;
 using Silk.NET.OpenGL;
 using static SDL.SDL3;
 
@@ -20,13 +18,13 @@ public unsafe class OpenGLRender : IRender
     // Resource tracking
     private uint _nextBufferId = 1;
     private uint _nextTextureId = 2; // 1 is reserved for white texture
-    private byte _nextShaderId = 2;  // 1 is reserved for sprite shader
+    private byte _nextShaderId = 1;
     private ulong _nextFenceId = 1;
 
     private readonly Dictionary<uint, uint> _buffers = new();           // Handle -> GL buffer
     private readonly Dictionary<ushort, uint> _textures = new();        // Handle -> GL texture
     private readonly Dictionary<byte, uint> _shaders = new();           // Handle -> GL program
-    private readonly Dictionary<ulong, nint> _fences = new();           // Handle -> GLsync
+    private readonly Dictionary<ulong, nint> _fences = new();           // Handle -> GL sync
 
     // VAO for MeshVertex format
     private uint _meshVao;
@@ -48,81 +46,13 @@ public unsafe class OpenGLRender : IRender
     // Fullscreen quad for composite pass
     private uint _fullscreenVao;
     private uint _fullscreenVbo;
-    private uint _compositeShader;
-
-    // Default sprite shader source
-    // Matches MeshVertex layout: position, uv, normal, color, opacity, depth, bone, atlas
-    private const string SpriteVertexShader = @"#version 330 core
-layout(location = 0) in vec2 aPosition;
-layout(location = 1) in vec2 aUV;
-layout(location = 2) in vec2 aNormal;
-layout(location = 3) in vec4 aColor;
-layout(location = 4) in float aOpacity;
-layout(location = 5) in float aDepth;
-layout(location = 6) in int aBone;
-layout(location = 7) in int aAtlas;
-
-uniform mat4 uProjection;
-
-out vec2 vUV;
-out vec4 vColor;
-flat out int vAtlas;
-
-void main()
-{
-    gl_Position = uProjection * vec4(aPosition, aDepth, 1.0);
-    vUV = aUV;
-    vColor = aColor * aOpacity;
-    vAtlas = aAtlas;
-}";
-
-    private const string SpriteFragmentShader = @"#version 330 core
-in vec2 vUV;
-in vec4 vColor;
-flat in int vAtlas;
-
-uniform sampler2D uTexture;
-
-out vec4 FragColor;
-
-void main()
-{
-    vec4 texColor = texture(uTexture, vUV);
-    FragColor = texColor * vColor;
-}";
-
-    // Composite shader - renders fullscreen quad with Y flip
-    private const string CompositeVertexShader = @"#version 330 core
-layout(location = 0) in vec2 aPosition;
-layout(location = 1) in vec2 aUV;
-
-out vec2 vUV;
-
-void main()
-{
-    gl_Position = vec4(aPosition, 0.0, 1.0);
-    // Flip Y: map UV.y from [0,1] to [1,0]
-    vUV = vec2(aUV.x, 1.0 - aUV.y);
-}";
-
-    private const string CompositeFragmentShader = @"#version 330 core
-in vec2 vUV;
-
-uniform sampler2D uTexture;
-
-out vec4 FragColor;
-
-void main()
-{
-    FragColor = texture(uTexture, vUV);
-}";
 
     public void Init(RenderBackendConfig config)
     {
         _config = config;
 
         // Create GL context using SDL's GetProcAddress
-        _gl = GL.GetApi(name => (nint)SDL_GL_GetProcAddress(name));
+        _gl = GL.GetApi(name => SDL_GL_GetProcAddress(name));
 
         // Enable standard blend mode
         _gl.Enable(EnableCap.Blend);
@@ -152,23 +82,6 @@ void main()
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
         _textures[TextureHandle.White.Id] = whiteTex;
-
-        // Create built-in sprite shader
-        var spriteProgram = CreateShaderProgram(SpriteVertexShader, SpriteFragmentShader);
-        _shaders[ShaderHandle.Sprite.Id] = spriteProgram;
-
-        // Set texture uniform to slot 0
-        _gl.UseProgram(spriteProgram);
-        var texLoc = _gl.GetUniformLocation(spriteProgram, "uTexture");
-        if (texLoc >= 0)
-            _gl.Uniform1(texLoc, 0);
-
-        // Create composite shader
-        _compositeShader = CreateShaderProgram(CompositeVertexShader, CompositeFragmentShader);
-        _gl.UseProgram(_compositeShader);
-        texLoc = _gl.GetUniformLocation(_compositeShader, "uTexture");
-        if (texLoc >= 0)
-            _gl.Uniform1(texLoc, 0);
 
         // Create fullscreen quad VAO/VBO
         // Positions and UVs for a fullscreen quad (two triangles)
@@ -208,9 +121,7 @@ void main()
         // Clean up offscreen target
         DestroyOffscreenTarget();
 
-        // Clean up composite resources
-        if (_compositeShader != 0)
-            _gl.DeleteProgram(_compositeShader);
+        // Clean up fullscreen quad resources
         if (_fullscreenVbo != 0)
             _gl.DeleteBuffer(_fullscreenVbo);
         if (_fullscreenVao != 0)
@@ -326,9 +237,10 @@ void main()
         _boundVertexBuffer = glBuffer;
         _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
 
-        // Setup vertex attributes for MeshVertex layout (56 bytes total)
-        // Offsets: position(0), uv(8), normal(16), color(24), opacity(40), depth(44), bone(48), atlas(52)
-        uint stride = (uint)MeshVertex.SizeInBytes;
+        // Setup vertex attributes for MeshVertex layout (68 bytes total)
+        // Offsets: position(0), uv(8), normal(16), color(24), opacity(40), bone(44), atlas(48),
+        //          frameCount(52), frameWidth(56), frameRate(60), animStartTime(64)
+        uint stride = MeshVertex.SizeInBytes;
 
         // Position: vec2 at offset 0
         _gl.EnableVertexAttribArray(0);
@@ -350,17 +262,29 @@ void main()
         _gl.EnableVertexAttribArray(4);
         _gl.VertexAttribPointer(4, 1, VertexAttribPointerType.Float, false, stride, (void*)40);
 
-        // Depth: float at offset 44
+        // Bone: int at offset 44
         _gl.EnableVertexAttribArray(5);
-        _gl.VertexAttribPointer(5, 1, VertexAttribPointerType.Float, false, stride, (void*)44);
+        _gl.VertexAttribIPointer(5, 1, VertexAttribIType.Int, stride, (void*)44);
 
-        // Bone: int at offset 48
+        // Atlas: int at offset 48
         _gl.EnableVertexAttribArray(6);
         _gl.VertexAttribIPointer(6, 1, VertexAttribIType.Int, stride, (void*)48);
 
-        // Atlas: int at offset 52
+        // FrameCount: int at offset 52
         _gl.EnableVertexAttribArray(7);
         _gl.VertexAttribIPointer(7, 1, VertexAttribIType.Int, stride, (void*)52);
+
+        // FrameWidth: float at offset 56
+        _gl.EnableVertexAttribArray(8);
+        _gl.VertexAttribPointer(8, 1, VertexAttribPointerType.Float, false, stride, (void*)56);
+
+        // FrameRate: float at offset 60
+        _gl.EnableVertexAttribArray(9);
+        _gl.VertexAttribPointer(9, 1, VertexAttribPointerType.Float, false, stride, (void*)60);
+
+        // AnimStartTime: float at offset 64
+        _gl.EnableVertexAttribArray(10);
+        _gl.VertexAttribPointer(10, 1, VertexAttribPointerType.Float, false, stride, (void*)64);
     }
 
     public void BindIndexBuffer(BufferHandle buffer)
@@ -398,6 +322,19 @@ void main()
         return handle;
     }
 
+    public void UpdateTexture(TextureHandle handle, int width, int height, ReadOnlySpan<byte> data)
+    {
+        if (!_textures.TryGetValue(handle.Id, out var glTexture))
+            return;
+
+        _gl.BindTexture(TextureTarget.Texture2D, glTexture);
+        fixed (byte* p = data)
+        {
+            _gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0,
+                (uint)width, (uint)height, PixelFormat.Rgba, PixelType.UnsignedByte, p);
+        }
+    }
+
     public void DestroyTexture(TextureHandle handle)
     {
         if (_textures.TryGetValue(handle.Id, out var glTexture))
@@ -416,11 +353,59 @@ void main()
         _gl.BindTexture(TextureTarget.Texture2D, glTexture);
     }
 
+    // === Texture Array Management ===
+
+    private readonly Dictionary<ushort, (uint glTexture, int width, int height, int layers)> _textureArrays = new();
+
+    public TextureHandle CreateTextureArray(int width, int height, int layers)
+    {
+        var glTexture = _gl.GenTexture();
+        _gl.BindTexture(TextureTarget.Texture2DArray, glTexture);
+
+        // Allocate storage for all layers
+        _gl.TexImage3D(TextureTarget.Texture2DArray, 0, InternalFormat.Rgba8,
+            (uint)width, (uint)height, (uint)layers, 0,
+            PixelFormat.Rgba, PixelType.UnsignedByte, null);
+
+        _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+        _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+
+        var handle = new TextureHandle((ushort)_nextTextureId++);
+        _textureArrays[handle.Id] = (glTexture, width, height, layers);
+        return handle;
+    }
+
+    public void UpdateTextureArrayLayer(TextureHandle handle, int layer, ReadOnlySpan<byte> data)
+    {
+        if (!_textureArrays.TryGetValue(handle.Id, out var info))
+            return;
+
+        _gl.BindTexture(TextureTarget.Texture2DArray, info.glTexture);
+        fixed (byte* p = data)
+        {
+            _gl.TexSubImage3D(TextureTarget.Texture2DArray, 0,
+                0, 0, layer,
+                (uint)info.width, (uint)info.height, 1,
+                PixelFormat.Rgba, PixelType.UnsignedByte, p);
+        }
+    }
+
+    public void BindTextureArray(int slot, TextureHandle handle)
+    {
+        if (!_textureArrays.TryGetValue(handle.Id, out var info))
+            return;
+
+        _gl.ActiveTexture(TextureUnit.Texture0 + slot);
+        _gl.BindTexture(TextureTarget.Texture2DArray, info.glTexture);
+    }
+
     // === Shader Management ===
 
-    public ShaderHandle CreateShader(string vertexSource, string fragmentSource)
+    public ShaderHandle CreateShader(string name, string vertexSource, string fragmentSource)
     {
-        var program = CreateShaderProgram(vertexSource, fragmentSource);
+        var program = CreateShaderProgram(name, vertexSource, fragmentSource);
         var handle = new ShaderHandle(_nextShaderId++);
         _shaders[handle.Id] = program;
         return handle;
@@ -450,18 +435,30 @@ void main()
         _gl.UseProgram(program);
     }
 
+    private static bool _setUniformMatrixWarning = false;
+    private static bool _getUniformLocationWarning = false;
+    
     public void SetUniformMatrix4x4(string name, in Matrix4x4 value)
     {
         if (_boundShader == 0)
         {
-            Console.WriteLine($"[WARN] SetUniformMatrix4x4: No shader bound");
+            if (!_setUniformMatrixWarning)
+            {
+                Console.WriteLine($"[WARN] SetUniformMatrix4x4: No shader bound");
+                _setUniformMatrixWarning = true;
+            }
+
             return;
         }
 
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location < 0)
         {
-            Console.WriteLine($"[WARN] SetUniformMatrix4x4: Uniform '{name}' not found in shader {_boundShader}");
+            if (!_getUniformLocationWarning)
+            {
+                Console.WriteLine($"[WARN] SetUniformMatrix4x4: Uniform '{name}' not found in shader {_boundShader}");
+                _getUniformLocationWarning = true;
+            }
             return;
         }
 
@@ -487,6 +484,69 @@ void main()
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location >= 0)
             _gl.Uniform1(location, value);
+    }
+
+    public void SetUniformFloat(string name, float value)
+    {
+        if (_boundShader == 0)
+            return;
+
+        var location = _gl.GetUniformLocation(_boundShader, name);
+        if (location >= 0)
+            _gl.Uniform1(location, value);
+    }
+
+    public void SetUniformVec2(string name, Vector2 value)
+    {
+        if (_boundShader == 0)
+            return;
+
+        var location = _gl.GetUniformLocation(_boundShader, name);
+        if (location >= 0)
+            _gl.Uniform2(location, value.X, value.Y);
+    }
+
+    public void SetUniformVec4(string name, Vector4 value)
+    {
+        if (_boundShader == 0)
+            return;
+
+        var location = _gl.GetUniformLocation(_boundShader, name);
+        if (location >= 0)
+            _gl.Uniform4(location, value.X, value.Y, value.Z, value.W);
+    }
+
+    public void SetBoneTransforms(ReadOnlySpan<Matrix3x2> bones)
+    {
+        if (_boundShader == 0)
+            return;
+
+        var location = _gl.GetUniformLocation(_boundShader, "uBones");
+        if (location < 0)
+            return;
+
+        // Each Matrix3x2 becomes 2 vec3s (column-major)
+        // M11 M21 M31 -> col0 (x, y, translation.x)
+        // M12 M22 M32 -> col1 (x, y, translation.y)
+        Span<float> data = stackalloc float[bones.Length * 6];
+        for (int i = 0; i < bones.Length; i++)
+        {
+            var m = bones[i];
+            int idx = i * 6;
+            // First vec3: column 0 (M11, M21) + translation.x (M31)
+            data[idx + 0] = m.M11;
+            data[idx + 1] = m.M21;
+            data[idx + 2] = m.M31;
+            // Second vec3: column 1 (M12, M22) + translation.y (M32)
+            data[idx + 3] = m.M12;
+            data[idx + 4] = m.M22;
+            data[idx + 5] = m.M32;
+        }
+
+        fixed (float* p = data)
+        {
+            _gl.Uniform3(location, (uint)(bones.Length * 2), p);
+        }
     }
 
     // === State Management ===
@@ -552,7 +612,6 @@ void main()
         if (!_fences.TryGetValue(fence.Id, out var glFence))
             return;
 
-        // Wait with a 1 second timeout
         _gl.ClientWaitSync(glFence, SyncObjectMask.Bit, 1_000_000_000);
     }
 
@@ -575,7 +634,7 @@ void main()
         _ => BufferUsageARB.DynamicDraw
     };
 
-    private uint CreateShaderProgram(string vertexSource, string fragmentSource)
+    private uint CreateShaderProgram(string name, string vertexSource, string fragmentSource)
     {
         // Compile vertex shader
         var vertexShader = _gl.CreateShader(ShaderType.VertexShader);
@@ -587,7 +646,7 @@ void main()
         {
             var info = _gl.GetShaderInfoLog(vertexShader);
             _gl.DeleteShader(vertexShader);
-            throw new Exception($"Vertex shader compilation failed: {info}");
+            throw new Exception($"[{name}] Vertex shader: {info}");
         }
 
         // Compile fragment shader
@@ -601,7 +660,7 @@ void main()
             var info = _gl.GetShaderInfoLog(fragmentShader);
             _gl.DeleteShader(vertexShader);
             _gl.DeleteShader(fragmentShader);
-            throw new Exception($"Fragment shader compilation failed: {info}");
+            throw new Exception($"[{name}] Fragment shader: {info}");
         }
 
         // Link program
@@ -617,7 +676,7 @@ void main()
             _gl.DeleteShader(vertexShader);
             _gl.DeleteShader(fragmentShader);
             _gl.DeleteProgram(program);
-            throw new Exception($"Shader program linking failed: {info}");
+            throw new Exception($"[{name}] Link: {info}");
         }
 
         // Cleanup - shaders are now part of the program
@@ -762,31 +821,23 @@ void main()
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
     }
 
-    public void BeginCompositePass()
+    public void Composite(ShaderHandle compositeShader)
     {
+        if (!_shaders.TryGetValue(compositeShader.Id, out var program))
+            return;
+
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         _gl.Viewport(0, 0, (uint)_offscreenWidth, (uint)_offscreenHeight);
         _gl.ClearColor(0f, 0f, 0f, 1f);
         _gl.Clear(ClearBufferMask.ColorBufferBit);
         _gl.Disable(EnableCap.DepthTest);
         _gl.Disable(EnableCap.Blend);
-    }
 
-    public void EndCompositePass()
-    {
-        // Nothing needed
-    }
-
-    public void BindSceneTexture()
-    {
+        // Bind scene texture and shader, draw fullscreen quad
         _gl.ActiveTexture(TextureUnit.Texture0);
         _gl.BindTexture(TextureTarget.Texture2D, _offscreenTexture);
-    }
-
-    public void DrawFullscreenQuad()
-    {
-        _gl.UseProgram(_compositeShader);
-        _boundShader = _compositeShader;
+        _gl.UseProgram(program);
+        _boundShader = program;
 
         _gl.BindVertexArray(_fullscreenVao);
         _gl.DrawArrays(PrimitiveType.Triangles, 0, 6);

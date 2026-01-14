@@ -16,11 +16,18 @@ public enum SpriteEditorTool
 
 public class SpriteEditor
 {
+    private const int RasterTextureSize = 256;
+
     private SpriteDocument? _document;
     private InputSet _input = null!;
     private ushort _currentFrame;
     private bool _isPlaying;
     private float _playTimer;
+
+    // Raster state
+    private PixelData? _pixelData;
+    private TextureHandle _rasterTexture;
+    private bool _rasterDirty = true;
 
     // Selection
     private byte _selectionColor;
@@ -66,6 +73,11 @@ public class SpriteEditor
         _isPlaying = false;
         _playTimer = 0;
         _activeTool = SpriteEditorTool.None;
+        _rasterDirty = true;
+
+        _pixelData = new PixelData(RasterTextureSize, RasterTextureSize);
+        _rasterTexture = Application.RenderBackend.CreateTexture(
+            RasterTextureSize, RasterTextureSize, _pixelData.AsBytes());
 
         _input = new InputSet("SpriteEditor");
         Input.PushInputSet(_input, inheritState: true);
@@ -76,6 +88,15 @@ public class SpriteEditor
     public void End()
     {
         Input.PopInputSet();
+
+        if (_rasterTexture.IsValid)
+        {
+            Application.RenderBackend.DestroyTexture(_rasterTexture);
+            _rasterTexture = default;
+        }
+
+        _pixelData?.Dispose();
+        _pixelData = null;
         _document = null;
     }
 
@@ -93,11 +114,14 @@ public class SpriteEditor
         if (_document == null)
             return;
 
+        if (_rasterDirty)
+            UpdateRaster();
+
         var shape = _document.GetFrame(_currentFrame).Shape;
         var zoom = Workspace.Zoom;
         var zoomScale = 1f / zoom;
 
-        DrawShapeFilled(shape);
+        DrawRaster(shape);
         DrawShapeEdges(shape, zoomScale);
         DrawShapeVertices(shape, zoomScale);
         DrawShapeMidpoints(shape, zoomScale);
@@ -106,12 +130,56 @@ public class SpriteEditor
             DrawSelectionBox();
     }
 
+    private void UpdateRaster()
+    {
+        if (_document == null || _pixelData == null)
+            return;
+
+        var dpi = Editor.Config?.AtlasDpi ?? 64f;
+        var shape = _document.GetFrame(_currentFrame).Shape;
+
+        shape.UpdateSamples();
+        shape.UpdateBounds(dpi);
+
+        var rb = shape.RasterBounds;
+        if (rb.Width <= 0 || rb.Height <= 0)
+        {
+            _rasterDirty = false;
+            return;
+        }
+
+        _pixelData.Clear();
+
+        var palette = PaletteManager.GetPalette(_document.Palette);
+        if (palette != null)
+        {
+            shape.Rasterize(_pixelData, palette.Colors, new Vector2Int(-rb.X, -rb.Y), dpi);
+        }
+
+        Application.RenderBackend.UpdateTexture(
+            _rasterTexture,
+            _pixelData.Width, _pixelData.Height,
+            _pixelData.AsBytes());
+
+        _rasterDirty = false;
+    }
+
+    public void MarkRasterDirty()
+    {
+        _rasterDirty = true;
+    }
+
     public void SetCurrentFrame(ushort frame)
     {
         if (_document == null)
             return;
 
-        _currentFrame = (ushort)Math.Min(frame, _document.FrameCount - 1);
+        var newFrame = (ushort)Math.Min(frame, _document.FrameCount - 1);
+        if (newFrame != _currentFrame)
+        {
+            _currentFrame = newFrame;
+            MarkRasterDirty();
+        }
     }
 
     public void TogglePlayback()
@@ -126,6 +194,7 @@ public class SpriteEditor
             return;
 
         _currentFrame = (ushort)((_currentFrame + 1) % _document.FrameCount);
+        MarkRasterDirty();
     }
 
     public void PreviousFrame()
@@ -134,6 +203,7 @@ public class SpriteEditor
             return;
 
         _currentFrame = _currentFrame == 0 ? (ushort)(_document.FrameCount - 1) : (ushort)(_currentFrame - 1);
+        MarkRasterDirty();
     }
 
     public void SetSelectionColor(byte color)
@@ -161,6 +231,7 @@ public class SpriteEditor
         shape.DeleteSelectedAnchors();
         _document.MarkModified();
         _document.UpdateBounds();
+        MarkRasterDirty();
     }
 
     private void UpdateAnimation()
@@ -403,6 +474,7 @@ public class SpriteEditor
         _activeTool = SpriteEditorTool.None;
         _document.MarkModified();
         _document.UpdateBounds();
+        MarkRasterDirty();
 
         if (_selectOnUp && _pendingSelectAnchor != ushort.MaxValue)
         {
@@ -495,6 +567,7 @@ public class SpriteEditor
         _curveAnchor = ushort.MaxValue;
         _document.MarkModified();
         _document.UpdateBounds();
+        MarkRasterDirty();
     }
 
     private void CancelCurveTool()
@@ -620,6 +693,7 @@ public class SpriteEditor
 
         _document.MarkModified();
         _document.UpdateBounds();
+        MarkRasterDirty();
 
         BeginMoveTool();
     }
@@ -656,6 +730,7 @@ public class SpriteEditor
         }
 
         _document.MarkModified();
+        MarkRasterDirty();
     }
 
     private static ushort FindPathForAnchor(Shape shape, ushort anchorIndex)
@@ -669,73 +744,38 @@ public class SpriteEditor
         return ushort.MaxValue;
     }
 
-    private void DrawShapeFilled(Shape shape)
+    private void DrawRaster(Shape shape)
     {
-        var palette = PaletteManager.GetPalette(_document!.Palette);
-        if (palette == null)
+        if (_pixelData == null || !_rasterTexture.IsValid)
             return;
 
-        for (ushort p = 0; p < shape.PathCount; p++)
-        {
-            var path = shape.GetPath(p);
-            if (path.AnchorCount < 3)
-                continue;
-
-            var color = palette.Colors[path.FillColor % PaletteDef.ColorCount];
-            DrawFilledPath(shape, path, color);
-        }
-    }
-
-    private static void DrawFilledPath(Shape shape, Shape.Path path, Color color)
-    {
-        var vertices = new List<Vector2>();
-        for (ushort a = 0; a < path.AnchorCount; a++)
-        {
-            var anchorIdx = path.AnchorStart + a;
-            var anchor = shape.GetAnchor((ushort)anchorIdx);
-            vertices.Add(anchor.Position);
-
-            if (MathF.Abs(anchor.Curve) > 0.0001f)
-            {
-                var samples = shape.GetSegmentSamples((ushort)anchorIdx);
-                foreach (var sample in samples)
-                    vertices.Add(sample);
-            }
-        }
-
-        if (vertices.Count < 3)
+        var rb = shape.RasterBounds;
+        if (rb.Width <= 0 || rb.Height <= 0)
             return;
 
-        var center = Vector2.Zero;
-        foreach (var v in vertices)
-            center += v;
-        center /= vertices.Count;
+        if (EditorAssets.Shaders.Texture is Shader textureShader)
+            Render.BindShader(textureShader);
 
-        var color32 = color.ToColor32();
-        for (var i = 0; i < vertices.Count; i++)
-        {
-            var v0 = vertices[i];
-            var v1 = vertices[(i + 1) % vertices.Count];
+        Render.Backend.BindTexture(0, _rasterTexture);
 
-            DrawTriangle(center, v0, v1, color32);
-        }
-    }
+        var dpi = Editor.Config?.AtlasDpi ?? 64f;
+        var invDpi = 1f / dpi;
 
-    private static void DrawTriangle(Vector2 a, Vector2 b, Vector2 c, Color32 color)
-    {
-        var minX = MathF.Min(a.X, MathF.Min(b.X, c.X));
-        var minY = MathF.Min(a.Y, MathF.Min(b.Y, c.Y));
-        var maxX = MathF.Max(a.X, MathF.Max(b.X, c.X));
-        var maxY = MathF.Max(a.Y, MathF.Max(b.Y, c.Y));
+        var quadX = rb.X * invDpi;
+        var quadY = rb.Y * invDpi;
+        var quadW = rb.Width * invDpi;
+        var quadH = rb.Height * invDpi;
 
-        // Use quads for simplicity (batcher doesn't have triangle submit)
-        // This is a simplified fan triangulation
+        var texSize = (float)_pixelData.Width;
+        var u1 = rb.Width / texSize;
+        var v1 = rb.Height / texSize;
+
         Render.DrawQuad(
-            minX, minY,
-            maxX - minX, maxY - minY,
-            color,
-            layer: 100,
-            depth: 0
+            quadX,quadY, quadW, quadH,
+            0, 0, u1, v1,
+            _rasterTexture,
+            Color32.White,
+            layer: 100
         );
     }
 

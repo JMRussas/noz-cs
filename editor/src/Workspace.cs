@@ -105,6 +105,8 @@ public static class Workspace
         UpdateCamera();
 
         Grid.Init();
+
+        Render.ClearColor = EditorStyle.WorkspaceColor;
     }
 
     public static void Shutdown()
@@ -128,18 +130,13 @@ public static class Workspace
 
     public static void Draw()
     {
-        Render.BeginScenePass(EditorStyle.WorkspaceColor);
+        if (EditorAssets.Shaders.Sprite is Shader spriteShader)
+            Render.BindShader(spriteShader);
+
         Render.BindCamera(_camera);
 
         if (_showGrid)
             Grid.Draw(_camera);
-    }
-
-    public static void DrawComposite()
-    {
-        Render.EndScenePass();
-        Render.BeginCompositePass();
-        Render.EndCompositePass();
     }
 
     public static void DrawOverlay()

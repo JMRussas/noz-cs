@@ -84,7 +84,7 @@ public static class Importer
     public static void QueueImport(string path)
     {
         var ext = Path.GetExtension(path);
-        var def = DocumentDef.GetByExtension(ext);
+        var def = DocumentManager.GetDef(ext);
         if (def == null)
             return;
 

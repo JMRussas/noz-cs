@@ -7,7 +7,7 @@ let isWebGL2 = false;
 // Resource tracking
 let nextBufferId = 1;
 let nextTextureId = 2; // 1 reserved for white texture
-let nextShaderId = 2;  // 1 reserved for sprite shader
+let nextShaderId = 1;
 let nextFenceId = 1;
 
 const buffers = new Map();      // id -> { glBuffer, type: 'vertex'|'index' }
@@ -20,79 +20,6 @@ let meshVao = null;
 let boundVertexBuffer = null;
 let boundIndexBuffer = null;
 let boundShader = null;
-
-// Sprite shader sources (WebGL2 GLSL ES 300)
-const SPRITE_VERTEX_SHADER = `#version 300 es
-precision highp float;
-layout(location = 0) in vec2 aPosition;
-layout(location = 1) in vec2 aUV;
-layout(location = 2) in vec2 aNormal;
-layout(location = 3) in vec4 aColor;
-layout(location = 4) in float aOpacity;
-layout(location = 5) in float aDepth;
-layout(location = 6) in int aBone;
-layout(location = 7) in int aAtlas;
-
-uniform mat4 uProjection;
-
-out vec2 vUV;
-out vec4 vColor;
-flat out int vAtlas;
-
-void main() {
-    gl_Position = uProjection * vec4(aPosition, aDepth, 1.0);
-    vUV = aUV;
-    vColor = aColor * aOpacity;
-    vAtlas = aAtlas;
-}`;
-
-const SPRITE_FRAGMENT_SHADER = `#version 300 es
-precision mediump float;
-in vec2 vUV;
-in vec4 vColor;
-flat in int vAtlas;
-
-uniform sampler2D uTexture;
-
-out vec4 FragColor;
-
-void main() {
-    vec4 texColor = texture(uTexture, vUV);
-    FragColor = texColor * vColor;
-}`;
-
-// WebGL1 fallback shaders
-const SPRITE_VERTEX_SHADER_WEBGL1 = `
-precision highp float;
-attribute vec2 aPosition;
-attribute vec2 aUV;
-attribute vec2 aNormal;
-attribute vec4 aColor;
-attribute float aOpacity;
-attribute float aDepth;
-
-uniform mat4 uProjection;
-
-varying vec2 vUV;
-varying vec4 vColor;
-
-void main() {
-    gl_Position = uProjection * vec4(aPosition, aDepth, 1.0);
-    vUV = aUV;
-    vColor = aColor * aOpacity;
-}`;
-
-const SPRITE_FRAGMENT_SHADER_WEBGL1 = `
-precision mediump float;
-varying vec2 vUV;
-varying vec4 vColor;
-
-uniform sampler2D uTexture;
-
-void main() {
-    vec4 texColor = texture2D(uTexture, vUV);
-    gl_FragColor = texColor * vColor;
-}`;
 
 export function init() {
     canvas = document.getElementById('noz-canvas');
@@ -131,17 +58,6 @@ export function init() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
     textures.set(1, whiteTex); // TextureHandle.White
-
-    // Create built-in sprite shader
-    const vertSrc = isWebGL2 ? SPRITE_VERTEX_SHADER : SPRITE_VERTEX_SHADER_WEBGL1;
-    const fragSrc = isWebGL2 ? SPRITE_FRAGMENT_SHADER : SPRITE_FRAGMENT_SHADER_WEBGL1;
-    const spriteShader = createShaderInternal(vertSrc, fragSrc);
-    shaders.set(1, spriteShader); // ShaderHandle.Sprite
-
-    // Set texture uniform to slot 0
-    gl.useProgram(spriteShader.program);
-    const texLoc = gl.getUniformLocation(spriteShader.program, 'uTexture');
-    if (texLoc) gl.uniform1i(texLoc, 0);
 
     return true;
 }
@@ -236,8 +152,8 @@ export function bindVertexBuffer(id) {
 
     gl.bindBuffer(gl.ARRAY_BUFFER, buf.glBuffer);
 
-    // Setup vertex attributes for MeshVertex layout (56 bytes total)
-    const stride = 56;
+    // Setup vertex attributes for MeshVertex layout (68 bytes total)
+    const stride = 68;
 
     // Position: vec2 at offset 0
     gl.enableVertexAttribArray(0);
@@ -259,18 +175,30 @@ export function bindVertexBuffer(id) {
     gl.enableVertexAttribArray(4);
     gl.vertexAttribPointer(4, 1, gl.FLOAT, false, stride, 40);
 
-    // Depth: float at offset 44
-    gl.enableVertexAttribArray(5);
-    gl.vertexAttribPointer(5, 1, gl.FLOAT, false, stride, 44);
-
     if (isWebGL2) {
-        // Bone: int at offset 48
+        // Bone: int at offset 44
+        gl.enableVertexAttribArray(5);
+        gl.vertexAttribIPointer(5, 1, gl.INT, stride, 44);
+
+        // Atlas: int at offset 48
         gl.enableVertexAttribArray(6);
         gl.vertexAttribIPointer(6, 1, gl.INT, stride, 48);
 
-        // Atlas: int at offset 52
+        // FrameCount: int at offset 52
         gl.enableVertexAttribArray(7);
         gl.vertexAttribIPointer(7, 1, gl.INT, stride, 52);
+
+        // FrameWidth: float at offset 56
+        gl.enableVertexAttribArray(8);
+        gl.vertexAttribPointer(8, 1, gl.FLOAT, false, stride, 56);
+
+        // FrameRate: float at offset 60
+        gl.enableVertexAttribArray(9);
+        gl.vertexAttribPointer(9, 1, gl.FLOAT, false, stride, 60);
+
+        // AnimStartTime: float at offset 64
+        gl.enableVertexAttribArray(10);
+        gl.vertexAttribPointer(10, 1, gl.FLOAT, false, stride, 64);
     }
 }
 
@@ -318,7 +246,7 @@ export function bindTexture(slot, id) {
 
 // === Shader Management ===
 
-function createShaderInternal(vertexSource, fragmentSource) {
+function createShaderInternal(name, vertexSource, fragmentSource) {
     // Compile vertex shader
     const vertexShader = gl.createShader(gl.VERTEX_SHADER);
     gl.shaderSource(vertexShader, vertexSource);
@@ -327,7 +255,7 @@ function createShaderInternal(vertexSource, fragmentSource) {
     if (!gl.getShaderParameter(vertexShader, gl.COMPILE_STATUS)) {
         const info = gl.getShaderInfoLog(vertexShader);
         gl.deleteShader(vertexShader);
-        throw new Error(`Vertex shader compilation failed: ${info}`);
+        throw new Error(`[${name}] Vertex shader: ${info}`);
     }
 
     // Compile fragment shader
@@ -339,7 +267,7 @@ function createShaderInternal(vertexSource, fragmentSource) {
         const info = gl.getShaderInfoLog(fragmentShader);
         gl.deleteShader(vertexShader);
         gl.deleteShader(fragmentShader);
-        throw new Error(`Fragment shader compilation failed: ${info}`);
+        throw new Error(`[${name}] Fragment shader: ${info}`);
     }
 
     // Link program
@@ -364,7 +292,7 @@ function createShaderInternal(vertexSource, fragmentSource) {
         gl.deleteShader(vertexShader);
         gl.deleteShader(fragmentShader);
         gl.deleteProgram(program);
-        throw new Error(`Shader program linking failed: ${info}`);
+        throw new Error(`[${name}] Link: ${info}`);
     }
 
     gl.detachShader(program, vertexShader);
@@ -375,8 +303,8 @@ function createShaderInternal(vertexSource, fragmentSource) {
     return { program, uniformLocations: new Map() };
 }
 
-export function createShader(vertexSource, fragmentSource) {
-    const shader = createShaderInternal(vertexSource, fragmentSource);
+export function createShader(name, vertexSource, fragmentSource) {
+    const shader = createShaderInternal(name, vertexSource, fragmentSource);
     const id = nextShaderId++;
     shaders.set(id, shader);
     return id;
@@ -444,6 +372,142 @@ export function setUniformInt(name, value) {
     if (location === null) return;
 
     gl.uniform1i(location, value);
+}
+
+export function setUniformFloat(name, value) {
+    if (!boundShader) return;
+
+    let shader = null;
+    for (const [, s] of shaders) {
+        if (s.program === boundShader) {
+            shader = s;
+            break;
+        }
+    }
+    if (!shader) return;
+
+    let location = shader.uniformLocations.get(name);
+    if (location === undefined) {
+        location = gl.getUniformLocation(shader.program, name);
+        shader.uniformLocations.set(name, location);
+    }
+    if (location === null) return;
+
+    gl.uniform1f(location, value);
+}
+
+export function setUniformVec2(name, x, y) {
+    if (!boundShader) return;
+
+    let shader = null;
+    for (const [, s] of shaders) {
+        if (s.program === boundShader) {
+            shader = s;
+            break;
+        }
+    }
+    if (!shader) return;
+
+    let location = shader.uniformLocations.get(name);
+    if (location === undefined) {
+        location = gl.getUniformLocation(shader.program, name);
+        shader.uniformLocations.set(name, location);
+    }
+    if (location === null) return;
+
+    gl.uniform2f(location, x, y);
+}
+
+export function setUniformVec4(name, x, y, z, w) {
+    if (!boundShader) return;
+
+    let shader = null;
+    for (const [, s] of shaders) {
+        if (s.program === boundShader) {
+            shader = s;
+            break;
+        }
+    }
+    if (!shader) return;
+
+    let location = shader.uniformLocations.get(name);
+    if (location === undefined) {
+        location = gl.getUniformLocation(shader.program, name);
+        shader.uniformLocations.set(name, location);
+    }
+    if (location === null) return;
+
+    gl.uniform4f(location, x, y, z, w);
+}
+
+export function setBoneTransforms(data) {
+    if (!boundShader || !isWebGL2) return;
+
+    let shader = null;
+    for (const [, s] of shaders) {
+        if (s.program === boundShader) {
+            shader = s;
+            break;
+        }
+    }
+    if (!shader) return;
+
+    let location = shader.uniformLocations.get('uBones');
+    if (location === undefined) {
+        location = gl.getUniformLocation(shader.program, 'uBones');
+        shader.uniformLocations.set('uBones', location);
+    }
+    if (location === null) return;
+
+    gl.uniform3fv(location, data);
+}
+
+// === Texture Array Management ===
+
+let textureArrays = new Map(); // id -> { texture, width, height, layers }
+
+export function createTextureArray(width, height, layers) {
+    if (!isWebGL2) return 0;
+
+    const texture = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, texture);
+    gl.texStorage3D(gl.TEXTURE_2D_ARRAY, 1, gl.RGBA8, width, height, layers);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D_ARRAY, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+    const id = nextTextureId++;
+    textureArrays.set(id, { texture, width, height, layers });
+    return id;
+}
+
+export function updateTextureArrayLayer(id, layer, data) {
+    if (!isWebGL2) return;
+
+    const arr = textureArrays.get(id);
+    if (!arr) return;
+
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, arr.texture);
+    gl.texSubImage3D(gl.TEXTURE_2D_ARRAY, 0, 0, 0, layer, arr.width, arr.height, 1, gl.RGBA, gl.UNSIGNED_BYTE, data);
+}
+
+export function bindTextureArray(slot, id) {
+    if (!isWebGL2) return;
+
+    const arr = textureArrays.get(id);
+    if (!arr) return;
+
+    gl.activeTexture(gl.TEXTURE0 + slot);
+    gl.bindTexture(gl.TEXTURE_2D_ARRAY, arr.texture);
+}
+
+export function updateTexture(id, width, height, data) {
+    const tex = textures.get(id);
+    if (!tex) return;
+
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
 }
 
 // === State Management ===

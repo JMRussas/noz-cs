@@ -2,9 +2,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.2.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "noz", "src\NoZ.csproj", "{A62742F1-AD76-BE1B-B2AE-2D99D42B1314}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NoZ", "engine\NoZ.csproj", "{A62742F1-AD76-BE1B-B2AE-2D99D42B1314}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "editor", "editor\editor.csproj", "{B73842F2-BE87-CF2C-C3BF-3E00E53C2425}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NoZ.Editor", "editor\NoZ.Editor.csproj", "{B73842F2-BE87-CF2C-C3BF-3E00E53C2425}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

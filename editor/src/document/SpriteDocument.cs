@@ -39,7 +39,7 @@ public class SpriteDocument : Document
 
     public static void RegisterDef()
     {
-        DocumentDef.Register(new DocumentDef(
+        DocumentManager.RegisterDef(new DocumentDef(
             AssetType.Sprite,
             ".sprite",
             () => new SpriteDocument()
