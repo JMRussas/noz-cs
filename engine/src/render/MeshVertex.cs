@@ -9,18 +9,17 @@ namespace NoZ;
 
 /// <summary>
 /// Vertex format for mesh batching. Must be blittable for GPU upload.
-/// Layout (68 bytes):
+/// Layout (64 bytes):
 ///   location 0: vec2 position
 ///   location 1: vec2 uv
 ///   location 2: vec2 normal
 ///   location 3: vec4 color
-///   location 4: float opacity
-///   location 5: int bone
-///   location 6: int atlas
-///   location 7: int frameCount
-///   location 8: float frameWidth
-///   location 9: float frameRate
-///   location 10: float animStartTime
+///   location 4: int bone
+///   location 5: int atlas
+///   location 6: int frameCount
+///   location 7: float frameWidth
+///   location 8: float frameRate
+///   location 9: float animStartTime
 /// </summary>
 [StructLayout(LayoutKind.Sequential)]
 public struct MeshVertex
@@ -36,7 +35,7 @@ public struct MeshVertex
     public float FrameRate;     // 4 bytes (frames per second)
     public float AnimStartTime; // 4 bytes (animation start time offset)
 
-    public const int SizeInBytes = 68;
+    public const int SizeInBytes = 64;
 
     public MeshVertex(Vector2 position, Vector2 uv, Color color, int atlas = 0)
     {

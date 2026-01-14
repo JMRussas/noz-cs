@@ -36,12 +36,6 @@ public abstract class Document
     public virtual void Draw() { }
     public virtual void Clone(Document source) { }
 
-    public virtual bool CanEdit() => false;
-    public virtual void BeginEdit() { }
-    public virtual void EndEdit() { }
-    public virtual void UpdateEdit() { }
-    public virtual void DrawEdit() { }
-
     public void MarkModified()
     {
         IsModified = true;

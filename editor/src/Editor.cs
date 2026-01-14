@@ -22,12 +22,12 @@ internal class EditorVtable : IApplicationVtable
 
 public static class EditorApplication
 {
-    public static EditorConfig? Config { get; private set; }
+    public static EditorConfig? Config { get; private set; } = null!;
 
     public static void Init(string? projectPath, bool clean)
     {
         Log.Info($"Working Directory: {Environment.CurrentDirectory}");
-
+        
         TextureDocument.RegisterDef();
         ShaderDocument.RegisterDef();
         SoundDocument.RegisterDef();
@@ -56,15 +56,19 @@ public static class EditorApplication
         EditorStyle.Init();
         Workspace.Init();
         PaletteManager.Init(Config);
+        UserSettings.Load();
     }
 
     public static void Shutdown()
     {
+        UserSettings.Save();
+        
         Workspace.Shutdown();
         EditorStyle.Shutdown();
         PaletteManager.Shutdown();
         Importer.Shutdown();
         DocumentManager.Shutdown();
+        UserSettings.Save();
         Config = null;
     }
 
@@ -78,10 +82,10 @@ public static class EditorApplication
         DrawDocuments();
         DrawSelectionBounds();
 
-        if (Workspace.State == WorkspaceState.Edit && Workspace.ActiveDocument != null)
+        if (Workspace.State == WorkspaceState.Edit && Workspace.ActiveEditor != null)
         {
-            Workspace.ActiveDocument.UpdateEdit();
-            Workspace.ActiveDocument.DrawEdit();
+            Workspace.ActiveEditor.Update();
+            Workspace.ActiveEditor.Draw();
         }
 
         Workspace.DrawOverlay();
@@ -89,6 +93,7 @@ public static class EditorApplication
 
     public static void UpdateUI()
     {
+        Workspace.ActiveEditor?.UpdateUI();
     }
 
     private static void CheckShortcuts()
@@ -101,6 +106,9 @@ public static class EditorApplication
 
         if (Input.WasButtonPressed(InputCode.KeyS) && Input.IsCtrlDown())
             DocumentManager.SaveAll();
+
+        if (Input.WasButtonPressed(InputCode.KeyQuote) && Input.IsAltDown())
+            Workspace.ToggleGrid();
     }
 
     private static void DrawDocuments()
@@ -110,7 +118,7 @@ public static class EditorApplication
             if (!doc.Loaded || !doc.PostLoaded)
                 continue;
 
-            if (doc.IsEditing)
+            if (doc.IsEditing || doc.IsClipped)
                 continue;
 
             doc.Draw();
@@ -121,17 +129,22 @@ public static class EditorApplication
     {
         if (Workspace.ActiveDocument != null)
         {
-            EditorRender.DrawBounds(Workspace.ActiveDocument, EditorStyle.EdgeColor);
+            EditorRender.SetColor(EditorStyle.EdgeColor);
+            EditorRender.DrawBounds(Workspace.ActiveDocument);
             return;
         }
 
+        EditorRender.SetColor(EditorStyle.SelectionColor);
         foreach (var doc in DocumentManager.Documents)
         {
             if (!doc.Loaded || !doc.PostLoaded)
                 continue;
 
+            if (doc.IsClipped)
+                continue;
+
             if (doc.IsSelected)
-                EditorRender.DrawBounds(doc, EditorStyle.SelectionColor32);
+                EditorRender.DrawBounds(doc);
         }
     }
 }

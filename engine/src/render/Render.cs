@@ -73,8 +73,10 @@ public static unsafe class Render
     private static bool _inScenePass;
     private static RenderStats _stats;
     private static ushort[] _sortGroupStack = null!;
+    private static ushort[] _layerStack = null!;
     private static BatchState[] _batchStates = null!;
     private static ushort _sortGroupStackDepth = 0;
+    private static ushort _layerStackDepth = 0;
     private static bool _batchStateDirty = true;
     private static int _batchStateCount = 0;
 
@@ -113,7 +115,9 @@ public static unsafe class Render
         _maxDrawCommands = Config.MaxDrawCommands;
         _maxBatches = Config.MaxBatches;
         _sortGroupStack = new ushort[MaxSortGroups];
+        _layerStack = new ushort[MaxSortGroups];
         _sortGroupStackDepth = 0;
+        _layerStackDepth = 0;
         
         Driver.Init(new RenderDriverConfig
         {
@@ -358,6 +362,7 @@ public static unsafe class Render
         float height,
         ushort order = 0)
     {
+        _state.Transform = Matrix3x2.Identity;
         AddQuad(
             x, y, width, height,
             0, 0, 1, 1,
@@ -373,7 +378,7 @@ public static unsafe class Render
         in Matrix3x2 transform,
         ushort order=0)
     {
-        BindTransform(transform);
+        SetTransform(transform);
         AddQuad(
             x, y, width, height,
             0, 0, 1, 1,
@@ -392,6 +397,7 @@ public static unsafe class Render
         float v1,
         ushort order=0)
     {
+        _state.Transform = Matrix3x2.Identity;
         AddQuad(
             x, y, width, height,
             u0, v0, u1, v1,
@@ -411,7 +417,7 @@ public static unsafe class Render
         in Matrix3x2 transform,
         ushort order=0)
     {
-        BindTransform(transform);  
+        SetTransform(transform);  
         AddQuad(
             x, y, width, height,
             u0, v0, u1, v1,
@@ -426,13 +432,28 @@ public static unsafe class Render
         _state.Layer = layer;
     }
 
-    public static void BindBlendMode(BlendMode blendMode)
+    public static void PushLayer(ushort layer)
+    {
+        _layerStack[_layerStackDepth++] = _state.Layer;
+        _state.Layer = layer;
+    }
+
+    public static void PopLayer()
+    {
+        if (_layerStackDepth == 0)
+            return;
+
+        _layerStackDepth--;
+        _state.Layer = _layerStack[_layerStackDepth];
+    }
+
+    public static void SetBlendMode(BlendMode blendMode)
     {
         _state.BlendMode = blendMode;
         _batchStateDirty = true;
     }
     
-    public static void BindBones(ReadOnlySpan<Matrix3x2> transforms)
+    public static void SetBones(ReadOnlySpan<Matrix3x2> transforms)
     {
         Debug.Assert(_state.Bones != null);
         Debug.Assert(transforms.Length < MaxBones);
@@ -442,27 +463,11 @@ public static unsafe class Render
         _state.BoneCount = 0;
     }
 
-    public static void BindTransform(in Matrix3x2 transform)
+    public static void SetTransform(in Matrix3x2 transform)
     {
         _state.Transform = transform;
     }
 
-    private static void UploadBoneTransforms()
-    {
-        Driver.SetBoneTransforms(_state.Bones);
-    }
-
-    // Sprite rendering (to be implemented when Sprite is extended)
-    public static void Draw(Sprite sprite)
-    {
-        // TODO: Get sprite texture, rect, and UV and submit to batcher
-    }
-
-    public static void Draw(Sprite sprite, in Matrix3x2 transform)
-    {
-        // TODO: Get sprite texture, rect, and UV and submit to batcher with transform
-    }
-    
     public static void PushSortGroup(ushort group)
     {
         _sortGroupStack[_sortGroupStackDepth++] = _state.Group;
@@ -633,6 +638,7 @@ public static unsafe class Render
             ref var batch = ref _batches[batchIndex];
             ref var batchState = ref _batchStates[batch.State];
             Driver.BindShader(batchState.Shader);
+            Driver.SetBoneTransforms(_state.Bones);
             ApplyBatchUniforms(ref batchState);
             Driver.BindTexture((nuint)batchState.Textures[0], 0);
             Driver.BindTexture((nuint)batchState.Textures[1], 1);

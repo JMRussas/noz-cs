@@ -533,7 +533,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         if (_boundShader == 0)
             return;
 
-        var location = _gl.GetUniformLocation(_boundShader, "uBones");
+        var location = _gl.GetUniformLocation(_boundShader, "u_bones");
         if (location < 0)
             return;
 
@@ -847,10 +847,15 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.Disable(EnableCap.Blend);
 
         // Bind scene texture and shader, draw fullscreen quad
-        _gl.ActiveTexture(TextureUnit.Texture0);
-        _gl.BindTexture(TextureTarget.Texture2D, _offscreenTexture);
         _gl.UseProgram(program);
         _boundShader = program;
+
+        _gl.ActiveTexture(TextureUnit.Texture0);
+        _gl.BindTexture(TextureTarget.Texture2D, _offscreenTexture);
+
+        var loc = _gl.GetUniformLocation(program, "sampler_texture");
+        if (loc >= 0)
+            _gl.Uniform1(loc, 0);
 
         _gl.BindVertexArray(_fullscreenVao);
         _gl.DrawArrays(PrimitiveType.Triangles, 0, 6);

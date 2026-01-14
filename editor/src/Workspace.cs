@@ -47,7 +47,9 @@ public static class Workspace
 
     private static WorkspaceState _state = WorkspaceState.Default;
     private static Document? _activeDocument;
+    private static DocumentEditor? _activeEditor;
     private static int _selectedCount;
+    private static Texture? _whiteTexture;
 
     public static Camera Camera => _camera;
     public static float Zoom => _zoom;
@@ -104,15 +106,36 @@ public static class Workspace
 
         UpdateCamera();
 
-        Grid.Init();
-
         Render.ClearColor = EditorStyle.WorkspaceColor;
+
+        // Create a 1x1 white texture for untextured draws
+        byte[] white = [255, 255, 255, 255];
+        _whiteTexture = Texture.Create(1, 1, white, "white");
     }
 
     public static void Shutdown()
     {
+        _whiteTexture?.Dispose();
+        _whiteTexture = null;
+
         Input.PopInputSet();
-        Grid.Shutdown();
+    }
+
+    public static void LoadUserSettings(PropertySet props)
+    {
+        _camera.Position = props.GetVector2("view", "camera_position", Vector2.Zero);
+        _zoom = props.GetFloat("view", "camera_zoom", ZoomDefault);
+        _showGrid = props.GetBool("view", "show_grid", true);
+        _userUIScale = props.GetFloat("view", "ui_scale", 1f);
+        UpdateCamera();
+    }
+
+    public static void SaveUserSettings(PropertySet props)
+    {
+        props.SetVec2("view", "camera_position", _camera.Position);
+        props.SetFloat("view", "camera_zoom", _zoom);
+        props.SetBool("view", "show_grid", _showGrid);
+        props.SetFloat("view", "ui_scale", _userUIScale);
     }
 
     public static void Update()
@@ -125,7 +148,21 @@ public static class Workspace
         if (_state == WorkspaceState.Default)
             UpdateDefaultState();
 
-        Grid.Update(_camera);
+        UpdateCulling();
+    }
+
+    private static void UpdateCulling()
+    {
+        var cameraBounds = _camera.WorldBounds;
+        foreach (var doc in DocumentManager.Documents)
+        {
+            var docBounds = new Rect(
+                doc.Position.X + doc.Bounds.X,
+                doc.Position.Y + doc.Bounds.Y,
+                doc.Bounds.Width,
+                doc.Bounds.Height);
+            doc.IsClipped = !cameraBounds.Intersects(docBounds);
+        }
     }
 
     public static void Draw()
@@ -133,6 +170,8 @@ public static class Workspace
         if (EditorAssets.Shaders.Sprite is Shader spriteShader)
             Render.SetShader(spriteShader);
 
+        Render.SetTexture(_whiteTexture!);
+        Render.SetBlendMode(BlendMode.Alpha);
         Render.SetCamera(_camera);
 
         if (_showGrid)
@@ -141,8 +180,6 @@ public static class Workspace
 
     public static void DrawOverlay()
     {
-        if (_showGrid)
-            Grid.DrawPixelGrid(_camera);
     }
 
     public static void ToggleGrid()
@@ -159,7 +196,6 @@ public static class Workspace
     public static void SetDpi(float dpi)
     {
         _dpi = dpi > 0 ? dpi : DefaultDpi;
-        Grid.SetDpi((int)_dpi);
         UpdateCamera();
     }
 
@@ -382,13 +418,13 @@ public static class Workspace
             return;
 
         var doc = GetFirstSelected();
-        if (doc == null || !doc.CanEdit())
+        if (doc == null || !doc.Def.CanEdit)
             return;
 
         _activeDocument = doc;
+        _activeEditor = doc.Def.EditorFactory!(doc);
         doc.IsEditing = true;
         _state = WorkspaceState.Edit;
-        doc.BeginEdit();
     }
 
     public static void EndEdit()
@@ -396,13 +432,16 @@ public static class Workspace
         if (_activeDocument == null)
             return;
 
-        _activeDocument.EndEdit();
+        _activeEditor?.Dispose();
+        _activeEditor = null;
         _activeDocument.IsEditing = false;
         _activeDocument = null;
         _state = WorkspaceState.Default;
 
         DocumentManager.SaveAll();
     }
+
+    public static DocumentEditor? ActiveEditor => _activeEditor;
 
     public static void UpdateDefaultState()
     {

@@ -14,20 +14,28 @@ public enum SpriteEditorTool
     BoxSelect
 }
 
-public class SpriteEditor
+public class SpriteEditor : DocumentEditor
 {
     private const int RasterTextureSize = 256;
 
-    private SpriteDocument? _document;
-    private InputSet _input = null!;
+    public new SpriteDocument Document => (SpriteDocument)base.Document;
+
+    private readonly InputSet _input = new("SpriteEditor");
     private ushort _currentFrame;
     private bool _isPlaying;
     private float _playTimer;
 
     // Raster state
-    private PixelData? _pixelData;
-    private Texture? _rasterTexture;
+    private readonly PixelData _pixelData = new(RasterTextureSize, RasterTextureSize);
+    private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
+
+    public SpriteEditor(SpriteDocument document) : base(document)
+    {
+        _rasterTexture = Texture.Create(RasterTextureSize, RasterTextureSize, _pixelData.AsBytes());
+        Input.PushInputSet(_input, inheritState: true);
+        Workspace.FrameView(Document.Bounds);
+    }
 
     // Selection
     private byte _selectionColor;
@@ -59,68 +67,37 @@ public class SpriteEditor
     private const float VertexSize = 0.12f;
     private const float MidpointSize = 0.08f;
 
-    public SpriteDocument? Document => _document;
     public ushort CurrentFrame => _currentFrame;
     public bool IsPlaying => _isPlaying;
     public byte SelectionColor => _selectionColor;
     public byte SelectionOpacity => _selectionOpacity;
     public bool EditFill => _editFill;
 
-    public void Begin(SpriteDocument document)
-    {
-        _document = document;
-        _currentFrame = 0;
-        _isPlaying = false;
-        _playTimer = 0;
-        _activeTool = SpriteEditorTool.None;
-        _rasterDirty = true;
-
-        _pixelData = new PixelData(RasterTextureSize, RasterTextureSize);
-        _rasterTexture = Texture.Create(
-            RasterTextureSize, RasterTextureSize, _pixelData.AsBytes());
-
-        _input = new InputSet("SpriteEditor");
-        Input.PushInputSet(_input, inheritState: true);
-
-        Workspace.FrameView(document.Bounds);
-    }
-
-    public void End()
+    public override void Dispose()
     {
         Input.PopInputSet();
-
-        _rasterTexture?.Dispose();
-        _rasterTexture = null;
-
-        _pixelData?.Dispose();
-        _pixelData = null;
-        _document = null;
+        _rasterTexture.Dispose();
+        _pixelData.Dispose();
     }
 
-    public void Update()
+    public override void Update()
     {
-        if (_document == null)
-            return;
-
         UpdateAnimation();
         UpdateInput();
     }
 
-    public void Draw()
+    public override void Draw()
     {
-        if (_document == null)
-            return;
-
         if (_rasterDirty)
             UpdateRaster();
 
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var zoom = Workspace.Zoom;
         var zoomScale = 1f / zoom;
 
         DrawRaster(shape);
         DrawShapeEdges(shape, zoomScale);
-        DrawShapeVertices(shape, zoomScale);
+        DrawShapeAnchors(shape, zoomScale);
         DrawShapeMidpoints(shape, zoomScale);
 
         if (_activeTool == SpriteEditorTool.BoxSelect)
@@ -129,11 +106,8 @@ public class SpriteEditor
 
     private void UpdateRaster()
     {
-        if (_document == null || _pixelData == null)
-            return;
-
         var dpi = EditorApplication.Config?.AtlasDpi ?? 64f;
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
 
         shape.UpdateSamples();
         shape.UpdateBounds(dpi);
@@ -147,7 +121,7 @@ public class SpriteEditor
 
         _pixelData.Clear();
 
-        var palette = PaletteManager.GetPalette(_document.Palette);
+        var palette = PaletteManager.GetPalette(Document.Palette);
         if (palette != null)
         {
             shape.Rasterize(_pixelData, palette.Colors, new Vector2Int(-rb.X, -rb.Y), dpi);
@@ -168,10 +142,7 @@ public class SpriteEditor
 
     public void SetCurrentFrame(ushort frame)
     {
-        if (_document == null)
-            return;
-
-        var newFrame = (ushort)Math.Min(frame, _document.FrameCount - 1);
+        var newFrame = (ushort)Math.Min(frame, Document.FrameCount - 1);
         if (newFrame != _currentFrame)
         {
             _currentFrame = newFrame;
@@ -187,19 +158,19 @@ public class SpriteEditor
 
     public void NextFrame()
     {
-        if (_document == null || _document.FrameCount == 0)
+        if (Document.FrameCount == 0)
             return;
 
-        _currentFrame = (ushort)((_currentFrame + 1) % _document.FrameCount);
+        _currentFrame = (ushort)((_currentFrame + 1) % Document.FrameCount);
         MarkRasterDirty();
     }
 
     public void PreviousFrame()
     {
-        if (_document == null || _document.FrameCount == 0)
+        if (Document.FrameCount == 0)
             return;
 
-        _currentFrame = _currentFrame == 0 ? (ushort)(_document.FrameCount - 1) : (ushort)(_currentFrame - 1);
+        _currentFrame = _currentFrame == 0 ? (ushort)(Document.FrameCount - 1) : (ushort)(_currentFrame - 1);
         MarkRasterDirty();
     }
 
@@ -221,23 +192,20 @@ public class SpriteEditor
 
     public void DeleteSelected()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         shape.DeleteSelectedAnchors();
-        _document.MarkModified();
-        _document.UpdateBounds();
+        Document.MarkModified();
+        Document.UpdateBounds();
         MarkRasterDirty();
     }
 
     private void UpdateAnimation()
     {
-        if (!_isPlaying || _document == null || _document.FrameCount <= 1)
+        if (!_isPlaying || Document.FrameCount <= 1)
             return;
 
         _playTimer += Time.DeltaTime;
-        var frame = _document.GetFrame(_currentFrame);
+        var frame = Document.GetFrame(_currentFrame);
         var holdTime = Math.Max(1, frame.Hold) / 12f;
 
         if (_playTimer >= holdTime)
@@ -249,9 +217,6 @@ public class SpriteEditor
 
     private void UpdateInput()
     {
-        if (_document == null)
-            return;
-
         UpdateHover();
 
         if (_activeTool != SpriteEditorTool.None)
@@ -286,10 +251,7 @@ public class SpriteEditor
 
     private void UpdateHover()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var worldPos = Workspace.MouseWorldPosition;
         var zoom = Workspace.Zoom;
         var hitRadius = VertexSize / zoom;
@@ -304,10 +266,7 @@ public class SpriteEditor
 
     private void HandleLeftClick()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var shift = Input.IsShiftDown();
         var alt = Input.IsAltDown();
 
@@ -352,7 +311,7 @@ public class SpriteEditor
 
     private void HandleDoubleClick()
     {
-        if (_document == null || _hoveredPath == ushort.MaxValue)
+        if (_hoveredPath == ushort.MaxValue)
             return;
 
         SelectPath(_hoveredPath, Input.IsShiftDown());
@@ -360,13 +319,10 @@ public class SpriteEditor
 
     private void HandleDragStart()
     {
-        if (_document == null)
-            return;
-
         _dragStartWorld = Workspace.MouseWorldPosition;
         _dragStartScreen = Input.MousePosition;
 
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var alt = Input.IsAltDown();
 
         if (_hoveredMidpoint != ushort.MaxValue && alt)
@@ -424,10 +380,7 @@ public class SpriteEditor
 
     private void BeginMoveTool()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
 
         for (ushort i = 0; i < shape.AnchorCount; i++)
         {
@@ -442,10 +395,7 @@ public class SpriteEditor
 
     private void UpdateMoveTool()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var delta = Workspace.MouseWorldPosition - _dragStartWorld;
         var snap = Input.IsCtrlDown();
 
@@ -465,17 +415,14 @@ public class SpriteEditor
 
     private void CommitMoveTool()
     {
-        if (_document == null)
-            return;
-
         _activeTool = SpriteEditorTool.None;
-        _document.MarkModified();
-        _document.UpdateBounds();
+        Document.MarkModified();
+        Document.UpdateBounds();
         MarkRasterDirty();
 
         if (_selectOnUp && _pendingSelectAnchor != ushort.MaxValue)
         {
-            var shape = _document.GetFrame(_currentFrame).Shape;
+            var shape = Document.GetFrame(_currentFrame).Shape;
             shape.ClearSelection();
             SelectAnchor(_pendingSelectAnchor, false);
         }
@@ -486,10 +433,7 @@ public class SpriteEditor
 
     private void CancelMoveTool()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         shape.RestoreAnchorPositions(_savedPositions);
         shape.UpdateSamples();
         shape.UpdateBounds();
@@ -501,10 +445,7 @@ public class SpriteEditor
 
     private void BeginCurveTool(ushort anchorIndex)
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
 
         for (ushort i = 0; i < shape.AnchorCount; i++)
         {
@@ -518,10 +459,10 @@ public class SpriteEditor
 
     private void UpdateCurveTool()
     {
-        if (_document == null || _curveAnchor == ushort.MaxValue)
+        if (_curveAnchor == ushort.MaxValue)
             return;
 
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var anchor = shape.GetAnchor(_curveAnchor);
         var pathIdx = FindPathForAnchor(shape, _curveAnchor);
         if (pathIdx == ushort.MaxValue)
@@ -557,22 +498,16 @@ public class SpriteEditor
 
     private void CommitCurveTool()
     {
-        if (_document == null)
-            return;
-
         _activeTool = SpriteEditorTool.None;
         _curveAnchor = ushort.MaxValue;
-        _document.MarkModified();
-        _document.UpdateBounds();
+        Document.MarkModified();
+        Document.UpdateBounds();
         MarkRasterDirty();
     }
 
     private void CancelCurveTool()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         shape.RestoreAnchorCurves(_savedCurves);
         shape.UpdateSamples();
         shape.UpdateBounds();
@@ -589,9 +524,6 @@ public class SpriteEditor
 
     private void UpdateBoxSelect()
     {
-        if (_document == null)
-            return;
-
         var mouseWorld = Workspace.MouseWorldPosition;
         var minX = MathF.Min(_dragStartWorld.X, mouseWorld.X);
         var minY = MathF.Min(_dragStartWorld.Y, mouseWorld.Y);
@@ -611,10 +543,7 @@ public class SpriteEditor
 
     private void CommitBoxSelect()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var shift = Input.IsShiftDown();
 
         if (!shift)
@@ -627,10 +556,7 @@ public class SpriteEditor
 
     private void SelectAnchor(ushort anchorIndex, bool additive)
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
 
         if (!additive)
             shape.ClearSelection();
@@ -640,10 +566,7 @@ public class SpriteEditor
 
     private void SelectSegment(ushort anchorIndex, bool additive)
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         var pathIdx = FindPathForAnchor(shape, anchorIndex);
         if (pathIdx == ushort.MaxValue)
             return;
@@ -660,10 +583,7 @@ public class SpriteEditor
 
     private void SelectPath(ushort pathIndex, bool additive)
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
 
         if (!additive)
             shape.ClearSelection();
@@ -677,10 +597,7 @@ public class SpriteEditor
 
     private void SplitSegment(ushort anchorIndex)
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
         shape.ClearSelection();
         shape.SplitSegment(anchorIndex);
 
@@ -688,8 +605,8 @@ public class SpriteEditor
         if (newAnchorIdx < shape.AnchorCount)
             shape.SetAnchorSelected(newAnchorIdx, true);
 
-        _document.MarkModified();
-        _document.UpdateBounds();
+        Document.MarkModified();
+        Document.UpdateBounds();
         MarkRasterDirty();
 
         BeginMoveTool();
@@ -697,10 +614,7 @@ public class SpriteEditor
 
     private void ApplyColorToSelection()
     {
-        if (_document == null)
-            return;
-
-        var shape = _document.GetFrame(_currentFrame).Shape;
+        var shape = Document.GetFrame(_currentFrame).Shape;
 
         for (ushort p = 0; p < shape.PathCount; p++)
         {
@@ -726,7 +640,7 @@ public class SpriteEditor
             }
         }
 
-        _document.MarkModified();
+        Document.MarkModified();
         MarkRasterDirty();
     }
 
@@ -767,7 +681,6 @@ public class SpriteEditor
         var u1 = rb.Width / texSize;
         var v1 = rb.Height / texSize;
 
-        Render.BindLayer(100);
         Render.SetColor(Color.White);
         Render.DrawQuad(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
     }
@@ -795,18 +708,19 @@ public class SpriteEditor
                 var samples = shape.GetSegmentSamples(a0Idx);
                 var prev = a0.Position;
 
+                EditorRender.SetColor(color);
                 foreach (var sample in samples)
                 {
-                    DrawLine(prev, sample, width, color);
+                    EditorRender.DrawLine(prev, sample, width);
                     prev = sample;
                 }
 
-                DrawLine(prev, a1.Position, width, color);
+                EditorRender.DrawLine(prev, a1.Position, width);
             }
         }
     }
 
-    private void DrawShapeVertices(Shape shape, float zoomScale)
+    private void DrawShapeAnchors(Shape shape, float zoomScale)
     {
         for (ushort i = 0; i < shape.AnchorCount; i++)
         {
@@ -820,7 +734,8 @@ public class SpriteEditor
             if (hovered)
                 size *= 1.2f;
 
-            DrawVertex(anchor.Position, size, color);
+            EditorRender.SetColor(color);
+            EditorRender.DrawVertex(anchor.Position, size);
         }
     }
 
@@ -842,7 +757,8 @@ public class SpriteEditor
                 if (hovered)
                     size *= 1.3f;
 
-                DrawCircle(anchor.Midpoint, size * 0.5f, color);
+                Render.SetColor(color);
+                EditorRender.DrawCircle(anchor.Midpoint, size * 0.5f);
             }
         }
     }
@@ -850,7 +766,6 @@ public class SpriteEditor
     private void DrawSelectionBox()
     {
         var color = new Color(EditorStyle.SelectionColor.R, EditorStyle.SelectionColor.G, EditorStyle.SelectionColor.B, 0.2f);
-        Render.BindLayer(200);
         Render.SetColor(color);
         Render.DrawQuad(_selectionBox.X, _selectionBox.Y, _selectionBox.Width, _selectionBox.Height);
 
@@ -858,49 +773,10 @@ public class SpriteEditor
         var zoom = Workspace.Zoom;
         var lineWidth = 0.02f / zoom;
 
-        DrawLine(new Vector2(_selectionBox.X, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Y), lineWidth, borderColor);
-        DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Bottom), lineWidth, borderColor);
-        DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Bottom), lineWidth, borderColor);
-        DrawLine(new Vector2(_selectionBox.X, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Y), lineWidth, borderColor);
-    }
-
-    private static void DrawLine(Vector2 a, Vector2 b, float width, Color color)
-    {
-        var dir = b - a;
-        var len = dir.Length();
-        if (len < 0.0001f)
-            return;
-
-        dir /= len;
-        var perp = new Vector2(-dir.Y, dir.X) * width * 0.5f;
-
-        var p0 = a - perp;
-        var p1 = a + perp;
-        var p2 = b + perp;
-        var p3 = b - perp;
-
-        var center = (a + b) * 0.5f;
-        var transform = Matrix3x2.CreateTranslation(-center) *
-                        Matrix3x2.CreateRotation(MathF.Atan2(dir.Y, dir.X)) *
-                        Matrix3x2.CreateTranslation(center);
-
-        Render.BindLayer(150);
-        Render.SetColor(color);
-        Render.DrawQuad(center.X - len * 0.5f, center.Y - width * 0.5f, len, width, transform);
-    }
-
-    private static void DrawVertex(Vector2 pos, float size, Color color)
-    {
-        var halfSize = size * 0.5f;
-        Render.BindLayer(160);
-        Render.SetColor(color);
-        Render.DrawQuad(pos.X - halfSize, pos.Y - halfSize, size, size);
-    }
-
-    private static void DrawCircle(Vector2 pos, float radius, Color color)
-    {
-        Render.BindLayer(155);
-        Render.SetColor(color);
-        Render.DrawQuad(pos.X - radius, pos.Y - radius, radius * 2, radius * 2);
+        EditorRender.SetColor(borderColor);
+        EditorRender.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Y), lineWidth);
+        EditorRender.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Bottom), lineWidth);
+        EditorRender.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Bottom), lineWidth);
+        EditorRender.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Y), lineWidth);
     }
 }

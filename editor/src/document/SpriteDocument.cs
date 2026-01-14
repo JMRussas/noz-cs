@@ -42,7 +42,8 @@ public class SpriteDocument : Document
         DocumentManager.RegisterDef(new DocumentDef(
             AssetType.Sprite,
             ".sprite",
-            () => new SpriteDocument()
+            () => new SpriteDocument(),
+            doc => new SpriteEditor((SpriteDocument)doc)
         ));
     }
 
@@ -155,12 +156,6 @@ public class SpriteDocument : Document
     public override void Save(string path)
     {
         var sb = new StringBuilder();
-        SaveToStringBuilder(sb);
-        File.WriteAllText(path, sb.ToString());
-    }
-
-    private void SaveToStringBuilder(StringBuilder sb)
-    {
         sb.AppendLine($"c {Palette}");
         sb.AppendLine();
 
@@ -180,9 +175,10 @@ public class SpriteDocument : Document
 
             if (frameIndex < FrameCount - 1)
                 sb.AppendLine();
-        }
+        }        
+        File.WriteAllText(path, sb.ToString());
     }
-
+    
     private static void SaveFrame(SpriteFrame f, StringBuilder sb)
     {
         var shape = f.Shape;
@@ -222,63 +218,6 @@ public class SpriteDocument : Document
             size.X, size.Y
         );
     }
-
-    public override bool CanEdit() => true;
-
-    public override void BeginEdit()
-    {
-        _currentFrame = 0;
-    }
-
-    public override void EndEdit()
-    {
-    }
-
-    public override void UpdateEdit()
-    {
-    }
-
-    public override void DrawEdit()
-    {
-        if (FrameCount <= 0)
-            return;
-
-        var frame = Frames[_currentFrame];
-        var shape = frame.Shape;
-
-        for (ushort pIdx = 0; pIdx < shape.PathCount; pIdx++)
-        {
-            var path = shape.GetPath(pIdx);
-            if (path.AnchorCount < 2)
-                continue;
-
-            for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
-            {
-                var anchorIdx = (ushort)(path.AnchorStart + aIdx);
-                var nextIdx = (ushort)(path.AnchorStart + (aIdx + 1) % path.AnchorCount);
-                var a0 = shape.GetAnchor(anchorIdx);
-                var a1 = shape.GetAnchor(nextIdx);
-                var samples = shape.GetSegmentSamples(anchorIdx);
-
-                var v0 = a0.Position + Position;
-                for (var i = 0; i < samples.Length; i++)
-                {
-                    var sample = samples[i] + Position;
-                    EditorRender.DrawLine(v0, sample, EditorStyle.EdgeColor);
-                    v0 = sample;
-                }
-                EditorRender.DrawLine(v0, a1.Position + Position, EditorStyle.EdgeColor);
-            }
-
-            for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
-            {
-                var anchor = shape.GetAnchor((ushort)(path.AnchorStart + aIdx));
-                EditorRender.DrawVertex(anchor.Position + Position, EditorStyle.EdgeColor);
-            }
-        }
-    }
-
-    private ushort _currentFrame;
 
     public override void Import(string outputPath, PropertySet config, PropertySet meta)
     {

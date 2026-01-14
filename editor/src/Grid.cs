@@ -9,107 +9,63 @@ namespace NoZ.Editor;
 public static class Grid
 {
     private const float MaxAlpha = 0.6f;
-    private const float TargetGridScreenSpacing = 64f;
+    private const float MaxPixelAlpha = 0.5f;
+    private const ushort PixelGridLayer = 200;
 
-    private static float _snapSpacing;
-    private static bool _pixelGridVisible;
-    private static int _dpi = 16;
-
-    public static bool PixelGridVisible => _pixelGridVisible;
-    public static float SnapSpacing => _snapSpacing;
-
-    public static void Init()
-    {
-        _snapSpacing = 1f;
-        _pixelGridVisible = false;
-    }
-
-    public static void Shutdown()
-    {
-    }
-
-    public static void SetDpi(int dpi)
-    {
-        _dpi = dpi > 0 ? dpi : 16;
-    }
-
-    public static void Update(Camera camera)
-    {
-        var pixelSize = 1f / _dpi;
-        var bounds = camera.WorldBounds;
-        var worldWidth = bounds.Width;
-        var screenWidth = camera.ScreenSize.X;
-
-        var world = CalculateGridLevels(worldWidth, screenWidth, 1f, _dpi);
-
-        var screenPixelsPerWorldPixel = screenWidth / (worldWidth / pixelSize);
-        var pixelGridAlpha = 0f;
-        if (screenPixelsPerWorldPixel > 8f)
-            pixelGridAlpha = MathF.Min((screenPixelsPerWorldPixel - 8f) / 32f, 1f);
-
-        _pixelGridVisible = pixelGridAlpha > float.Epsilon;
-
-        if (_pixelGridVisible)
-            _snapSpacing = pixelSize;
-        else
-            _snapSpacing = world.FineSpacing * 0.5f;
-    }
-
+    public static float SnapSpacing { get; private set; }
+    public static bool IsPixelGridVisible { get; private set; }
+    
     public static void Draw(Camera camera)
     {
-        var pixelSize = 1f / _dpi;
+        var dpi = (float)EditorApplication.Config!.AtlasDpi;
+        var pixelSize = 1.0f / dpi;
         var bounds = camera.WorldBounds;
         var worldWidth = bounds.Width;
-        var screenWidth = camera.ScreenSize.X;
-
-        var world = CalculateGridLevels(worldWidth, screenWidth, 1f, _dpi);
+        var screenWidth = Application.WindowSize.X;
+        var world = CalculateGridLevels(worldWidth, screenWidth, 1.0f, dpi);
 
         var screenPixelsPerWorldPixel = screenWidth / (worldWidth / pixelSize);
         var pixelGridAlpha = 0f;
         if (screenPixelsPerWorldPixel > 8f)
-            pixelGridAlpha = MathF.Min((screenPixelsPerWorldPixel - 8f) / 32f, 1f);
+            pixelGridAlpha = MathF.Min((screenPixelsPerWorldPixel - 8f) / 32f, 1f) * MaxPixelAlpha;
 
-        var spacing1 = world.CoarseSpacing;
-        var alpha1 = world.CoarseAlpha * MaxAlpha;
+        IsPixelGridVisible = pixelGridAlpha > float.Epsilon;
 
-        var spacing2 = world.FineSpacing;
-        var alpha2 = world.FineAlpha * MaxAlpha;
+        if (IsPixelGridVisible)
+            SnapSpacing = pixelSize;
+        else
+            SnapSpacing = world.FineSpacing * 0.5f;
+        
+        SnapSpacing = IsPixelGridVisible ? pixelSize : world.FineSpacing;
 
-        var spacing3 = pixelSize;
-        var alpha3 = pixelGridAlpha * MaxAlpha * 0.5f;
-
-        // Draw coarse grid
-        DrawGridLines(camera, spacing1, EditorStyle.GridColor.WithAlpha(alpha1));
-        DrawGridLines(camera, spacing2, EditorStyle.GridColor.WithAlpha(alpha2));
-
-        // Draw zero lines (origin)
         DrawZeroLines(camera, EditorStyle.GridColor);
+        
 
-        // Draw pixel grid when visible
-        if (pixelGridAlpha > float.Epsilon)
-            DrawGridLines(camera, spacing3, EditorStyle.GridColor.WithAlpha(alpha3 * MaxAlpha * 0.5f));
+        if (IsPixelGridVisible)
+        {
+            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha));
+            DrawHorizontalLines(camera, world.FineSpacing);
+            DrawVerticalLines(camera, world.FineSpacing);
+
+            Render.PushLayer(PixelGridLayer);
+            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(pixelGridAlpha));
+            DrawHorizontalLines(camera, pixelSize);
+            DrawVerticalLines(camera, pixelSize);
+            Render.PopLayer();
+        } else {
+            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha * MaxAlpha));
+            DrawHorizontalLines(camera, world.CoarseSpacing);
+            DrawVerticalLines(camera, world.CoarseSpacing);
+
+            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.FineAlpha));
+            DrawHorizontalLines(camera, world.FineSpacing);
+            DrawVerticalLines(camera, world.FineSpacing);
+        }
     }
 
-    public static void DrawPixelGrid(Camera camera)
+    private static void DrawHorizontalLines(Camera camera, float spacing)
     {
-        if (!_pixelGridVisible) return;
-
-        var pixelSize = 1f / _dpi;
-        var bounds = camera.WorldBounds;
-        var worldWidth = bounds.Width;
-        var screenWidth = camera.ScreenSize.X;
-
-        var screenPixelsPerWorldPixel = screenWidth / (worldWidth / pixelSize);
-        var pixelGridAlpha = 0f;
-        if (screenPixelsPerWorldPixel > 8f)
-            pixelGridAlpha = MathF.Min((screenPixelsPerWorldPixel - 8f) / 32f, 1f);
-
-        DrawGridLines(camera, pixelSize, EditorStyle.GridColor.WithAlpha(pixelGridAlpha * MaxAlpha * 0.5f));
-    }
-
-    private static void DrawGridLines(Camera camera, float spacing, Color color)
-    {
-        if (color.A <= 0) return;
+        if (spacing <= 0.0001f) return;
 
         var bounds = camera.WorldBounds;
         var left = bounds.Min.X;
@@ -117,30 +73,59 @@ public static class Grid
         var bottom = bounds.Min.Y;
         var top = bounds.Max.Y;
 
+        // Find grid lines that intersect the view
+        var startY = MathF.Floor(bottom / spacing) * spacing;
+        var endY = MathF.Ceiling(top / spacing) * spacing;
+        var lineCount = (int)((endY - startY) / spacing) + 1;
+
+        if (lineCount > 500)
+            return;
+
         var screenSize = camera.ScreenSize;
         var worldHeight = top - bottom;
         var pixelsPerWorldUnit = screenSize.Y / worldHeight;
         var lineThickness = 1f / pixelsPerWorldUnit;
 
-        Render.SetColor(color);
-        
-        // Vertical lines
-        var startX = MathF.Floor(left / spacing) * spacing;
-        for (var x = startX; x <= right + spacing; x += spacing)
+        for (var y = startY; y <= endY; y += spacing)
         {
-            Render.DrawQuad(
-                x - lineThickness, bottom,
-                lineThickness * 2f, top - bottom
-            );
-        }
-
-        // Horizontal lines
-        var startY = MathF.Floor(bottom / spacing) * spacing;
-        for (var y = startY; y <= top + spacing; y += spacing)
-        {
+            if (y < bottom - lineThickness || y > top + lineThickness)
+                continue;
             Render.DrawQuad(
                 left, y - lineThickness,
                 right - left, lineThickness * 2f
+            );
+        }
+    }
+
+    private static void DrawVerticalLines(Camera camera, float spacing)
+    {
+        if (spacing <= 0.0001f) return;
+
+        var bounds = camera.WorldBounds;
+        var left = bounds.Min.X;
+        var right = bounds.Max.X;
+        var bottom = bounds.Min.Y;
+        var top = bounds.Max.Y;
+        var startX = MathF.Floor(left / spacing) * spacing;
+        var endX = MathF.Ceiling(right / spacing) * spacing;
+        var lineCount = (int)((endX - startX) / spacing) + 1;
+
+        if (lineCount > 500)
+            return;
+
+        var screenSize = camera.ScreenSize;
+        var worldHeight = top - bottom;
+        var pixelsPerWorldUnit = screenSize.Y / worldHeight;
+        var lineThickness = 1f / pixelsPerWorldUnit;
+
+        for (var x = startX; x <= endX; x += spacing)
+        {
+            if (x < left - lineThickness || x > right + lineThickness)
+                continue;
+
+            Render.DrawQuad(
+                x - lineThickness, bottom,
+                lineThickness * 2f, top - bottom
             );
         }
     }
@@ -160,24 +145,27 @@ public static class Grid
 
         Render.SetColor(color);
         
-        // Vertical zero line (Y axis)
-        Render.DrawQuad(
-            -lineThickness, bottom,
-            lineThickness * 2f, top - bottom
-        );
+        if (left < lineThickness && right > -lineThickness)
+            Render.DrawQuad(
+                -lineThickness, bottom,
+                lineThickness * 2f, top - bottom
+            );
 
-        // Horizontal zero line (X axis)
-        Render.DrawQuad(
-            left, -lineThickness,
-            right - left, lineThickness * 2f
-        );
+        if (top < lineThickness && bottom > -lineThickness)
+            Render.DrawQuad(
+                left, -lineThickness,
+                right - left, lineThickness * 2f
+            );
     }
 
-    private static GridLevels CalculateGridLevels(float worldWidth, float screenWidth, float baseUnit, float targetGridScreenSpacing)
+    private static GridLevels CalculateGridLevels(
+        float worldWidth,
+        float screenWidth,
+        float baseUnit,
+        float targetGridScreenSpacing)
     {
         var worldPerPixel = worldWidth / screenWidth;
         var idealWorldSpacing = worldPerPixel * targetGridScreenSpacing;
-
         var idealInBaseUnits = idealWorldSpacing / baseUnit;
 
         var logSpacing = MathF.Log10(idealInBaseUnits);
@@ -189,17 +177,12 @@ public static class Grid
         var multiplier = MathF.Round(MathF.Pow(10f, floorLog));
 
         var fineSpacing = baseUnit * multiplier;
-        var coarseSpacing = fineSpacing * 10f;
-
-        var fineAlpha = 1f - t;
-        var coarseAlpha = 1f;
-
-        return new GridLevels(fineSpacing, fineAlpha, coarseSpacing, coarseAlpha);
+        return new GridLevels(fineSpacing, 1f - t, fineSpacing * 10f, 1.0f);
     }
 
     public static Vector2 SnapToPixelGrid(Vector2 position)
     {
-        var spacing = 1f / _dpi;
+        var spacing = 1f / (float)EditorApplication.Config!.AtlasDpi;
         return new Vector2(
             MathF.Round(position.X / spacing) * spacing,
             MathF.Round(position.Y / spacing) * spacing
@@ -208,7 +191,7 @@ public static class Grid
 
     public static Vector2 SnapToGrid(Vector2 position)
     {
-        var spacing = _snapSpacing > 0f ? _snapSpacing : 0.1f;
+        var spacing = SnapSpacing > 0f ? SnapSpacing : 0.1f;
         return new Vector2(
             MathF.Round(position.X / spacing) * spacing,
             MathF.Round(position.Y / spacing) * spacing

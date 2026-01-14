@@ -78,7 +78,7 @@ public readonly struct Color24(byte r, byte g, byte b) : IEquatable<Color24>
 }
 
 [StructLayout(LayoutKind.Sequential)]
-public readonly struct Color(float r, float g, float b, float a = 1f)
+public readonly struct Color(float r, float g, float b, float a)
     : IEquatable<Color>
 {
     public readonly float R = r;
@@ -92,6 +92,10 @@ public readonly struct Color(float r, float g, float b, float a = 1f)
     public Color WithAlpha(float alpha) => new(R, G, B, alpha);
     public Color MultiplyAlpha(float multiply) => new(R, G, B, A * multiply);
 
+    public Color(float r, float g, float b) : this(r, g, b, 1.0f)
+    {
+    }
+    
     public Color(byte r, byte g, byte b, byte a) : this(r / 255f, g / 255f, b / 255f, a / 255f)
     {
     }
@@ -134,7 +138,8 @@ public readonly struct Color(float r, float g, float b, float a = 1f)
     public static Color FromRgb(uint rgb) => new(
         ((rgb >> 16) & 0xFF) / 255f,
         ((rgb >> 8) & 0xFF) / 255f,
-        (rgb & 0xFF) / 255f
+        (rgb & 0xFF) / 255f,
+        1.0f
     );
 
     public static Color FromRgba(uint rgba) => new(
