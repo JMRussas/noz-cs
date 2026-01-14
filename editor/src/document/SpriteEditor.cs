@@ -34,7 +34,6 @@ public class SpriteEditor : DocumentEditor
     {
         _rasterTexture = Texture.Create(RasterTextureSize, RasterTextureSize, _pixelData.AsBytes());
         Input.PushInputSet(_input, inheritState: true);
-        Workspace.FrameView(Document.Bounds);
     }
 
     // Selection
@@ -62,8 +61,8 @@ public class SpriteEditor : DocumentEditor
     private Rect _selectionBox;
 
     // Rendering constants
-    private const float EdgeWidth = 0.02f;
-    private const float EdgeSelectedWidth = 0.05f;
+    private const float EdgeWidth = 1.0f;
+    private const float EdgeSelectedWidth = 1.1f;
     private const float VertexSize = 0.12f;
     private const float MidpointSize = 0.08f;
 
@@ -84,26 +83,25 @@ public class SpriteEditor : DocumentEditor
     {
         UpdateAnimation();
         UpdateInput();
-    }
 
-    public override void Draw()
-    {
         if (_rasterDirty)
             UpdateRaster();
 
         var shape = Document.GetFrame(_currentFrame).Shape;
         var zoom = Workspace.Zoom;
-        var zoomScale = 1f / zoom;
 
-        DrawRaster(shape);
-        DrawShapeEdges(shape, zoomScale);
-        DrawShapeAnchors(shape, zoomScale);
-        DrawShapeMidpoints(shape, zoomScale);
+//        DrawRaster(shape);
+        Render.SetTransform(Document.Transform);
+        Render.PushLayer(EditorRender.GizmoLayer);
+        DrawShapeEdges(shape);
+        DrawShapeAnchors(shape);
+        // DrawShapeMidpoints(shape);
+        Render.PopLayer();
 
-        if (_activeTool == SpriteEditorTool.BoxSelect)
-            DrawSelectionBox();
+        // if (_activeTool == SpriteEditorTool.BoxSelect)
+        //     DrawSelectionBox();
     }
-
+    
     private void UpdateRaster()
     {
         var dpi = EditorApplication.Config?.AtlasDpi ?? 64f;
@@ -685,7 +683,7 @@ public class SpriteEditor : DocumentEditor
         Render.DrawQuad(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
     }
 
-    private void DrawShapeEdges(Shape shape, float zoomScale)
+    private static void DrawShapeEdges(Shape shape)
     {
         for (ushort p = 0; p < shape.PathCount; p++)
         {
@@ -703,7 +701,7 @@ public class SpriteEditor : DocumentEditor
                                (a1.Flags & Shape.AnchorFlags.Selected) != 0;
 
                 var color = selected ? EditorStyle.EdgeSelected : EditorStyle.Edge;
-                var width = (selected ? EdgeSelectedWidth : EdgeWidth) * zoomScale;
+                var width = (selected ? EdgeSelectedWidth : EdgeWidth);
 
                 var samples = shape.GetSegmentSamples(a0Idx);
                 var prev = a0.Position;
@@ -720,7 +718,7 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
-    private void DrawShapeAnchors(Shape shape, float zoomScale)
+    private void DrawShapeAnchors(Shape shape)
     {
         for (ushort i = 0; i < shape.AnchorCount; i++)
         {
@@ -729,7 +727,7 @@ public class SpriteEditor : DocumentEditor
             var hovered = i == _hoveredAnchor;
 
             var color = selected ? EditorStyle.VertexSelected : EditorStyle.Vertex;
-            var size = VertexSize * zoomScale;
+            var size = VertexSize;
 
             if (hovered)
                 size *= 1.2f;
@@ -739,7 +737,7 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
-    private void DrawShapeMidpoints(Shape shape, float zoomScale)
+    private void DrawShapeMidpoints(Shape shape)
     {
         for (ushort p = 0; p < shape.PathCount; p++)
         {
@@ -752,7 +750,7 @@ public class SpriteEditor : DocumentEditor
                 var hovered = anchorIdx == _hoveredMidpoint;
 
                 var color = hovered ? EditorStyle.EdgeSelected : new Color(0.5f, 0.5f, 0.5f, 0.5f);
-                var size = MidpointSize * zoomScale;
+                var size = MidpointSize;
 
                 if (hovered)
                     size *= 1.3f;

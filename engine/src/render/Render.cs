@@ -355,74 +355,47 @@ public static unsafe class Render
 
     #region Draw
 
-    public static void DrawQuad(
-        float x,
-        float y,
-        float width,
-        float height,
-        ushort order = 0)
+    public static void DrawQuad(float x, float y, float width, float height, ushort order = 0)
     {
-        _state.Transform = Matrix3x2.Identity;
-        AddQuad(
-            x, y, width, height,
-            0, 0, 1, 1,
-            order
-        );
-    }
-    
-    public static void DrawQuad(
-        float x,
-        float y,
-        float width,
-        float height,
-        in Matrix3x2 transform,
-        ushort order=0)
-    {
-        SetTransform(transform);
-        AddQuad(
-            x, y, width, height,
-            0, 0, 1, 1,
-            order
-        );
+        var p0 = new Vector2(x, y);
+        var p1 = new Vector2(x + width, y);
+        var p2 = new Vector2(x + width, y + height);
+        var p3 = new Vector2(x, y + height);
+        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
     }
 
-    public static void DrawQuad(
-        float x,
-        float y,
-        float width,
-        float height,
-        float u0,
-        float v0,
-        float u1,
-        float v1,
-        ushort order=0)
+    public static void DrawQuad(float x, float y, float width, float height, in Matrix3x2 transform, ushort order = 0)
     {
-        _state.Transform = Matrix3x2.Identity;
-        AddQuad(
-            x, y, width, height,
-            u0, v0, u1, v1,
-            order
-        );
+        _state.Transform = transform;
+        var p0 = new Vector2(x, y);
+        var p1 = new Vector2(x + width, y);
+        var p2 = new Vector2(x + width, y + height);
+        var p3 = new Vector2(x, y + height);
+        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
     }
 
-    public static void DrawQuad(
-        float x,
-        float y,
-        float width,
-        float height,
-        float u0,
-        float v0,
-        float u1,
-        float v1,
-        in Matrix3x2 transform,
-        ushort order=0)
+    public static void DrawQuad(float x, float y, float width, float height, float u0, float v0, float u1, float v1, ushort order = 0)
     {
-        SetTransform(transform);  
-        AddQuad(
-            x, y, width, height,
-            u0, v0, u1, v1,
-            order
-        );
+        var p0 = new Vector2(x, y);
+        var p1 = new Vector2(x + width, y);
+        var p2 = new Vector2(x + width, y + height);
+        var p3 = new Vector2(x, y + height);
+        AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order);
+    }
+
+    public static void DrawQuad(float x, float y, float width, float height, float u0, float v0, float u1, float v1, in Matrix3x2 transform, ushort order = 0)
+    {
+        _state.Transform = transform;
+        var p0 = new Vector2(x, y);
+        var p1 = new Vector2(x + width, y);
+        var p2 = new Vector2(x + width, y + height);
+        var p3 = new Vector2(x, y + height);
+        AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order);
+    }
+
+    public static void DrawQuad(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, ushort order = 0)
+    {
+        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
     }
 
     #endregion
@@ -462,6 +435,8 @@ public static unsafe class Render
 
         _state.BoneCount = 0;
     }
+
+    public static Matrix3x2 Transform => _state.Transform;
 
     public static void SetTransform(in Matrix3x2 transform)
     {
@@ -506,22 +481,22 @@ public static unsafe class Render
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AddQuad(
-        float x,
-        float y,
-        float width,
-        float height,
-        float u0,
-        float v0,
-        float u1,
-        float v1,
+        in Vector2 p0,
+        in Vector2 p1,
+        in Vector2 p2,
+        in Vector2 p3,
+        in Vector2 uv0,
+        in Vector2 uv1,
+        in Vector2 uv2,
+        in Vector2 uv3,
         ushort order)
     {
         if (_state.Shader == null)
             return;
-        
+
         if (_batchStateDirty)
             AddBatchState();
-        
+
         if (_commandCount >= _maxDrawCommands)
             return;
 
@@ -537,15 +512,15 @@ public static unsafe class Render
         cmd.IndexCount = 6;
         cmd.BatchState = (ushort)(_batchStateCount - 1);
 
-        var p0 = Vector2.Transform(new Vector2(x, y), _state.Transform);
-        var p1 = Vector2.Transform(new Vector2(x + width, y), _state.Transform);
-        var p2 = Vector2.Transform(new Vector2(x + width, y + height), _state.Transform);
-        var p3 = Vector2.Transform(new Vector2(x, y + height), _state.Transform);
+        var t0 = Vector2.Transform(p0, _state.Transform);
+        var t1 = Vector2.Transform(p1, _state.Transform);
+        var t2 = Vector2.Transform(p2, _state.Transform);
+        var t3 = Vector2.Transform(p3, _state.Transform);
 
-        _vertices[_vertexCount + 0] = new MeshVertex { Position = p0, UV = new Vector2(u0, v0), Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 1] = new MeshVertex { Position = p1, UV = new Vector2(u1, v0), Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 2] = new MeshVertex { Position = p2, UV = new Vector2(u1, v1), Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 3] = new MeshVertex { Position = p3, UV = new Vector2(u0, v1), Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 0] = new MeshVertex { Position = t0, UV = uv0, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 1] = new MeshVertex { Position = t1, UV = uv1, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 2] = new MeshVertex { Position = t2, UV = uv2, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 3] = new MeshVertex { Position = t3, UV = uv3, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
 
         _indices[_indexCount + 0] = (ushort)_vertexCount;
         _indices[_indexCount + 1] = (ushort)(_vertexCount + 1);

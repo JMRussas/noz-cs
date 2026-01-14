@@ -43,16 +43,19 @@ public static class Grid
 
         if (IsPixelGridVisible)
         {
+            Render.PushLayer(EditorRender.GridLayer);
             EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha));
             DrawHorizontalLines(camera, world.FineSpacing);
             DrawVerticalLines(camera, world.FineSpacing);
-
-            Render.PushLayer(PixelGridLayer);
+            Render.PopLayer();
+            
+            Render.PushLayer(EditorRender.PixelGridLayer);
             EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(pixelGridAlpha));
             DrawHorizontalLines(camera, pixelSize);
             DrawVerticalLines(camera, pixelSize);
             Render.PopLayer();
         } else {
+            Render.PushLayer(EditorRender.GridLayer);
             EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha * MaxAlpha));
             DrawHorizontalLines(camera, world.CoarseSpacing);
             DrawVerticalLines(camera, world.CoarseSpacing);
@@ -60,6 +63,7 @@ public static class Grid
             EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.FineAlpha));
             DrawHorizontalLines(camera, world.FineSpacing);
             DrawVerticalLines(camera, world.FineSpacing);
+            Render.PopLayer();
         }
     }
 

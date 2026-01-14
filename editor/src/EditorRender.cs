@@ -8,6 +8,10 @@ namespace NoZ.Editor;
 
 public static class EditorRender
 {
+    public const int GridLayer = 100;
+    public const int PixelGridLayer = 1000;
+    public const int GizmoLayer = 1100;
+    
     private const float DefaultLineWidth = 0.02f;
     private const float DefaultVertexSize = 0.12f;
     private const byte BoundsLayer = 200;
@@ -35,7 +39,7 @@ public static class EditorRender
         DrawLine(bottomLeft, topLeft);
     }
 
-    public static void DrawLine(Vector2 v0, Vector2 v1,  float width = DefaultLineWidth)
+    public static void DrawLine(Vector2 v0, Vector2 v1, float width = 1.0f)
     {
         var delta = v1 - v0;
         var length = delta.Length();
@@ -43,25 +47,20 @@ public static class EditorRender
             return;
 
         var dir = delta / length;
-        var mid = (v0 + v1) * 0.5f;
+        var perp = new Vector2(-dir.Y, dir.X);
+        var halfWidth = DefaultLineWidth * width * ZoomRefScale;
 
-        var scaleX = length * 0.5f;
-        var scaleY = width * ZoomRefScale;
+        var p0 = v0 - perp * halfWidth;
+        var p1 = v0 + perp * halfWidth;
+        var p2 = v1 + perp * halfWidth;
+        var p3 = v1 - perp * halfWidth;
 
-        var cos = dir.X;
-        var sin = dir.Y;
-        var transform = new Matrix3x2(
-            cos * scaleX, sin * scaleX,
-            -sin * scaleY, cos * scaleY,
-            mid.X, mid.Y
-        );
-
-        Render.DrawQuad(-1, -1, 2, 2, transform);
+        Render.DrawQuad(p0, p1, p2, p3);
     }
 
-    public static void DrawVertex(Vector2 position, float size = DefaultVertexSize)
+    public static void DrawVertex(Vector2 position, float size = 1.0f)
     {
-        var scaledSize = size * ZoomRefScale;
+        var scaledSize = DefaultVertexSize * size * ZoomRefScale;
         var halfSize = scaledSize * 0.5f;
         Render.DrawQuad(position.X - halfSize, position.Y - halfSize, scaledSize, scaledSize);
     }

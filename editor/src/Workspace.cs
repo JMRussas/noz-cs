@@ -138,8 +138,25 @@ public static class Workspace
         props.SetFloat("view", "ui_scale", _userUIScale);
     }
 
+    private static void CheckShortcuts()
+    {
+        if (Input.WasButtonPressed(InputCode.KeyTab))
+            ToggleEdit();
+
+        if (Input.WasButtonPressed(InputCode.KeyF))
+            FrameSelected();
+
+        if (Input.WasButtonPressed(InputCode.KeyS) && Input.IsCtrlDown())
+            DocumentManager.SaveAll();
+
+        if (Input.WasButtonPressed(InputCode.KeyQuote) && Input.IsAltDown())
+            ToggleGrid();
+    }
+    
     public static void Update()
     {
+        CheckShortcuts();
+        
         UpdateCamera();
         UpdateMouse();
         UpdatePan();
@@ -149,6 +166,27 @@ public static class Workspace
             UpdateDefaultState();
 
         UpdateCulling();
+
+        if (EditorAssets.Shaders.Sprite is Shader spriteShader)
+            Render.SetShader(spriteShader);
+
+        Render.SetTexture(_whiteTexture!);
+        Render.SetBlendMode(BlendMode.Alpha);
+        Render.SetCamera(_camera);
+
+        DrawSelectionBounds();
+        DrawDocuments();
+
+        if (_showGrid)
+            Grid.Draw(_camera);
+
+        if (Workspace.State == WorkspaceState.Edit && Workspace.ActiveEditor != null)
+            Workspace.ActiveEditor.Update();
+    }
+
+    public static void UpdateUI()
+    {
+        Workspace.ActiveEditor?.UpdateUI();
     }
 
     private static void UpdateCulling()
@@ -165,21 +203,41 @@ public static class Workspace
         }
     }
 
-    public static void Draw()
+    private static void DrawSelectionBounds()
     {
-        if (EditorAssets.Shaders.Sprite is Shader spriteShader)
-            Render.SetShader(spriteShader);
+        if (Workspace.ActiveDocument != null)
+        {
+            EditorRender.SetColor(EditorStyle.EdgeColor);
+            EditorRender.DrawBounds(Workspace.ActiveDocument);
+            return;
+        }
 
-        Render.SetTexture(_whiteTexture!);
-        Render.SetBlendMode(BlendMode.Alpha);
-        Render.SetCamera(_camera);
+        EditorRender.SetColor(EditorStyle.SelectionColor);
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (!doc.Loaded || !doc.PostLoaded)
+                continue;
 
-        if (_showGrid)
-            Grid.Draw(_camera);
+            if (doc.IsClipped)
+                continue;
+
+            if (doc.IsSelected)
+                EditorRender.DrawBounds(doc);
+        }
     }
-
-    public static void DrawOverlay()
+    
+    private static void DrawDocuments()
     {
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (!doc.Loaded || !doc.PostLoaded)
+                continue;
+
+            if (doc.IsEditing || doc.IsClipped)
+                continue;
+
+            doc.Draw();
+        }
     }
 
     public static void ToggleGrid()

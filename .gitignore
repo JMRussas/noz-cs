@@ -3,6 +3,7 @@ build/
 bin/
 obj/
 .vs/
+./noz/user.cfg
 vs/
 _deps/
 

@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using Silk.NET.Maths;
 
 namespace NoZ.Editor;
 
@@ -17,6 +18,8 @@ public abstract class Document
     public Vector2 SavedPosition { get; set; }
     public Rect Bounds { get; set; } = new(-0.5f, -0.5f, 1f, 1f);
 
+    public Matrix3x2 Transform => Matrix3x2.CreateTranslation(Position);
+    
     public bool IsSelected { get; set; }
     public bool IsEditing { get; set; }
     public bool IsModified { get; set; }
