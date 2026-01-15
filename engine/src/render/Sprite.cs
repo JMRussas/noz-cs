@@ -9,6 +9,7 @@ namespace NoZ;
 public class Sprite : Asset
 {
     public const int Version = 1;
+    public const int MaxFrames = 64;
     
     public Texture Texture { get; private set; }
     public int Width { get; private set; }

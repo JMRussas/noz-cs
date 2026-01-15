@@ -8,6 +8,7 @@ public static class EditorAssets
 {
     public static class Names
     {
+        public const string Seguisb = "seguisb";
         public const string Composite = "composite";
         public const string Sprite = "sprite";
         public const string Text = "text";
@@ -41,6 +42,11 @@ public static class EditorAssets
         public const string IconVertexMode = "icon_vertex_mode";
         public const string IconWeightMode = "icon_weight_mode";
         public const string EditorPalette = "editor_palette";
+    }
+
+    public static class Fonts
+    {
+        public static Asset? Seguisb;
     }
 
     public static class Shaders
@@ -90,6 +96,7 @@ public static class EditorAssets
 
     public static void LoadAssets()
     {
+        Fonts.Seguisb = (Asset?)Asset.Load(AssetType.Font, Names.Seguisb);
         Shaders.Composite = (Asset?)Asset.Load(AssetType.Shader, Names.Composite);
         Shaders.Sprite = (Asset?)Asset.Load(AssetType.Shader, Names.Sprite);
         Shaders.Text = (Asset?)Asset.Load(AssetType.Shader, Names.Text);
@@ -132,6 +139,7 @@ public static class EditorAssets
 
     public static void UnloadAssets()
     {
+        Fonts.Seguisb?.Dispose();
         Shaders.Composite?.Dispose();
         Shaders.Sprite?.Dispose();
         Shaders.Text?.Dispose();

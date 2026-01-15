@@ -12,6 +12,7 @@ namespace NoZ;
 public static unsafe class Render
 {
     private const int MaxSortGroups = 16;
+    private const int MaxStateStack = 16;
     private const int MaxVertices = 65536;
     private const int MaxIndices = 196608;
     private const int MaxTextures = 2;
@@ -33,8 +34,6 @@ public static unsafe class Render
     private struct BatchState()
     {
         public nuint Shader;
-        public ushort UniformIndex;
-        public ushort UniformCount;
         public fixed ulong Textures[MaxTextures];
         public BlendMode BlendMode;
     }
@@ -46,17 +45,15 @@ public static unsafe class Render
         public ushort State;
     }
     
-    private struct State()
+    private struct State
     {
-        public Color Color = default;
-        public Shader? Shader = null!;
-        public Matrix3x2[]? Bones = null!;
+        public Color Color;
+        public Shader? Shader;
         public Matrix3x2 Transform;
-        public int BoneCount = 0;
-        public nuint[] Textures = null!;
-        public ushort Layer = 0;
-        public ushort Group = 0;
-        public ushort Index = 0;
+        public fixed ulong Textures[MaxTextures];
+        public ushort Layer;
+        public ushort Group;
+        public ushort Index;
         public BlendMode BlendMode;
     }
     
@@ -67,24 +64,28 @@ public static unsafe class Render
     public static ref readonly RenderStats Stats => ref _stats;
 
     private const int MaxBones = 64;
+    private static int _boneCount;
     private static float _time;
     private static Shader? _compositeShader;
     private static bool _inUIPass;
     private static bool _inScenePass;
     private static RenderStats _stats;
     private static ushort[] _sortGroupStack = null!;
-    private static ushort[] _layerStack = null!;
+    private static State[] _stateStack = null!;
+    private static Matrix3x2[] _bones = null!;
     private static BatchState[] _batchStates = null!;
     private static ushort _sortGroupStackDepth = 0;
-    private static ushort _layerStackDepth = 0;
+    private static int _stateStackDepth = 0;
     private static bool _batchStateDirty = true;
     private static int _batchStateCount = 0;
 
-    private static State _state;
+    private static ref State CurrentState => ref _stateStack[_stateStackDepth];
 
     #region Batching
     private static nuint _vertexBuffer;
     private static nuint _indexBuffer;
+    private static nuint _boneUbo;
+    private const int BoneUboBindingPoint = 0;
     private static int _maxDrawCommands;
     private static int _maxBatches;
     private static MeshVertex[] _vertices = null!;
@@ -97,10 +98,7 @@ public static unsafe class Render
     private static Batch[] _batches = null!;
     private static int _batchCount = 0;
 
-    private const int MaxUniforms = 1024;
-    private static UniformEntry[] _uniforms = null!;
-    private static int _uniformCount = 0;
-    private static int _uniformBatchStart = 0;
+    private static Dictionary<string, UniformEntry> _uniforms = null!;
     #endregion
     
     public static Color ClearColor { get; set; } = Color.Black;  
@@ -115,9 +113,9 @@ public static unsafe class Render
         _maxDrawCommands = Config.MaxDrawCommands;
         _maxBatches = Config.MaxBatches;
         _sortGroupStack = new ushort[MaxSortGroups];
-        _layerStack = new ushort[MaxSortGroups];
+        _stateStack = new State[MaxStateStack];
         _sortGroupStackDepth = 0;
-        _layerStackDepth = 0;
+        _stateStackDepth = 0;
         
         Driver.Init(new RenderDriverConfig
         {
@@ -133,27 +131,27 @@ public static unsafe class Render
 
     private static void InitState()
     {
-        _state.Bones = new Matrix3x2[MaxBones];
-        _state.Textures = new nuint[MaxTextures];
+        _bones = new Matrix3x2[MaxBones];
         ResetState();
     }
 
     private static void ResetState()
     {
-        Debug.Assert(_state.Bones != null);
-
-        _state.Transform = Matrix3x2.Identity;
-        _state.BoneCount = 0;
-        _state.Group = 0;
-        _state.Layer = 0;
-        _state.Index = 0;
-        _state.Color = Color.White;
+        _stateStackDepth = 0;
+        CurrentState.Transform = Matrix3x2.Identity;
+        CurrentState.Group = 0;
+        CurrentState.Layer = 0;
+        CurrentState.Index = 0;
+        CurrentState.Color = Color.White;
+        CurrentState.Shader = null;
+        CurrentState.BlendMode = default;
+        for (var i = 0; i < MaxTextures; i++)
+            CurrentState.Textures[i] = 0;
         _batchStateCount = 0;
         _batchCount = 0;
-        _uniformCount = 0;
-        _uniformBatchStart = 0;
-        for (var boneIndex = 0; boneIndex < MaxBones; boneIndex++)
-            _state.Bones[boneIndex] = Matrix3x2.Identity;
+        _uniforms.Clear();
+        _boneCount = 1;
+        _bones[0] = Matrix3x2.Identity;
     }
     
     private static void InitBatcher()
@@ -164,7 +162,7 @@ public static unsafe class Render
         _commands = new RenderCommand[_maxDrawCommands];
         _batches = new Batch[_maxBatches];
         _batchStates = new BatchState[_maxBatches];
-        _uniforms = new UniformEntry[MaxUniforms];
+        _uniforms = new Dictionary<string, UniformEntry>();
 
         _vertexBuffer = Driver.CreateVertexBuffer(
             _vertices.Length * MeshVertex.SizeInBytes,
@@ -175,6 +173,9 @@ public static unsafe class Render
             _indices.Length * sizeof(ushort),
             BufferUsage.Dynamic
         );
+
+        // Create bone UBO: 64 bones * 2 vec4s per bone (std140 padded) * 16 bytes per vec4
+        _boneUbo = Driver.CreateUniformBuffer(MaxBones * 2 * 16, BufferUsage.Dynamic);
     }
 
     public static void Shutdown()
@@ -187,71 +188,60 @@ public static unsafe class Render
     {
         Driver.DestroyBuffer(_vertexBuffer);
         Driver.DestroyBuffer(_indexBuffer);
+        Driver.DestroyBuffer(_boneUbo);
     }
 
     public static void SetShader(Shader shader)
     {
-        if (shader == _state.Shader) return;
-        _state.Shader = shader;
+        if (shader == CurrentState.Shader) return;
+        CurrentState.Shader = shader;
         _batchStateDirty = true;
     }
 
     public static void SetTexture(nuint texture, int slot = 0)
     {
         Debug.Assert(slot is >= 0 and < MaxTextures);
-        if (_state.Textures[slot] == texture) return;
-        _state.Textures[slot] = texture;
+        if (CurrentState.Textures[slot] == texture) return;
+        CurrentState.Textures[slot] = texture;
         _batchStateDirty = true;
     }
     
     public static void SetTexture(Texture texture, int slot = 0)
     {
         Debug.Assert(slot is >= 0 and < MaxTextures);
-        nuint handle = texture?.Handle ?? nuint.Zero;
-        if (_state.Textures[slot] == handle) return;
-        _state.Textures[slot] = handle;
+        var handle = texture?.Handle ?? nuint.Zero;
+        if (CurrentState.Textures[slot] == handle) return;
+        CurrentState.Textures[slot] = handle;
         _batchStateDirty = true;
     }
 
     public static void SetUniformFloat(string name, float value)
     {
-        ref var u = ref _uniforms[_uniformCount++];
-        u.Type = UniformType.Float;
-        u.Name = name;
-        u.Value = new Vector4(value, 0, 0, 0);
+        _uniforms[name] = new UniformEntry { Type = UniformType.Float, Name = name, Value = new Vector4(value, 0, 0, 0) };
         _batchStateDirty = true;
     }
 
     public static void SetUniformVec2(string name, Vector2 value)
     {
-        ref var u = ref _uniforms[_uniformCount++];
-        u.Type = UniformType.Vec2;
-        u.Name = name;
-        u.Value = new Vector4(value.X, value.Y, 0, 0);
+        _uniforms[name] = new UniformEntry { Type = UniformType.Vec2, Name = name, Value = new Vector4(value.X, value.Y, 0, 0) };
         _batchStateDirty = true;
     }
 
     public static void SetUniformVec4(string name, Vector4 value)
     {
-        ref var u = ref _uniforms[_uniformCount++];
-        u.Type = UniformType.Vec4;
-        u.Name = name;
-        u.Value = value;
+        _uniforms[name] = new UniformEntry { Type = UniformType.Vec4, Name = name, Value = value };
         _batchStateDirty = true;
     }
 
     public static void SetUniformMatrix4x4(string name, Matrix4x4 value)
     {
-        ref var u = ref _uniforms[_uniformCount++];
-        u.Type = UniformType.Matrix4x4;
-        u.Name = name;
-        u.MatrixValue = value;
+        _uniforms[name] = new UniformEntry { Type = UniformType.Matrix4x4, Name = name, MatrixValue = value };
         _batchStateDirty = true;
     }
 
     public static void SetColor(Color color)
     {
-        _state.Color = color;
+        CurrentState.Color = color;
     }
 
     /// <summary>
@@ -267,8 +257,6 @@ public static unsafe class Render
         if (viewport is { Width: > 0, Height: > 0 })
             Driver.SetViewport((int)viewport.X, (int)viewport.Y, (int)viewport.Width, (int)viewport.Height);
 
-        // Convert camera's 3x2 view matrix to 4x4 for the shader
-        // Translation goes in column 4 (M14, M24) so after transpose it's in the right place
         var view = camera.ViewMatrix;
         var projection = new Matrix4x4(
             view.M11, view.M12, 0, view.M31,
@@ -366,7 +354,7 @@ public static unsafe class Render
 
     public static void DrawQuad(float x, float y, float width, float height, in Matrix3x2 transform, ushort order = 0)
     {
-        _state.Transform = transform;
+        CurrentState.Transform = transform;
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
         var p2 = new Vector2(x + width, y + height);
@@ -385,7 +373,7 @@ public static unsafe class Render
 
     public static void DrawQuad(float x, float y, float width, float height, float u0, float v0, float u1, float v1, in Matrix3x2 transform, ushort order = 0)
     {
-        _state.Transform = transform;
+        CurrentState.Transform = transform;
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
         var p2 = new Vector2(x + width, y + height);
@@ -400,53 +388,100 @@ public static unsafe class Render
 
     #endregion
 
-    public static void BindLayer(ushort layer)
+    public static void SetLayer(ushort layer)
     {
-        _state.Layer = layer;
+        CurrentState.Layer = layer;
     }
 
-    public static void PushLayer(ushort layer)
+    public static void PushState()
     {
-        _layerStack[_layerStackDepth++] = _state.Layer;
-        _state.Layer = layer;
-    }
-
-    public static void PopLayer()
-    {
-        if (_layerStackDepth == 0)
+        if (_stateStackDepth >= MaxStateStack - 1)
             return;
 
-        _layerStackDepth--;
-        _state.Layer = _layerStack[_layerStackDepth];
+        ref var current = ref _stateStack[_stateStackDepth];
+        ref var next = ref _stateStack[++_stateStackDepth];
+
+        next = current;
+    }
+
+    public static void PopState()
+    {
+        if (_stateStackDepth == 0)
+            return;
+
+        ref var current = ref _stateStack[_stateStackDepth];
+        ref var prev = ref _stateStack[--_stateStackDepth];
+
+        var shaderChanged = current.Shader != prev.Shader;
+        var blendChanged = current.BlendMode != prev.BlendMode;
+        var texturesChanged = false;
+        for (var i = 0; i < MaxTextures && !texturesChanged; i++)
+            texturesChanged = current.Textures[i] != prev.Textures[i];
+
+        if (shaderChanged || blendChanged || texturesChanged)
+            _batchStateDirty = true;
     }
 
     public static void SetBlendMode(BlendMode blendMode)
     {
-        _state.BlendMode = blendMode;
+        CurrentState.BlendMode = blendMode;
         _batchStateDirty = true;
     }
     
+    public const int MaxBoneTransforms = MaxBones;
+
     public static void SetBones(ReadOnlySpan<Matrix3x2> transforms)
     {
-        Debug.Assert(_state.Bones != null);
-        Debug.Assert(transforms.Length < MaxBones);
-        for (int i = 0, c = transforms.Length; i < c; i++)
-            _state.Bones[i + 1] = transforms[i];
-
-        _state.BoneCount = 0;
+        Debug.Assert(_boneCount + transforms.Length <= MaxBones);
+        CurrentState.Index = (ushort)_boneCount;
+        fixed (Matrix3x2* dst = &_bones[_boneCount])
+        fixed (Matrix3x2* src = transforms)
+        {
+            Unsafe.CopyBlock(dst, src, (uint)(transforms.Length * sizeof(Matrix3x2)));
+        }
+        _boneCount += transforms.Length;
     }
 
-    public static Matrix3x2 Transform => _state.Transform;
+    private static void UploadBones()
+    {
+        // std140 layout requires vec4 alignment, so we pad each Matrix3x2 row to vec4
+        // Matrix3x2: M11,M12,M21,M22,M31,M32 -> two vec4s: [M11,M12,M31,0], [M21,M22,M32,0]
+        var size = MaxBones * 2 * 16;
+        var data = stackalloc float[MaxBones * 8];
+        fixed (Matrix3x2* src = _bones)
+        {
+            var srcPtr = (float*)src;
+            var dstPtr = data;
+            for (var i = 0; i < MaxBones; i++)
+            {
+                // Row 0: M11, M12, M31, pad
+                dstPtr[0] = srcPtr[0]; // M11
+                dstPtr[1] = srcPtr[1]; // M12
+                dstPtr[2] = srcPtr[4]; // M31
+                dstPtr[3] = 0;
+                // Row 1: M21, M22, M32, pad
+                dstPtr[4] = srcPtr[2]; // M21
+                dstPtr[5] = srcPtr[3]; // M22
+                dstPtr[6] = srcPtr[5]; // M32
+                dstPtr[7] = 0;
+                srcPtr += 6;
+                dstPtr += 8;
+            }
+        }
+        Driver.UpdateUniformBuffer(_boneUbo, 0, new ReadOnlySpan<byte>(data, size));
+    }
+
+    public static Matrix3x2 Transform => CurrentState.Transform;
 
     public static void SetTransform(in Matrix3x2 transform)
     {
-        _state.Transform = transform;
+        CurrentState.Transform = transform;
     }
 
     public static void PushSortGroup(ushort group)
     {
-        _sortGroupStack[_sortGroupStackDepth++] = _state.Group;
-        _state.Group = group;
+        _sortGroupStack[_sortGroupStackDepth++] = CurrentState.Group;
+        CurrentState.Group = group;
     }
 
     public static void PopSortGroup()
@@ -455,28 +490,24 @@ public static unsafe class Render
             return;
 
         _sortGroupStackDepth--;
-        _state.Group = _sortGroupStack[_sortGroupStackDepth];
+        CurrentState.Group = _sortGroupStack[_sortGroupStackDepth];
     }
 
     private static long MakeSortKey(ushort order) =>
-        (((long)_state.Layer) << LayerShift) |
-        (((long)_state.Group) << GroupShift) |
+        (((long)CurrentState.Layer) << LayerShift) |
+        (((long)CurrentState.Group) << GroupShift) |
         (((long)order) << OrderShift) |
-        (((long)_state.Index) << IndexShift);
+        (((long)CurrentState.Index) << IndexShift);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AddBatchState()
     {
         _batchStateDirty = false;
         ref var batchState = ref _batchStates[_batchStateCount++];
-        batchState.Shader = _state.Shader?.Handle ?? nuint.Zero;
-        batchState.BlendMode = _state.BlendMode;
+        batchState.Shader = CurrentState.Shader?.Handle ?? nuint.Zero;
+        batchState.BlendMode = CurrentState.BlendMode;
         for (var i = 0; i < MaxTextures; i++)
-            batchState.Textures[i] = _state.Textures[i];
-
-        batchState.UniformIndex = (ushort)_uniformBatchStart;
-        batchState.UniformCount = (ushort)(_uniformCount - _uniformBatchStart);
-        _uniformBatchStart = _uniformCount;
+            batchState.Textures[i] = CurrentState.Textures[i];
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -491,7 +522,7 @@ public static unsafe class Render
         in Vector2 uv3,
         ushort order)
     {
-        if (_state.Shader == null)
+        if (CurrentState.Shader == null)
             return;
 
         if (_batchStateDirty)
@@ -512,15 +543,15 @@ public static unsafe class Render
         cmd.IndexCount = 6;
         cmd.BatchState = (ushort)(_batchStateCount - 1);
 
-        var t0 = Vector2.Transform(p0, _state.Transform);
-        var t1 = Vector2.Transform(p1, _state.Transform);
-        var t2 = Vector2.Transform(p2, _state.Transform);
-        var t3 = Vector2.Transform(p3, _state.Transform);
+        var t0 = Vector2.Transform(p0, CurrentState.Transform);
+        var t1 = Vector2.Transform(p1, CurrentState.Transform);
+        var t2 = Vector2.Transform(p2, CurrentState.Transform);
+        var t3 = Vector2.Transform(p3, CurrentState.Transform);
 
-        _vertices[_vertexCount + 0] = new MeshVertex { Position = t0, UV = uv0, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 1] = new MeshVertex { Position = t1, UV = uv1, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 2] = new MeshVertex { Position = t2, UV = uv2, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 3] = new MeshVertex { Position = t3, UV = uv3, Normal = Vector2.Zero, Color = _state.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 0] = new MeshVertex { Position = t0, UV = uv0, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 1] = new MeshVertex { Position = t1, UV = uv1, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 2] = new MeshVertex { Position = t2, UV = uv2, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        _vertices[_vertexCount + 3] = new MeshVertex { Position = t3, UV = uv3, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
 
         _indices[_indexCount + 0] = (ushort)_vertexCount;
         _indices[_indexCount + 1] = (ushort)(_vertexCount + 1);
@@ -543,11 +574,11 @@ public static unsafe class Render
         batch.State = batchState;
     }
 
-    private static void ApplyBatchUniforms(ref BatchState state)
+    private static void ApplyUniforms()
     {
-        for (var i = state.UniformIndex; i < state.UniformIndex + state.UniformCount; i++)
+        foreach (var kvp in _uniforms)
         {
-            ref var u = ref _uniforms[i];
+            var u = kvp.Value;
             switch (u.Type)
             {
                 case UniformType.Float:
@@ -579,7 +610,7 @@ public static unsafe class Render
         
         SortCommands();
         
-        ushort batchStateIndex = 0xFFFF;
+        var batchStateIndex = _commands[0].BatchState;
         var sortedIndexCount = 0;   
         var sortedIndexOffset = 0;
         for (var commandIndex = 0; commandIndex < _commandCount; commandIndex++)
@@ -587,7 +618,7 @@ public static unsafe class Render
             ref var cmd = ref _commands[commandIndex];
             if (batchStateIndex != cmd.BatchState)
             {
-                AddBatch(cmd.BatchState, sortedIndexOffset, sortedIndexCount - sortedIndexOffset);
+                AddBatch(batchStateIndex, sortedIndexOffset, sortedIndexCount - sortedIndexOffset);
                 sortedIndexOffset = sortedIndexCount;
                 batchStateIndex = cmd.BatchState;
             }
@@ -607,14 +638,16 @@ public static unsafe class Render
         Driver.UpdateIndexBuffer(_indexBuffer, 0, _sortedIndices.AsSpan(0, sortedIndexCount));
         Driver.BindVertexBuffer(_vertexBuffer);
         Driver.BindIndexBuffer(_indexBuffer);
-        
+
+        UploadBones();
+        Driver.BindUniformBuffer(_boneUbo, BoneUboBindingPoint);
+
         for (var batchIndex=0; batchIndex < _batchCount; batchIndex++)
         {
             ref var batch = ref _batches[batchIndex];
             ref var batchState = ref _batchStates[batch.State];
             Driver.BindShader(batchState.Shader);
-            Driver.SetBoneTransforms(_state.Bones);
-            ApplyBatchUniforms(ref batchState);
+            ApplyUniforms();
             Driver.BindTexture((nuint)batchState.Textures[0], 0);
             Driver.BindTexture((nuint)batchState.Textures[1], 1);
             Driver.SetBlendMode(batchState.BlendMode);

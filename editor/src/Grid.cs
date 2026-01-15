@@ -10,8 +10,6 @@ public static class Grid
 {
     private const float MaxAlpha = 0.6f;
     private const float MaxPixelAlpha = 0.5f;
-    private const ushort PixelGridLayer = 200;
-
     public static float SnapSpacing { get; private set; }
     public static bool IsPixelGridVisible { get; private set; }
     
@@ -40,31 +38,34 @@ public static class Grid
 
         DrawZeroLines(camera, EditorStyle.GridColor);
         
-
         if (IsPixelGridVisible)
         {
-            Render.PushLayer(EditorRender.GridLayer);
-            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha));
+            Render.PushState();
+            Render.SetLayer(EditorLayer.Grid);
+            Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha));
             DrawHorizontalLines(camera, world.FineSpacing);
             DrawVerticalLines(camera, world.FineSpacing);
-            Render.PopLayer();
-            
-            Render.PushLayer(EditorRender.PixelGridLayer);
-            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(pixelGridAlpha));
+            Render.PopState();
+
+            Render.PushState();
+            Render.SetLayer(EditorLayer.PixelGrid);
+            Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(pixelGridAlpha));
             DrawHorizontalLines(camera, pixelSize);
             DrawVerticalLines(camera, pixelSize);
-            Render.PopLayer();
-        } else {
-            Render.PushLayer(EditorRender.GridLayer);
-            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha * MaxAlpha));
-            DrawHorizontalLines(camera, world.CoarseSpacing);
-            DrawVerticalLines(camera, world.CoarseSpacing);
-
-            EditorRender.SetColor(EditorStyle.GridColor.WithAlpha(world.FineAlpha));
-            DrawHorizontalLines(camera, world.FineSpacing);
-            DrawVerticalLines(camera, world.FineSpacing);
-            Render.PopLayer();
+            Render.PopState();
+            return;
         }
+
+        Render.PushState();
+        Render.SetLayer(EditorLayer.Grid);
+        Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha * MaxAlpha));
+        DrawHorizontalLines(camera, world.CoarseSpacing);
+        DrawVerticalLines(camera, world.CoarseSpacing);
+
+        Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(world.FineAlpha));
+        DrawHorizontalLines(camera, world.FineSpacing);
+        DrawVerticalLines(camera, world.FineSpacing);
+        Render.PopState();
     }
 
     private static void DrawHorizontalLines(Camera camera, float spacing)

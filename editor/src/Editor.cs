@@ -32,6 +32,7 @@ public static class EditorApplication
         ShaderDocument.RegisterDef();
         SoundDocument.RegisterDef();
         SpriteDocument.RegisterDef();
+        FontDocument.RegisterDef();
 
         Config = string.IsNullOrEmpty(projectPath)
             ? EditorConfig.FindAndLoad()

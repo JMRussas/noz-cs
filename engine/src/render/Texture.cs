@@ -23,11 +23,16 @@ public class Texture : Asset
 
     public static Texture Create(int width, int height, ReadOnlySpan<byte> data, string name = "")
     {
+        return Create(width, height, data, TextureFormat.RGBA8, name);
+    }
+
+    public static Texture Create(int width, int height, ReadOnlySpan<byte> data, TextureFormat format, string name = "")
+    {
         var texture = new Texture(name)
         {
             Width = width,
             Height = height,
-            Format = TextureFormat.RGBA8,
+            Format = format,
             Filter = TextureFilter.Linear,
             Clamp = TextureClamp.Clamp,
             Data = data.ToArray()
@@ -68,7 +73,7 @@ public class Texture : Asset
     {
         if (Handle != nuint.Zero)
             Render.Driver.DestroyTexture(Handle);
-        Handle = Render.Driver.CreateTexture(Width, Height, Data);
+        Handle = Render.Driver.CreateTexture(Width, Height, Data, Format);
     }
 
     internal static void RegisterDef()

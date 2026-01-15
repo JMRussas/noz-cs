@@ -206,26 +206,6 @@ public class WebGLRender : IRender
         _module?.InvokeVoidAsync("setUniformVec4", name, value.X, value.Y, value.Z, value.W);
     }
 
-    public void SetBoneTransforms(ReadOnlySpan<Matrix3x2> bones)
-    {
-        if (_module == null) return;
-
-        // Pack Matrix3x2 into vec3 pairs for WebGL (same as OpenGL)
-        var data = new float[bones.Length * 6];
-        for (int i = 0; i < bones.Length; i++)
-        {
-            var m = bones[i];
-            int offset = i * 6;
-            data[offset + 0] = m.M11;
-            data[offset + 1] = m.M21;
-            data[offset + 2] = m.M31;
-            data[offset + 3] = m.M12;
-            data[offset + 4] = m.M22;
-            data[offset + 5] = m.M32;
-        }
-        _module.InvokeVoidAsync("setBoneTransforms", data);
-    }
-
     // === State Management ===
 
     public void SetBlendMode(BlendMode mode)

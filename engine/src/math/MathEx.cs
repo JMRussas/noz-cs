@@ -47,10 +47,10 @@ public static class MathEx
     public static int FloorToInt(float v) => (int)MathF.Floor(v);
     public static int CeilToInt(float v) => (int)MathF.Ceiling(v);
     public static int RoundToInt(float v) => (int)(v + 0.5f);
-    public static float Lerp(float a, float b, float t) => a + (b - a) * t;
-    public static double Lerp(double a, double b, double t) => a + (b - a) * t;
+    public static float Mix(float a, float b, float t) => a + (b - a) * t;
+    public static double Mix(double a, double b, double t) => a + (b - a) * t;
 
-    public static float InverseLerp(float a, float b, float value)
+    public static float InverseMix(float a, float b, float value)
     {
         if (MathF.Abs(b - a) < Epsilon) return 0f;
         return (value - a) / (b - a);
@@ -58,8 +58,8 @@ public static class MathEx
 
     public static float Remap(float value, float fromMin, float fromMax, float toMin, float toMax)
     {
-        var t = InverseLerp(fromMin, fromMax, value);
-        return Lerp(toMin, toMax, t);
+        var t = InverseMix(fromMin, fromMax, value);
+        return Mix(toMin, toMax, t);
     }
 
     // Clamping
@@ -137,14 +137,14 @@ public static class MathEx
     {
         t = Clamp01(t);
         t = t * t * (3f - 2f * t);
-        return Lerp(a, b, t);
+        return Mix(a, b, t);
     }
 
     public static float SmootherStep(float a, float b, float t)
     {
         t = Clamp01(t);
         t = t * t * t * (t * (t * 6f - 15f) + 10f);
-        return Lerp(a, b, t);
+        return Mix(a, b, t);
     }
 
     public static float SmoothDamp(

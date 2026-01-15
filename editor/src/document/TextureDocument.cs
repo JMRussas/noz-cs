@@ -37,7 +37,8 @@ public class TextureDocument : Document
 
     public override void PostLoad()
     {
-        Texture = Asset.Load(AssetType.Texture, Name) as Texture;
+        // todo: dont load the asset, load the texture directly
+        // Texture = Asset.Load(AssetType.Texture, Name) as Texture;
         UpdateBounds();
     }
 
@@ -63,7 +64,7 @@ public class TextureDocument : Document
             Render.SetShader(textureShader);
 
         Render.SetTexture(Texture);
-        Render.BindLayer(64);
+        Render.SetLayer(64);
         Render.SetColor(Color.White);
 
         var size = Bounds.Size;

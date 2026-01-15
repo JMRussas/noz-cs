@@ -9,22 +9,15 @@ namespace NoZ;
 /// <summary>
 /// Integer rectangle with position and size.
 /// </summary>
-public struct RectInt : IEquatable<RectInt>
+public struct RectInt(int x, int y, int width, int height)
+    : IEquatable<RectInt>
 {
-    public int X;
-    public int Y;
-    public int Width;
-    public int Height;
-
-    public RectInt(int x, int y, int width, int height)
-    {
-        X = x;
-        Y = y;
-        Width = width;
-        Height = height;
-    }
-
-    public static RectInt Zero => new(0, 0, 0, 0);
+    public static readonly RectInt Zero = new(0,0,0,0);  
+    
+    public int X = x;
+    public int Y = y;
+    public int Width = width;
+    public int Height = height;
 
     // Edges
     public int Left => X;

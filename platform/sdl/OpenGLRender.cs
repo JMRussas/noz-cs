@@ -312,15 +312,23 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
     // === Texture Management ===
 
-    public nuint CreateTexture(int width, int height, ReadOnlySpan<byte> data)
+    public nuint CreateTexture(int width, int height, ReadOnlySpan<byte> data, TextureFormat format = TextureFormat.RGBA8)
     {
         var glTexture = _gl.GenTexture();
         _gl.BindTexture(TextureTarget.Texture2D, glTexture);
 
+        var (internalFormat, pixelFormat) = format switch
+        {
+            TextureFormat.R8 => (InternalFormat.R8, PixelFormat.Red),
+            TextureFormat.RG8 => (InternalFormat.RG8, PixelFormat.RG),
+            TextureFormat.RGB8 => (InternalFormat.Rgb8, PixelFormat.Rgb),
+            _ => (InternalFormat.Rgba8, PixelFormat.Rgba)
+        };
+
         fixed (byte* p = data)
         {
-            _gl.TexImage2D(TextureTarget.Texture2D, 0, InternalFormat.Rgba8,
-                (uint)width, (uint)height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, p);
+            _gl.TexImage2D(TextureTarget.Texture2D, 0, internalFormat,
+                (uint)width, (uint)height, 0, pixelFormat, PixelType.UnsignedByte, p);
         }
 
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
@@ -526,39 +534,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location >= 0)
             _gl.Uniform4(location, value.X, value.Y, value.Z, value.W);
-    }
-
-    public void SetBoneTransforms(ReadOnlySpan<Matrix3x2> bones)
-    {
-        if (_boundShader == 0)
-            return;
-
-        var location = _gl.GetUniformLocation(_boundShader, "u_bones");
-        if (location < 0)
-            return;
-
-        // Each Matrix3x2 becomes 2 vec3s (column-major)
-        // M11 M21 M31 -> col0 (x, y, translation.x)
-        // M12 M22 M32 -> col1 (x, y, translation.y)
-        Span<float> data = stackalloc float[bones.Length * 6];
-        for (int i = 0; i < bones.Length; i++)
-        {
-            var m = bones[i];
-            int idx = i * 6;
-            // First vec3: column 0 (M11, M21) + translation.x (M31)
-            data[idx + 0] = m.M11;
-            data[idx + 1] = m.M21;
-            data[idx + 2] = m.M31;
-            // Second vec3: column 1 (M12, M22) + translation.y (M32)
-            data[idx + 3] = m.M12;
-            data[idx + 4] = m.M22;
-            data[idx + 5] = m.M32;
-        }
-
-        fixed (float* p = data)
-        {
-            _gl.Uniform3(location, (uint)(bones.Length * 2), p);
-        }
     }
 
     // === State Management ===

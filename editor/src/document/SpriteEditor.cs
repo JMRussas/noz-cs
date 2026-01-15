@@ -16,6 +16,8 @@ public enum SpriteEditorTool
 
 public class SpriteEditor : DocumentEditor
 {
+    private readonly Shortcut[] Shortcuts;
+    
     private const int RasterTextureSize = 256;
 
     public new SpriteDocument Document => (SpriteDocument)base.Document;
@@ -26,7 +28,7 @@ public class SpriteEditor : DocumentEditor
     private float _playTimer;
 
     // Raster state
-    private readonly PixelData _pixelData = new(RasterTextureSize, RasterTextureSize);
+    private readonly PixelData<Color32> _pixelData = new(RasterTextureSize, RasterTextureSize);
     private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
 
@@ -34,6 +36,11 @@ public class SpriteEditor : DocumentEditor
     {
         _rasterTexture = Texture.Create(RasterTextureSize, RasterTextureSize, _pixelData.AsBytes());
         Input.PushInputSet(_input, inheritState: true);
+
+        Shortcuts =
+        [
+            new Shortcut { Name = "Toggle Playback", Code = InputCode.KeySpace, Action = TogglePlayback },
+        ];
     }
 
     // Selection
@@ -63,7 +70,7 @@ public class SpriteEditor : DocumentEditor
     // Rendering constants
     private const float EdgeWidth = 1.0f;
     private const float EdgeSelectedWidth = 1.1f;
-    private const float VertexSize = 0.12f;
+    private const float VertexSize = 1.0f;
     private const float MidpointSize = 0.08f;
 
     public ushort CurrentFrame => _currentFrame;
@@ -81,6 +88,8 @@ public class SpriteEditor : DocumentEditor
 
     public override void Update()
     {
+        Shortcut.Update(Shortcuts);
+        
         UpdateAnimation();
         UpdateInput();
 
@@ -88,15 +97,15 @@ public class SpriteEditor : DocumentEditor
             UpdateRaster();
 
         var shape = Document.GetFrame(_currentFrame).Shape;
-        var zoom = Workspace.Zoom;
 
 //        DrawRaster(shape);
+        Render.PushState();
         Render.SetTransform(Document.Transform);
-        Render.PushLayer(EditorRender.GizmoLayer);
+        Render.SetLayer(EditorLayer.Gizmo);
         DrawShapeEdges(shape);
         DrawShapeAnchors(shape);
         // DrawShapeMidpoints(shape);
-        Render.PopLayer();
+        Render.PopState();
 
         // if (_activeTool == SpriteEditorTool.BoxSelect)
         //     DrawSelectionBox();
@@ -148,13 +157,13 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
-    public void TogglePlayback()
+    private void TogglePlayback()
     {
         _isPlaying = !_isPlaying;
         _playTimer = 0;
     }
 
-    public void NextFrame()
+    private void NextFrame()
     {
         if (Document.FrameCount == 0)
             return;
@@ -163,7 +172,7 @@ public class SpriteEditor : DocumentEditor
         MarkRasterDirty();
     }
 
-    public void PreviousFrame()
+    private void PreviousFrame()
     {
         if (Document.FrameCount == 0)
             return;
@@ -706,14 +715,14 @@ public class SpriteEditor : DocumentEditor
                 var samples = shape.GetSegmentSamples(a0Idx);
                 var prev = a0.Position;
 
-                EditorRender.SetColor(color);
+                Gizmos.SetColor(color);
                 foreach (var sample in samples)
                 {
-                    EditorRender.DrawLine(prev, sample, width);
+                    Gizmos.DrawLine(prev, sample, width);
                     prev = sample;
                 }
 
-                EditorRender.DrawLine(prev, a1.Position, width);
+                Gizmos.DrawLine(prev, a1.Position, width);
             }
         }
     }
@@ -732,8 +741,8 @@ public class SpriteEditor : DocumentEditor
             if (hovered)
                 size *= 1.2f;
 
-            EditorRender.SetColor(color);
-            EditorRender.DrawVertex(anchor.Position, size);
+            Gizmos.SetColor(color);
+            Gizmos.DrawVertex(anchor.Position, size);
         }
     }
 
@@ -756,7 +765,7 @@ public class SpriteEditor : DocumentEditor
                     size *= 1.3f;
 
                 Render.SetColor(color);
-                EditorRender.DrawCircle(anchor.Midpoint, size * 0.5f);
+                Gizmos.DrawCircle(anchor.Midpoint, size * 0.5f);
             }
         }
     }
@@ -771,10 +780,10 @@ public class SpriteEditor : DocumentEditor
         var zoom = Workspace.Zoom;
         var lineWidth = 0.02f / zoom;
 
-        EditorRender.SetColor(borderColor);
-        EditorRender.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Y), lineWidth);
-        EditorRender.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Bottom), lineWidth);
-        EditorRender.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Bottom), lineWidth);
-        EditorRender.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Y), lineWidth);
+        Gizmos.SetColor(borderColor);
+        Gizmos.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Y), lineWidth);
+        Gizmos.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Bottom), lineWidth);
+        Gizmos.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Bottom), lineWidth);
+        Gizmos.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Y), lineWidth);
     }
 }

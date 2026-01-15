@@ -44,7 +44,7 @@ public interface IRenderDriver
     void BindIndexBuffer(nuint buffer);
     void BindUniformBuffer(nuint buffer, int slot);
 
-    nuint CreateTexture(int width, int height, ReadOnlySpan<byte> data);
+    nuint CreateTexture(int width, int height, ReadOnlySpan<byte> data, TextureFormat format = TextureFormat.RGBA8);
     void UpdateTexture(nuint handle, int width, int height, ReadOnlySpan<byte> data);
     void DestroyTexture(nuint handle);
     void BindTexture(nuint handle, int slot);
@@ -61,7 +61,6 @@ public interface IRenderDriver
     void SetUniformFloat(string name, float value);
     void SetUniformVec2(string name, Vector2 value);
     void SetUniformVec4(string name, Vector4 value);
-    void SetBoneTransforms(ReadOnlySpan<Matrix3x2> bones);
 
     void SetBlendMode(BlendMode mode);
 

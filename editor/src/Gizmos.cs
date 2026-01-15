@@ -6,16 +6,11 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-public static class EditorRender
+public static class Gizmos
 {
-    public const int GridLayer = 100;
-    public const int PixelGridLayer = 1000;
-    public const int GizmoLayer = 1100;
-    
     private const float DefaultLineWidth = 0.02f;
     private const float DefaultVertexSize = 0.12f;
-    private const byte BoundsLayer = 200;
-
+    
     public static float ZoomRefScale => 1f / Workspace.Zoom;
 
     public static void SetColor(Color color) => Render.SetColor(color);

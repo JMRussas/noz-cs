@@ -55,12 +55,13 @@ public static class Application
         Input.Init();
         Audio.Init(AudioDriverBackend);
         Render.Init(config.Render);
-        UI.Init();
+        UI.Init(config.UI);
 
         // Register asset types and load assets
         RegisterAssetTypes();
         _vtable.LoadAssets();
         Render.ResolveAssets();
+        UI.ResolveAssets();
 
         _running = true;
     }
@@ -71,6 +72,7 @@ public static class Application
         Sprite.RegisterDef();
         Sound.RegisterDef();
         Shader.RegisterDef();
+        Font.RegisterDef();
     }
 
     public static void Run()

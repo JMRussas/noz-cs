@@ -607,7 +607,7 @@ public sealed unsafe class Shape : IDisposable
         return GetSegmentSamplesSpan(anchorIndex);
     }
 
-    public void Rasterize(PixelData pixels, Color[] palette, Vector2Int offset, float dpi = 1f)
+    public void Rasterize(PixelData<Color32> pixels, Color[] palette, Vector2Int offset, float dpi = 1f)
     {
         if (PathCount == 0) return;
 

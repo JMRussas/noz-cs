@@ -14,6 +14,15 @@ public enum WorkspaceState
 
 public static class Workspace
 {
+    private static readonly Shortcut[] Shortcuts =
+    [
+        new() {Name="Toggle Edit Mode", Code=InputCode.KeyTab, Action=ToggleEdit},
+        new() {Name="Frame Selected", Code=InputCode.KeyF, Action=FrameSelected},
+        new() {Name="Save All Documents", Code=InputCode.KeyS, Ctrl=true, Action=DocumentManager.SaveAll},
+        new() {Name="Toggle Grid", Code=InputCode.KeyQuote, Alt=true, Action=ToggleGrid },
+        new() {Name="Toggle Names", Code=InputCode.KeyN, Alt=true, Action=ToggleNames }
+    ];
+    
     private const float ZoomMin = 0.01f;
     private const float ZoomMax = 200f;
     private const float ZoomStep = 0.1f;
@@ -32,6 +41,7 @@ public static class Workspace
     private static float _uiScale = 1f;
     private static float _userUIScale = 1f;
     private static bool _showGrid = true;
+    private static bool _showNames;
 
     private static Vector2 _mousePosition;
     private static Vector2 _mouseWorldPosition;
@@ -54,6 +64,7 @@ public static class Workspace
     public static Camera Camera => _camera;
     public static float Zoom => _zoom;
     public static bool ShowGrid => _showGrid;
+    public static bool ShowNames => _showNames || Input.IsAltDown();
     public static Vector2 MousePosition => _mousePosition;
     public static Vector2 MouseWorldPosition => _mouseWorldPosition;
     public static bool IsDragging => _isDragging;
@@ -63,7 +74,6 @@ public static class Workspace
     public static Vector2 DragWorldDelta => _dragWorldDelta;
     public static float UserUIScale => _userUIScale;
     public static WorkspaceState State => _state;
-    public static Document? ActiveDocument => _activeDocument;
     public static int SelectedCount => _selectedCount;
 
     public static float GetUIScale() => Application.Platform.DisplayScale * _userUIScale;
@@ -126,6 +136,7 @@ public static class Workspace
         _camera.Position = props.GetVector2("view", "camera_position", Vector2.Zero);
         _zoom = props.GetFloat("view", "camera_zoom", ZoomDefault);
         _showGrid = props.GetBool("view", "show_grid", true);
+        _showNames = props.GetBool("view", "show_names", false);
         _userUIScale = props.GetFloat("view", "ui_scale", 1f);
         UpdateCamera();
     }
@@ -135,27 +146,14 @@ public static class Workspace
         props.SetVec2("view", "camera_position", _camera.Position);
         props.SetFloat("view", "camera_zoom", _zoom);
         props.SetBool("view", "show_grid", _showGrid);
+        props.SetBool("view", "show_names", _showNames);
         props.SetFloat("view", "ui_scale", _userUIScale);
     }
 
-    private static void CheckShortcuts()
-    {
-        if (Input.WasButtonPressed(InputCode.KeyTab))
-            ToggleEdit();
-
-        if (Input.WasButtonPressed(InputCode.KeyF))
-            FrameSelected();
-
-        if (Input.WasButtonPressed(InputCode.KeyS) && Input.IsCtrlDown())
-            DocumentManager.SaveAll();
-
-        if (Input.WasButtonPressed(InputCode.KeyQuote) && Input.IsAltDown())
-            ToggleGrid();
-    }
     
     public static void Update()
     {
-        CheckShortcuts();
+        Shortcut.Update(Shortcuts);
         
         UpdateCamera();
         UpdateMouse();
@@ -174,11 +172,13 @@ public static class Workspace
         Render.SetBlendMode(BlendMode.Alpha);
         Render.SetCamera(_camera);
 
-        DrawSelectionBounds();
         DrawDocuments();
 
         if (_showGrid)
             Grid.Draw(_camera);
+
+        if (ShowNames)
+            DrawNames();
 
         if (Workspace.State == WorkspaceState.Edit && Workspace.ActiveEditor != null)
             Workspace.ActiveEditor.Update();
@@ -202,32 +202,12 @@ public static class Workspace
             doc.IsClipped = !cameraBounds.Intersects(docBounds);
         }
     }
-
-    private static void DrawSelectionBounds()
-    {
-        if (Workspace.ActiveDocument != null)
-        {
-            EditorRender.SetColor(EditorStyle.EdgeColor);
-            EditorRender.DrawBounds(Workspace.ActiveDocument);
-            return;
-        }
-
-        EditorRender.SetColor(EditorStyle.SelectionColor);
-        foreach (var doc in DocumentManager.Documents)
-        {
-            if (!doc.Loaded || !doc.PostLoaded)
-                continue;
-
-            if (doc.IsClipped)
-                continue;
-
-            if (doc.IsSelected)
-                EditorRender.DrawBounds(doc);
-        }
-    }
     
     private static void DrawDocuments()
     {
+        Render.PushState();
+        Render.SetLayer(EditorLayer.Document);
+
         foreach (var doc in DocumentManager.Documents)
         {
             if (!doc.Loaded || !doc.PostLoaded)
@@ -236,22 +216,64 @@ public static class Workspace
             if (doc.IsEditing || doc.IsClipped)
                 continue;
 
+            if (doc.IsSelected)
+            {
+                Render.PushState();
+                Render.SetLayer(EditorLayer.Selection);
+                Gizmos.DrawBounds(doc);
+                Render.PopState();
+            }
+
             doc.Draw();
         }
+
+        Render.PopState();
     }
 
-    public static void ToggleGrid()
+    private static void DrawNames()
+    {
+        if (EditorAssets.Fonts.Seguisb is not Font font || EditorAssets.Shaders.Text is not Shader textShader)
+            return;
+
+        Render.PushState();
+        Render.SetLayer(EditorLayer.Names);
+        Render.SetColor(EditorStyle.TextColor);
+
+        const float fontSize = 0.14f;
+        const float padding = 0.04f;
+
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped)
+                continue;
+
+            var bounds = doc.Bounds.Offset(doc.Position);
+            var textSize = TextRender.Measure(doc.Name, font, fontSize);
+            var textX = bounds.Center.X - textSize.X * 0.5f;
+            var textY = bounds.Y - textSize.Y - padding;
+            TextRender.Draw(doc.Name, font, fontSize, textX, textY);
+        }
+
+        Render.PopState();
+    }
+
+    private static void ToggleGrid()
     {
         _showGrid = !_showGrid;
     }
 
-    public static void SetZoom(float zoom)
+    private static void ToggleNames()
+    {
+        _showNames = !_showNames;
+    }
+
+    private static void SetZoom(float zoom)
     {
         _zoom = Math.Clamp(zoom, ZoomMin, ZoomMax);
         UpdateCamera();
     }
 
-    public static void SetDpi(float dpi)
+    private static void SetDpi(float dpi)
     {
         _dpi = dpi > 0 ? dpi : DefaultDpi;
         UpdateCamera();
@@ -464,7 +486,7 @@ public static class Workspace
         return null;
     }
 
-    public static void ToggleEdit()
+    private static void ToggleEdit()
     {
         if (_state == WorkspaceState.Edit)
         {

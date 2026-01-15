@@ -19,23 +19,26 @@ layout(location = 9) in float in_frame_time;
 
 uniform mat4 u_projection;
 uniform float u_time;
-uniform vec3 u_bones[128];
+
+layout(std140, binding = 0) uniform BoneBlock {
+    vec4 u_bones[128];  // 64 bones * 2 vec4s (padded to 8 floats per bone)
+};
 
 out vec2 v_uv;
 out vec4 v_color;
 flat out int v_atlas;
 
-void main() 
+void main()
 {
-    // Get bone transform (2 vec3s per bone)
+    // Get bone transform (2 vec4s per bone, row-major: [M11,M12,M31,pad], [M21,M22,M32,pad])
     int boneIdx = in_bone * 2;
-    vec3 boneCol0 = u_bones[boneIdx];
-    vec3 boneCol1 = u_bones[boneIdx + 1];
+    vec4 row0 = u_bones[boneIdx];     // M11, M12, M31, (unused)
+    vec4 row1 = u_bones[boneIdx + 1]; // M21, M22, M32, (unused)
 
     // Apply bone transform: pos' = M * pos (2D affine)
     vec2 skinnedPos = vec2(
-        boneCol0.x * in_position.x + boneCol1.x * in_position.y + boneCol0.z,
-        boneCol0.y * in_position.x + boneCol1.y * in_position.y + boneCol1.z
+        row0.x * in_position.x + row0.y * in_position.y + row0.z,
+        row1.x * in_position.x + row1.y * in_position.y + row1.z
     );
 
     // Animation: offset UV.x based on current frame
@@ -71,3 +74,5 @@ void main()
 }
 
 //@ END
+
+

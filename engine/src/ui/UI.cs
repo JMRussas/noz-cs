@@ -424,6 +424,11 @@ public static class UI
     private const byte ElementIdNone = 0;
     private const byte ElementIdMax = 255;
 
+    private static Font? _font;
+    private static Shader? _textShader;
+
+    public static UIConfig Config { get; private set; } = new();
+
     private static readonly AlignInfo[] AlignInfoTable =
     [
         new(false, 0.0f, false, 0.0f), // None
@@ -493,9 +498,30 @@ public static class UI
         );
     }
 
-    public static void Init()
+    public static void Init(UIConfig? config = null)
     {
+        Config = config ?? new UIConfig();
         _camera = new Camera();
+    }
+
+    internal static void ResolveAssets()
+    {
+        if (!string.IsNullOrEmpty(Config.TextShader))
+        {
+            _textShader = Asset.Get<Shader>(AssetType.Shader, Config.TextShader);
+            if (_textShader != null)
+                TextRender.Init(_textShader);
+        }
+
+        if (!string.IsNullOrEmpty(Config.DefaultFont))
+        {
+            _font = Asset.Get<Font>(AssetType.Font, Config.DefaultFont);
+        }
+    }
+
+    public static void SetFont(Font font)
+    {
+        _font = font;
     }
 
     public static void Shutdown()
@@ -1154,7 +1180,15 @@ public static class UI
     private static void MeasureLabel(ref Element e)
     {
         var fontSize = e.Data.Label.FontSize;
-        e.MeasuredSize = new Vector2(e.Data.Label.TextLength * fontSize * 0.6f, fontSize * 1.2f);
+        if (_font != null)
+        {
+            var text = GetText(e.Data.Label.TextStart, e.Data.Label.TextLength);
+            e.MeasuredSize = TextRender.Measure(new string(text), _font, fontSize);
+        }
+        else
+        {
+            e.MeasuredSize = new Vector2(e.Data.Label.TextLength * fontSize * 0.6f, fontSize * 1.2f);
+        }
     }
 
     private static void MeasureImage(ref Element e)
@@ -1621,9 +1655,14 @@ public static class UI
 
     private static void DrawLabel(ref Element e)
     {
-        // Text rendering placeholder - would draw glyphs here
-        // var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
-        // var text = GetText(e.Data.Label.TextStart, e.Data.Label.TextLength);
+        if (_font == null || _textShader == null)
+            return;
+
+        var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
+        var text = new string(GetText(e.Data.Label.TextStart, e.Data.Label.TextLength));
+
+        Render.SetColor(e.Data.Label.Color);
+        TextRender.Draw(text, _font, e.Data.Label.FontSize, pos.X, pos.Y);
     }
 
     private static void DrawImage(ref Element e)

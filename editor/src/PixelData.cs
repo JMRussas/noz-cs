@@ -6,10 +6,10 @@ using System.Runtime.InteropServices;
 
 namespace NoZ.Editor;
 
-public sealed unsafe class PixelData : IDisposable
+public sealed unsafe class PixelData<T> : IDisposable where T : unmanaged
 {
     private void* _memory;
-    private readonly UnsafeSpan<Color32> _pixels;
+    private readonly UnsafeSpan<T> _pixels;
 
     public Vector2Int Size { get; }
     public int Width => Size.X;
@@ -19,10 +19,10 @@ public sealed unsafe class PixelData : IDisposable
     {
         Size = size;
         var totalPixels = size.X * size.Y;
-        var totalSize = sizeof(Color32) * totalPixels;
+        var totalSize = sizeof(T) * totalPixels;
 
         _memory = NativeMemory.AllocZeroed((nuint)totalSize);
-        _pixels = new UnsafeSpan<Color32>((Color32*)_memory, totalPixels);
+        _pixels = new UnsafeSpan<T>((T*)_memory, totalPixels);
     }
 
     public PixelData(int width, int height) : this(new Vector2Int(width, height))
@@ -49,28 +49,35 @@ public sealed unsafe class PixelData : IDisposable
         _memory = null;
     }
 
-    public ref Color32 this[int index] => ref _pixels[index];
+    public ref T this[int index] => ref _pixels[index];
 
-    public ref Color32 this[int x, int y] => ref _pixels[y * Size.X + x];
+    public ref T this[int x, int y] => ref _pixels[y * Size.X + x];
 
-    public Color32* GetUnsafePtr() => _pixels.GetUnsafePtr();
-
-    public void Clear(Color32 color = default)
+    public void Clear(T value = default)
     {
         var total = Size.X * Size.Y;
         for (var i = 0; i < total; i++)
-            _pixels[i] = color;
+            _pixels[i] = value;
     }
 
-    public void Set(RectInt rect, Color32 color)
+    public void Set(int x, int y, T value)
+    {
+        _pixels[y * Size.X + x] = value;
+    }
+
+    public void Set(in Vector2Int position, T value)
+    {
+        _pixels[position.Y * Size.X + position.X] = value;
+    }
+
+    public void Set(in RectInt rect, T value)
     {
         var xe = rect.X + rect.Width;
         var ye = rect.Y + rect.Height;
         for (var y = rect.Y; y < ye; y++)
             for (var x = rect.X; x < xe; x++)
-                _pixels[y * Size.X + x] = color;
+                _pixels[y * Size.X + x] = value;
     }
 
-    public ReadOnlySpan<byte> AsBytes() =>
-        new ReadOnlySpan<byte>(_memory, Size.X * Size.Y * sizeof(Color32));
+    public ReadOnlySpan<byte> AsBytes() => new(_memory, Size.X * Size.Y * sizeof(T));
 }

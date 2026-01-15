@@ -29,6 +29,10 @@ Application.Init(new ApplicationConfig
     AudioBackend = new SdlAudioDriver(),
     Vtable = new EditorVtable(),
 
+    UI = new UIConfig()
+    {
+        DefaultFont = EditorAssets.Names.Seguisb
+    },
     Render = new RenderConfig
     {
         Driver = new OpenGlRenderDriver(),
