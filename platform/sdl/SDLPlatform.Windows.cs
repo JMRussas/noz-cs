@@ -33,6 +33,8 @@ internal static partial class User32
     public const int VK_RETURN = 0x0D;
     public const int VK_ESCAPE = 0x1B;
     public const int VK_TAB = 0x09;
+    public const int VK_UP = 0x26;
+    public const int VK_DOWN = 0x28;
     public const int FW_NORMAL = 400;
     public const int DEFAULT_CHARSET = 1;
     public const int OUT_DEFAULT_PRECIS = 0;
@@ -222,8 +224,9 @@ public unsafe partial class SDLPlatform
 
     private nint EditSubclassProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
-        // Intercept Enter/Escape/Tab key events and forward them to SDL
-        if (wParam == User32.VK_RETURN || wParam == User32.VK_ESCAPE || wParam == User32.VK_TAB)
+        // Intercept Enter/Escape/Tab/Arrow key events and forward them to SDL
+        if (wParam == User32.VK_RETURN || wParam == User32.VK_ESCAPE || wParam == User32.VK_TAB ||
+            wParam == User32.VK_UP || wParam == User32.VK_DOWN)
         {
             if (msg == User32.WM_CHAR)
                 return 0;
@@ -235,6 +238,8 @@ public unsafe partial class SDLPlatform
                     User32.VK_RETURN => InputCode.KeyEnter,
                     User32.VK_ESCAPE => InputCode.KeyEscape,
                     User32.VK_TAB => InputCode.KeyTab,
+                    User32.VK_UP => InputCode.KeyUp,
+                    User32.VK_DOWN => InputCode.KeyDown,
                     _ => InputCode.None
                 };
 

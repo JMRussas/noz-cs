@@ -36,6 +36,15 @@ public static unsafe class Render
         public nuint Shader;
         public fixed ulong Textures[MaxTextures];
         public BlendMode BlendMode;
+        public int ViewportX;
+        public int ViewportY;
+        public int ViewportWidth;
+        public int ViewportHeight;
+        public bool ScissorEnabled;
+        public int ScissorX;
+        public int ScissorY;
+        public int ScissorWidth;
+        public int ScissorHeight;
     }
 
     private struct Batch
@@ -55,6 +64,15 @@ public static unsafe class Render
         public ushort Group;
         public ushort Index;
         public BlendMode BlendMode;
+        public int ViewportX;
+        public int ViewportY;
+        public int ViewportWidth;
+        public int ViewportHeight;
+        public bool ScissorEnabled;
+        public int ScissorX;
+        public int ScissorY;
+        public int ScissorWidth;
+        public int ScissorHeight;
     }
     
     public static RenderConfig Config { get; private set; } = null!;
@@ -147,6 +165,19 @@ public static unsafe class Render
         CurrentState.BlendMode = default;
         for (var i = 0; i < MaxTextures; i++)
             CurrentState.Textures[i] = 0;
+
+        var size = Application.WindowSize;
+        CurrentState.ViewportX = 0;
+        CurrentState.ViewportY = 0;
+        CurrentState.ViewportWidth = (int)size.X;
+        CurrentState.ViewportHeight = (int)size.Y;
+
+        CurrentState.ScissorEnabled = false;
+        CurrentState.ScissorX = 0;
+        CurrentState.ScissorY = 0;
+        CurrentState.ScissorWidth = 0;
+        CurrentState.ScissorHeight = 0;
+
         _batchStateCount = 0;
         _batchCount = 0;
         _uniforms.Clear();
@@ -166,16 +197,18 @@ public static unsafe class Render
 
         _vertexBuffer = Driver.CreateVertexBuffer(
             _vertices.Length * MeshVertex.SizeInBytes,
-            BufferUsage.Dynamic
+            BufferUsage.Dynamic,
+            "Render.Vertices"
         );
 
         _indexBuffer = Driver.CreateIndexBuffer(
             _indices.Length * sizeof(ushort),
-            BufferUsage.Dynamic
+            BufferUsage.Dynamic,
+            "Render.Indices"
         );
 
         // Create bone UBO: 64 bones * 2 vec4s per bone (std140 padded) * 16 bytes per vec4
-        _boneUbo = Driver.CreateUniformBuffer(MaxBones * 2 * 16, BufferUsage.Dynamic);
+        _boneUbo = Driver.CreateUniformBuffer(MaxBones * 2 * 16, BufferUsage.Dynamic, "Render.BoneUBO");
     }
 
     public static void Shutdown()
@@ -255,7 +288,7 @@ public static unsafe class Render
 
         var viewport = camera.Viewport;
         if (viewport is { Width: > 0, Height: > 0 })
-            Driver.SetViewport((int)viewport.X, (int)viewport.Y, (int)viewport.Width, (int)viewport.Height);
+            SetViewport((int)viewport.X, (int)viewport.Y, (int)viewport.Width, (int)viewport.Height);
 
         var view = camera.ViewMatrix;
         var projection = new Matrix4x4(
@@ -272,8 +305,9 @@ public static unsafe class Render
     internal static void BeginFrame()
     {
         ResetState();
-        
+
         Driver.BeginFrame();
+        Driver.DisableScissor();
 
         _time += Time.DeltaTime;
 
@@ -338,7 +372,39 @@ public static unsafe class Render
 
     public static void SetViewport(int x, int y, int width, int height)
     {
-        Driver.SetViewport(x, y, width, height);
+        if (CurrentState.ViewportX == x && CurrentState.ViewportY == y &&
+            CurrentState.ViewportWidth == width && CurrentState.ViewportHeight == height)
+            return;
+
+        CurrentState.ViewportX = x;
+        CurrentState.ViewportY = y;
+        CurrentState.ViewportWidth = width;
+        CurrentState.ViewportHeight = height;
+        _batchStateDirty = true;
+    }
+
+    public static void SetScissor(int x, int y, int width, int height)
+    {
+        if (CurrentState.ScissorEnabled &&
+            CurrentState.ScissorX == x && CurrentState.ScissorY == y &&
+            CurrentState.ScissorWidth == width && CurrentState.ScissorHeight == height)
+            return;
+
+        CurrentState.ScissorEnabled = true;
+        CurrentState.ScissorX = x;
+        CurrentState.ScissorY = y;
+        CurrentState.ScissorWidth = width;
+        CurrentState.ScissorHeight = height;
+        _batchStateDirty = true;
+    }
+
+    public static void DisableScissor()
+    {
+        if (!CurrentState.ScissorEnabled)
+            return;
+
+        CurrentState.ScissorEnabled = false;
+        _batchStateDirty = true;
     }
 
     #region Draw
@@ -417,8 +483,17 @@ public static unsafe class Render
         var texturesChanged = false;
         for (var i = 0; i < MaxTextures && !texturesChanged; i++)
             texturesChanged = current.Textures[i] != prev.Textures[i];
+        var viewportChanged = current.ViewportX != prev.ViewportX ||
+                              current.ViewportY != prev.ViewportY ||
+                              current.ViewportWidth != prev.ViewportWidth ||
+                              current.ViewportHeight != prev.ViewportHeight;
+        var scissorChanged = current.ScissorEnabled != prev.ScissorEnabled ||
+                             current.ScissorX != prev.ScissorX ||
+                             current.ScissorY != prev.ScissorY ||
+                             current.ScissorWidth != prev.ScissorWidth ||
+                             current.ScissorHeight != prev.ScissorHeight;
 
-        if (shaderChanged || blendChanged || texturesChanged)
+        if (shaderChanged || blendChanged || texturesChanged || viewportChanged || scissorChanged)
             _batchStateDirty = true;
     }
 
@@ -508,6 +583,15 @@ public static unsafe class Render
         batchState.BlendMode = CurrentState.BlendMode;
         for (var i = 0; i < MaxTextures; i++)
             batchState.Textures[i] = CurrentState.Textures[i];
+        batchState.ViewportX = CurrentState.ViewportX;
+        batchState.ViewportY = CurrentState.ViewportY;
+        batchState.ViewportWidth = CurrentState.ViewportWidth;
+        batchState.ViewportHeight = CurrentState.ViewportHeight;
+        batchState.ScissorEnabled = CurrentState.ScissorEnabled;
+        batchState.ScissorX = CurrentState.ScissorX;
+        batchState.ScissorY = CurrentState.ScissorY;
+        batchState.ScissorWidth = CurrentState.ScissorWidth;
+        batchState.ScissorHeight = CurrentState.ScissorHeight;
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -597,6 +681,30 @@ public static unsafe class Render
         }
     }
 
+    public static void Flush()
+    {
+        ExecuteCommands();
+    }
+
+    public static void SetVertexBuffer<T>(nuint buffer) where T : unmanaged, IVertex
+    {
+        ExecuteCommands();
+        Driver.BindVertexFormat(VertexFormat<T>.Handle);
+        Driver.BindVertexBuffer(buffer);
+    }
+
+    public static void SetIndexBuffer(nuint buffer)
+    {
+        Driver.BindIndexBuffer(buffer);
+    }
+
+    public static void DrawElements(int indexCount, int indexOffset = 0)
+    {
+        ApplyUniforms();
+        Driver.DrawElements(indexOffset, indexCount, 0);
+        _stats.DrawCount++;
+    }
+
     private static void ExecuteCommands()
     {
         if (_commandCount == 0)
@@ -646,6 +754,11 @@ public static unsafe class Render
         {
             ref var batch = ref _batches[batchIndex];
             ref var batchState = ref _batchStates[batch.State];
+            Driver.SetViewport(batchState.ViewportX, batchState.ViewportY, batchState.ViewportWidth, batchState.ViewportHeight);
+            if (batchState.ScissorEnabled)
+                Driver.SetScissor(batchState.ScissorX, batchState.ScissorY, batchState.ScissorWidth, batchState.ScissorHeight);
+            else
+                Driver.DisableScissor();
             Driver.BindShader(batchState.Shader);
             ApplyUniforms();
             Driver.BindTexture((nuint)batchState.Textures[0], 0);

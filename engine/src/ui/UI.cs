@@ -369,7 +369,7 @@ public struct ContainerStyle()
 
 public struct LabelStyle()
 {
-    public int FontSize = 16;
+    public float FontSize = 16;
     public Color Color = Color.White;
     public Align Align = Align.None;
 }
@@ -484,6 +484,7 @@ public static class UI
 
     private static Font? _font;
     private static Shader? _textShader;
+    private static Shader? _uiShader;
 
     public static UIConfig Config { get; private set; } = new();
 
@@ -543,6 +544,8 @@ public static class UI
     private static int _activeCanvasCount;
     private static byte _hotCanvasId;
     private static byte _currentCanvasId;
+    private static bool _mouseLeftPressed;
+    private static Vector2 _mousePosition;
 
     private static int _elementCount;
     private static int _elementStackCount;
@@ -591,6 +594,13 @@ public static class UI
             _textShader = Asset.Get<Shader>(AssetType.Shader, Config.TextShader);
             if (_textShader != null)
                 TextRender.Init(_textShader);
+        }
+
+        if (!string.IsNullOrEmpty(Config.UIShader))
+        {
+            _uiShader = Asset.Get<Shader>(AssetType.Shader, Config.UIShader);
+            if (_uiShader != null)
+                UIRender.Init(_uiShader);
         }
 
         if (!string.IsNullOrEmpty(Config.DefaultFont))
@@ -720,6 +730,16 @@ public static class UI
     public static bool WasPressed() => CheckElementFlags(ElementFlags.Pressed);
     public static bool IsDown() => CheckElementFlags(ElementFlags.Down);
 
+    public static bool WasClicked()
+    {
+        if (!_mouseLeftPressed) return false;
+        if (_elementStackCount <= 0) return false;
+        ref var e = ref _elements[_elementStack[_elementStackCount - 1]];
+        if (e.CanvasId != _hotCanvasId) return false;
+        var localMouse = Vector2.Transform(_mousePosition, e.WorldToLocal);
+        return new Rect(0, 0, e.Rect.Width, e.Rect.Height).Contains(localMouse);
+    }
+
     public static byte GetElementId() => HasCurrentElement() ? GetCurrentElement().Id : (byte)0;
 
     public static Rect GetElementRect(byte id)
@@ -737,19 +757,36 @@ public static class UI
         return _elementStates[id].Rect;
     }
 
-    public static float GetScrollOffset(byte id)
+    public static float GetScrollOffset(byte id, byte canvasId = ElementIdNone)
     {
         if (id == ElementIdNone) return 0;
 
-        // Check canvas-scoped state first if we're in a canvas context
-        if (_currentCanvasId != ElementIdNone)
+        var effectiveCanvasId = canvasId != ElementIdNone ? canvasId : _currentCanvasId;
+        if (effectiveCanvasId != ElementIdNone)
         {
-            ref var cs = ref _canvasStates[_currentCanvasId];
+            ref var cs = ref _canvasStates[effectiveCanvasId];
             if (cs.ElementStates != null)
                 return cs.ElementStates[id].ScrollOffset;
         }
 
         return _elementStates[id].ScrollOffset;
+    }
+
+    public static void SetScrollOffset(byte id, float offset, byte canvasId = ElementIdNone)
+    {
+        if (id == ElementIdNone) return;
+
+        if (canvasId != ElementIdNone)
+        {
+            ref var cs = ref _canvasStates[canvasId];
+            if (cs.ElementStates != null)
+            {
+                cs.ElementStates[id].ScrollOffset = offset;
+                return;
+            }
+        }
+
+        _elementStates[id].ScrollOffset = offset;
     }
 
     public static Vector2 ScreenToUI(Vector2 screenPos) =>
@@ -1031,9 +1068,25 @@ public static class UI
         e.Data.Scrollable.ContentHeight = 0;
         SetId(ref e, style.Id);
 
-        e.Data.Scrollable.Offset = style.Id != ElementIdNone
-            ? _elementStates[style.Id].ScrollOffset
-            : offset;
+        if (style.Id != ElementIdNone)
+        {
+            if (_currentCanvasId != ElementIdNone)
+            {
+                ref var cs = ref _canvasStates[_currentCanvasId];
+                if (cs.ElementStates != null)
+                    e.Data.Scrollable.Offset = cs.ElementStates[style.Id].ScrollOffset;
+                else
+                    e.Data.Scrollable.Offset = _elementStates[style.Id].ScrollOffset;
+            }
+            else
+            {
+                e.Data.Scrollable.Offset = _elementStates[style.Id].ScrollOffset;
+            }
+        }
+        else
+        {
+            e.Data.Scrollable.Offset = offset;
+        }
 
         PushElement(e.Index);
         return e.Data.Scrollable.Offset;
@@ -1210,6 +1263,7 @@ public static class UI
         HandleInput();
 
         // Flush any pending world-space rendering before drawing UI
+        // SetCamera also sets u_projection uniform which UIRender will use
         Render.SetCamera(_camera);
 
         // Reset textbox tracking before draw pass
@@ -1226,6 +1280,9 @@ public static class UI
             for (var idx = pIdx; idx < p.NextSiblingIndex;)
                 idx = DrawElement(idx, true);
         }
+
+        // Flush any remaining UI rendering
+        UIRender.Flush();
 
         // Hide textbox if it wasn't rendered this frame (element no longer exists)
         if (_textboxVisible && !_textboxRenderedThisFrame)
@@ -1764,8 +1821,11 @@ public static class UI
     private static void HandleInput()
     {
         var mouse = _camera.ScreenToWorld(Input.MousePosition);
-        var mouseLeftPressed = Input.WasButtonPressed(InputCode.MouseLeft);
-        var buttonDown = Input.IsButtonDown(InputCode.MouseLeft);
+        var mouseLeftPressed = Input.WasButtonPressedRaw(InputCode.MouseLeft);
+        var buttonDown = Input.IsButtonDownRaw(InputCode.MouseLeft);
+
+        _mousePosition = mouse;
+        _mouseLeftPressed = mouseLeftPressed;
 
         // Update canvas world bounds and find hot canvas (topmost under mouse)
         _hotCanvasId = ElementIdNone;
@@ -1815,6 +1875,9 @@ public static class UI
 
         // Handle scrollable drag
         HandleScrollableDrag(mouse, buttonDown, mouseLeftPressed);
+
+        // Handle mouse wheel scroll
+        HandleMouseWheelScroll(mouse);
     }
 
     private static void ProcessCanvasInput(byte canvasId, Vector2 mouse, bool mouseLeftPressed, bool buttonDown, bool isHotCanvas)
@@ -1914,6 +1977,36 @@ public static class UI
         }
     }
 
+    private static void HandleMouseWheelScroll(Vector2 mouse)
+    {
+        var scrollDelta = Input.GetAxisValue(InputCode.MouseScrollY);
+        if (scrollDelta == 0) return;
+
+        for (var i = _elementCount; i > 0; i--)
+        {
+            ref var e = ref _elements[i - 1];
+            if (e.Type != ElementType.Scrollable || e.Id == ElementIdNone || e.CanvasId == ElementIdNone)
+                continue;
+
+            var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
+            if (!new Rect(0, 0, e.Rect.Width, e.Rect.Height).Contains(localMouse))
+                continue;
+
+            ref var cs = ref _canvasStates[e.CanvasId];
+            if (cs.ElementStates == null) continue;
+            ref var state = ref cs.ElementStates[e.Id];
+
+            var scrollSpeed = 30f;
+            var newOffset = e.Data.Scrollable.Offset - scrollDelta * scrollSpeed;
+            var maxScroll = Math.Max(0, e.Data.Scrollable.ContentHeight - e.Rect.Height);
+            newOffset = Math.Clamp(newOffset, 0, maxScroll);
+
+            e.Data.Scrollable.Offset = newOffset;
+            state.ScrollOffset = newOffset;
+            break;
+        }
+    }
+
     // Draw pass
     private static int DrawElement(int elementIndex, bool isPopup)
     {
@@ -1947,8 +2040,34 @@ public static class UI
                 return e.NextSiblingIndex;
         }
 
+        var useScissor = e.Type == ElementType.Scrollable;
+        if (useScissor)
+        {
+            // Flush pending UI draws before changing scissor state
+            UIRender.Flush();
+
+            var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
+            var screenPos = _camera.WorldToScreen(pos);
+            var scale = Application.WindowSize.Y / _orthoSize.Y;
+            var screenHeight = Application.WindowSize.Y;
+
+            // OpenGL scissor Y is from bottom, need to flip
+            var scissorX = (int)screenPos.X;
+            var scissorY = (int)(screenHeight - screenPos.Y - e.Rect.Height * scale);
+            var scissorW = (int)(e.Rect.Width * scale);
+            var scissorH = (int)(e.Rect.Height * scale);
+
+            Render.Driver.SetScissor(scissorX, scissorY, scissorW, scissorH);
+        }
+
         for (var i = 0; i < e.ChildCount; i++)
             elementIndex = DrawElement(elementIndex, false);
+
+        if (useScissor)
+        {
+            UIRender.Flush();
+            Render.Driver.DisableScissor();
+        }
 
         return elementIndex;
     }
@@ -1960,8 +2079,7 @@ public static class UI
             return;
 
         var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
-        Render.SetColor(style.Color);
-        Render.DrawQuad(pos.X, pos.Y, e.Rect.Width, e.Rect.Height);
+        UIRender.DrawRect(pos.X, pos.Y, e.Rect.Width, e.Rect.Height, style.Color);
     }
 
     private static void DrawContainer(ref Element e)
@@ -1971,8 +2089,13 @@ public static class UI
             return;
 
         var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
-        Render.SetColor(style.Color);
-        Render.DrawQuad(pos.X, pos.Y, e.Rect.Width, e.Rect.Height);
+        UIRender.DrawRect(
+            pos.X, pos.Y, e.Rect.Width, e.Rect.Height,
+            style.Color,
+            style.Border.Radius,
+            style.Border.Width,
+            style.Border.Color
+        );
     }
 
     private static void DrawLabel(ref Element e)
@@ -1982,9 +2105,11 @@ public static class UI
 
         var text = new string(GetText(e.Data.Label.TextStart, e.Data.Label.TextLength));
 
+        Render.PushState();
         Render.SetColor(e.Data.Label.Color);
         Render.SetTransform(e.LocalToWorld);
         TextRender.Draw(text, _font, e.Data.Label.FontSize);
+        Render.PopState();
     }
 
     private static void DrawImage(ref Element e)
@@ -2008,10 +2133,15 @@ public static class UI
         var isFocused = e.Id != 0 && _focusId == e.Id && _focusCanvasId == e.CanvasId;
         var border = isFocused ? tb.FocusBorder : tb.Border;
 
-        // Draw background
+        // Draw background with border
         var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
-        Render.SetColor(tb.BackgroundColor);
-        Render.DrawQuad(pos.X, pos.Y, e.Rect.Width, e.Rect.Height);
+        UIRender.DrawRect(
+            pos.X, pos.Y, e.Rect.Width, e.Rect.Height,
+            tb.BackgroundColor,
+            border.Radius,
+            border.Width,
+            border.Color
+        );
 
         // Convert UI coordinates to screen coordinates for the native textbox
         var screenPos = _camera.WorldToScreen(pos);

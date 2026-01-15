@@ -149,6 +149,63 @@ public enum InputCode
 
 public static class InputCodeExtensions
 {
+    private static readonly string[] Names =
+    [
+        "", // None
+
+        // Mouse Buttons
+        "Mouse Left", "Mouse Right", "Mouse Middle", "Mouse 4", "Mouse 5", "Double Click",
+
+        // Mouse Axes
+        "Mouse X", "Mouse Y", "Scroll X", "Scroll Y",
+
+        // Keyboard Keys
+        "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M",
+        "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
+        "0", "1", "2", "3", "4", "5", "6", "7", "8", "9",
+        ";", "'", "-", "=",
+        "~", "[", "]",
+        "Space", "Enter", "Tab", ",", ".", "Backspace", "Escape",
+        "Left Shift", "Left Ctrl", "Left Alt", "Right Shift", "Right Ctrl", "Right Alt",
+        "Up", "Down", "Left", "Right", "Delete", "Insert", "Home", "End", "Page Up", "Page Down",
+        "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
+        "Left Super", "Right Super",
+
+        // Gamepad Buttons
+        "A", "B", "X", "Y", "Start", "Back",
+        "D-Pad Up", "D-Pad Down", "D-Pad Left", "D-Pad Right",
+        "LB", "RB", "L3", "L-Left", "L-Right", "L-Up", "L-Down", "R3", "LT Button", "RT Button",
+        "Guide",
+
+        // Gamepad Axes
+        "Left Stick X", "Left Stick Y", "Right Stick X", "Right Stick Y", "LT", "RT",
+
+        // Gamepad 1
+        "GP1 A", "GP1 B", "GP1 X", "GP1 Y", "GP1 Start", "GP1 Back",
+        "GP1 D-Up", "GP1 D-Down", "GP1 D-Left", "GP1 D-Right",
+        "GP1 LB", "GP1 RB", "GP1 L3", "GP1 L-Left", "GP1 L-Right", "GP1 L-Up", "GP1 L-Down",
+        "GP1 R3", "GP1 LT Button", "GP1 RT Button",
+        "GP1 LX", "GP1 LY", "GP1 RX", "GP1 RY", "GP1 LT", "GP1 RT",
+
+        // Gamepad 2
+        "GP2 A", "GP2 B", "GP2 X", "GP2 Y", "GP2 LB", "GP2 RB", "GP2 Start", "GP2 Back",
+        "GP2 L3", "GP2 R3", "GP2 D-Up", "GP2 D-Down", "GP2 D-Left", "GP2 D-Right",
+        "GP2 LX", "GP2 LY", "GP2 RX", "GP2 RY", "GP2 LT", "GP2 RT",
+
+        // Gamepad 3
+        "GP3 A", "GP3 B", "GP3 X", "GP3 Y", "GP3 LB", "GP3 RB", "GP3 Start", "GP3 Back",
+        "GP3 L3", "GP3 R3", "GP3 D-Up", "GP3 D-Down", "GP3 D-Left", "GP3 D-Right",
+        "GP3 LX", "GP3 LY", "GP3 RX", "GP3 RY", "GP3 LT", "GP3 RT",
+
+        // Gamepad 4
+        "GP4 A", "GP4 B", "GP4 X", "GP4 Y", "GP4 LB", "GP4 RB", "GP4 Start", "GP4 Back",
+        "GP4 L3", "GP4 R3", "GP4 D-Up", "GP4 D-Down", "GP4 D-Left", "GP4 D-Right",
+        "GP4 LX", "GP4 LY", "GP4 RX", "GP4 RY", "GP4 LT", "GP4 RT",
+    ];
+
+    public static string ToDisplayString(this InputCode code) =>
+        (int)code < Names.Length ? Names[(int)code] : "";
+
     public static bool IsKeyboard(this InputCode code) =>
         code >= InputCode.KeyA && code <= InputCode.KeyRightSuper;
 

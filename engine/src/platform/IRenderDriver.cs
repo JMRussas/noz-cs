@@ -6,6 +6,12 @@ using System.Numerics;
 
 namespace NoZ.Platform;
 
+public struct VertexFormatDescriptor
+{
+    public VertexAttribute[] Attributes;
+    public int Stride;
+}
+
 public enum BufferUsage
 {
     Static,     // Data set once
@@ -30,15 +36,22 @@ public interface IRenderDriver
 
     void Clear(Color color);
     void SetViewport(int x, int y, int width, int height);
+    void SetScissor(int x, int y, int width, int height);
+    void DisableScissor();
 
-    nuint CreateVertexBuffer(int sizeInBytes, BufferUsage usage);
-    nuint CreateIndexBuffer(int sizeInBytes, BufferUsage usage);
-    nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage);
+    nuint CreateVertexBuffer(int sizeInBytes, BufferUsage usage, string name = "");
+    nuint CreateIndexBuffer(int sizeInBytes, BufferUsage usage, string name = "");
+    nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage, string name = "");
     void DestroyBuffer(nuint handle);
 
     void UpdateVertexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<MeshVertex> data);
+    void UpdateVertexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data);
     void UpdateIndexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<ushort> data);
     void UpdateUniformBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data);
+
+    nuint CreateVertexFormat(in VertexFormatDescriptor descriptor);
+    void DestroyVertexFormat(nuint handle);
+    void BindVertexFormat(nuint format);
 
     void BindVertexBuffer(nuint buffer);
     void BindIndexBuffer(nuint buffer);

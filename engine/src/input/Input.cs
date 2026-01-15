@@ -10,6 +10,7 @@ namespace NoZ;
 public static class Input
 {
     private static readonly bool[] ButtonState = new bool[(int)InputCode.Count];
+    private static readonly bool[] ButtonPressedThisFrame = new bool[(int)InputCode.Count];
     private static readonly float[] AxisState = new float[(int)InputCode.Count];
     private static readonly Stack<InputSet> InputSetStack = new();
 
@@ -70,6 +71,7 @@ public static class Input
         _scrollX = 0;
         _scrollY = 0;
         _textInput = string.Empty;
+        Array.Clear(ButtonPressedThisFrame);
     }
 
     public static void Update()
@@ -83,7 +85,11 @@ public static class Input
         {
             case PlatformEventType.KeyDown:
                 if (evt.KeyCode != InputCode.None)
+                {
+                    if (!ButtonState[(int)evt.KeyCode])
+                        ButtonPressedThisFrame[(int)evt.KeyCode] = true;
                     ButtonState[(int)evt.KeyCode] = true;
+                }
                 break;
 
             case PlatformEventType.KeyUp:
@@ -98,10 +104,14 @@ public static class Input
 
             case PlatformEventType.MouseButtonDown:
                 if (evt.MouseButton != InputCode.None)
+                {
+                    if (!ButtonState[(int)evt.MouseButton])
+                        ButtonPressedThisFrame[(int)evt.MouseButton] = true;
                     ButtonState[(int)evt.MouseButton] = true;
+                }
 
                 if (evt.ClickCount == 2 && evt.MouseButton == InputCode.MouseLeft)
-                    ButtonState[(int)InputCode.MouseLeftDoubleClick] = true;
+                    ButtonPressedThisFrame[(int)InputCode.MouseLeftDoubleClick] = true;
                 break;
 
             case PlatformEventType.MouseButtonUp:
@@ -161,6 +171,7 @@ public static class Input
     }
 
     internal static bool IsButtonDownRaw(InputCode code) => ButtonState[(int)code];
+    internal static bool WasButtonPressedRaw(InputCode code) => ButtonPressedThisFrame[(int)code];
 
     internal static float GetAxisValue(InputCode code)
     {

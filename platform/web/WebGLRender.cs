@@ -60,6 +60,16 @@ public class WebGLRender : IRender
         _module?.InvokeVoidAsync("setViewport", x, y, width, height);
     }
 
+    public void SetScissor(int x, int y, int width, int height)
+    {
+        _module?.InvokeVoidAsync("setScissor", x, y, width, height);
+    }
+
+    public void DisableScissor()
+    {
+        _module?.InvokeVoidAsync("disableScissor");
+    }
+
     // === Buffer Management ===
 
     public BufferHandle CreateVertexBuffer(int sizeInBytes, BufferUsage usage)

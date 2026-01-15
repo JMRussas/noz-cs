@@ -24,8 +24,6 @@ public class SpriteEditor : DocumentEditor
     private ushort _currentFrame;
     private bool _isPlaying;
     private float _playTimer;
-
-    // Raster state
     private readonly PixelData<Color32> _pixelData = new(RasterTextureSize, RasterTextureSize);
     private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
@@ -39,11 +37,11 @@ public class SpriteEditor : DocumentEditor
 
         _commands =
         [
-            new() { Name = "Toggle Playback", ShortName = "play", Handler = TogglePlayback, Key = InputCode.KeySpace },
-            new() { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
-            new() { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
-            new() { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
-            new() { Name = "Toggle Edit Mode", ShortName = "fill", Handler = ToggleEditMode, Key = InputCode.KeyH }
+            new Command { Name = "Toggle Playback", ShortName = "play", Handler = TogglePlayback, Key = InputCode.KeySpace },
+            new Command { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
+            new Command { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
+            new Command { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
+            new Command { Name = "Toggle Edit Mode", ShortName = "fill", Handler = ToggleEditMode, Key = InputCode.KeyH }
         ];
     }
 

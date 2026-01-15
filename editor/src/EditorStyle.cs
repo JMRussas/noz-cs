@@ -9,6 +9,7 @@ public class Style
     // General
     public Color BackgroundColor;
     public Color SelectionColor;
+    public Color SelectionTextColor;
 
     // Workspace
     public Color WorkspaceColor;
@@ -108,26 +109,54 @@ public static class EditorStyle
     {
         public const float FontSize = 18.0f;
         public const float Width = 600.0f;
-        public const float Height = 24.0f;
+        public const float Height = 200.0f;
+        public const float Padding = 8.0f;
+        public const float BorderRadius = 10.0f;
+        public const float InputHeight = 24.0f;
+        public const float ItemHeight = 32.0f;
+        public const float ItemFontSize = 14.0f;
+        public const float ItemPadding = 8.0f;
+        public const float ListSpacing = 4.0f;
+        public const float ShortcutFontSize = 12.0f;
     }
     
     // Overlay
-    public const int OverlayTextSize = 14;
-    public const float OverlayContentBorderRadius = 9f;
-    public const float OverlayPadding = 12f;
-    public const float OverlayBorderRadius = 16f;
+    public static class Overlay
+    {
+        public const float Padding = 12f;
+        public const float BorderRadius = 16f;
+        public const int TextSize = 14;
+        public const float ContentBorderRadius = 9f;
+        public static Color BackgroundColor => _current.OverlayBackgroundColor;
+        public static Color TextColor => _current.OverlayTextColor;
+        public static Color AccentTextColor => _current.OverlayAccentTextColor;
+        public static Color DisabledTextColor => _current.OverlayDisabledTextColor;
+        public static Color IconColor => _current.OverlayIconColor;
+        public static Color ContentColor => _current.OverlayContentColor;
+    }
+
+    public static class Shortcut
+    {
+        public const float Size = 24.0f;
+        public const float TextSize = 10;
+        public const float BorderRadius = 8.0f;
+    }
 
     // Toggle Button
     public const float ToggleButtonHeight = ButtonHeight;
     public const float ToggleButtonPadding = 6f;
     public const float ToggleButtonBorderRadius = 8f;
 
-    // Context Menu
-    public const int ContextMenuMinWidth = 100;
-    public const int ContextMenuTextSize = 12;
-    public const float ContextMenuSeparatorHeight = 2f;
-    public const float ContextMenuSeparatorSpacing = 12f;
-    public const float ContextMenuItemHeight = 20f;
+    public static class ContextMenu
+    {
+        public const int MinWidth = 100;
+        public const int TextSize = 12;
+        public const float SeparatorHeight = 2f;
+        public const float SeparatorSpacing = 12f;
+        public const float ItemHeight = 20f;
+        public static Color TitleColor => _current.ContextMenuTitleColor;
+        public static Color SeparatorColor => _current.ContextMenuSeparatorColor;
+    }
 
     // Color Picker
     public const float ColorPickerBorderWidth = 2.5f;
@@ -140,6 +169,7 @@ public static class EditorStyle
     // Style accessors
     public static Color BackgroundColor => _current.BackgroundColor;
     public static Color SelectionColor => _current.SelectionColor;
+    public static Color SelectionTextColor => _current.SelectionTextColor;
     public static Color ButtonColor => _current.ButtonColor;
     public static Color ButtonHoverColor => _current.ButtonHoverColor;
     public static Color ButtonTextColor => _current.ButtonTextColor;
@@ -149,14 +179,6 @@ public static class EditorStyle
     public static Color ButtonDisabledTextColor => _current.ButtonDisabledTextColor;
     public static Color WorkspaceColor => _current.WorkspaceColor;
     public static Color GridColor => _current.GridColor;
-    public static Color OverlayBackgroundColor => _current.OverlayBackgroundColor;
-    public static Color OverlayTextColor => _current.OverlayTextColor;
-    public static Color OverlayAccentTextColor => _current.OverlayAccentTextColor;
-    public static Color OverlayDisabledTextColor => _current.OverlayDisabledTextColor;
-    public static Color OverlayIconColor => _current.OverlayIconColor;
-    public static Color OverlayContentColor => _current.OverlayContentColor;
-    public static Color ContextMenuTitleColor => _current.ContextMenuTitleColor;
-    public static Color ContextMenuSeparatorColor => _current.ContextMenuSeparatorColor;
 
     public static void Init()
     {
@@ -173,6 +195,7 @@ public static class EditorStyle
         {
             BackgroundColor = Color.FromRgb(0x383838),
             SelectionColor = Color.FromRgb(0x3a79bb),
+            SelectionTextColor = Color.FromRgb(0xf0f0f0),
             ButtonColor = Color.FromRgb(0x585858),
             ButtonHoverColor = Color.FromRgb(0x676767),
             ButtonTextColor = Color.FromRgb(0xe3e3e3),

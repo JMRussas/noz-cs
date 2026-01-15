@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using NoZ;
 using Silk.NET.OpenGL;
 using static SDL.SDL3;
 
@@ -21,18 +22,21 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     private const int MaxShaders = 64;
     private const int MaxFences = 16;
     private const int MaxTextureArrays = 32;
+    private const int MaxVertexFormats = 32;
 
     private int _nextBufferId = 1;
     private int _nextTextureId = 2; // 1 is reserved for white texture
     private int _nextShaderId = 1;
     private int _nextFenceId = 1;
     private int _nextTextureArrayId = 1;
+    private int _nextVertexFormatId = 1;
 
     private readonly uint[] _buffers = new uint[MaxBuffers];
     private readonly uint[] _textures = new uint[MaxTextures];
     private readonly uint[] _shaders = new uint[MaxShaders];
     private readonly nint[] _fences = new nint[MaxFences];
     private readonly (uint glTexture, int width, int height, int layers)[] _textureArrays = new (uint, int, int, int)[MaxTextureArrays];
+    private readonly (uint vao, int stride)[] _vertexFormats = new (uint, int)[MaxVertexFormats];
 
     // VAO for MeshVertex format
     private uint _meshVao;
@@ -127,6 +131,10 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
             if (_textureArrays[i].glTexture != 0)
                 _gl.DeleteTexture(_textureArrays[i].glTexture);
 
+        for (var i = 0; i < MaxVertexFormats; i++)
+            if (_vertexFormats[i].vao != 0)
+                _gl.DeleteVertexArray(_vertexFormats[i].vao);
+
         _gl.DeleteVertexArray(_meshVao);
         _gl.Dispose();
     }
@@ -134,6 +142,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     public void BeginFrame()
     {
         _gl.BindVertexArray(_meshVao);
+        _activeVertexFormat = 0;
     }
 
     public void EndFrame()
@@ -152,24 +161,37 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.Viewport(x, y, (uint)width, (uint)height);
     }
 
+    public void SetScissor(int x, int y, int width, int height)
+    {
+        _gl.Enable(EnableCap.ScissorTest);
+        _gl.Scissor(x, y, (uint)width, (uint)height);
+    }
+
+    public void DisableScissor()
+    {
+        _gl.Disable(EnableCap.ScissorTest);
+    }
+
     // === Buffer Management ===
 
-    public nuint CreateVertexBuffer(int sizeInBytes, BufferUsage usage)
+    public nuint CreateVertexBuffer(int sizeInBytes, BufferUsage usage, string name = "")
     {
         var glBuffer = _gl.GenBuffer();
         _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
         _gl.BufferData(BufferTargetARB.ArrayBuffer, (nuint)sizeInBytes, null, ToGLUsage(usage));
+        SetDebugLabel(ObjectIdentifier.Buffer, glBuffer, name);
 
         var handle = _nextBufferId++;
         _buffers[handle] = glBuffer;
         return (nuint)handle;
     }
 
-    public nuint CreateIndexBuffer(int sizeInBytes, BufferUsage usage)
+    public nuint CreateIndexBuffer(int sizeInBytes, BufferUsage usage, string name = "")
     {
         var glBuffer = _gl.GenBuffer();
         _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glBuffer);
         _gl.BufferData(BufferTargetARB.ElementArrayBuffer, (nuint)sizeInBytes, null, ToGLUsage(usage));
+        SetDebugLabel(ObjectIdentifier.Buffer, glBuffer, name);
 
         var handle = _nextBufferId++;
         _buffers[handle] = glBuffer;
@@ -196,6 +218,24 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         {
             _gl.BufferSubData(BufferTargetARB.ArrayBuffer, offsetBytes, (nuint)(data.Length * MeshVertex.SizeInBytes), p);
         }
+
+        // Reset so BindVertexBuffer will set up attributes
+        _boundVertexBuffer = 0;
+    }
+
+    public void UpdateVertexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data)
+    {
+        var glBuffer = _buffers[(int)buffer];
+        if (glBuffer == 0) return;
+
+        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
+        fixed (byte* p = data)
+        {
+            _gl.BufferSubData(BufferTargetARB.ArrayBuffer, offsetBytes, (nuint)data.Length, p);
+        }
+
+        // Reset so BindVertexBuffer will set up attributes
+        _boundVertexBuffer = 0;
     }
 
     public void UpdateIndexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<ushort> data)
@@ -210,11 +250,12 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         }
     }
 
-    public nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage)
+    public nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage, string name = "")
     {
         var glBuffer = _gl.GenBuffer();
         _gl.BindBuffer(BufferTargetARB.UniformBuffer, glBuffer);
         _gl.BufferData(BufferTargetARB.UniformBuffer, (nuint)sizeInBytes, null, ToGLUsage(usage));
+        SetDebugLabel(ObjectIdentifier.Buffer, glBuffer, name);
 
         var handle = _nextBufferId++;
         _buffers[handle] = glBuffer;
@@ -252,7 +293,14 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _boundVertexBuffer = glBuffer;
         _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
 
-        // Setup vertex attributes for MeshVertex layout (64 bytes total)
+        // If a custom vertex format is active, use its attributes
+        if (_activeVertexFormat != 0)
+        {
+            SetupVertexAttributes(_activeVertexFormat);
+            return;
+        }
+
+        // Default: Setup vertex attributes for MeshVertex layout (64 bytes total)
         // Offsets: position(0), uv(8), normal(16), color(24), bone(40), atlas(44),
         //          frameCount(48), frameWidth(52), frameRate(56), animStartTime(60)
         uint stride = MeshVertex.SizeInBytes;
@@ -308,6 +356,76 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
         _boundIndexBuffer = glBuffer;
         _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glBuffer);
+    }
+
+    // === Vertex Format Management ===
+
+    private nuint _activeVertexFormat;
+    private readonly VertexFormatDescriptor[] _vertexFormatDescriptors = new VertexFormatDescriptor[MaxVertexFormats];
+
+    public nuint CreateVertexFormat(in VertexFormatDescriptor descriptor)
+    {
+        var vao = _gl.GenVertexArray();
+
+        var handle = _nextVertexFormatId++;
+        _vertexFormats[handle] = (vao, descriptor.Stride);
+        _vertexFormatDescriptors[handle] = descriptor;
+        return (nuint)handle;
+    }
+
+    public void DestroyVertexFormat(nuint handle)
+    {
+        ref var format = ref _vertexFormats[(int)handle];
+        if (format.vao != 0)
+        {
+            _gl.DeleteVertexArray(format.vao);
+            format = (0, 0);
+        }
+    }
+
+    public void BindVertexFormat(nuint format)
+    {
+        ref var f = ref _vertexFormats[(int)format];
+        if (f.vao == 0) return;
+
+        _gl.BindVertexArray(f.vao);
+        _activeVertexFormat = format;
+        _boundVertexBuffer = 0;
+    }
+
+    private void SetupVertexAttributes(nuint format)
+    {
+        ref var descriptor = ref _vertexFormatDescriptors[(int)format];
+        if (descriptor.Attributes == null) return;
+
+        // Disable all vertex attributes first to avoid interference from previous format
+        for (uint i = 0; i < 16; i++)
+            _gl.DisableVertexAttribArray(i);
+
+        foreach (var attr in descriptor.Attributes)
+        {
+            _gl.EnableVertexAttribArray((uint)attr.Location);
+
+            var glType = attr.Type switch
+            {
+                VertexAttribType.Float => VertexAttribPointerType.Float,
+                VertexAttribType.Int => VertexAttribPointerType.Int,
+                VertexAttribType.UByte => VertexAttribPointerType.UnsignedByte,
+                _ => VertexAttribPointerType.Float
+            };
+
+            if (attr.Type == VertexAttribType.Int)
+            {
+                var glIType = VertexAttribIType.Int;
+                _gl.VertexAttribIPointer((uint)attr.Location, attr.Components, glIType,
+                    (uint)descriptor.Stride, (void*)attr.Offset);
+            }
+            else
+            {
+                _gl.VertexAttribPointer((uint)attr.Location, attr.Components, glType,
+                    attr.Normalized, (uint)descriptor.Stride, (void*)attr.Offset);
+            }
+        }
     }
 
     // === Texture Management ===
@@ -673,7 +791,16 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.DeleteShader(vertexShader);
         _gl.DeleteShader(fragmentShader);
 
+        SetDebugLabel(ObjectIdentifier.Program, program, name);
+
         return program;
+    }
+
+    private void SetDebugLabel(ObjectIdentifier type, uint id, string label)
+    {
+        if (string.IsNullOrEmpty(label)) return;
+        // Use -1 (0xFFFFFFFF) to let OpenGL calculate the length from null-terminated string
+        _gl.ObjectLabel(type, id, unchecked((uint)-1), label);
     }
 
     // === Render Passes ===

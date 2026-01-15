@@ -3,6 +3,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>noz</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -18,5 +19,13 @@
     <ProjectReference Include="..\engine\NoZ.csproj" />
     <ProjectReference Include="..\platform\sdl\NoZ.SDL.csproj" />
   </ItemGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+      <PublishAot>true</PublishAot>
+      <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+      <StripSymbols>true</StripSymbols>
+      <InvariantGlobalization>true</InvariantGlobalization>
+      <IlcTrimMetadata>true</IlcTrimMetadata>
+  </PropertyGroup>
 
 </Project>
