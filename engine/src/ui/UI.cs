@@ -334,6 +334,7 @@ public struct Element
     public Matrix3x2 LocalToWorld;
     public Matrix3x2 WorldToLocal;
     public ElementData Data;
+    public Font Font;
 }
 
 public struct ContainerStyle()
@@ -372,6 +373,7 @@ public struct LabelStyle()
     public float FontSize = 16;
     public Color Color = Color.White;
     public Align Align = Align.None;
+    public Font? Font = null;
 }
 
 public struct ImageStyle()
@@ -482,9 +484,7 @@ public static class UI
     private const byte ElementIdNone = 0;
     private const byte ElementIdMax = 255;
 
-    private static Font? _font;
-    private static Shader? _textShader;
-    private static Shader? _uiShader;
+    private static Font? _defaultFont;
 
     public static UIConfig Config { get; private set; } = new();
 
@@ -557,7 +557,6 @@ public static class UI
     private static byte _pendingFocusCanvasId;
     private static Vector2 _orthoSize;
     private static Vector2Int _refSize;
-    private static Camera _camera = null!;
     private static byte _activeScrollId;
     private static float _lastScrollMouseY;
     private static bool _closePopups;
@@ -570,6 +569,8 @@ public static class UI
     public static float UserScale { get; set; } = 1.0f;
 
     public static float GetUIScale() => Application.Platform.DisplayScale * UserScale;
+
+    public static Camera? Camera { get; private set; }
 
     public static Vector2Int GetRefSize()
     {
@@ -584,34 +585,11 @@ public static class UI
     public static void Init(UIConfig? config = null)
     {
         Config = config ?? new UIConfig();
-        _camera = new Camera { FlipY = true };
-    }
+        Camera = new Camera { FlipY = true };
 
-    internal static void ResolveAssets()
-    {
-        if (!string.IsNullOrEmpty(Config.TextShader))
-        {
-            _textShader = Asset.Get<Shader>(AssetType.Shader, Config.TextShader);
-            if (_textShader != null)
-                TextRender.Init(_textShader);
-        }
+        UIRender.Init(Config);
 
-        if (!string.IsNullOrEmpty(Config.UIShader))
-        {
-            _uiShader = Asset.Get<Shader>(AssetType.Shader, Config.UIShader);
-            if (_uiShader != null)
-                UIRender.Init(_uiShader);
-        }
-
-        if (!string.IsNullOrEmpty(Config.DefaultFont))
-        {
-            _font = Asset.Get<Font>(AssetType.Font, Config.DefaultFont);
-        }
-    }
-
-    public static void SetFont(Font font)
-    {
-        _font = font;
+        _defaultFont = Asset.Get<Font>(AssetType.Font, Config.DefaultFont);
     }
 
     public static void Shutdown()
@@ -796,7 +774,7 @@ public static class UI
     {
         if (!HasCurrentElement()) return Vector2.Zero;
         ref var e = ref GetCurrentElement();
-        return Vector2.Transform(_camera.ScreenToWorld(screen), e.WorldToLocal);
+        return Vector2.Transform(Camera.ScreenToWorld(screen), e.WorldToLocal);
     }
 
     public static bool HasFocus()
@@ -899,8 +877,8 @@ public static class UI
             _orthoSize.Y = sh;
         }
 
-        _camera.SetExtents(new Rect(0, 0, _orthoSize.X, _orthoSize.Y));
-        _camera.Update();
+        Camera.SetExtents(new Rect(0, 0, _orthoSize.X, _orthoSize.Y));
+        Camera.Update();
 
         // Apply pending focus (element ID + canvas ID)
         _focusId = _pendingFocusId;
@@ -1264,7 +1242,7 @@ public static class UI
 
         // Flush any pending world-space rendering before drawing UI
         // SetCamera also sets u_projection uniform which UIRender will use
-        Render.SetCamera(_camera);
+        Render.SetCamera(Camera);
 
         // Reset textbox tracking before draw pass
         _textboxRenderedThisFrame = false;
@@ -1494,15 +1472,9 @@ public static class UI
     private static void MeasureLabel(ref Element e)
     {
         var fontSize = e.Data.Label.FontSize;
-        if (_font != null)
-        {
-            var text = GetText(e.Data.Label.TextStart, e.Data.Label.TextLength);
-            e.MeasuredSize = TextRender.Measure(new string(text), _font, fontSize);
-        }
-        else
-        {
-            e.MeasuredSize = new Vector2(e.Data.Label.TextLength * fontSize * 0.6f, fontSize * 1.2f);
-        }
+        var font = e.Font ?? _defaultFont!;
+        var text = GetText(e.Data.Label.TextStart, e.Data.Label.TextLength);
+        e.MeasuredSize = TextRender.Measure(new string(text), font, fontSize);
     }
 
     private static void MeasureImage(ref Element e)
@@ -1820,7 +1792,7 @@ public static class UI
     // Input handling
     private static void HandleInput()
     {
-        var mouse = _camera.ScreenToWorld(Input.MousePosition);
+        var mouse = Camera.ScreenToWorld(Input.MousePosition);
         var mouseLeftPressed = Input.WasButtonPressedRaw(InputCode.MouseLeft);
         var buttonDown = Input.IsButtonDownRaw(InputCode.MouseLeft);
 
@@ -2047,7 +2019,7 @@ public static class UI
             UIRender.Flush();
 
             var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
-            var screenPos = _camera.WorldToScreen(pos);
+            var screenPos = Camera.WorldToScreen(pos);
             var scale = Application.WindowSize.Y / _orthoSize.Y;
             var screenHeight = Application.WindowSize.Y;
 
@@ -2100,15 +2072,13 @@ public static class UI
 
     private static void DrawLabel(ref Element e)
     {
-        if (_font == null || _textShader == null)
-            return;
-
+        var font = e.Font ?? _defaultFont!;
         var text = new string(GetText(e.Data.Label.TextStart, e.Data.Label.TextLength));
 
         Render.PushState();
         Render.SetColor(e.Data.Label.Color);
         Render.SetTransform(e.LocalToWorld);
-        TextRender.Draw(text, _font, e.Data.Label.FontSize);
+        TextRender.Draw(text, font, e.Data.Label.FontSize);
         Render.PopState();
     }
 
@@ -2120,7 +2090,7 @@ public static class UI
         var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
         Render.SetColor(img.Color);
         Render.SetTexture(img.Texture);
-        Render.DrawQuad(
+        Render.Draw(
             pos.X, pos.Y, e.Rect.Width, e.Rect.Height,
             img.UV0.X, img.UV0.Y, img.UV1.X, img.UV1.Y
         );
@@ -2144,7 +2114,7 @@ public static class UI
         );
 
         // Convert UI coordinates to screen coordinates for the native textbox
-        var screenPos = _camera.WorldToScreen(pos);
+        var screenPos = Camera.WorldToScreen(pos);
         var scale = GetUIScale();
         var screenRect = new Rect(
             screenPos.X,

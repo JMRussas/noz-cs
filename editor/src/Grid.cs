@@ -89,7 +89,7 @@ public static class Grid
         {
             if (y < bottom - lineThickness || y > top + lineThickness)
                 continue;
-            Render.DrawQuad(
+            Render.Draw(
                 left, y - lineThickness,
                 right - left, lineThickness * 2f
             );
@@ -122,7 +122,7 @@ public static class Grid
             if (x < left - lineThickness || x > right + lineThickness)
                 continue;
 
-            Render.DrawQuad(
+            Render.Draw(
                 x - lineThickness, bottom,
                 lineThickness * 2f, top - bottom
             );
@@ -145,13 +145,13 @@ public static class Grid
         Render.SetColor(color);
         
         if (left < lineThickness && right > -lineThickness)
-            Render.DrawQuad(
+            Render.Draw(
                 -lineThickness, bottom,
                 lineThickness * 2f, top - bottom
             );
 
         if (top < lineThickness && bottom > -lineThickness)
-            Render.DrawQuad(
+            Render.Draw(
                 left, -lineThickness,
                 right - left, lineThickness * 2f
             );

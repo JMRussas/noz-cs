@@ -3,21 +3,68 @@
 //
 
 using System.Numerics;
+using NoZ.Platform;
 
 namespace NoZ;
 
-public static class TextRender
+internal static class TextRender
 {
+    private const int MaxVertices = 8192;
+    private const int MaxIndices = 8192 / 4 * 6;
+    
     private static Shader? _textShader;
+    private static nuint _vertexBuffer;
+    private static nuint _indexBuffer;
+    private static NativeArray<TextVertex> _vertices = new NativeArray<TextVertex>(MaxVertices);
+    private static NativeArray<ushort> _indices = new NativeArray<ushort>(MaxIndices);
 
-    public static void Init(Shader textShader)
+    public static void Init(ApplicationConfig config)
     {
-        _textShader = textShader;
+        _textShader = Asset.Get<Shader>(AssetType.Shader, config.TextShader);
+        if (_textShader == null) throw new Exception($"Failed to load text shader '{config.TextShader}'");
+        
+        _vertices = new NativeArray<TextVertex>(MaxVertices);
+        _vertexBuffer = Render.Driver.CreateVertexBuffer(
+            MaxVertices * TextVertex.SizeInBytes,
+            BufferUsage.Dynamic,
+            "TextRender.Vertices"
+        );
+        
+        _indexBuffer = Render.Driver.CreateIndexBuffer(
+            MaxIndices,
+            BufferUsage.Dynamic,
+            "TextRender.Indices"
+        );
     }
 
+    public static void Shutdown()
+    {
+        _vertices.Dispose();
+        Render.Driver.DestroyBuffer(_vertexBuffer);
+        Render.Driver.DestroyBuffer(_indexBuffer);
+        _vertexBuffer = nuint.Zero;
+        _indexBuffer = nuint.Zero;
+        _textShader = null;
+    }
+    
+    public static void Flush()
+    {
+        if (_vertices.Length > 0)
+        {
+            Render.Driver.BindVertexFormat(VertexFormat<UIVertex>.Handle);
+            Render.Driver.UpdateVertexBuffer(_vertexBuffer, 0, _vertices.AsByteSpan());
+        }
+
+        if (_indices.Length > 0)
+            Render.Driver.UpdateIndexBuffer(_indexBuffer, 0, _indices.AsSpan());
+
+        _vertices.Clear();
+        _indices.Clear();
+    }
+    
     public static Vector2 Measure(string text, Font font, float fontSize)
     {
-        if (font == null || string.IsNullOrEmpty(text))
+        if (string.IsNullOrEmpty(text))
             return Vector2.Zero;
 
         var totalWidth = 0f;
@@ -37,18 +84,22 @@ public static class TextRender
 
     public static void Draw(string text, Font font, float fontSize, ushort order = 0)
     {
-        if (font == null || string.IsNullOrEmpty(text) || _textShader == null)
+        if (string.IsNullOrEmpty(text) || _textShader == null)
             return;
 
         var atlasTexture = font.AtlasTexture;
         if (atlasTexture == null)
             return;
 
+        Render.PushState();
         Render.SetShader(_textShader);
         Render.SetTexture(atlasTexture);
+        Render.SetVertexBuffer<TextVertex>(_vertexBuffer);
+        Render.SetIndexBuffer(_indexBuffer);
 
         var currentX = 0f;
         var baselineY = (font.LineHeight - font.Baseline) * fontSize;
+        var baseIndex = _indices.Length;
 
         for (var i = 0; i < text.Length; i++)
         {
@@ -57,18 +108,50 @@ public static class TextRender
 
             if (glyph.UVMax.X > glyph.UVMin.X && glyph.UVMax.Y > glyph.UVMin.Y)
             {
-                var glyphX = currentX + glyph.Bearing.X * fontSize;
-                var glyphY = baselineY + glyph.Bearing.Y * fontSize - glyph.Size.Y * fontSize;
-                var glyphWidth = glyph.Size.X * fontSize;
-                var glyphHeight = glyph.Size.Y * fontSize;
+                var x0 = currentX + glyph.Bearing.X * fontSize;
+                var x1 = x0 + glyph.Size.X * fontSize;
+                var y0 = baselineY + glyph.Bearing.Y * fontSize - glyph.Size.Y * fontSize;
+                var y1 = y0 + glyph.Size.Y * fontSize; 
 
-                Render.DrawQuad(
-                    glyphX, glyphY,
-                    glyphWidth, glyphHeight,
-                    glyph.UVMin.X, glyph.UVMin.Y,
-                    glyph.UVMax.X, glyph.UVMax.Y,
-                    order
-                );
+                var baseVertex = _vertices.Length;
+                
+                _vertices.Add(new TextVertex
+                {
+                    Position = Vector2.Transform(new Vector2(x0, y0), Render.Transform),
+                    UV = glyph.UVMin,
+                    Color = Render.Color
+                });
+
+                _vertices.Add(new TextVertex
+                {
+                    Position = Vector2.Transform(new Vector2(x1, y0), Render.Transform),
+                    UV = new Vector2(glyph.UVMax.X, glyph.UVMin.Y),
+                    Color = Render.Color
+                });
+
+                _vertices.Add(new TextVertex
+                {
+                    Position = Vector2.Transform(new Vector2(x1, y1), Render.Transform),
+                    UV = glyph.UVMax,
+                    Color = Render.Color
+                });
+
+                _vertices.Add(new TextVertex
+                {
+                    Position = Vector2.Transform(new Vector2(x0, y1), Render.Transform),
+                    UV = new Vector2(glyph.UVMin.X, glyph.UVMax.Y),
+                    Color = Render.Color
+                });
+
+                _indices.Add((ushort)(baseVertex + 0));
+                _indices.Add((ushort)(baseVertex + 1));
+                _indices.Add((ushort)(baseVertex + 2));
+                _indices.Add((ushort)(baseVertex + 2));
+                _indices.Add((ushort)(baseVertex + 3));
+                _indices.Add((ushort)(baseVertex + 0));
+                Render.DrawElements(6, baseIndex, order);
+                
+                baseIndex += 6;
             }
 
             currentX += glyph.Advance * fontSize;

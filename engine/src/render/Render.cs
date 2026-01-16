@@ -2,10 +2,12 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+#define NOZ_RENDER_DEBUG
+//#define NOZ_RENDER_DEBUG_VERBOSE
+
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using NoZ.Platform;
 
 namespace NoZ;
@@ -35,17 +37,21 @@ public static unsafe class Render
     private struct BatchState()
     {
         public nuint Shader;
-        public fixed ulong Textures[MaxTextures];
+        public nuint Texture0;
+        public nuint Texture1;
         public BlendMode BlendMode;
         public int ViewportX;
         public int ViewportY;
-        public int ViewportWidth;
-        public int ViewportHeight;
-        public bool ScissorEnabled;
+        public int ViewportW;
+        public int ViewportH;
         public int ScissorX;
         public int ScissorY;
         public int ScissorWidth;
         public int ScissorHeight;
+        public nuint VertexFormat;
+        public nuint VertexBuffer;
+        public nuint IndexBuffer;
+        public bool ScissorEnabled;
     }
 
     private struct Batch
@@ -75,13 +81,10 @@ public static unsafe class Render
         public int ScissorY;
         public int ScissorWidth;
         public int ScissorHeight;
+        public nuint IndexBuffer;
+        public nuint VertexBuffer;
+        public nuint VertexFormat;
     }
-    
-    public static RenderConfig Config { get; private set; } = null!;
-    public static IRenderDriver Driver { get; private set; } = null!;
-    public static Camera? Camera { get; private set; }
-
-    public static ref readonly RenderStats Stats => ref _stats;
 
     private const int MaxBones = 64;
     private static int _boneCount;
@@ -93,14 +96,19 @@ public static unsafe class Render
     private static ushort[] _sortGroupStack = null!;
     private static State[] _stateStack = null!;
     private static Matrix3x2[] _bones = null!;
-    private static BatchState[] _batchStates = null!;
     private static ushort _sortGroupStackDepth = 0;
     private static int _stateStackDepth = 0;
     private static bool _batchStateDirty = true;
-    private static int _batchStateCount = 0;
+    
+    public static RenderConfig Config { get; private set; } = null!;
+    public static IRenderDriver Driver { get; private set; } = null!;
+    public static Camera? Camera { get; private set; }
+    public static ref readonly Matrix3x2 Transform => ref CurrentState.Transform;
+    public static Color Color => CurrentState.Color;
+    public static ref readonly RenderStats Stats => ref _stats;
 
     private static ref State CurrentState => ref _stateStack[_stateStackDepth];
-
+    
     #region Batching
     private static nuint _vertexBuffer;
     private static nuint _indexBuffer;
@@ -108,15 +116,12 @@ public static unsafe class Render
     private const int BoneUboBindingPoint = 0;
     private static int _maxDrawCommands;
     private static int _maxBatches;
-    private static MeshVertex[] _vertices = null!;
-    private static ushort[] _indices = null!;
-    private static ushort[] _sortedIndices = null!;
-    private static int _vertexCount;
-    private static int _indexCount;
-    private static RenderCommand[] _commands = null!;
-    private static int _commandCount;
-    private static Batch[] _batches = null!;
-    private static int _batchCount = 0;
+    private static NativeArray<MeshVertex> _vertices;
+    private static NativeArray<ushort> _indices;
+    private static NativeArray<ushort> _sortedIndices;
+    private static NativeArray<RenderCommand> _commands;
+    private static NativeArray<Batch> _batches;
+    private static NativeArray<BatchState> _batchStates;
 
     private static Dictionary<string, UniformEntry> _uniforms = null!;
     #endregion
@@ -179,8 +184,10 @@ public static unsafe class Render
         CurrentState.ScissorWidth = 0;
         CurrentState.ScissorHeight = 0;
 
-        _batchStateCount = 0;
-        _batchCount = 0;
+        CurrentState.VertexFormat = VertexFormat<MeshVertex>.Handle;
+        CurrentState.VertexBuffer = _vertexBuffer;
+        CurrentState.IndexBuffer = _indexBuffer;
+
         _uniforms.Clear();
         _boneCount = 1;
         _bones[0] = Matrix3x2.Identity;
@@ -188,22 +195,22 @@ public static unsafe class Render
     
     private static void InitBatcher()
     {
-        _vertices = new MeshVertex[MaxVertices];
-        _indices = new ushort[MaxIndices];
-        _sortedIndices = new ushort[MaxIndices];
-        _commands = new RenderCommand[_maxDrawCommands];
-        _batches = new Batch[_maxBatches];
-        _batchStates = new BatchState[_maxBatches];
+        _vertices = new NativeArray<MeshVertex>(MaxVertices);
+        _indices = new NativeArray<ushort>(MaxIndices);
+        _sortedIndices = new NativeArray<ushort>(MaxIndices);
+        _commands = new NativeArray<RenderCommand>(_maxDrawCommands);
+        _batches = new NativeArray<Batch>(_maxBatches);
+        _batchStates = new NativeArray<BatchState>(_maxBatches);
         _uniforms = new Dictionary<string, UniformEntry>();
 
         _vertexBuffer = Driver.CreateVertexBuffer(
-            _vertices.Length * MeshVertex.SizeInBytes,
+            MaxVertices * MeshVertex.SizeInBytes,
             BufferUsage.Dynamic,
             "Render.Vertices"
         );
 
         _indexBuffer = Driver.CreateIndexBuffer(
-            _indices.Length * sizeof(ushort),
+            MaxIndices * sizeof(ushort),
             BufferUsage.Dynamic,
             "Render.Indices"
         );
@@ -214,17 +221,22 @@ public static unsafe class Render
 
     public static void Shutdown()
     {
-        ShutdownBatcher();
-        Driver.Shutdown();
-    }
+        _batches.Dispose();
+        _vertices.Dispose();
+        _commands.Dispose();
+        _indices.Dispose();
 
-    private static void ShutdownBatcher()
-    {
         Driver.DestroyBuffer(_vertexBuffer);
         Driver.DestroyBuffer(_indexBuffer);
         Driver.DestroyBuffer(_boneUbo);
-    }
+        
+        Driver.Shutdown();
 
+        _vertexBuffer = 0;
+        _indexBuffer = 0;
+        _boneUbo = 0;
+    }
+    
     public static void SetShader(Shader shader)
     {
         if (shader == CurrentState.Shader) return;
@@ -410,7 +422,10 @@ public static unsafe class Render
 
     #region Draw
 
-    public static void DrawQuad(float x, float y, float width, float height, ushort order = 0)
+    public static void Draw(in Rect rect, ushort order = 0) =>
+        Draw(rect.X, rect.Y, rect.Width, rect.Height);
+        
+    public static void Draw(float x, float y, float width, float height, ushort order = 0)
     {
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
@@ -419,7 +434,7 @@ public static unsafe class Render
         AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
     }
 
-    public static void DrawQuad(float x, float y, float width, float height, in Matrix3x2 transform, ushort order = 0)
+    public static void Draw(float x, float y, float width, float height, in Matrix3x2 transform, ushort order = 0)
     {
         CurrentState.Transform = transform;
         var p0 = new Vector2(x, y);
@@ -429,7 +444,7 @@ public static unsafe class Render
         AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
     }
 
-    public static void DrawQuad(float x, float y, float width, float height, float u0, float v0, float u1, float v1, ushort order = 0)
+    public static void Draw(float x, float y, float width, float height, float u0, float v0, float u1, float v1, ushort order = 0)
     {
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
@@ -438,7 +453,7 @@ public static unsafe class Render
         AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order);
     }
 
-    public static void DrawQuad(float x, float y, float width, float height, float u0, float v0, float u1, float v1, in Matrix3x2 transform, ushort order = 0)
+    public static void Draw(float x, float y, float width, float height, float u0, float v0, float u1, float v1, in Matrix3x2 transform, ushort order = 0)
     {
         CurrentState.Transform = transform;
         var p0 = new Vector2(x, y);
@@ -448,7 +463,7 @@ public static unsafe class Render
         AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order);
     }
 
-    public static void DrawQuad(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, ushort order = 0)
+    public static void Draw(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, ushort order = 0)
     {
         AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
     }
@@ -547,8 +562,6 @@ public static unsafe class Render
         Driver.UpdateUniformBuffer(_boneUbo, 0, new ReadOnlySpan<byte>(data, size));
     }
 
-    public static Matrix3x2 Transform => CurrentState.Transform;
-
     public static void SetTransform(in Matrix3x2 transform)
     {
         CurrentState.Transform = transform;
@@ -573,26 +586,29 @@ public static unsafe class Render
         (((long)CurrentState.SortLayer) << LayerShift) |
         (((long)CurrentState.SortGroup) << GroupShift) |
         (((long)order) << OrderShift) |
-        (((long)_commandCount) << IndexShift);
+        (((long)_commands.Length) << IndexShift);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AddBatchState()
     {
         _batchStateDirty = false;
-        ref var batchState = ref _batchStates[_batchStateCount++];
+        ref var batchState = ref _batchStates.Add();
         batchState.Shader = CurrentState.Shader?.Handle ?? nuint.Zero;
         batchState.BlendMode = CurrentState.BlendMode;
-        for (var i = 0; i < MaxTextures; i++)
-            batchState.Textures[i] = CurrentState.Textures[i];
+        batchState.Texture0 = (nuint)CurrentState.Textures[0];
+        batchState.Texture1 = (nuint)CurrentState.Textures[1];
         batchState.ViewportX = CurrentState.ViewportX;
         batchState.ViewportY = CurrentState.ViewportY;
-        batchState.ViewportWidth = CurrentState.ViewportWidth;
-        batchState.ViewportHeight = CurrentState.ViewportHeight;
+        batchState.ViewportW = CurrentState.ViewportWidth;
+        batchState.ViewportH = CurrentState.ViewportHeight;
         batchState.ScissorEnabled = CurrentState.ScissorEnabled;
         batchState.ScissorX = CurrentState.ScissorX;
         batchState.ScissorY = CurrentState.ScissorY;
         batchState.ScissorWidth = CurrentState.ScissorWidth;
         batchState.ScissorHeight = CurrentState.ScissorHeight;
+        batchState.VertexFormat = CurrentState.VertexFormat;
+        batchState.VertexBuffer = CurrentState.VertexBuffer;
+        batchState.IndexBuffer = CurrentState.IndexBuffer;
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -613,47 +629,43 @@ public static unsafe class Render
         if (_batchStateDirty)
             AddBatchState();
 
-        if (_commandCount >= _maxDrawCommands)
+        if (_commands.Length >= _maxDrawCommands)
             return;
 
-        if (_vertexCount + 4 > MaxVertices ||
-            _indexCount + 6 > MaxIndices)
+        if (_vertices.Length + 4 > MaxVertices ||
+            _indices.Length + 6 > MaxIndices)
             return;
 
-        ref var cmd = ref _commands[_commandCount++];
+        ref var cmd = ref _commands.Add();
         cmd.SortKey = MakeSortKey(order);
-        cmd.VertexOffset = _vertexCount;
-        cmd.VertexCount = 4;
-        cmd.IndexOffset = _indexCount;
+        cmd.IndexOffset = _indices.Length;
         cmd.IndexCount = 6;
-        cmd.BatchState = (ushort)(_batchStateCount - 1);
+        cmd.BatchState = (ushort)(_batchStates.Length - 1);
 
         var t0 = Vector2.Transform(p0, CurrentState.Transform);
         var t1 = Vector2.Transform(p1, CurrentState.Transform);
         var t2 = Vector2.Transform(p2, CurrentState.Transform);
         var t3 = Vector2.Transform(p3, CurrentState.Transform);
 
-        _vertices[_vertexCount + 0] = new MeshVertex { Position = t0, UV = uv0, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 1] = new MeshVertex { Position = t1, UV = uv1, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 2] = new MeshVertex { Position = t2, UV = uv2, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
-        _vertices[_vertexCount + 3] = new MeshVertex { Position = t3, UV = uv3, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 };
+        var baseVertex = _vertices.Length;
+        _vertices.Add(new MeshVertex { Position = t0, UV = uv0, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 });
+        _vertices.Add(new MeshVertex { Position = t1, UV = uv1, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 });
+        _vertices.Add(new MeshVertex { Position = t2, UV = uv2, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 });
+        _vertices.Add(new MeshVertex { Position = t3, UV = uv3, Normal = Vector2.Zero, Color = CurrentState.Color, Bone = 0, Atlas = 0, FrameCount = 1, FrameWidth = 0, FrameRate = 0, AnimStartTime = 0 });
 
-        _indices[_indexCount + 0] = (ushort)_vertexCount;
-        _indices[_indexCount + 1] = (ushort)(_vertexCount + 1);
-        _indices[_indexCount + 2] = (ushort)(_vertexCount + 2);
-        _indices[_indexCount + 3] = (ushort)(_vertexCount + 2);
-        _indices[_indexCount + 4] = (ushort)(_vertexCount + 3);
-        _indices[_indexCount + 5] = (ushort)_vertexCount;
-
-        _vertexCount += 4;
-        _indexCount += 6;
+        _indices.Add((ushort)(baseVertex + 0));
+        _indices.Add((ushort)(baseVertex + 1));
+        _indices.Add((ushort)(baseVertex + 2));
+        _indices.Add((ushort)(baseVertex + 2));
+        _indices.Add((ushort)(baseVertex + 3));
+        _indices.Add((ushort)(baseVertex + 0));
     }
 
     private static void AddBatch(ushort batchState, int indexOffset, int indexCount)
     {
         if (indexCount == 0) return;
         
-        ref var batch = ref _batches[_batchCount++];
+        ref var batch = ref _batches.Add();
         batch.IndexOffset = indexOffset;
         batch.IndexCount = indexCount;
         batch.State = batchState;
@@ -682,105 +694,231 @@ public static unsafe class Render
         }
     }
 
-    public static void Flush()
-    {
-        ExecuteCommands();
-    }
-
     public static void SetVertexBuffer<T>(nuint buffer) where T : unmanaged, IVertex
     {
-        ExecuteCommands();
-        Driver.BindVertexFormat(VertexFormat<T>.Handle);
-        Driver.BindVertexBuffer(buffer);
+        if (CurrentState.VertexBuffer == buffer) return;
+
+        CurrentState.VertexBuffer = buffer;
+        CurrentState.VertexFormat = VertexFormat<T>.Handle;
+        _batchStateDirty = true;
     }
 
     public static void SetIndexBuffer(nuint buffer)
     {
-        Driver.BindIndexBuffer(buffer);
+        if (CurrentState.IndexBuffer == buffer) return;
+        CurrentState.IndexBuffer = buffer;
+        _batchStateDirty = true;
     }
 
-    public static void DrawElements(int indexCount, int indexOffset = 0)
+    public static void DrawElements(int indexCount, int indexOffset = 0, ushort order=0)
     {
-        ApplyUniforms();
-        Driver.DrawElements(indexOffset, indexCount, 0);
-        _stats.DrawCount++;
+        if (_batchStateDirty)
+            AddBatchState();
+
+        if (_commands.Length > 0)
+        {
+            ref var lastCommand = ref _commands[^1];
+            if (lastCommand.BatchState == _batchStates.Length - 1 &&
+                lastCommand.IndexOffset + lastCommand.IndexCount == indexOffset)
+            {
+                // Merge with last command
+                lastCommand.IndexCount += (ushort)indexCount;
+                LogRenderVerbose($"DrawElements (merged): Count={indexCount} Offset={indexOffset} Order={order}");
+                return;
+            }
+        }
+
+        ref var cmd = ref _commands.Add();
+        cmd.SortKey = MakeSortKey(order);
+        cmd.IndexOffset = indexOffset;
+        cmd.IndexCount = indexCount;
+        cmd.BatchState = (ushort)(_batchStates.Length - 1);
+
+        LogRenderVerbose($"DrawElements: Count={indexCount} Offset={indexOffset} Order={order}");
     }
 
     private static void ExecuteCommands()
     {
-        if (_commandCount == 0)
+        if (_commands.Length == 0)
             return;
-
-        var vertexSpan = MemoryMarshal.AsBytes(_vertices.AsSpan(0, _vertexCount));
-        Driver.UpdateVertexBuffer(_vertexBuffer, 0, vertexSpan);
-
-        SortCommands();
+        
+        TextRender.Flush();
+        UIRender.Flush();
+        
+        _commands.AsSpan().Sort();
+        _sortedIndices.Clear();
 
         var batchStateIndex = _commands[0].BatchState;
-        var sortedIndexCount = 0;
         var sortedIndexOffset = 0;
-        for (var commandIndex = 0; commandIndex < _commandCount; commandIndex++)
+        for (int commandIndex = 0, commandCount = _commands.Length; commandIndex < commandCount; commandIndex++)
         {
             ref var cmd = ref _commands[commandIndex];
             if (batchStateIndex != cmd.BatchState)
             {
-                AddBatch(batchStateIndex, sortedIndexOffset, sortedIndexCount - sortedIndexOffset);
-                sortedIndexOffset = sortedIndexCount;
+                AddBatch(batchStateIndex, sortedIndexOffset, _sortedIndices.Length - sortedIndexOffset);
+                sortedIndexOffset = _sortedIndices.Length;
                 batchStateIndex = cmd.BatchState;
             }
 
-            fixed (ushort* src = &_indices[cmd.IndexOffset])
-            fixed (ushort* dst = &_sortedIndices[sortedIndexCount])
+            ref var batchState = ref _batchStates[cmd.BatchState];
+            if (batchState.IndexBuffer == _indexBuffer)
             {
-                Unsafe.CopyBlock(dst, src, (uint)(cmd.IndexCount * sizeof(ushort)));
+                _sortedIndices.AddRange(
+                    _indices.AsReadonlySpan(cmd.IndexOffset, cmd.IndexCount)
+                );
             }
-
-            sortedIndexCount += cmd.IndexCount;
         }
 
-        if (sortedIndexOffset != sortedIndexCount)
-            AddBatch(batchStateIndex, sortedIndexOffset, sortedIndexCount - sortedIndexOffset);
+        if (sortedIndexOffset != _sortedIndices.Length)
+            AddBatch(batchStateIndex, sortedIndexOffset, _sortedIndices.Length - sortedIndexOffset);
 
-        Driver.UpdateIndexBuffer(_indexBuffer, 0, _sortedIndices.AsSpan(0, sortedIndexCount));
         Driver.BindVertexFormat(VertexFormat<MeshVertex>.Handle);
         Driver.BindVertexBuffer(_vertexBuffer);
+        Driver.UpdateVertexBuffer(_vertexBuffer, 0, _vertices.AsByteSpan());
         Driver.BindIndexBuffer(_indexBuffer);
+        Driver.UpdateIndexBuffer(_indexBuffer, 0, _sortedIndices.AsSpan());
+        Driver.SetBlendMode(BlendMode.None);
 
         UploadBones();
         Driver.BindUniformBuffer(_boneUbo, BoneUboBindingPoint);
 
-        for (var batchIndex=0; batchIndex < _batchCount; batchIndex++)
+        var lastViewportX = ushort.MaxValue;
+        var lastViewportY = ushort.MaxValue;
+        var lastViewportW = ushort.MaxValue;
+        var lastViewportH = ushort.MaxValue;
+        var lastScissorEnabled = false;
+        var lastShader = nuint.Zero;
+        var lastTexture0 = nuint.Zero;
+        var lastTexture1 = nuint.Zero;
+        var lastVertexBuffer = _vertexBuffer;
+        var lastIndexBuffer = _indexBuffer;
+        var lastVertexFormat = VertexFormat<MeshVertex>.Handle;
+        var lastBlendMode = BlendMode.None;
+
+        LogRender($"ExecuteCommands: Batches={_batches.Length} Commands={_commands.Length} Vertices={_vertices.Length} Indices={_indices.Length}");
+        
+        for (int batchIndex=0, batchCount=_batches.Length; batchIndex < batchCount; batchIndex++)
         {
             ref var batch = ref _batches[batchIndex];
             ref var batchState = ref _batchStates[batch.State];
-            Driver.SetViewport(batchState.ViewportX, batchState.ViewportY, batchState.ViewportWidth, batchState.ViewportHeight);
-            if (batchState.ScissorEnabled)
-                Driver.SetScissor(batchState.ScissorX, batchState.ScissorY, batchState.ScissorWidth, batchState.ScissorHeight);
-            else
-                Driver.DisableScissor();
-            Driver.BindShader(batchState.Shader);
-            ApplyUniforms();
-            Driver.BindTexture((nuint)batchState.Textures[0], 0);
-            Driver.BindTexture((nuint)batchState.Textures[1], 1);
-            Driver.SetBlendMode(batchState.BlendMode);
 
+            LogRender($"  Batch: Index={batchIndex} IndexOffset={batch.IndexOffset} IndexCount={batch.IndexCount} State={batch.State}");
+            
+            if (lastViewportX != batchState.ViewportX ||  
+                lastViewportY != batchState.ViewportY ||
+                lastViewportW != batchState.ViewportW ||
+                lastViewportH != batchState.ViewportH)
+            {
+                lastViewportX = (ushort)batchState.ViewportX;
+                lastViewportY = (ushort)batchState.ViewportY;
+                lastViewportW = (ushort)batchState.ViewportW;
+                lastViewportH = (ushort)batchState.ViewportH;
+                Driver.SetViewport(
+                    batchState.ViewportX,
+                    batchState.ViewportY,
+                    batchState.ViewportW,
+                    batchState.ViewportH);
+
+                LogRender($"    SetViewport: X={batchState.ViewportX} Y={batchState.ViewportY} W={batchState.ViewportW} H={batchState.ViewportH}");
+            }
+
+            if (lastScissorEnabled != batchState.ScissorEnabled)
+            {
+                lastScissorEnabled = batchState.ScissorEnabled;
+                if (batchState.ScissorEnabled)
+                {
+                    Driver.SetScissor(
+                        batchState.ScissorX,
+                        batchState.ScissorY,
+                        batchState.ScissorWidth,
+                        batchState.ScissorHeight);
+                    
+                    LogRender($"    SetScissor: X={batchState.ScissorX} Y={batchState.ScissorY} W={batchState.ScissorWidth} H={batchState.ScissorHeight}");
+                }
+                else
+                {
+                    Driver.DisableScissor();
+                    LogRender($"    DisableScissor:");
+                }
+            }
+
+            if (lastShader != batchState.Shader)
+            {
+                lastShader = batchState.Shader;
+                Driver.BindShader(batchState.Shader);
+                LogRender($"    BindShader: Handle=0x{batchState.Shader:X}");
+            }
+            
+            if (lastTexture0 != batchState.Texture0)
+            {
+                lastTexture0 = batchState.Texture0;
+                Driver.BindTexture(batchState.Texture0, 0);
+                LogRender($"    BindTexture: Slot=0 Handle=0x{batchState.Texture0:X}");
+            }
+            
+            if (lastTexture1 != batchState.Texture1)
+            {
+                lastTexture1 = batchState.Texture1;
+                Driver.BindTexture(batchState.Texture1, 1);
+                LogRender($"    BindTexture: Slot=1 Handle=0x{batchState.Texture1:X}");
+            }
+            
+            if (lastBlendMode != batchState.BlendMode)
+            {
+                lastBlendMode = batchState.BlendMode;
+                Driver.SetBlendMode(batchState.BlendMode);
+                LogRender($"    SetBlendMode: {batchState.BlendMode}");
+            }
+
+            if (lastVertexFormat != batchState.VertexFormat)
+            {
+                lastVertexFormat = batchState.VertexFormat;
+                Driver.BindVertexFormat(batchState.VertexFormat);
+                LogRender($"    BindVertexFormat: Handle=0x{batchState.VertexFormat:X}");
+            }
+            
+            if (lastVertexBuffer != batchState.VertexBuffer)
+            {
+                lastVertexBuffer = batchState.VertexBuffer;
+                Driver.BindVertexBuffer(batchState.VertexBuffer);
+                LogRender($"    BindVertexBuffer: Handle=0x{batchState.VertexBuffer:X}");
+            }
+            
+            if (lastIndexBuffer != batchState.IndexBuffer)
+            {
+                lastIndexBuffer = batchState.IndexBuffer;
+                Driver.BindIndexBuffer(batchState.IndexBuffer);
+                LogRender($"    BindIndexBuffer: Handle=0x{batchState.IndexBuffer:X}");
+            }
+            
+            ApplyUniforms();
+
+            LogRender($"    DrawElements: IndexCount={batch.IndexCount} IndexOffset={batch.IndexOffset}");
             Driver.DrawElements(batch.IndexOffset, batch.IndexCount, 0);
         }
 
-        _stats.DrawCount += _batchCount;
-        _stats.VertexCount = _vertexCount;
-        _stats.CommandCount = _commandCount;
+        _stats.DrawCount += _batches.Length;
+        _stats.VertexCount = _vertices.Length;
+        _stats.CommandCount = _commands.Length;
 
-        _vertexCount = 0;
-        _indexCount = 0;
-        _commandCount = 0;
-        _batchCount = 0;
-        _batchStateCount = 0;
+        _commands.Clear();
+        _vertices.Clear();
+        _indices.Clear();
+        _batches.Clear();
+        _batchStates.Clear();
+        
         _batchStateDirty = true;
     }
-    
-    private static void SortCommands()
+
+    [Conditional("NOZ_RENDER_DEBUG")]
+    private static void LogRender(string msg)
     {
-        new Span<RenderCommand>(_commands, 0, _commandCount).Sort();
+        Log.Debug($"[RENDER] {msg}");
+    }
+
+    [Conditional("NOZ_RENDER_DEBUG_VERBOSE")]
+    private static void LogRenderVerbose(string msg)
+    {
+        Log.Debug($"[RENDER] {msg}");
     }
 }

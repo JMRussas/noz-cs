@@ -7,8 +7,6 @@ namespace NoZ;
 internal struct RenderCommand : IComparable<RenderCommand>
 {
     public long SortKey;
-    public int VertexOffset;
-    public int VertexCount;
     public int IndexOffset;
     public int IndexCount;
     public ushort BatchState;

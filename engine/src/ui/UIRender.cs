@@ -22,11 +22,11 @@ public static class UIRender
     private static Shader? _shader;
     private static bool _initialized;
 
-    public static void Init(Shader shader)
+    public static void Init(UIConfig config)
     {
         if (_initialized) return;
 
-        _shader = shader;
+        _shader = Asset.Get<Shader>(AssetType.Shader, config.UIShader);
         _vertices = new UIVertex[MaxUIVertices];
         _indices = new ushort[MaxUIIndices];
 
@@ -63,9 +63,6 @@ public static class UIRender
     {
         if (!_initialized || _shader == null) return;
 
-        var color32 = color.ToColor32();
-        var borderColor32 = borderColor.ToColor32();
-
         // Simple rect - no border radius
         if (borderRadius <= 0)
         {
@@ -74,10 +71,10 @@ public static class UIRender
 
             var bv = _vertexCount;
 
-            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x, y), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color32, BorderRatio = -1f, BorderColor = borderColor32 };
-            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x + width, y), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color32, BorderRatio = -1f, BorderColor = borderColor32 };
-            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x + width, y + height), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color32, BorderRatio = -1f, BorderColor = borderColor32 };
-            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x, y + height), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color32, BorderRatio = -1f, BorderColor = borderColor32 };
+            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x, y), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color, BorderRatio = -1f, BorderColor = borderColor };
+            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x + width, y), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color, BorderRatio = -1f, BorderColor = borderColor };
+            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x + width, y + height), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color, BorderRatio = -1f, BorderColor = borderColor };
+            _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x, y + height), UV = new Vector2(1, 1), Normal = Vector2.Zero, Color = color, BorderRatio = -1f, BorderColor = borderColor };
 
             _indices[_indexCount++] = (ushort)bv;
             _indices[_indexCount++] = (ushort)(bv + 1);
@@ -101,28 +98,28 @@ public static class UIRender
         var r = borderRadius;
         
         // 0-3 (top row, inner edge)
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(0, 1), Normal = new Vector2(r, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(0, 1), Normal = new Vector2(-r, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(0, 1), Normal = new Vector2(r, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(0, 1), Normal = new Vector2(-r, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
 
         // 4-7 (top row, outer edge)
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(1, 0), Normal = new Vector2(0, r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(0, 0), Normal = new Vector2(r, r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(0, 0), Normal = new Vector2(-r, r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(1, 0), Normal = new Vector2(0, r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(1, 0), Normal = new Vector2(0, r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y0), UV = new Vector2(0, 0), Normal = new Vector2(r, r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(0, 0), Normal = new Vector2(-r, r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y0), UV = new Vector2(1, 0), Normal = new Vector2(0, r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
 
         // 8-11 (bottom row, outer edge)
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(1, 0), Normal = new Vector2(0, -r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(0, 0), Normal = new Vector2(r, -r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(0, 0), Normal = new Vector2(-r, -r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(1, 0), Normal = new Vector2(0, -r), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(1, 0), Normal = new Vector2(0, -r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(0, 0), Normal = new Vector2(r, -r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(0, 0), Normal = new Vector2(-r, -r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(1, 0), Normal = new Vector2(0, -r), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
 
         // 12-15 (bottom row, inner edge)
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(0, 1), Normal = new Vector2(r, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(0, 1), Normal = new Vector2(-r, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
-        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color32, BorderRatio = borderRatio, BorderColor = borderColor32 };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x0, y1), UV = new Vector2(0, 1), Normal = new Vector2(r, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(0, 1), Normal = new Vector2(-r, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
+        _vertices[_vertexCount++] = new UIVertex { Position = new Vector2(x1, y1), UV = new Vector2(1, 1), Normal = new Vector2(0, 0), Color = color, BorderRatio = borderRatio, BorderColor = borderColor };
 
         // top
         AddTriangle(vs, 0, 1, 4);
@@ -164,25 +161,27 @@ public static class UIRender
         var vertexSpan = MemoryMarshal.AsBytes(_vertices.AsSpan(0, _vertexCount));
         Render.Driver.UpdateVertexBuffer(_vertexBuffer, 0, vertexSpan);
         Render.Driver.UpdateIndexBuffer(_indexBuffer, 0, _indices.AsSpan(0, _indexCount));
-
+        
+        Render.PushState();
         Render.SetVertexBuffer<UIVertex>(_vertexBuffer);
         Render.SetIndexBuffer(_indexBuffer);
-        Render.Driver.BindShader(_shader.Handle);
+        Render.SetShader(_shader);
+        Render.SetCamera(UI.Camera);
+        Render.SetBlendMode(BlendMode.Alpha);
+        Render.DrawElements(0, _indexCount, 0);
 
-        if (Render.Camera != null)
-        {
-            var view = Render.Camera.ViewMatrix;
-            var projection = new Matrix4x4(
-                view.M11, view.M12, 0, view.M31,
-                view.M21, view.M22, 0, view.M32,
-                0, 0, 1, 0,
-                0, 0, 0, 1
-            );
-            Render.Driver.SetUniformMatrix4x4("u_projection", projection);
-        }
+        // if (Render.Camera != null)
+        // {
+        //     var view = Render.Camera.ViewMatrix;
+        //     var projection = new Matrix4x4(
+        //         view.M11, view.M12, 0, view.M31,
+        //         view.M21, view.M22, 0, view.M32,
+        //         0, 0, 1, 0,
+        //         0, 0, 0, 1
+        //     );
+        //     Render.Driver.SetUniformMatrix4x4("u_projection", projection);
+        // }
 
-        Render.Driver.SetBlendMode(BlendMode.Premultiplied);
-        Render.Driver.DrawElements(0, _indexCount, 0);
 
         _vertexCount = 0;
         _indexCount = 0;

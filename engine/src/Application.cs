@@ -23,9 +23,12 @@ public static class Application
     {
         Config = config;
 
-        // Platform and render backend must be provided
         Platform = config.Platform ?? throw new ArgumentNullException(nameof(config.Platform),
             "Platform must be provided. Use SDLPlatform for desktop or WebPlatform for web.");
+
+        if (config.Render == null)
+            throw new ArgumentNullException(nameof(config.Render),
+                "RenderConfig must be provided");
         
         AudioDriverBackend = config.AudioBackend ?? throw new ArgumentNullException(nameof(config.AudioBackend),
             "AudioBackend must be provided. Use SDLAudio for desktop or WebAudio for web.");
@@ -54,15 +57,17 @@ public static class Application
         Time.Init();
         Input.Init();
         Audio.Init(AudioDriverBackend);
-        Render.Init(config.Render);
+        Render.Init(Config.Render!);
         UI.Init(config.UI);
 
         // Register asset types and load assets
         RegisterAssetTypes();
         _vtable.LoadAssets();
         Render.ResolveAssets();
-        UI.ResolveAssets();
 
+        TextRender.Init(config);
+        UI.Init(config.UI);
+        
         _running = true;
     }
 
@@ -107,6 +112,7 @@ public static class Application
         _vtable.UnloadAssets();
 
         UI.Shutdown();
+        TextRender.Shutdown();
         Render.Shutdown();
         Audio.Shutdown();
         Input.Shutdown();

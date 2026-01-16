@@ -38,6 +38,10 @@ public class Style
     public Color ShapeColor;
     public Color ShapeSelectionColor;
     public Color ShapeHoverColor;
+    
+    // Box Select
+    public Color BoxSelectLineColor;
+    public Color BoxSelectFillColor;
 }
 
 public static class EditorStyle
@@ -100,11 +104,21 @@ public static class EditorStyle
     public const float ButtonBorderRadius = 8f;
 
     // Workspace
-    public const float WorkspacePadding = 16f;
-    public const float WorkspaceBoundsThickness = 1.1f;
-    public const float WorkspaceNameFontSize = 0.24f;
-    public const float WorkspaceNamePadding = 0.04f;
+    public static class Workspace
+    {
+        public const float Padding = 16f;
+        public const float BoundsLineWidth = 0.03f;
+        public const float NameSize = 0.24f;
+        public const float NamePadding = 0.04f;
+    }
 
+    public static class BoxSelect 
+    {
+        public const float LineWidth = 0.02f;
+        public static Color LineColor => _current.BoxSelectLineColor;
+        public static Color FillColor => _current.BoxSelectFillColor;
+    }
+    
     public static class CommandPalette
     {
         public const float FontSize = 18.0f;
@@ -227,7 +241,9 @@ public static class EditorStyle
             ContextMenuTitleColor = Color.FromRgb(0x636363),
             ShapeColor = Color.Black,
             ShapeSelectionColor = selectionColor,
-            ShapeHoverColor = selectionColor
+            ShapeHoverColor = selectionColor,
+            BoxSelectLineColor = selectionColor,
+            BoxSelectFillColor = selectionColor.WithAlpha(0.15f)
         };
     }
 }

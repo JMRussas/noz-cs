@@ -13,19 +13,17 @@ public interface IVertex
 
 public static class VertexFormat<T> where T : unmanaged, IVertex
 {
-    private static nuint _handle;
-    private static bool _initialized;
-
+    // ReSharper disable once StaticMemberInGenericType
     public static nuint Handle
     {
         get
         {
-            if (!_initialized)
+            if (field == nuint.Zero)
             {
-                _handle = Render.Driver.CreateVertexFormat(T.GetFormatDescriptor());
-                _initialized = true;
+                field = Render.Driver.CreateVertexFormat(T.GetFormatDescriptor());
             }
-            return _handle;
+
+            return field;
         }
     }
 }
@@ -37,20 +35,11 @@ public enum VertexAttribType
     UByte
 }
 
-public struct VertexAttribute
+public struct VertexAttribute(int location, int components, VertexAttribType type, int offset, bool normalized = false)
 {
-    public int Location;
-    public int Components;
-    public VertexAttribType Type;
-    public int Offset;
-    public bool Normalized;
-
-    public VertexAttribute(int location, int components, VertexAttribType type, int offset, bool normalized = false)
-    {
-        Location = location;
-        Components = components;
-        Type = type;
-        Offset = offset;
-        Normalized = normalized;
-    }
+    public readonly int Location = location;
+    public readonly int Components = components;
+    public readonly VertexAttribType Type = type;
+    public readonly int Offset = offset;
+    public readonly bool Normalized = normalized;
 }

@@ -58,6 +58,9 @@ public class Asset : IDisposable {
 
     public static T? Get<T>(AssetType type, string name) where T : Asset
     {
+        if (string.IsNullOrEmpty(name))
+            return null;
+        
         _registry.TryGetValue((type, name), out var asset);
         return asset as T;
     }

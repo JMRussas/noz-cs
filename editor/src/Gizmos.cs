@@ -57,19 +57,19 @@ public static class Gizmos
         var p2 = end + perp * halfWidth;
         var p3 = end - perp * halfWidth;
 
-        Render.DrawQuad(p0, p1, p2, p3, order);
+        Render.Draw(p0, p1, p2, p3, order);
     }
 
     public static void DrawRect(in Vector2 position, float size, ushort order=0)
     {
         var scaledSize = ZoomRefScale * size;
         var halfSize = scaledSize * 0.5f;
-        Render.DrawQuad(position.X - halfSize, position.Y - halfSize, scaledSize, scaledSize, order);
+        Render.Draw(position.X - halfSize, position.Y - halfSize, scaledSize, scaledSize, order);
     }
 
     public static void DrawCircle(Vector2 pos, float radius)
     {
-        Render.DrawQuad(pos.X - radius, pos.Y - radius, radius * 2, radius * 2);
+        Render.Draw(pos.X - radius, pos.Y - radius, radius * 2, radius * 2);
     }
     
     public static float GetVertexSize(float size=1.0f)

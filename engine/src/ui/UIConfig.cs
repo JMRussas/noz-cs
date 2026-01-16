@@ -6,7 +6,6 @@ namespace NoZ;
 
 public class UIConfig
 {
-    public string TextShader { get; init; } = "text";
     public string UIShader { get; init; } = "ui";
     public string DefaultFont { get; init; } = "";
 }

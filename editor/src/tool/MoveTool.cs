@@ -70,17 +70,17 @@ public class MoveTool : Tool
 
             var camera = Workspace.Camera;
             var bounds = camera.WorldBounds;
-            var thickness = EditorStyle.WorkspaceBoundsThickness / Workspace.Zoom;
+            var thickness = EditorStyle.Workspace.BoundsLineWidth / Workspace.Zoom;
 
             if (_deltaScale.X > 0)
             {
                 // X-axis constraint - draw horizontal line
-                Render.DrawQuad(bounds.X, Workspace.MouseWorldPosition.Y - thickness, bounds.Width, thickness * 2);
+                Render.Draw(bounds.X, Workspace.MouseWorldPosition.Y - thickness, bounds.Width, thickness * 2);
             }
             else
             {
                 // Y-axis constraint - draw vertical line
-                Render.DrawQuad(Workspace.MouseWorldPosition.X - thickness, bounds.Y, thickness * 2, bounds.Height);
+                Render.Draw(Workspace.MouseWorldPosition.X - thickness, bounds.Y, thickness * 2, bounds.Height);
             }
 
             Render.PopState();

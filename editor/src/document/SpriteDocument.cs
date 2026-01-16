@@ -206,7 +206,7 @@ public class SpriteDocument : Document
             return;
 
         Render.SetColor(new Color(200/255f, 200/255f, 200/255f, 1f));
-        Render.DrawQuad(
+        Render.Draw(
             Position.X + Bounds.X,
             Position.Y + Bounds.Y,
             size.X, size.Y

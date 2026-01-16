@@ -32,6 +32,10 @@ public struct Rect(float x, float y, float width, float height)
     public Vector2 Center => new(X + Width * 0.5f, Y + Height * 0.5f);
     public Vector2 Min => new(X, Y);
     public Vector2 Max => new(X + Width, Y + Height);
+    public float MinX => X;
+    public float MinY => Y;
+    public float MaxX => X + Width;
+    public float MaxY => Y + Height;
     public Vector2 TopLeft => new(X, Y);
     public Vector2 TopRight => new(X + Width, Y);
     public Vector2 BottomLeft => new(X, Y + Height);

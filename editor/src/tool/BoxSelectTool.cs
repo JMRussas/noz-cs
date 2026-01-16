@@ -35,15 +35,10 @@ public class BoxSelectTool : Tool
     {
         Render.PushState();
         Render.SetLayer(EditorLayer.Tool);
-
-        // Draw filled selection rect
-        Render.SetColor(EditorStyle.SelectionColor.WithAlpha(0.15f));
-        Render.DrawQuad(_selection.X, _selection.Y, _selection.Width, _selection.Height);
-
-        // Draw selection outline
-        Render.SetColor(EditorStyle.SelectionColor);
-        Gizmos.DrawRect(_selection, EditorStyle.WorkspaceBoundsThickness);
-
+        Render.SetColor(EditorStyle.BoxSelect.FillColor);
+        Render.Draw(_selection);
+        Render.SetColor(EditorStyle.BoxSelect.LineColor);
+        Gizmos.DrawRect(_selection, EditorStyle.BoxSelect.LineWidth);
         Render.PopState();
     }
 

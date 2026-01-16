@@ -29,4 +29,5 @@ public class ApplicationConfig
     public IPlatform? Platform { get; init; }
     public IAudioDriver? AudioBackend { get; init; }
     public string AssetPath { get; init; } = "library/";
+    public string TextShader { get; init; } = "text";
 }

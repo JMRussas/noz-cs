@@ -262,7 +262,7 @@ public static class Workspace
                 Render.SetLayer(EditorLayer.Selection);
                 Render.SetColor(EditorStyle.SelectionColor);
                 Render.SetTransform(doc.Transform);
-                Gizmos.DrawRect(doc, EditorStyle.WorkspaceBoundsThickness);
+                Gizmos.DrawRect(doc, EditorStyle.Workspace.BoundsLineWidth);
                 Render.PopState();
             }
 
@@ -282,8 +282,8 @@ public static class Workspace
         Render.SetColor(EditorStyle.TextColor);
 
         var scale = 1f / _zoom;
-        var fontSize = EditorStyle.WorkspaceNameFontSize * scale;
-        var padding = EditorStyle.WorkspaceNamePadding * scale;
+        var fontSize = EditorStyle.Workspace.NameSize * scale;
+        var padding = EditorStyle.Workspace.NamePadding * scale;
 
         foreach (var doc in DocumentManager.Documents)
         {

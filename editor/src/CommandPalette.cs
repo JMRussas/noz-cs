@@ -166,7 +166,7 @@ public static class CommandPalette
             Color = EditorStyle.Overlay.BackgroundColor,
             Border = new BorderStyle 
             { 
-                Radius = EditorStyle.CommandPalette.BorderRadius
+                //Radius = EditorStyle.CommandPalette.BorderRadius
             }
         });
 
@@ -214,7 +214,7 @@ public static class CommandPalette
                 Height = EditorStyle.CommandPalette.ItemHeight,
                 Padding = EdgeInsets.LeftRight(EditorStyle.CommandPalette.ItemPadding),
                 Color = isSelected ? EditorStyle.SelectionColor : Color.Red,
-                Border = new BorderStyle { Radius = 8 },
+                //Border = new BorderStyle { Radius = 8 },
                 Id = (byte)(i + 10)
             });
 

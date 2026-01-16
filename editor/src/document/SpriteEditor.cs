@@ -10,8 +10,7 @@ public enum SpriteEditorTool
 {
     None,
     Move,
-    Curve,
-    BoxSelect
+    Curve
 }
 
 public class SpriteEditor : DocumentEditor
@@ -67,8 +66,6 @@ public class SpriteEditor : DocumentEditor
     private ushort _hoveredSegment = ushort.MaxValue;
     private ushort _hoveredPath = ushort.MaxValue;
 
-    // Box selection
-    private Rect _selectionBox;
 
     public ushort CurrentFrame => _currentFrame;
     public bool IsPlaying => _isPlaying;
@@ -100,8 +97,6 @@ public class SpriteEditor : DocumentEditor
         DrawAnchors(shape);
         Render.PopState();
 
-        // if (_activeTool == SpriteEditorTool.BoxSelect)
-        //     DrawSelectionBox();
     }
     
     private void UpdateRaster()
@@ -342,9 +337,6 @@ public class SpriteEditor : DocumentEditor
             case SpriteEditorTool.Curve:
                 UpdateCurveTool();
                 break;
-            case SpriteEditorTool.BoxSelect:
-                UpdateBoxSelect();
-                break;
         }
     }
 
@@ -488,30 +480,10 @@ public class SpriteEditor : DocumentEditor
 
     private void BeginBoxSelect()
     {
-        _activeTool = SpriteEditorTool.BoxSelect;
-        _selectionBox = new Rect(_dragStartWorld.X, _dragStartWorld.Y, 0, 0);
+        Workspace.BeginTool(new BoxSelectTool(CommitBoxSelect));
     }
 
-    private void UpdateBoxSelect()
-    {
-        var mouseWorld = Workspace.MouseWorldPosition;
-        var minX = MathF.Min(_dragStartWorld.X, mouseWorld.X);
-        var minY = MathF.Min(_dragStartWorld.Y, mouseWorld.Y);
-        var maxX = MathF.Max(_dragStartWorld.X, mouseWorld.X);
-        var maxY = MathF.Max(_dragStartWorld.Y, mouseWorld.Y);
-        _selectionBox = Rect.FromMinMax(new Vector2(minX, minY), new Vector2(maxX, maxY));
-
-        if (Input.WasButtonReleased(InputCode.MouseLeft))
-        {
-            CommitBoxSelect();
-        }
-        else if (Input.WasButtonPressed(InputCode.KeyEscape))
-        {
-            _activeTool = SpriteEditorTool.None;
-        }
-    }
-
-    private void CommitBoxSelect()
+    private void CommitBoxSelect(Rect bounds)
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
         var shift = Input.IsShiftDown();
@@ -519,9 +491,13 @@ public class SpriteEditor : DocumentEditor
         if (!shift)
             shape.ClearSelection();
 
-        shape.SelectAnchorsInRect(_selectionBox);
+        // Transform selection box from world space to document space
+        Matrix3x2.Invert(Document.Transform, out var invTransform);
+        var minLocal = Vector2.Transform(bounds.Min, invTransform);
+        var maxLocal = Vector2.Transform(bounds.Max, invTransform);
+        var localRect = Rect.FromMinMax(minLocal, maxLocal);
 
-        _activeTool = SpriteEditorTool.None;
+        shape.SelectAnchorsInRect(localRect);
     }
 
     private void SelectAnchor(ushort anchorIndex, bool additive)
@@ -649,7 +625,7 @@ public class SpriteEditor : DocumentEditor
         var v1 = rb.Height / texSize;
 
         Render.SetColor(Color.White);
-        Render.DrawQuad(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
+        Render.Draw(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
     }
 
     private static void DrawSegment(Shape shape, ushort segmentIndex, float width, ushort order = 0)
@@ -726,22 +702,5 @@ public class SpriteEditor : DocumentEditor
         }
 
         Render.PopState();
-    }
-
-    private void DrawSelectionBox()
-    {
-        var color = new Color(EditorStyle.SelectionColor.R, EditorStyle.SelectionColor.G, EditorStyle.SelectionColor.B, 0.2f);
-        Render.SetColor(color);
-        Render.DrawQuad(_selectionBox.X, _selectionBox.Y, _selectionBox.Width, _selectionBox.Height);
-
-        var borderColor = EditorStyle.SelectionColor;
-        var zoom = Workspace.Zoom;
-        var lineWidth = 0.02f / zoom;
-
-        Gizmos.SetColor(borderColor);
-        Gizmos.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Y), lineWidth);
-        Gizmos.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Y), new Vector2(_selectionBox.Right, _selectionBox.Bottom), lineWidth);
-        Gizmos.DrawLine(new Vector2(_selectionBox.Right, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Bottom), lineWidth);
-        Gizmos.DrawLine(new Vector2(_selectionBox.X, _selectionBox.Bottom), new Vector2(_selectionBox.X, _selectionBox.Y), lineWidth);
     }
 }

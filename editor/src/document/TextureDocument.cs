@@ -68,7 +68,7 @@ public class TextureDocument : Document
         Render.SetColor(Color.White);
 
         var size = Bounds.Size;
-        Render.DrawQuad(
+        Render.Draw(
             Position.X - size.X * 0.5f,
             Position.Y - size.Y * 0.5f,
             size.X, size.Y,

@@ -9,14 +9,7 @@
 
 layout(location = 0) in vec2 in_position;
 layout(location = 1) in vec2 in_uv;
-layout(location = 2) in vec2 in_normal;
 layout(location = 3) in vec4 in_color;
-layout(location = 4) in int in_bone;
-layout(location = 5) in int in_atlas;
-layout(location = 6) in int in_frame_count;
-layout(location = 7) in float in_frame_width;
-layout(location = 8) in float in_frame_rate;
-layout(location = 9) in float in_frame_time;
 
 uniform mat4 u_projection;
 

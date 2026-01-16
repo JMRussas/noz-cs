@@ -30,6 +30,8 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     private int _nextFenceId = 1;
     private int _nextTextureArrayId = 1;
     private int _nextVertexFormatId = 1;
+    private int _lastVertexAttributeCount = 0;
+    private uint _boundShader = 0;
 
     private readonly uint[] _buffers = new uint[MaxBuffers];
     private readonly uint[] _textures = new uint[MaxTextures];
@@ -37,10 +39,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     private readonly nint[] _fences = new nint[MaxFences];
     private readonly (uint glTexture, int width, int height, int layers)[] _textureArrays = new (uint, int, int, int)[MaxTextureArrays];
     private readonly (uint vao, int stride)[] _vertexFormats = new (uint, int)[MaxVertexFormats];
-
-    private uint _boundVertexBuffer;
-    private uint _boundIndexBuffer;
-    private uint _boundShader;
 
     // Offscreen render target
     private uint _offscreenFramebuffer;
@@ -137,8 +135,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     public void BeginFrame()
     {
         _activeVertexFormat = 0;
-        _boundVertexBuffer = 0;
-        _boundIndexBuffer = 0;
     }
 
     public void EndFrame()
@@ -209,14 +205,8 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         var glBuffer = _buffers[(int)buffer];
         if (glBuffer == 0) return;
 
-        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
         fixed (byte* p = data)
-        {
             _gl.BufferSubData(BufferTargetARB.ArrayBuffer, offsetBytes, (nuint)data.Length, p);
-        }
-
-        // Reset so BindVertexBuffer will set up attributes
-        _boundVertexBuffer = 0;
     }
 
     public void UpdateIndexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<ushort> data)
@@ -224,11 +214,8 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         var glBuffer = _buffers[(int)buffer];
         if (glBuffer == 0) return;
 
-        _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glBuffer);
         fixed (ushort* p = data)
-        {
             _gl.BufferSubData(BufferTargetARB.ElementArrayBuffer, offsetBytes, (nuint)(data.Length * sizeof(ushort)), p);
-        }
     }
 
     public nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage, string name = "")
@@ -268,40 +255,68 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         var glBuffer = _buffers[(int)buffer];
         if (glBuffer == 0) return;
 
-        if (_boundVertexBuffer == glBuffer)
-            return;
-
-        _boundVertexBuffer = glBuffer;
         _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
 
-        if (_activeVertexFormat != 0)
-            SetupVertexAttributes(_activeVertexFormat);
+        // if (_activeVertexFormat != 0)
+        //     SetupVertexAttributes(_activeVertexFormat);
     }
 
     public void BindIndexBuffer(nuint buffer)
     {
         var glBuffer = _buffers[(int)buffer];
         if (glBuffer == 0) return;
-
-        if (_boundIndexBuffer == glBuffer)
-            return;
-
-        _boundIndexBuffer = glBuffer;
         _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glBuffer);
     }
 
     // === Vertex Format Management ===
 
     private nuint _activeVertexFormat;
-    private readonly VertexFormatDescriptor[] _vertexFormatDescriptors = new VertexFormatDescriptor[MaxVertexFormats];
+    //private readonly VertexFormatDescriptor[] _vertexFormatDescriptors = new VertexFormatDescriptor[MaxVertexFormats];
 
     public nuint CreateVertexFormat(in VertexFormatDescriptor descriptor)
     {
         var vao = _gl.GenVertexArray();
 
+
+        foreach (var attr in descriptor.Attributes)
+        {
+            _gl.EnableVertexAttribArray((uint)attr.Location);
+
+            var glType = attr.Type switch
+            {
+                VertexAttribType.Float => VertexAttribPointerType.Float,
+                VertexAttribType.Int => VertexAttribPointerType.Int,
+                VertexAttribType.UByte => VertexAttribPointerType.UnsignedByte,
+                _ => VertexAttribPointerType.Float
+            };
+
+            if (attr.Type == VertexAttribType.Int)
+            {
+                const VertexAttribIType glIType = VertexAttribIType.Int;
+                _gl.VertexAttribIPointer(
+                    (uint)attr.Location,
+                    attr.Components,
+                    glIType,
+                    (uint)descriptor.Stride,
+                    (void*)attr.Offset);
+            }
+            else
+            {
+                _gl.VertexAttribPointer(
+                    (uint)attr.Location,
+                    attr.Components,
+                    glType,
+                    attr.Normalized,
+                    (uint)descriptor.Stride,
+                    (void*)attr.Offset);
+            }
+        }
+        
+        //SetupVertexAttributes();
+        
         var handle = _nextVertexFormatId++;
         _vertexFormats[handle] = (vao, descriptor.Stride);
-        _vertexFormatDescriptors[handle] = descriptor;
+        //_vertexFormatDescriptors[handle] = descriptor;
         return (nuint)handle;
     }
 
@@ -319,22 +334,15 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     {
         ref var f = ref _vertexFormats[(int)format];
         if (f.vao == 0) return;
-
         _gl.BindVertexArray(f.vao);
-        _activeVertexFormat = format;
-        _boundVertexBuffer = 0;
-        _boundIndexBuffer = 0;
+        //_activeVertexFormat = format;
     }
 
+    #if false
     private void SetupVertexAttributes(nuint format)
     {
         ref var descriptor = ref _vertexFormatDescriptors[(int)format];
-        if (descriptor.Attributes == null) return;
-
-        // Disable all vertex attributes first to avoid interference from previous format
-        for (uint i = 0; i < 16; i++)
-            _gl.DisableVertexAttribArray(i);
-
+        
         foreach (var attr in descriptor.Attributes)
         {
             _gl.EnableVertexAttribArray((uint)attr.Location);
@@ -350,16 +358,31 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
             if (attr.Type == VertexAttribType.Int)
             {
                 var glIType = VertexAttribIType.Int;
-                _gl.VertexAttribIPointer((uint)attr.Location, attr.Components, glIType,
-                    (uint)descriptor.Stride, (void*)attr.Offset);
+                _gl.VertexAttribIPointer(
+                    (uint)attr.Location,
+                    attr.Components,
+                    glIType,
+                    (uint)descriptor.Stride,
+                    (void*)attr.Offset);
             }
             else
             {
-                _gl.VertexAttribPointer((uint)attr.Location, attr.Components, glType,
-                    attr.Normalized, (uint)descriptor.Stride, (void*)attr.Offset);
+                _gl.VertexAttribPointer(
+                    (uint)attr.Location,
+                    attr.Components,
+                    glType,
+                    attr.Normalized,
+                    (uint)descriptor.Stride,
+                    (void*)attr.Offset);
             }
         }
+
+        for (var i = (uint)descriptor.Attributes.Length; i < _lastVertexAttributeCount; i++)
+            _gl.DisableVertexAttribArray(i);
+        
+        _lastVertexAttributeCount = descriptor.Attributes.Length;
     }
+#endif
 
     // === Texture Management ===
 
@@ -513,23 +536,18 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     {
         if (_boundShader == 0)
         {
-            if (!_setUniformMatrixWarning)
-            {
-                Console.WriteLine($"[WARN] SetUniformMatrix4x4: No shader bound");
-                _setUniformMatrixWarning = true;
-            }
-
+            if (_setUniformMatrixWarning) return;
+            Console.WriteLine($"[WARN] SetUniformMatrix4x4: No shader bound");
+            _setUniformMatrixWarning = true;
             return;
         }
 
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location < 0)
         {
-            if (!_getUniformLocationWarning)
-            {
-                Console.WriteLine($"[WARN] SetUniformMatrix4x4: Uniform '{name}' not found in shader {_boundShader}");
-                _getUniformLocationWarning = true;
-            }
+            if (_getUniformLocationWarning) return;
+            Console.WriteLine($"[WARN] SetUniformMatrix4x4: Uniform '{name}' not found in shader {_boundShader}");
+            _getUniformLocationWarning = true;
             return;
         }
 
@@ -549,9 +567,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
     public void SetUniformInt(string name, int value)
     {
-        if (_boundShader == 0)
-            return;
-
+        if (_boundShader == 0) return;
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location >= 0)
             _gl.Uniform1(location, value);
@@ -559,9 +575,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
     public void SetUniformFloat(string name, float value)
     {
-        if (_boundShader == 0)
-            return;
-
+        if (_boundShader == 0) return;
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location >= 0)
             _gl.Uniform1(location, value);
@@ -569,9 +583,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
     public void SetUniformVec2(string name, Vector2 value)
     {
-        if (_boundShader == 0)
-            return;
-
+        if (_boundShader == 0) return;
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location >= 0)
             _gl.Uniform2(location, value.X, value.Y);
@@ -579,9 +591,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
     public void SetUniformVec4(string name, Vector4 value)
     {
-        if (_boundShader == 0)
-            return;
-
+        if (_boundShader == 0) return;
         var location = _gl.GetUniformLocation(_boundShader, name);
         if (location >= 0)
             _gl.Uniform4(location, value.X, value.Y, value.Z, value.W);
@@ -848,8 +858,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
 
         _activeVertexFormat = 0;
-        _boundVertexBuffer = 0;
-        _boundIndexBuffer = 0;
     }
 
     public void EndScenePass()
@@ -894,7 +902,5 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.DrawArrays(PrimitiveType.Triangles, 0, 6);
 
         _activeVertexFormat = 0;
-        _boundVertexBuffer = 0;
-        _boundIndexBuffer = 0;
     }
 }
