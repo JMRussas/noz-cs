@@ -8,21 +8,28 @@ namespace NoZ.Editor;
 
 public class MoveTool : Tool
 {
+    private readonly Action<Vector2> _update;
+    private readonly Action<Vector2> _commit;
+    private readonly Action _cancel;
+
+    private Vector2 _startWorld;
     private Vector2 _deltaScale = Vector2.One;
+
+    public MoveTool(Action<Vector2> update, Action<Vector2> commit, Action cancel)
+    {
+        _update = update;
+        _commit = commit;
+        _cancel = cancel;
+    }
 
     public override void Begin()
     {
-        foreach (var doc in DocumentManager.Documents)
-        {
-            if (!doc.IsSelected)
-                continue;
-            doc.SavedPosition = doc.Position;
-        }
+        _startWorld = Workspace.MouseWorldPosition;
     }
 
     public override void Update()
     {
-        if (Input.WasButtonPressed(InputCode.KeyEscape))
+        if (Input.WasButtonPressed(InputCode.KeyEscape) || Input.WasButtonPressed(InputCode.MouseRight))
         {
             Workspace.CancelTool();
             return;
@@ -30,34 +37,22 @@ public class MoveTool : Tool
 
         if (Input.WasButtonPressed(InputCode.MouseLeft) || Input.WasButtonPressed(InputCode.KeyEnter))
         {
-            Commit();
+            var delta = Workspace.MouseWorldPosition - _startWorld;
+            delta *= _deltaScale;
+            _commit(delta);
+            Input.ConsumeButton(InputCode.MouseLeft);
+            Workspace.EndTool();
             return;
         }
 
-        if (Input.WasButtonPressed(InputCode.MouseRight))
-        {
-            Workspace.CancelTool();
-            return;
-        }
-
-        // Axis constraints (Blender-style X/Y key locking)
         if (Input.WasButtonPressed(InputCode.KeyX))
             _deltaScale = _deltaScale.X > 0 ? new Vector2(1, 0) : Vector2.One;
         if (Input.WasButtonPressed(InputCode.KeyY))
             _deltaScale = _deltaScale.Y > 0 ? new Vector2(0, 1) : Vector2.One;
 
-        var delta = Workspace.MouseWorldPosition - Workspace.DragWorldPosition;
-        delta *= _deltaScale;
-
-        foreach (var doc in DocumentManager.Documents)
-        {
-            if (!doc.IsSelected)
-                continue;
-
-            var newPos = doc.SavedPosition + delta;
-            newPos = Input.IsCtrlDown() ? Grid.SnapToGrid(newPos) : Grid.SnapToPixelGrid(newPos);
-            doc.Position = newPos;
-        }
+        var updateDelta = Workspace.MouseWorldPosition - _startWorld;
+        updateDelta *= _deltaScale;
+        _update(updateDelta);
     }
 
     public override void Draw()
@@ -73,15 +68,9 @@ public class MoveTool : Tool
             var thickness = EditorStyle.Workspace.BoundsLineWidth / Workspace.Zoom;
 
             if (_deltaScale.X > 0)
-            {
-                // X-axis constraint - draw horizontal line
                 Render.Draw(bounds.X, Workspace.MouseWorldPosition.Y - thickness, bounds.Width, thickness * 2);
-            }
             else
-            {
-                // Y-axis constraint - draw vertical line
                 Render.Draw(Workspace.MouseWorldPosition.X - thickness, bounds.Y, thickness * 2, bounds.Height);
-            }
 
             Render.PopState();
         }
@@ -89,23 +78,6 @@ public class MoveTool : Tool
 
     public override void Cancel()
     {
-        foreach (var doc in DocumentManager.Documents)
-        {
-            if (!doc.IsSelected)
-                continue;
-            doc.Position = doc.SavedPosition;
-        }
-    }
-
-    private void Commit()
-    {
-        foreach (var doc in DocumentManager.Documents)
-        {
-            if (!doc.IsSelected)
-                continue;
-            if (doc.Position != doc.SavedPosition)
-                doc.MarkMetaModified();
-        }
-        Workspace.EndTool();
+        _cancel();
     }
 }

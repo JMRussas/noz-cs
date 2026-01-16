@@ -24,6 +24,8 @@ public static class Workspace
     {
         CommandManager.RegisterCommon([
             new Command { Name = "Save All", ShortName = "save", Handler = DocumentManager.SaveAll, Key = InputCode.KeyS, Ctrl = true },
+            new Command { Name = "Undo", ShortName = "undo", Handler = () => Undo.DoUndo(), Key = InputCode.KeyZ, Ctrl = true },
+            new Command { Name = "Redo", ShortName = "redo", Handler = () => Undo.DoRedo(), Key = InputCode.KeyY, Ctrl = true },
             new Command { Name = "Increase UI Scale", ShortName = "ui+", Handler = IncreaseUIScale, Key = InputCode.KeyEquals, Ctrl = true },
             new Command { Name = "Decrease UI Scale", ShortName = "ui-", Handler = DecreaseUIScale, Key = InputCode.KeyMinus, Ctrl = true },
             new Command { Name = "Reset UI Scale", ShortName = "ui0", Handler = ResetUIScale, Key = InputCode.Key0, Ctrl = true },
@@ -34,7 +36,7 @@ public static class Workspace
         CommandManager.RegisterWorkspace([
             new Command { Name = "Frame Selected", ShortName = "frame", Handler = FrameSelected, Key = InputCode.KeyF },
             new Command { Name = "Move Selected", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
-            new Command { Name = "Toggle Grid", ShortName = "grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Alt = true },
+            new Command { Name = "Toggle Grid", ShortName = "grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Ctrl = true },
             new Command { Name = "Toggle Names", ShortName = "names", Handler = ToggleNames, Key = InputCode.KeyN, Alt = true },
             new Command { Name = "Rebuild All", ShortName = "build", Handler = RebuildAll },
             new Command { Name = "Frame Selected", ShortName = "origin", Handler = FrameOrigin }
@@ -121,7 +123,7 @@ public static class Workspace
         RegisterCommands();
         UpdateCamera();
 
-        Render.ClearColor = EditorStyle.WorkspaceColor;
+        Render.ClearColor = EditorStyle.Workspace.Color;
 
         // Create a 1x1 white texture for untextured draws
         byte[] white = [255, 255, 255, 255];
@@ -306,9 +308,44 @@ public static class Workspace
         if (SelectedCount == 0 || ActiveTool != null || State != WorkspaceState.Default)
             return;
 
-        _dragPosition = _mousePosition;
-        DragWorldPosition = _mouseWorldPosition;
-        BeginTool(new MoveTool());
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (doc.IsSelected)
+                doc.SavedPosition = doc.Position;
+        }
+
+        BeginTool(new MoveTool(
+            update: delta =>
+            {
+                var snap = Input.IsCtrlDown();
+                foreach (var doc in DocumentManager.Documents)
+                {
+                    if (!doc.IsSelected)
+                        continue;
+                    var newPos = doc.SavedPosition + delta;
+                    newPos = snap ? Grid.SnapToGrid(newPos) : Grid.SnapToPixelGrid(newPos);
+                    doc.Position = newPos;
+                }
+            },
+            commit: _ =>
+            {
+                foreach (var doc in DocumentManager.Documents)
+                {
+                    if (!doc.IsSelected)
+                        continue;
+                    if (doc.Position != doc.SavedPosition)
+                        doc.MarkMetaModified();
+                }
+            },
+            cancel: () =>
+            {
+                foreach (var doc in DocumentManager.Documents)
+                {
+                    if (doc.IsSelected)
+                        doc.Position = doc.SavedPosition;
+                }
+            }
+        ));
     }
 
     private static void OpenCommandPalette()

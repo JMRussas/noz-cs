@@ -59,7 +59,7 @@ public class ShaderDocument : Document
         var flags = GetShaderFlags();
 
         // Write OpenGL 4.3 version
-        WriteGlsl(outputPath + ".glsl", vertexSource, fragmentSource, flags, ConvertToOpenGL);
+        WriteGlsl(outputPath, vertexSource, fragmentSource, flags, ConvertToOpenGL);
 
         // Write OpenGL ES 3.0 version
         WriteGlsl(outputPath + ".gles", vertexSource, fragmentSource, flags, ConvertToOpenGLES);

@@ -13,7 +13,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     private RenderDriverConfig _config = null!;
     private GL _gl = null!;
 
-    public string ShaderExtension => ".glsl";
+    public string ShaderExtension => ""; // todo: handle gles ".glsl";
 
     // Resource tracking - arrays indexed by handle
     private const int MaxBuffers = 256;

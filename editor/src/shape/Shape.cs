@@ -678,8 +678,41 @@ public sealed unsafe class Shape : IDisposable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsAnchorSelected(ushort anchorIndex) => _anchors[anchorIndex].IsSelected;
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsSegmentSelected(ushort anchorIndex) =>
         IsAnchorSelected(anchorIndex) && IsAnchorSelected(GetNextAnchorIndex(anchorIndex));
+
+    public bool HasSelection()
+    {
+        for (ushort i = 0; i < AnchorCount; i++)
+            if (_anchors[i].IsSelected)
+                return true;
+        return false;
+    }
+
+    public void CopyFrom(Shape source)
+    {
+        AnchorCount = source.AnchorCount;
+        PathCount = source.PathCount;
+        Bounds = source.Bounds;
+        RasterBounds = source.RasterBounds;
+
+        for (var i = 0; i < source.AnchorCount; i++)
+            _anchors[i] = source._anchors[i];
+
+        for (var i = 0; i < source.PathCount; i++)
+            _paths[i] = source._paths[i];
+
+        for (var i = 0; i < source.AnchorCount * MaxSegmentSamples; i++)
+            _samples[i] = source._samples[i];
+    }
+
+    public void Clear()
+    {
+        AnchorCount = 0;
+        PathCount = 0;
+        Bounds = Rect.Zero;
+        RasterBounds = RectInt.Zero;
+    }
 }

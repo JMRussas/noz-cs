@@ -35,9 +35,11 @@ public class Style
     public Color ContextMenuSeparatorColor;
     
     // Shape
-    public Color ShapeColor;
+    public Color ShapeAnchorColor;
+    public Color ShapeAnchorOutlineColor;
     public Color ShapeSelectionColor;
     public Color ShapeHoverColor;
+    public Color ShapeEdgeColor;
     
     // Box Select
     public Color BoxSelectLineColor;
@@ -106,10 +108,14 @@ public static class EditorStyle
     // Workspace
     public static class Workspace
     {
+        public static Color Color => _current.WorkspaceColor;
         public const float Padding = 16f;
         public const float BoundsLineWidth = 0.03f;
         public const float NameSize = 0.24f;
         public const float NamePadding = 0.04f;
+        public static Color GridColor => _current.GridColor;
+        public const float GridAlpha = 0.2f;
+        public const float GridZeroAlpha = 0.4f;
     }
 
     public static class BoxSelect 
@@ -136,12 +142,12 @@ public static class EditorStyle
 
     public static class Shape
     {
-        public static Color Color => _current.ShapeColor;
-        public static Color SelectionColor => _current.ShapeSelectionColor;
-        public static Color HoverColor => _current.ShapeHoverColor;
-        public const float AnchorSize = 0.12f;
-        public const float AnchorHoverSize = AnchorSize * 1.5f; 
-        public const float SegmentWidth = 0.02f;
+        public static Color AnchorColor => _current.ShapeAnchorColor;
+        public static Color AnchorOutlineColor => _current.ShapeAnchorOutlineColor;
+        public static Color SegmentColor => _current.ShapeEdgeColor;
+        public const float AnchorSize = 0.18f;
+        public const float AnchorSelectedSize = AnchorSize * 1.3f; 
+        public const float SegmentWidth = 0.01f;
         public const float SegmentHoverWidth = SegmentWidth * 2.0f;
     }
 
@@ -191,7 +197,6 @@ public static class EditorStyle
     public const float ColorPickerSelectionBorderWidth = 3f;
 
     // Style accessors
-    public static Color BackgroundColor => _current.BackgroundColor;
     public static Color SelectionColor => _current.SelectionColor;
     public static Color SelectionTextColor => _current.SelectionTextColor;
     public static Color ButtonColor => _current.ButtonColor;
@@ -201,8 +206,6 @@ public static class EditorStyle
     public static Color ButtonCheckedTextColor => _current.ButtonCheckedTextColor;
     public static Color ButtonDisabledColor => _current.ButtonDisabledColor;
     public static Color ButtonDisabledTextColor => _current.ButtonDisabledTextColor;
-    public static Color WorkspaceColor => _current.WorkspaceColor;
-    public static Color GridColor => _current.GridColor;
 
     public static void Init()
     {
@@ -215,7 +218,7 @@ public static class EditorStyle
 
     private static Style CreateDarkStyle()
     {
-        var selectionColor = Color.FromRgb(0x3a79bb);
+        var selectionColor = Color.FromRgb(0x0099ff);
         
         return new Style
         {
@@ -229,8 +232,8 @@ public static class EditorStyle
             ButtonCheckedTextColor = Color.FromRgb(0xf0f0f0),
             ButtonDisabledColor = Color.FromRgb(0x2a2a2a),
             ButtonDisabledTextColor = Color.FromRgb(0x636363),
-            WorkspaceColor = Color.FromRgb(0x464646),
-            GridColor = Color.FromRgb(0x686868),
+            WorkspaceColor = Color.FromRgb(0x1d1d1d),
+            GridColor = Color.FromRgb(0x3e3e3e),
             OverlayBackgroundColor = Color.FromRgb(0x0e0e0e),
             OverlayTextColor = Color.FromRgb(0x979797),
             OverlayAccentTextColor = Color.FromRgb(0xd2d2d2),
@@ -239,9 +242,11 @@ public static class EditorStyle
             OverlayContentColor = Color.FromRgb(0x2a2a2a),
             ContextMenuSeparatorColor = Color.FromRgb(0x2a2a2a),
             ContextMenuTitleColor = Color.FromRgb(0x636363),
-            ShapeColor = Color.Black,
+            ShapeAnchorColor = Color.White,
+            ShapeAnchorOutlineColor = Color.FromRgb(0x0099ff),
             ShapeSelectionColor = selectionColor,
             ShapeHoverColor = selectionColor,
+            ShapeEdgeColor = Color.FromRgb(0x171717),
             BoxSelectLineColor = selectionColor,
             BoxSelectFillColor = selectionColor.WithAlpha(0.15f)
         };

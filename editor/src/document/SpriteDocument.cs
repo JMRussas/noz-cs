@@ -213,6 +213,24 @@ public class SpriteDocument : Document
         );
     }
 
+    public override void Clone(Document source)
+    {
+        var src = (SpriteDocument)source;
+        FrameCount = src.FrameCount;
+        Palette = src.Palette;
+        Depth = src.Depth;
+        Bounds = src.Bounds;
+
+        for (var i = 0; i < src.FrameCount; i++)
+        {
+            Frames[i].Shape.CopyFrom(src.Frames[i].Shape);
+            Frames[i].Hold = src.Frames[i].Hold;
+        }
+
+        for (var i = src.FrameCount; i < Sprite.MaxFrames; i++)
+            Frames[i].Shape.Clear();
+    }
+
     public override void Import(string outputPath, PropertySet config, PropertySet meta)
     {
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath) ?? "");

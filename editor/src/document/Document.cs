@@ -38,6 +38,7 @@ public abstract class Document
     public virtual void Import(string outputPath, PropertySet config, PropertySet meta) { }
     public virtual void Draw() { }
     public virtual void Clone(Document source) { }
+    public virtual void OnUndoRedo() { }
 
     public void MarkModified()
     {

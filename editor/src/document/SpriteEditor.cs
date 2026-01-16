@@ -9,7 +9,6 @@ namespace NoZ.Editor;
 public enum SpriteEditorTool
 {
     None,
-    Move,
     Curve
 }
 
@@ -49,6 +48,7 @@ public class SpriteEditor : DocumentEditor
             new Command { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
             new Command { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
             new Command { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
+            new Command { Name = "Move Selected", ShortName = "move", Handler = BeginMoveToolFromSelection, Key = InputCode.KeyG },
         ];
     }
 
@@ -60,13 +60,9 @@ public class SpriteEditor : DocumentEditor
 
     // Tool state
     private SpriteEditorTool _activeTool = SpriteEditorTool.None;
-    private Vector2 _dragStartWorld;
-    private Vector2 _dragStartScreen;
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
     private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
     private ushort _curveAnchor = ushort.MaxValue;
-    private ushort _pendingSelectAnchor = ushort.MaxValue;
-    private bool _selectOnUp;
 
     // Hover state
     private ushort _hoveredAnchor = ushort.MaxValue;
@@ -84,6 +80,12 @@ public class SpriteEditor : DocumentEditor
         Input.PopInputSet();
         _rasterTexture.Dispose();
         _pixelData.Dispose();
+    }
+
+    public override void OnUndoRedo()
+    {
+        Document.UpdateBounds();
+        MarkRasterDirty();
     }
 
     public override void Update()
@@ -250,22 +252,10 @@ public class SpriteEditor : DocumentEditor
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
         var shift = Input.IsShiftDown();
-        var alt = Input.IsAltDown();
 
         if (_hoveredAnchor != ushort.MaxValue)
         {
-            var anchor = shape.GetAnchor(_hoveredAnchor);
-            var wasSelected = (anchor.Flags & Shape.AnchorFlags.Selected) != 0;
-
-            if (wasSelected && !shift)
-            {
-                _selectOnUp = true;
-                _pendingSelectAnchor = _hoveredAnchor;
-            }
-            else
-            {
-                SelectAnchor(_hoveredAnchor, shift);
-            }
+            SelectAnchor(_hoveredAnchor, shift);
             return;
         }
 
@@ -295,41 +285,6 @@ public class SpriteEditor : DocumentEditor
 
     private void HandleDragStart()
     {
-        _dragStartWorld = Workspace.MouseWorldPosition;
-        _dragStartScreen = Input.MousePosition;
-
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        var alt = Input.IsAltDown();
-
-
-        if (_hoveredAnchor != ushort.MaxValue)
-        {
-            var anchor = shape.GetAnchor(_hoveredAnchor);
-            if ((anchor.Flags & Shape.AnchorFlags.Selected) == 0)
-                SelectAnchor(_hoveredAnchor, Input.IsShiftDown());
-
-            BeginMoveTool();
-            return;
-        }
-
-        if (_hoveredSegment != ushort.MaxValue)
-        {
-            var pathIdx = FindPathForAnchor(shape, _hoveredSegment);
-            if (pathIdx != ushort.MaxValue)
-            {
-                var path = shape.GetPath(pathIdx);
-                var nextAnchor = (ushort)(path.AnchorStart + ((_hoveredSegment - path.AnchorStart + 1) % path.AnchorCount));
-
-                if (!Input.IsShiftDown())
-                    shape.ClearSelection();
-
-                SelectAnchor(_hoveredSegment, true);
-                SelectAnchor(nextAnchor, true);
-                BeginMoveTool();
-                return;
-            }
-        }
-
         BeginBoxSelect();
     }
 
@@ -337,78 +292,46 @@ public class SpriteEditor : DocumentEditor
     {
         switch (_activeTool)
         {
-            case SpriteEditorTool.Move:
-                UpdateMoveTool();
-                break;
             case SpriteEditorTool.Curve:
                 UpdateCurveTool();
                 break;
         }
     }
 
-    private void BeginMoveTool()
+    private void BeginMoveToolFromSelection()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
+        if (!shape.HasSelection())
+            return;
 
         for (ushort i = 0; i < shape.AnchorCount; i++)
-        {
-            var anchor = shape.GetAnchor(i);
-            _savedPositions[i] = anchor.Position;
-        }
+            _savedPositions[i] = shape.GetAnchor(i).Position;
 
-        _activeTool = SpriteEditorTool.Move;
-        _selectOnUp = false;
-        _pendingSelectAnchor = ushort.MaxValue;
-    }
+        Undo.Record(Document);
 
-    private void UpdateMoveTool()
-    {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        var delta = Workspace.MouseWorldPosition - _dragStartWorld;
-        var snap = Input.IsCtrlDown();
-
-        shape.MoveSelectedAnchors(delta, _savedPositions, snap);
-        shape.UpdateSamples();
-        shape.UpdateBounds();
-
-        if (Input.WasButtonReleased(InputCode.MouseLeft))
-        {
-            CommitMoveTool();
-        }
-        else if (Input.WasButtonPressed(InputCode.KeyEscape))
-        {
-            CancelMoveTool();
-        }
-    }
-
-    private void CommitMoveTool()
-    {
-        _activeTool = SpriteEditorTool.None;
-        Document.MarkModified();
-        Document.UpdateBounds();
-        MarkRasterDirty();
-
-        if (_selectOnUp && _pendingSelectAnchor != ushort.MaxValue)
-        {
-            var shape = Document.GetFrame(_currentFrame).Shape;
-            shape.ClearSelection();
-            SelectAnchor(_pendingSelectAnchor, false);
-        }
-
-        _selectOnUp = false;
-        _pendingSelectAnchor = ushort.MaxValue;
-    }
-
-    private void CancelMoveTool()
-    {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        shape.RestoreAnchorPositions(_savedPositions);
-        shape.UpdateSamples();
-        shape.UpdateBounds();
-
-        _activeTool = SpriteEditorTool.None;
-        _selectOnUp = false;
-        _pendingSelectAnchor = ushort.MaxValue;
+        Workspace.BeginTool(new MoveTool(
+            update: delta =>
+            {
+                var snap = Input.IsCtrlDown();
+                shape.MoveSelectedAnchors(delta, _savedPositions, snap);
+                shape.UpdateSamples();
+                shape.UpdateBounds();
+                MarkRasterDirty();
+            },
+            commit: _ =>
+            {
+                Document.MarkModified();
+                Document.UpdateBounds();
+                MarkRasterDirty();
+            },
+            cancel: () =>
+            {
+                shape.RestoreAnchorPositions(_savedPositions);
+                shape.UpdateSamples();
+                shape.UpdateBounds();
+                Undo.Cancel();
+            }
+        ));
     }
 
     private void BeginCurveTool(ushort anchorIndex)
@@ -506,17 +429,24 @@ public class SpriteEditor : DocumentEditor
         shape.SelectAnchorsInRect(localRect);
     }
 
-    private void SelectAnchor(ushort anchorIndex, bool additive)
+    private void SelectAnchor(ushort anchorIndex, bool toggle)
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
 
-        if (!additive)
+        if (toggle)
+        {
+            var anchor = shape.GetAnchor(anchorIndex);
+            var isSelected = (anchor.Flags & Shape.AnchorFlags.Selected) != 0;
+            shape.SetAnchorSelected(anchorIndex, !isSelected);
+        }
+        else
+        {
             shape.ClearSelection();
-
-        shape.SetAnchorSelected(anchorIndex, true);
+            shape.SetAnchorSelected(anchorIndex, true);
+        }
     }
 
-    private void SelectSegment(ushort anchorIndex, bool additive)
+    private void SelectSegment(ushort anchorIndex, bool toggle)
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
         var pathIdx = FindPathForAnchor(shape, anchorIndex);
@@ -526,24 +456,48 @@ public class SpriteEditor : DocumentEditor
         var path = shape.GetPath(pathIdx);
         var nextAnchor = (ushort)(path.AnchorStart + ((anchorIndex - path.AnchorStart + 1) % path.AnchorCount));
 
-        if (!additive)
+        if (toggle)
+        {
+            var anchor1 = shape.GetAnchor(anchorIndex);
+            var anchor2 = shape.GetAnchor(nextAnchor);
+            var bothSelected = (anchor1.Flags & Shape.AnchorFlags.Selected) != 0 &&
+                               (anchor2.Flags & Shape.AnchorFlags.Selected) != 0;
+            shape.SetAnchorSelected(anchorIndex, !bothSelected);
+            shape.SetAnchorSelected(nextAnchor, !bothSelected);
+        }
+        else
+        {
             shape.ClearSelection();
-
-        shape.SetAnchorSelected(anchorIndex, true);
-        shape.SetAnchorSelected(nextAnchor, true);
+            shape.SetAnchorSelected(anchorIndex, true);
+            shape.SetAnchorSelected(nextAnchor, true);
+        }
     }
 
-    private void SelectPath(ushort pathIndex, bool additive)
+    private void SelectPath(ushort pathIndex, bool toggle)
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-
-        if (!additive)
-            shape.ClearSelection();
-
         var path = shape.GetPath(pathIndex);
-        for (ushort a = 0; a < path.AnchorCount; a++)
+
+        if (toggle)
         {
-            shape.SetAnchorSelected((ushort)(path.AnchorStart + a), true);
+            var allSelected = true;
+            for (ushort a = 0; a < path.AnchorCount; a++)
+            {
+                var anchor = shape.GetAnchor((ushort)(path.AnchorStart + a));
+                if ((anchor.Flags & Shape.AnchorFlags.Selected) == 0)
+                {
+                    allSelected = false;
+                    break;
+                }
+            }
+            for (ushort a = 0; a < path.AnchorCount; a++)
+                shape.SetAnchorSelected((ushort)(path.AnchorStart + a), !allSelected);
+        }
+        else
+        {
+            shape.ClearSelection();
+            for (ushort a = 0; a < path.AnchorCount; a++)
+                shape.SetAnchorSelected((ushort)(path.AnchorStart + a), true);
         }
     }
 
@@ -560,8 +514,6 @@ public class SpriteEditor : DocumentEditor
         Document.MarkModified();
         Document.UpdateBounds();
         MarkRasterDirty();
-
-        BeginMoveTool();
     }
 
     private void ApplyColorToSelection()
@@ -649,14 +601,14 @@ public class SpriteEditor : DocumentEditor
         if (_hoveredSegment != ushort.MaxValue)
         {
             Render.PushState();
-            Render.SetColor(EditorStyle.Shape.HoverColor);
+//            Render.SetColor(EditorStyle.Shape.HoverColor);
             DrawSegment(shape, _hoveredSegment, EditorStyle.Shape.SegmentHoverWidth, 0);
             Render.PopState();
         }
 
         // default
         Render.PushState();
-        Render.SetColor(EditorStyle.Shape.Color);
+        Render.SetColor(EditorStyle.Shape.SegmentColor);
         for (ushort anchorIndex=0; anchorIndex < shape.AnchorCount; anchorIndex++)
             if (!shape.IsSegmentSelected(anchorIndex))
                 DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
@@ -664,43 +616,54 @@ public class SpriteEditor : DocumentEditor
 
         // selected
         Render.PushState();
-        Render.SetColor(EditorStyle.Shape.SelectionColor);
+        //Render.SetColor(EditorStyle.Shape.SelectionColor);
         for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
             if (shape.IsSegmentSelected(anchorIndex))
                 DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
         Render.PopState();        
     }
 
+    private static void DrawAnchor(ref readonly Shape.Anchor anchor)
+    {
+        Gizmos.SetColor(EditorStyle.Shape.AnchorColor);
+        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
+        Render.SetColor(EditorStyle.Shape.AnchorOutlineColor);
+        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize, order: 4);
+    }
+
+    private static void DrawSelectedAnchor(ref readonly Shape.Anchor anchor)
+    {
+        Render.SetColor(EditorStyle.Shape.AnchorOutlineColor);
+        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
+        Gizmos.SetColor(EditorStyle.Shape.AnchorColor);
+        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize, order: 4);
+    }
+
     private void DrawAnchors(Shape shape)
     {
         // hovered
         if (_hoveredAnchor != ushort.MaxValue)
-        {
-            Render.PushState();
-            Gizmos.SetColor(EditorStyle.Shape.HoverColor);
-            Gizmos.DrawRect(shape.GetAnchor(_hoveredAnchor).Position, EditorStyle.Shape.AnchorHoverSize, 3);
-            Render.PopState();
-        }
+            DrawSelectedAnchor(in shape.GetAnchor(_hoveredAnchor));
         
         // default
         Render.PushState();
-        Gizmos.SetColor(EditorStyle.Shape.Color);
 
-        for (ushort i = 0; i < shape.AnchorCount; i++)
-            Gizmos.DrawRect(shape.GetAnchor(i).Position, EditorStyle.Shape.AnchorSize, 4);
-
-        Render.PopState();
-
-        Render.PushState();
-        Render.SetColor(EditorStyle.Shape.SelectionColor);;
-        
         for (ushort i = 0; i < shape.AnchorCount; i++)
         {
-            var anchor = shape.GetAnchor(i);
-            if (!anchor.IsSelected) continue;
-            Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize, order: 5);
+            if (i == _hoveredAnchor) continue;
+            ref readonly var anchor = ref shape.GetAnchor(i);
+            if (anchor.IsSelected) continue;
+            DrawAnchor(in anchor);
         }
 
+        for (ushort i = 0; i < shape.AnchorCount; i++)
+        {
+            if (i == _hoveredAnchor) continue;
+            ref readonly var anchor = ref shape.GetAnchor(i);
+            if (!anchor.IsSelected) continue;
+            DrawSelectedAnchor(in anchor);
+        }
+        
         Render.PopState();
     }
 }

@@ -8,8 +8,6 @@ namespace NoZ.Editor;
 
 public static class Grid
 {
-    private const float MaxAlpha = 0.5f;
-    private const float MaxPixelAlpha = 0.4f;
     public static float SnapSpacing { get; private set; }
     public static bool IsPixelGridVisible { get; private set; }
     
@@ -25,25 +23,25 @@ public static class Grid
         var screenPixelsPerWorldPixel = screenWidth / (worldWidth / pixelSize);
         var pixelGridAlpha = 0f;
         if (screenPixelsPerWorldPixel > 8f)
-            pixelGridAlpha = MathF.Min((screenPixelsPerWorldPixel - 8f) / 32f, 1f) * MaxPixelAlpha;
+            pixelGridAlpha = MathF.Min((screenPixelsPerWorldPixel - 8f) / 32f, 1f) * EditorStyle.Workspace.GridAlpha;
 
         IsPixelGridVisible = pixelGridAlpha > float.Epsilon;
         SnapSpacing = IsPixelGridVisible ? pixelSize : world.FineSpacing * 0.5f;
 
-        DrawZeroLines(camera, EditorStyle.GridColor);
+        DrawZeroLines(camera, EditorStyle.Workspace.GridColor.WithAlpha(EditorStyle.Workspace.GridZeroAlpha));
         
         if (IsPixelGridVisible)
         {
             Render.PushState();
             Render.SetLayer(EditorLayer.Grid);
-            Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha));
+            Gizmos.SetColor(EditorStyle.Workspace.GridColor.WithAlpha(world.CoarseAlpha));
             DrawHorizontalLines(camera, world.FineSpacing);
             DrawVerticalLines(camera, world.FineSpacing);
             Render.PopState();
 
             Render.PushState();
             Render.SetLayer(EditorLayer.PixelGrid);
-            Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(pixelGridAlpha));
+            Gizmos.SetColor(EditorStyle.Workspace.GridColor.WithAlpha(pixelGridAlpha));
             DrawHorizontalLines(camera, pixelSize);
             DrawVerticalLines(camera, pixelSize);
             Render.PopState();
@@ -52,11 +50,11 @@ public static class Grid
 
         Render.PushState();
         Render.SetLayer(EditorLayer.Grid);
-        Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(world.CoarseAlpha * MaxAlpha));
+        Gizmos.SetColor(EditorStyle.Workspace.GridColor.WithAlpha(world.CoarseAlpha * EditorStyle.Workspace.GridAlpha));
         DrawHorizontalLines(camera, world.CoarseSpacing);
         DrawVerticalLines(camera, world.CoarseSpacing);
 
-        Gizmos.SetColor(EditorStyle.GridColor.WithAlpha(world.FineAlpha * MaxAlpha));
+        Gizmos.SetColor(EditorStyle.Workspace.GridColor.WithAlpha(world.FineAlpha * EditorStyle.Workspace.GridAlpha));
         DrawHorizontalLines(camera, world.FineSpacing);
         DrawVerticalLines(camera, world.FineSpacing);
         Render.PopState();
@@ -134,8 +132,8 @@ public static class Grid
         var bounds = camera.WorldBounds;
         var left = bounds.Min.X;
         var right = bounds.Max.X;
-        var bottom = bounds.Min.Y;
-        var top = bounds.Max.Y;
+        var bottom = bounds.Max.Y;
+        var top = bounds.Min.Y;
 
         var screenSize = camera.ScreenSize;
         var worldHeight = top - bottom;
@@ -146,14 +144,20 @@ public static class Grid
         
         if (left < lineThickness && right > -lineThickness)
             Render.Draw(
-                -lineThickness, bottom,
-                lineThickness * 2f, top - bottom
+                -lineThickness,
+                bottom,
+                lineThickness * 2f,
+                top - bottom,
+                order: 1
             );
 
         if (top < lineThickness && bottom > -lineThickness)
             Render.Draw(
-                left, -lineThickness,
-                right - left, lineThickness * 2f
+                left,
+                -lineThickness,
+                right - left,
+                lineThickness * 2f,
+                order: 1
             );
     }
 

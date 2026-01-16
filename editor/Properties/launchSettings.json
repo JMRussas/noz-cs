@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "NoZ.Editor": {
+      "commandName": "Project",
+      "commandLineArgs": "--project ../",
+      "workingDirectory": "D:\\git\\stickcraft\\noz\\editor"
+    }
+  }
+}
