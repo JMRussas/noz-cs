@@ -161,19 +161,14 @@ public static class UIRender
         if (_vertexCount == 0 || !_initialized || _shader == null)
             return;
 
-        // Flush any pending Render.cs commands first
-        Render.Flush();
-
         var vertexSpan = MemoryMarshal.AsBytes(_vertices.AsSpan(0, _vertexCount));
         Render.Driver.UpdateVertexBuffer(_vertexBuffer, 0, vertexSpan);
         Render.Driver.UpdateIndexBuffer(_indexBuffer, 0, _indices.AsSpan(0, _indexCount));
 
-        Render.Driver.BindVertexFormat(VertexFormat<UIVertex>.Handle);
-        Render.Driver.BindVertexBuffer(_vertexBuffer);
-        Render.Driver.BindIndexBuffer(_indexBuffer);
+        Render.SetVertexBuffer<UIVertex>(_vertexBuffer);
+        Render.SetIndexBuffer(_indexBuffer);
         Render.Driver.BindShader(_shader.Handle);
 
-        // Apply projection from current camera
         if (Render.Camera != null)
         {
             var view = Render.Camera.ViewMatrix;

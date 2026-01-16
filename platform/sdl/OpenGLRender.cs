@@ -38,8 +38,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     private readonly (uint glTexture, int width, int height, int layers)[] _textureArrays = new (uint, int, int, int)[MaxTextureArrays];
     private readonly (uint vao, int stride)[] _vertexFormats = new (uint, int)[MaxVertexFormats];
 
-    // VAO for MeshVertex format
-    private uint _meshVao;
     private uint _boundVertexBuffer;
     private uint _boundIndexBuffer;
     private uint _boundShader;
@@ -67,8 +65,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.Enable(EnableCap.Blend);
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         _gl.Enable(EnableCap.Multisample);
-        _meshVao = _gl.GenVertexArray();
-        _gl.BindVertexArray(_meshVao);
 
         // Create fullscreen quad VAO/VBO
         // Positions and UVs for a fullscreen quad (two triangles)
@@ -135,14 +131,14 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
             if (_vertexFormats[i].vao != 0)
                 _gl.DeleteVertexArray(_vertexFormats[i].vao);
 
-        _gl.DeleteVertexArray(_meshVao);
         _gl.Dispose();
     }
 
     public void BeginFrame()
     {
-        _gl.BindVertexArray(_meshVao);
         _activeVertexFormat = 0;
+        _boundVertexBuffer = 0;
+        _boundIndexBuffer = 0;
     }
 
     public void EndFrame()
@@ -206,21 +202,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
             _gl.DeleteBuffer(glBuffer);
             _buffers[(int)handle] = 0;
         }
-    }
-
-    public void UpdateVertexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<MeshVertex> data)
-    {
-        var glBuffer = _buffers[(int)buffer];
-        if (glBuffer == 0) return;
-
-        _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
-        fixed (MeshVertex* p = data)
-        {
-            _gl.BufferSubData(BufferTargetARB.ArrayBuffer, offsetBytes, (nuint)(data.Length * MeshVertex.SizeInBytes), p);
-        }
-
-        // Reset so BindVertexBuffer will set up attributes
-        _boundVertexBuffer = 0;
     }
 
     public void UpdateVertexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data)
@@ -293,57 +274,8 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _boundVertexBuffer = glBuffer;
         _gl.BindBuffer(BufferTargetARB.ArrayBuffer, glBuffer);
 
-        // If a custom vertex format is active, use its attributes
         if (_activeVertexFormat != 0)
-        {
             SetupVertexAttributes(_activeVertexFormat);
-            return;
-        }
-
-        // Default: Setup vertex attributes for MeshVertex layout (64 bytes total)
-        // Offsets: position(0), uv(8), normal(16), color(24), bone(40), atlas(44),
-        //          frameCount(48), frameWidth(52), frameRate(56), animStartTime(60)
-        uint stride = MeshVertex.SizeInBytes;
-
-        // Position: vec2 at offset 0
-        _gl.EnableVertexAttribArray(0);
-        _gl.VertexAttribPointer(0, 2, VertexAttribPointerType.Float, false, stride, (void*)0);
-
-        // UV: vec2 at offset 8
-        _gl.EnableVertexAttribArray(1);
-        _gl.VertexAttribPointer(1, 2, VertexAttribPointerType.Float, false, stride, (void*)8);
-
-        // Normal: vec2 at offset 16
-        _gl.EnableVertexAttribArray(2);
-        _gl.VertexAttribPointer(2, 2, VertexAttribPointerType.Float, false, stride, (void*)16);
-
-        // Color: vec4 at offset 24
-        _gl.EnableVertexAttribArray(3);
-        _gl.VertexAttribPointer(3, 4, VertexAttribPointerType.Float, false, stride, (void*)24);
-
-        // Bone: int at offset 40
-        _gl.EnableVertexAttribArray(4);
-        _gl.VertexAttribIPointer(4, 1, VertexAttribIType.Int, stride, (void*)40);
-
-        // Atlas: int at offset 44
-        _gl.EnableVertexAttribArray(5);
-        _gl.VertexAttribIPointer(5, 1, VertexAttribIType.Int, stride, (void*)44);
-
-        // FrameCount: int at offset 48
-        _gl.EnableVertexAttribArray(6);
-        _gl.VertexAttribIPointer(6, 1, VertexAttribIType.Int, stride, (void*)48);
-
-        // FrameWidth: float at offset 52
-        _gl.EnableVertexAttribArray(7);
-        _gl.VertexAttribPointer(7, 1, VertexAttribPointerType.Float, false, stride, (void*)52);
-
-        // FrameRate: float at offset 56
-        _gl.EnableVertexAttribArray(8);
-        _gl.VertexAttribPointer(8, 1, VertexAttribPointerType.Float, false, stride, (void*)56);
-
-        // AnimStartTime: float at offset 60
-        _gl.EnableVertexAttribArray(9);
-        _gl.VertexAttribPointer(9, 1, VertexAttribPointerType.Float, false, stride, (void*)60);
     }
 
     public void BindIndexBuffer(nuint buffer)
@@ -391,6 +323,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.BindVertexArray(f.vao);
         _activeVertexFormat = format;
         _boundVertexBuffer = 0;
+        _boundIndexBuffer = 0;
     }
 
     private void SetupVertexAttributes(nuint format)
@@ -907,7 +840,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
     public void BeginScenePass(Color clearColor)
     {
-        // Bind MSAA framebuffer if available, otherwise resolve framebuffer
         var fb = _msaaFramebuffer != 0 ? _msaaFramebuffer : _offscreenFramebuffer;
 
         _gl.BindFramebuffer(FramebufferTarget.Framebuffer, fb);
@@ -915,8 +847,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.ClearColor(clearColor.R, clearColor.G, clearColor.B, clearColor.A);
         _gl.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit | ClearBufferMask.StencilBufferBit);
 
-        // Rebind mesh VAO for scene rendering
-        _gl.BindVertexArray(_meshVao);
+        _activeVertexFormat = 0;
         _boundVertexBuffer = 0;
         _boundIndexBuffer = 0;
     }
@@ -961,6 +892,9 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
         _gl.BindVertexArray(_fullscreenVao);
         _gl.DrawArrays(PrimitiveType.Triangles, 0, 6);
-        _gl.BindVertexArray(_meshVao);
+
+        _activeVertexFormat = 0;
+        _boundVertexBuffer = 0;
+        _boundIndexBuffer = 0;
     }
 }

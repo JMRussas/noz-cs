@@ -17,6 +17,8 @@ public enum SpriteEditorTool
 public class SpriteEditor : DocumentEditor
 {
     private const int RasterTextureSize = 256;
+    private const float AnchorSelectionSize = 2.0f;
+    private const float SegmentSelectionSize = 6.0f;
 
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
@@ -41,7 +43,6 @@ public class SpriteEditor : DocumentEditor
             new Command { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
             new Command { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
             new Command { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
-            new Command { Name = "Toggle Edit Mode", ShortName = "fill", Handler = ToggleEditMode, Key = InputCode.KeyH }
         ];
     }
 
@@ -50,7 +51,6 @@ public class SpriteEditor : DocumentEditor
     // Selection
     private byte _selectionColor;
     private byte _selectionOpacity = 10;
-    private bool _editFill = true;
 
     // Tool state
     private SpriteEditorTool _activeTool = SpriteEditorTool.None;
@@ -64,24 +64,16 @@ public class SpriteEditor : DocumentEditor
 
     // Hover state
     private ushort _hoveredAnchor = ushort.MaxValue;
-    private ushort _hoveredMidpoint = ushort.MaxValue;
     private ushort _hoveredSegment = ushort.MaxValue;
     private ushort _hoveredPath = ushort.MaxValue;
 
     // Box selection
     private Rect _selectionBox;
 
-    // Rendering constants
-    private const float EdgeWidth = 1.0f;
-    private const float EdgeSelectedWidth = 1.1f;
-    private const float VertexSize = 1.0f;
-    private const float MidpointSize = 0.08f;
-
     public ushort CurrentFrame => _currentFrame;
     public bool IsPlaying => _isPlaying;
     public byte SelectionColor => _selectionColor;
     public byte SelectionOpacity => _selectionOpacity;
-    public bool EditFill => _editFill;
 
     public override void Dispose()
     {
@@ -104,9 +96,8 @@ public class SpriteEditor : DocumentEditor
         Render.PushState();
         Render.SetTransform(Document.Transform);
         Render.SetLayer(EditorLayer.Gizmo);
-        DrawShapeEdges(shape);
-        DrawShapeAnchors(shape);
-        // DrawShapeMidpoints(shape);
+        DrawSegments(shape);
+        DrawAnchors(shape);
         Render.PopState();
 
         // if (_activeTool == SpriteEditorTool.BoxSelect)
@@ -194,11 +185,6 @@ public class SpriteEditor : DocumentEditor
         _selectionOpacity = opacity;
     }
 
-    public void ToggleEditMode()
-    {
-        _editFill = !_editFill;
-    }
-
     public void DeleteSelected()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
@@ -248,15 +234,13 @@ public class SpriteEditor : DocumentEditor
 
     private void UpdateHover()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        var worldPos = Workspace.MouseWorldPosition;
-        var zoom = Workspace.Zoom;
-        var hitRadius = VertexSize / zoom;
-
-        var hit = shape.HitTest(worldPos, hitRadius, hitRadius * 0.5f);
+        Matrix3x2.Invert(Document.Transform, out var invTransform);
+        var hit = Document.GetFrame(_currentFrame).Shape.HitTest(
+            Vector2.Transform(Workspace.MouseWorldPosition, invTransform),
+            EditorStyle.Shape.AnchorSize * AnchorSelectionSize / Workspace.Zoom,
+            EditorStyle.Shape.SegmentWidth * SegmentSelectionSize / Workspace.Zoom);
 
         _hoveredAnchor = hit.AnchorIndex;
-        _hoveredMidpoint = hit.MidpointIndex;
         _hoveredSegment = hit.SegmentIndex;
         _hoveredPath = hit.PathIndex;
     }
@@ -266,12 +250,6 @@ public class SpriteEditor : DocumentEditor
         var shape = Document.GetFrame(_currentFrame).Shape;
         var shift = Input.IsShiftDown();
         var alt = Input.IsAltDown();
-
-        if (_hoveredMidpoint != ushort.MaxValue && !alt)
-        {
-            SplitSegment(_hoveredMidpoint);
-            return;
-        }
 
         if (_hoveredAnchor != ushort.MaxValue)
         {
@@ -322,11 +300,6 @@ public class SpriteEditor : DocumentEditor
         var shape = Document.GetFrame(_currentFrame).Shape;
         var alt = Input.IsAltDown();
 
-        if (_hoveredMidpoint != ushort.MaxValue && alt)
-        {
-            BeginCurveTool(_hoveredMidpoint);
-            return;
-        }
 
         if (_hoveredAnchor != ushort.MaxValue)
         {
@@ -630,10 +603,7 @@ public class SpriteEditor : DocumentEditor
 
             if (hasSelectedAnchor)
             {
-                if (_editFill)
-                    shape.SetPathFillColor(p, _selectionColor);
-                else
-                    shape.SetPathStrokeColor(p, _selectionColor);
+                shape.SetPathFillColor(p, _selectionColor);
             }
         }
 
@@ -682,82 +652,80 @@ public class SpriteEditor : DocumentEditor
         Render.DrawQuad(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
     }
 
-    private static void DrawShapeEdges(Shape shape)
+    private static void DrawSegment(Shape shape, ushort segmentIndex, float width, ushort order = 0)
     {
-        for (ushort p = 0; p < shape.PathCount; p++)
+        var samples = shape.GetSegmentSamples(segmentIndex);
+        ref readonly var anchor = ref shape.GetAnchor(segmentIndex);
+        var prev = anchor.Position;
+        foreach (var sample in samples)
         {
-            var path = shape.GetPath(p);
-
-            for (ushort a = 0; a < path.AnchorCount; a++)
-            {
-                var a0Idx = (ushort)(path.AnchorStart + a);
-                var a1Idx = (ushort)(path.AnchorStart + ((a + 1) % path.AnchorCount));
-
-                var a0 = shape.GetAnchor(a0Idx);
-                var a1 = shape.GetAnchor(a1Idx);
-
-                var selected = (a0.Flags & Shape.AnchorFlags.Selected) != 0 ||
-                               (a1.Flags & Shape.AnchorFlags.Selected) != 0;
-
-                var color = selected ? EditorStyle.EdgeSelected : EditorStyle.Edge;
-                var width = (selected ? EdgeSelectedWidth : EdgeWidth);
-
-                var samples = shape.GetSegmentSamples(a0Idx);
-                var prev = a0.Position;
-
-                Gizmos.SetColor(color);
-                foreach (var sample in samples)
-                {
-                    Gizmos.DrawLine(prev, sample, width);
-                    prev = sample;
-                }
-
-                Gizmos.DrawLine(prev, a1.Position, width);
-            }
+            Gizmos.DrawLine(prev, sample, width, order: order);
+            prev = sample;
         }
+
+        ref readonly var nextAnchor = ref shape.GetNextAnchor(segmentIndex);
+        Gizmos.DrawLine(prev, nextAnchor.Position, width, order: order);
     }
 
-    private void DrawShapeAnchors(Shape shape)
+    private void DrawSegments(Shape shape)
     {
+        // hover
+        if (_hoveredSegment != ushort.MaxValue)
+        {
+            Render.PushState();
+            Render.SetColor(EditorStyle.Shape.HoverColor);
+            DrawSegment(shape, _hoveredSegment, EditorStyle.Shape.SegmentHoverWidth, 0);
+            Render.PopState();
+        }
+
+        // default
+        Render.PushState();
+        Render.SetColor(EditorStyle.Shape.Color);
+        for (ushort anchorIndex=0; anchorIndex < shape.AnchorCount; anchorIndex++)
+            if (!shape.IsSegmentSelected(anchorIndex))
+                DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
+        Render.PopState();
+
+        // selected
+        Render.PushState();
+        Render.SetColor(EditorStyle.Shape.SelectionColor);
+        for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
+            if (shape.IsSegmentSelected(anchorIndex))
+                DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
+        Render.PopState();        
+    }
+
+    private void DrawAnchors(Shape shape)
+    {
+        // hovered
+        if (_hoveredAnchor != ushort.MaxValue)
+        {
+            Render.PushState();
+            Gizmos.SetColor(EditorStyle.Shape.HoverColor);
+            Gizmos.DrawRect(shape.GetAnchor(_hoveredAnchor).Position, EditorStyle.Shape.AnchorHoverSize, 3);
+            Render.PopState();
+        }
+        
+        // default
+        Render.PushState();
+        Gizmos.SetColor(EditorStyle.Shape.Color);
+
+        for (ushort i = 0; i < shape.AnchorCount; i++)
+            Gizmos.DrawRect(shape.GetAnchor(i).Position, EditorStyle.Shape.AnchorSize, 4);
+
+        Render.PopState();
+
+        Render.PushState();
+        Render.SetColor(EditorStyle.Shape.SelectionColor);;
+        
         for (ushort i = 0; i < shape.AnchorCount; i++)
         {
             var anchor = shape.GetAnchor(i);
-            var selected = (anchor.Flags & Shape.AnchorFlags.Selected) != 0;
-            var hovered = i == _hoveredAnchor;
-
-            var color = selected ? EditorStyle.VertexSelected : EditorStyle.Vertex;
-            var size = VertexSize;
-
-            if (hovered)
-                size *= 1.2f;
-
-            Gizmos.SetColor(color);
-            Gizmos.DrawVertex(anchor.Position, size);
+            if (!anchor.IsSelected) continue;
+            Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize, order: 5);
         }
-    }
 
-    private void DrawShapeMidpoints(Shape shape)
-    {
-        for (ushort p = 0; p < shape.PathCount; p++)
-        {
-            var path = shape.GetPath(p);
-
-            for (ushort a = 0; a < path.AnchorCount; a++)
-            {
-                var anchorIdx = (ushort)(path.AnchorStart + a);
-                var anchor = shape.GetAnchor(anchorIdx);
-                var hovered = anchorIdx == _hoveredMidpoint;
-
-                var color = hovered ? EditorStyle.EdgeSelected : new Color(0.5f, 0.5f, 0.5f, 0.5f);
-                var size = MidpointSize;
-
-                if (hovered)
-                    size *= 1.3f;
-
-                Render.SetColor(color);
-                Gizmos.DrawCircle(anchor.Midpoint, size * 0.5f);
-            }
-        }
+        Render.PopState();
     }
 
     private void DrawSelectionBox()

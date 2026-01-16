@@ -127,7 +127,7 @@ public class SpriteDocument : Document
         var x = tk.ExpectFloat();
         var y = tk.ExpectFloat();
         var curve = tk.ExpectFloat();
-        shape.AddAnchorToPath(pathIndex, new Vector2(x, y), curve);
+        shape.AddAnchor(pathIndex, new Vector2(x, y), curve);
     }
 
     public void UpdateBounds()

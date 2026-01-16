@@ -44,7 +44,6 @@ public interface IRenderDriver
     nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage, string name = "");
     void DestroyBuffer(nuint handle);
 
-    void UpdateVertexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<MeshVertex> data);
     void UpdateVertexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data);
     void UpdateIndexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<ushort> data);
     void UpdateUniformBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data);

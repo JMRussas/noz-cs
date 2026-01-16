@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace NoZ.Editor;
@@ -11,21 +12,17 @@ public struct HitResult
 {
     public ushort AnchorIndex;
     public ushort SegmentIndex;
-    public ushort MidpointIndex;
     public ushort PathIndex;
     public float AnchorDistSqr;
     public float SegmentDistSqr;
-    public float MidpointDistSqr;
 
     public static HitResult Empty => new()
     {
         AnchorIndex = ushort.MaxValue,
         SegmentIndex = ushort.MaxValue,
-        MidpointIndex = ushort.MaxValue,
         PathIndex = ushort.MaxValue,
         AnchorDistSqr = float.MaxValue,
         SegmentDistSqr = float.MaxValue,
-        MidpointDistSqr = float.MaxValue,
     };
 }
 
@@ -64,14 +61,15 @@ public sealed unsafe class Shape : IDisposable
         public Vector2 Position;
         public float Curve;
         public AnchorFlags Flags;
-        public Vector2 Midpoint;
+        public ushort Path;
+
+        public bool IsSelected => (Flags & AnchorFlags.Selected) != 0;
     }
 
     public struct Path
     {
         public ushort AnchorStart;
         public ushort AnchorCount;
-        public byte StrokeColor;
         public byte FillColor;
         public PathFlags Flags;
     }
@@ -126,8 +124,8 @@ public sealed unsafe class Shape : IDisposable
     public void UpdateSamples(ushort pathIndex, ushort anchorIndex)
     {
         ref var path = ref _paths[pathIndex];
-        var a0Index = path.AnchorStart + anchorIndex;
-        var a1Index = path.AnchorStart + ((anchorIndex + 1) % path.AnchorCount);
+        var a0Index = (ushort)(path.AnchorStart + anchorIndex);
+        var a1Index = (ushort)(path.AnchorStart + ((anchorIndex + 1) % path.AnchorCount));
 
         ref var a0 = ref _anchors[a0Index];
         ref var a1 = ref _anchors[a1Index];
@@ -135,7 +133,7 @@ public sealed unsafe class Shape : IDisposable
         var p0 = a0.Position;
         var p1 = a1.Position;
 
-        var samples = GetSegmentSamplesSpan(a0Index);
+        var samples = GetSegmentSamples(a0Index);
 
         if (MathF.Abs(a0.Curve) < 0.0001f)
         {
@@ -144,7 +142,6 @@ public sealed unsafe class Shape : IDisposable
                 var t = (i + 1) / (float)(MaxSegmentSamples + 1);
                 samples[i] = Vector2.Lerp(p0, p1, t);
             }
-            a0.Midpoint = Vector2.Lerp(p0, p1, 0.5f);
         }
         else
         {
@@ -160,8 +157,6 @@ public sealed unsafe class Shape : IDisposable
                 var oneMinusT = 1f - t;
                 samples[i] = oneMinusT * oneMinusT * p0 + 2f * oneMinusT * t * cp + t * t * p1;
             }
-
-            a0.Midpoint = 0.25f * p0 + 0.5f * cp + 0.25f * p1;
         }
     }
 
@@ -182,7 +177,7 @@ public sealed unsafe class Shape : IDisposable
             ref var path = ref _paths[p];
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
-                var anchorIdx = path.AnchorStart + a;
+                var anchorIdx = (ushort)(path.AnchorStart + a);
                 ref var anchor = ref _anchors[anchorIdx];
 
                 min = Vector2.Min(min, anchor.Position);
@@ -190,7 +185,7 @@ public sealed unsafe class Shape : IDisposable
 
                 if (MathF.Abs(anchor.Curve) > 0.0001f)
                 {
-                    var samples = GetSegmentSamplesSpan(anchorIdx);
+                    var samples = GetSegmentSamples(anchorIdx);
                     for (var s = 0; s < MaxSegmentSamples; s++)
                     {
                         min = Vector2.Min(min, samples[s]);
@@ -226,60 +221,36 @@ public sealed unsafe class Shape : IDisposable
                 ref var anchor = ref _anchors[anchorIdx];
 
                 var distSqr = Vector2.DistanceSquared(point, anchor.Position);
-                if (distSqr < anchorRadiusSqr && distSqr < result.AnchorDistSqr)
-                {
-                    result.AnchorIndex = (ushort)anchorIdx;
-                    result.AnchorDistSqr = distSqr;
-                    result.PathIndex = p;
-                }
+                if (distSqr >= anchorRadiusSqr || distSqr >= result.AnchorDistSqr) continue;
+                result.AnchorIndex = (ushort)anchorIdx;
+                result.AnchorDistSqr = distSqr;
+                result.PathIndex = p;
             }
 
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
-                var anchorIdx = path.AnchorStart + a;
-                ref var anchor = ref _anchors[anchorIdx];
-
-                var distSqr = Vector2.DistanceSquared(point, anchor.Midpoint);
-                if (distSqr < anchorRadiusSqr && distSqr < result.MidpointDistSqr)
-                {
-                    result.MidpointIndex = (ushort)anchorIdx;
-                    result.MidpointDistSqr = distSqr;
-                    if (result.PathIndex == ushort.MaxValue)
-                        result.PathIndex = p;
-                }
-            }
-
-            for (ushort a = 0; a < path.AnchorCount; a++)
-            {
-                var a0Idx = path.AnchorStart + a;
-                var a1Idx = path.AnchorStart + ((a + 1) % path.AnchorCount);
+                var a0Idx = (ushort)(path.AnchorStart + a);
+                var a1Idx = (ushort)(path.AnchorStart + ((a + 1) % path.AnchorCount));
                 ref var a0 = ref _anchors[a0Idx];
                 ref var a1 = ref _anchors[a1Idx];
-                var samples = GetSegmentSamplesSpan(a0Idx);
+                var samples = GetSegmentSamples(a0Idx);
 
+                
                 var distSqr = PointToSegmentDistSqr(point, a0.Position, samples[0]);
                 for (var s = 0; s < MaxSegmentSamples - 1; s++)
-                {
                     distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, samples[s], samples[s + 1]));
-                }
                 distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, samples[MaxSegmentSamples - 1], a1.Position));
 
-                if (distSqr < segmentRadiusSqr && distSqr < result.SegmentDistSqr)
-                {
-                    result.SegmentIndex = (ushort)a0Idx;
-                    result.SegmentDistSqr = distSqr;
-                    if (result.PathIndex == ushort.MaxValue)
-                        result.PathIndex = p;
-                }
+                if (distSqr >= segmentRadiusSqr || distSqr >= result.SegmentDistSqr) continue;
+
+                result.SegmentIndex = a0Idx;
+                result.SegmentDistSqr = distSqr;
+                if (result.PathIndex == ushort.MaxValue)
+                    result.PathIndex = p;
             }
 
-            if (result.AnchorIndex == ushort.MaxValue && result.SegmentIndex == ushort.MaxValue)
-            {
-                if (IsPointInPath(point, p))
-                {
-                    result.PathIndex = p;
-                }
-            }
+            if (result.PathIndex == ushort.MaxValue && IsPointInPath(point, p))
+                result.PathIndex = p;
         }
 
         return result;
@@ -323,6 +294,7 @@ public sealed unsafe class Shape : IDisposable
             Position = position,
             Curve = curve,
             Flags = AnchorFlags.None,
+            Path = pathIndex
         };
 
         AnchorCount++;
@@ -340,6 +312,7 @@ public sealed unsafe class Shape : IDisposable
 
     public void SplitSegment(ushort anchorIndex)
     {
+#if false        
         ushort pathIndex = ushort.MaxValue;
         for (ushort p = 0; p < PathCount; p++)
         {
@@ -355,7 +328,6 @@ public sealed unsafe class Shape : IDisposable
 
         ref var anchor = ref _anchors[anchorIndex];
         var midpoint = anchor.Midpoint;
-
         var newCurve = anchor.Curve * 0.5f;
 
         InsertAnchor(anchorIndex, midpoint, newCurve);
@@ -363,6 +335,7 @@ public sealed unsafe class Shape : IDisposable
 
         UpdateSamples();
         UpdateBounds();
+#endif
     }
 
     public void DeleteSelectedAnchors()
@@ -407,18 +380,25 @@ public sealed unsafe class Shape : IDisposable
         UpdateBounds();
     }
 
-    public Path GetPath(ushort pathIndex) => _paths[pathIndex];
+    public ref readonly Path GetPath(ushort pathIndex) => ref _paths[pathIndex];
 
-    public Anchor GetAnchor(ushort anchorIndex) => _anchors[anchorIndex];
+    public ref readonly Anchor GetAnchor(ushort anchorIndex) => ref _anchors[anchorIndex];
+
+    public ushort GetNextAnchorIndex(ushort anchorIndex)
+    {
+        ref readonly var anchor = ref GetAnchor(anchorIndex);
+        ref readonly var path = ref GetPath(anchor.Path);
+        var localIndex = (ushort)(anchorIndex - path.AnchorStart);
+        var nextLocalIndex = (ushort)((localIndex + 1) % path.AnchorCount);
+        return (ushort)(path.AnchorStart + nextLocalIndex);
+    }
+    
+    public ref readonly Anchor GetNextAnchor(ushort anchorIndex) =>
+        ref GetAnchor(GetNextAnchorIndex(anchorIndex));
 
     public void SetPathFillColor(ushort pathIndex, byte fillColor)
     {
         _paths[pathIndex].FillColor = fillColor;
-    }
-
-    public void SetPathStrokeColor(ushort pathIndex, byte strokeColor)
-    {
-        _paths[pathIndex].StrokeColor = strokeColor;
     }
 
     public ushort AddPath(byte fillColor = 0, byte strokeColor = 0)
@@ -431,14 +411,13 @@ public sealed unsafe class Shape : IDisposable
             AnchorStart = AnchorCount,
             AnchorCount = 0,
             FillColor = fillColor,
-            StrokeColor = strokeColor,
             Flags = PathFlags.None,
         };
 
         return pathIndex;
     }
 
-    public ushort AddAnchorToPath(ushort pathIndex, Vector2 position, float curve = 0f)
+    public ushort AddAnchor(ushort pathIndex, Vector2 position, float curve = 0f)
     {
         if (pathIndex >= PathCount || AnchorCount >= MaxAnchors) return ushort.MaxValue;
 
@@ -459,6 +438,7 @@ public sealed unsafe class Shape : IDisposable
             Position = position,
             Curve = curve,
             Flags = AnchorFlags.None,
+            Path = pathIndex
         };
 
         path.AnchorCount++;
@@ -482,14 +462,14 @@ public sealed unsafe class Shape : IDisposable
         var verts = new List<Vector2>();
         for (var a = 0; a < path.AnchorCount; a++)
         {
-            var anchorIdx = path.AnchorStart + a;
+            var anchorIdx = (ushort)(path.AnchorStart + a);
             ref var anchor = ref _anchors[anchorIdx];
 
             verts.Add(anchor.Position);
 
             if (MathF.Abs(anchor.Curve) > 0.0001f)
             {
-                var samples = GetSegmentSamplesSpan(anchorIdx);
+                var samples = GetSegmentSamples(anchorIdx);
                 for (var s = 0; s < MaxSegmentSamples; s++)
                     verts.Add(samples[s]);
             }
@@ -597,14 +577,9 @@ public sealed unsafe class Shape : IDisposable
         }
     }
 
-    private UnsafeSpan<Vector2> GetSegmentSamplesSpan(int anchorIndex)
-    {
-        return _samples.Slice(anchorIndex * MaxSegmentSamples, MaxSegmentSamples);
-    }
-
     public UnsafeSpan<Vector2> GetSegmentSamples(ushort anchorIndex)
     {
-        return GetSegmentSamplesSpan(anchorIndex);
+        return _samples.Slice(anchorIndex * MaxSegmentSamples, MaxSegmentSamples);
     }
 
     public void Rasterize(PixelData<Color32> pixels, Color[] palette, Vector2Int offset, float dpi = 1f)
@@ -622,14 +597,14 @@ public sealed unsafe class Shape : IDisposable
             var vertexCount = 0;
             for (ushort aIdx = 0; aIdx < path.AnchorCount && vertexCount < maxPolyVerts; aIdx++)
             {
-                var anchorIdx = path.AnchorStart + aIdx;
+                var anchorIdx = (ushort)(path.AnchorStart + aIdx);
                 ref var anchor = ref _anchors[anchorIdx];
 
                 polyVerts[vertexCount++] = anchor.Position * dpi;
 
                 if (MathF.Abs(anchor.Curve) > 0.0001f)
                 {
-                    var samples = GetSegmentSamplesSpan(anchorIdx);
+                    var samples = GetSegmentSamples(anchorIdx);
                     for (var s = 0; s < MaxSegmentSamples && vertexCount < maxPolyVerts; s++)
                     {
                         polyVerts[vertexCount++] = samples[s] * dpi;
@@ -700,4 +675,11 @@ public sealed unsafe class Shape : IDisposable
 
         return winding != 0;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsAnchorSelected(ushort anchorIndex) => _anchors[anchorIndex].IsSelected;
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool IsSegmentSelected(ushort anchorIndex) =>
+        IsAnchorSelected(anchorIndex) && IsAnchorSelected(GetNextAnchorIndex(anchorIndex));
 }

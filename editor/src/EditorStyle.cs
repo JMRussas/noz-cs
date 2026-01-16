@@ -33,6 +33,11 @@ public class Style
     // Context Menu
     public Color ContextMenuTitleColor;
     public Color ContextMenuSeparatorColor;
+    
+    // Shape
+    public Color ShapeColor;
+    public Color ShapeSelectionColor;
+    public Color ShapeHoverColor;
 }
 
 public static class EditorStyle
@@ -49,14 +54,9 @@ public static class EditorStyle
     public static Style Current => _current;
 
     // Legacy colors (deprecated but still used)
-    public static readonly Color VertexSelected = Color.FromRgb(0xFF7900);
-    public static readonly Color Vertex = Color.Black;
-    public static readonly Color Edge = Color.Black;
-    public static readonly Color EdgeSelected = Color.FromRgb(0xFD970B);
     public static readonly Color Origin = Color.FromRgb(0xFF9F2C);
     public static readonly Color Selected = Color.White;
     public static readonly Color Center = new(1f, 1f, 1f, 0.5f);
-    public static readonly Color BoneSelected = EdgeSelected;
 
     // Color32 versions for rendering
     public static readonly Color EdgeColor = new(0x00, 0x00, 0x00);
@@ -119,7 +119,18 @@ public static class EditorStyle
         public const float ListSpacing = 4.0f;
         public const float ShortcutFontSize = 12.0f;
     }
-    
+
+    public static class Shape
+    {
+        public static Color Color => _current.ShapeColor;
+        public static Color SelectionColor => _current.ShapeSelectionColor;
+        public static Color HoverColor => _current.ShapeHoverColor;
+        public const float AnchorSize = 0.12f;
+        public const float AnchorHoverSize = AnchorSize * 1.5f; 
+        public const float SegmentWidth = 0.02f;
+        public const float SegmentHoverWidth = SegmentWidth * 2.0f;
+    }
+
     // Overlay
     public static class Overlay
     {
@@ -164,7 +175,6 @@ public static class EditorStyle
     public const float ColorPickerWidth = ColorPickerColorSize * 64 + ColorPickerBorderWidth * 2;
     public const float ColorPickerHeight = ColorPickerColorSize + ColorPickerBorderWidth * 2;
     public const float ColorPickerSelectionBorderWidth = 3f;
-    public static readonly Color ColorPickerSelectionBorderColor = VertexSelected;
 
     // Style accessors
     public static Color BackgroundColor => _current.BackgroundColor;
@@ -191,10 +201,12 @@ public static class EditorStyle
 
     private static Style CreateDarkStyle()
     {
+        var selectionColor = Color.FromRgb(0x3a79bb);
+        
         return new Style
         {
             BackgroundColor = Color.FromRgb(0x383838),
-            SelectionColor = Color.FromRgb(0x3a79bb),
+            SelectionColor = selectionColor,
             SelectionTextColor = Color.FromRgb(0xf0f0f0),
             ButtonColor = Color.FromRgb(0x585858),
             ButtonHoverColor = Color.FromRgb(0x676767),
@@ -212,7 +224,10 @@ public static class EditorStyle
             OverlayIconColor = Color.FromRgb(0x585858),
             OverlayContentColor = Color.FromRgb(0x2a2a2a),
             ContextMenuSeparatorColor = Color.FromRgb(0x2a2a2a),
-            ContextMenuTitleColor = Color.FromRgb(0x636363)
+            ContextMenuTitleColor = Color.FromRgb(0x636363),
+            ShapeColor = Color.Black,
+            ShapeSelectionColor = selectionColor,
+            ShapeHoverColor = selectionColor
         };
     }
 }

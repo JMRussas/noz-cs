@@ -171,7 +171,6 @@ public static class CommandPalette
         });
 
         UI.BeginColumn(new ContainerStyle { Spacing = EditorStyle.CommandPalette.ListSpacing });
-
         UI.TextBox(ref _text, new TextBoxStyle
         {
             Height = EditorStyle.CommandPalette.InputHeight,
@@ -184,9 +183,7 @@ public static class CommandPalette
         });
 
         if (_filteredCount > 0)
-        {
             DrawCommandList();
-        }
 
         UI.EndColumn();
         UI.EndContainer();
@@ -221,15 +218,15 @@ public static class CommandPalette
                 Id = (byte)(i + 10)
             });
 
-            // UI.Label(cmd.Name, new LabelStyle
-            // {
-            //     FontSize = (int)EditorStyle.CommandPalette.ItemFontSize,
-            //     Color = isSelected ? EditorStyle.SelectionTextColor : EditorStyle.Overlay.TextColor,
-            //     Align = Align.CenterLeft
-            // });
+            UI.Label(cmd.Name, new LabelStyle
+            {
+                FontSize = (int)EditorStyle.CommandPalette.ItemFontSize,
+                Color = isSelected ? EditorStyle.SelectionTextColor : EditorStyle.Overlay.TextColor,
+                Align = Align.CenterLeft
+            });
 
-            // if (cmd.Key != InputCode.None)
-            //     EditorUI.Shortcut(cmd);
+            if (cmd.Key != InputCode.None)
+                EditorUI.Shortcut(cmd);
 
             if (UI.WasClicked())
             {

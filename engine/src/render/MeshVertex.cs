@@ -4,25 +4,12 @@
 
 using System.Numerics;
 using System.Runtime.InteropServices;
+using NoZ.Platform;
 
 namespace NoZ;
 
-/// <summary>
-/// Vertex format for mesh batching. Must be blittable for GPU upload.
-/// Layout (64 bytes):
-///   location 0: vec2 position
-///   location 1: vec2 uv
-///   location 2: vec2 normal
-///   location 3: vec4 color
-///   location 4: int bone
-///   location 5: int atlas
-///   location 6: int frameCount
-///   location 7: float frameWidth
-///   location 8: float frameRate
-///   location 9: float animStartTime
-/// </summary>
 [StructLayout(LayoutKind.Sequential)]
-public struct MeshVertex
+public struct MeshVertex : IVertex
 {
     public Vector2 Position;    // 8 bytes
     public Vector2 UV;          // 8 bytes
@@ -77,5 +64,23 @@ public struct MeshVertex
         FrameWidth = 0,
         FrameRate = 0,
         AnimStartTime = 0
+    };
+
+    public static VertexFormatDescriptor GetFormatDescriptor() => new()
+    {
+        Stride = SizeInBytes,
+        Attributes =
+        [
+            new VertexAttribute(0, 2, VertexAttribType.Float, 0),      // Position
+            new VertexAttribute(1, 2, VertexAttribType.Float, 8),      // UV
+            new VertexAttribute(2, 2, VertexAttribType.Float, 16),     // Normal
+            new VertexAttribute(3, 4, VertexAttribType.Float, 24),     // Color
+            new VertexAttribute(4, 1, VertexAttribType.Int, 40),       // Bone
+            new VertexAttribute(5, 1, VertexAttribType.Int, 44),       // Atlas
+            new VertexAttribute(6, 1, VertexAttribType.Int, 48),       // FrameCount
+            new VertexAttribute(7, 1, VertexAttribType.Float, 52),     // FrameWidth
+            new VertexAttribute(8, 1, VertexAttribType.Float, 56),     // FrameRate
+            new VertexAttribute(9, 1, VertexAttribType.Float, 60),     // AnimStartTime
+        ]
     };
 }

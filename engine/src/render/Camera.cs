@@ -137,7 +137,7 @@ public class Camera
 
         UpdateViewMatrix();
     }
-
+    
     public Vector2 ScreenToWorld(Vector2 screenPos)
     {
         Vector2 localPos = screenPos;

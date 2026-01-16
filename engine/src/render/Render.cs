@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NoZ.Platform;
 
 namespace NoZ;
@@ -60,9 +61,10 @@ public static unsafe class Render
         public Shader? Shader;
         public Matrix3x2 Transform;
         public fixed ulong Textures[MaxTextures];
-        public ushort Layer;
-        public ushort Group;
-        public ushort Index;
+        public ushort SortLayer;
+        public ushort SortGroup;
+        public ushort SortIndex;
+        public ushort BoneIndex;
         public BlendMode BlendMode;
         public int ViewportX;
         public int ViewportY;
@@ -157,9 +159,8 @@ public static unsafe class Render
     {
         _stateStackDepth = 0;
         CurrentState.Transform = Matrix3x2.Identity;
-        CurrentState.Group = 0;
-        CurrentState.Layer = 0;
-        CurrentState.Index = 0;
+        CurrentState.SortGroup = 0;
+        CurrentState.SortLayer = 0;
         CurrentState.Color = Color.White;
         CurrentState.Shader = null;
         CurrentState.BlendMode = default;
@@ -456,7 +457,7 @@ public static unsafe class Render
 
     public static void SetLayer(ushort layer)
     {
-        CurrentState.Layer = layer;
+        CurrentState.SortLayer = layer;
     }
 
     public static void PushState()
@@ -508,7 +509,7 @@ public static unsafe class Render
     public static void SetBones(ReadOnlySpan<Matrix3x2> transforms)
     {
         Debug.Assert(_boneCount + transforms.Length <= MaxBones);
-        CurrentState.Index = (ushort)_boneCount;
+        CurrentState.BoneIndex = (ushort)_boneCount;
         fixed (Matrix3x2* dst = &_bones[_boneCount])
         fixed (Matrix3x2* src = transforms)
         {
@@ -555,8 +556,8 @@ public static unsafe class Render
 
     public static void PushSortGroup(ushort group)
     {
-        _sortGroupStack[_sortGroupStackDepth++] = CurrentState.Group;
-        CurrentState.Group = group;
+        _sortGroupStack[_sortGroupStackDepth++] = CurrentState.SortGroup;
+        CurrentState.SortGroup = group;
     }
 
     public static void PopSortGroup()
@@ -565,14 +566,14 @@ public static unsafe class Render
             return;
 
         _sortGroupStackDepth--;
-        CurrentState.Group = _sortGroupStack[_sortGroupStackDepth];
+        CurrentState.SortGroup = _sortGroupStack[_sortGroupStackDepth];
     }
 
     private static long MakeSortKey(ushort order) =>
-        (((long)CurrentState.Layer) << LayerShift) |
-        (((long)CurrentState.Group) << GroupShift) |
+        (((long)CurrentState.SortLayer) << LayerShift) |
+        (((long)CurrentState.SortGroup) << GroupShift) |
         (((long)order) << OrderShift) |
-        (((long)CurrentState.Index) << IndexShift);
+        (((long)_commandCount) << IndexShift);
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AddBatchState()
@@ -710,16 +711,13 @@ public static unsafe class Render
         if (_commandCount == 0)
             return;
 
-        Driver.UpdateVertexBuffer(
-            _vertexBuffer,
-            0,
-            _vertices.AsSpan(0, _vertexCount)
-        );
-        
+        var vertexSpan = MemoryMarshal.AsBytes(_vertices.AsSpan(0, _vertexCount));
+        Driver.UpdateVertexBuffer(_vertexBuffer, 0, vertexSpan);
+
         SortCommands();
-        
+
         var batchStateIndex = _commands[0].BatchState;
-        var sortedIndexCount = 0;   
+        var sortedIndexCount = 0;
         var sortedIndexOffset = 0;
         for (var commandIndex = 0; commandIndex < _commandCount; commandIndex++)
         {
@@ -739,11 +737,12 @@ public static unsafe class Render
 
             sortedIndexCount += cmd.IndexCount;
         }
-        
+
         if (sortedIndexOffset != sortedIndexCount)
             AddBatch(batchStateIndex, sortedIndexOffset, sortedIndexCount - sortedIndexOffset);
 
         Driver.UpdateIndexBuffer(_indexBuffer, 0, _sortedIndices.AsSpan(0, sortedIndexCount));
+        Driver.BindVertexFormat(VertexFormat<MeshVertex>.Handle);
         Driver.BindVertexBuffer(_vertexBuffer);
         Driver.BindIndexBuffer(_indexBuffer);
 
