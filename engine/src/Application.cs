@@ -10,6 +10,7 @@ namespace NoZ;
 public static class Application
 {
     private static bool _running;
+    private static bool _assetTypesRegistered = false;
 
     private static IApplicationVtable _vtable = null!;
 
@@ -71,8 +72,11 @@ public static class Application
         _running = true;
     }
 
-    private static void RegisterAssetTypes()
+    internal static void RegisterAssetTypes()
     {
+        if (_assetTypesRegistered) return;
+        _assetTypesRegistered = true;
+        
         Texture.RegisterDef();
         Sprite.RegisterDef();
         Sound.RegisterDef();

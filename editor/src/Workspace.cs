@@ -125,7 +125,7 @@ public static class Workspace
 
         // Create a 1x1 white texture for untextured draws
         byte[] white = [255, 255, 255, 255];
-        _whiteTexture = Texture.Create(1, 1, white, "white");
+        _whiteTexture = Texture.Create(1, 1, white, name: "white");
     }
 
     public static void Shutdown()

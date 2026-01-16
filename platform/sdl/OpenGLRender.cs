@@ -3,7 +3,6 @@
 //
 
 using System.Numerics;
-using NoZ;
 using Silk.NET.OpenGL;
 using static SDL.SDL3;
 
@@ -327,7 +326,12 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.BindVertexArray(f.vao);
     }
 
-    public nuint CreateTexture(int width, int height, ReadOnlySpan<byte> data, TextureFormat format = TextureFormat.RGBA8)
+    public nuint CreateTexture(
+        int width,
+        int height,
+        ReadOnlySpan<byte> data,
+        TextureFormat format,
+        TextureFilter filter)
     {
         var glTexture = _gl.GenTexture();
         _gl.BindTexture(TextureTarget.Texture2D, glTexture);
@@ -346,8 +350,14 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
                 (uint)width, (uint)height, 0, pixelFormat, PixelType.UnsignedByte, p);
         }
 
-        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
-        _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+        _gl.TexParameter(
+            TextureTarget.Texture2D,
+            TextureParameterName.TextureMinFilter,
+            (int)ToTextureMinFilter(filter));
+        _gl.TexParameter(
+            TextureTarget.Texture2D,
+            TextureParameterName.TextureMagFilter,
+            (int)ToTextureMaxFilter(filter));
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
 
@@ -586,8 +596,6 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         }
     }
 
-    // === Synchronization ===
-
     public nuint CreateFence()
     {
         var fence = _gl.FenceSync(SyncCondition.SyncGpuCommandsComplete, SyncBehaviorFlags.None);
@@ -616,6 +624,18 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
 
     // === Private Helpers ===
 
+    private static TextureMinFilter ToTextureMinFilter(TextureFilter filter) => filter switch
+    {
+        TextureFilter.Nearest => TextureMinFilter.Nearest,
+        _ => TextureMinFilter.Linear
+    };
+
+    private static TextureMagFilter ToTextureMaxFilter(TextureFilter filter) => filter switch
+    {
+        TextureFilter.Nearest => TextureMagFilter.Nearest,
+        _ => TextureMagFilter.Linear
+    };
+    
     private static BufferUsageARB ToGLUsage(BufferUsage usage) => usage switch
     {
         BufferUsage.Static => BufferUsageARB.StaticDraw,

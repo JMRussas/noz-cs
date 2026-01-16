@@ -144,7 +144,7 @@ public class Font : Asset
         var atlasDataSize = atlasWidth * atlasHeight;
         var r8Data = reader.ReadBytes(atlasDataSize);
 
-        font._atlasTexture = Texture.Create(atlasWidth, atlasHeight, r8Data, TextureFormat.R8, name + "_atlas");
+        font._atlasTexture = Texture.Create(atlasWidth, atlasHeight, r8Data, TextureFormat.R8, name: name + "_atlas");
 
         return font;
     }

@@ -21,19 +21,20 @@ public class Texture : Asset
     {
     }
 
-    public static Texture Create(int width, int height, ReadOnlySpan<byte> data, string name = "")
-    {
-        return Create(width, height, data, TextureFormat.RGBA8, name);
-    }
-
-    public static Texture Create(int width, int height, ReadOnlySpan<byte> data, TextureFormat format, string name = "")
+    public static Texture Create(
+        int width,
+        int height,
+        ReadOnlySpan<byte> data,
+        TextureFormat format = TextureFormat.RGBA8,
+        TextureFilter filter = TextureFilter.Linear,
+        string name = "")
     {
         var texture = new Texture(name)
         {
             Width = width,
             Height = height,
             Format = format,
-            Filter = TextureFilter.Linear,
+            Filter = filter,
             Clamp = TextureClamp.Clamp,
             Data = data.ToArray()
         };
@@ -73,7 +74,7 @@ public class Texture : Asset
     {
         if (Handle != nuint.Zero)
             Render.Driver.DestroyTexture(Handle);
-        Handle = Render.Driver.CreateTexture(Width, Height, Data, Format);
+        Handle = Render.Driver.CreateTexture(Width, Height, Data, Format, Filter);
     }
 
     internal static void RegisterDef()

@@ -15,7 +15,6 @@ public enum SpriteEditorTool
 
 public class SpriteEditor : DocumentEditor
 {
-    private const int RasterTextureSize = 256;
     private const float AnchorSelectionSize = 2.0f;
     private const float SegmentSelectionSize = 6.0f;
 
@@ -25,7 +24,9 @@ public class SpriteEditor : DocumentEditor
     private ushort _currentFrame;
     private bool _isPlaying;
     private float _playTimer;
-    private readonly PixelData<Color32> _pixelData = new(RasterTextureSize, RasterTextureSize);
+    private readonly PixelData<Color32> _pixelData = new(
+        EditorApplication.Config!.AtlasSize,
+        EditorApplication.Config!.AtlasSize);
     private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
 
@@ -33,7 +34,13 @@ public class SpriteEditor : DocumentEditor
 
     public SpriteEditor(SpriteDocument document) : base(document)
     {
-        _rasterTexture = Texture.Create(RasterTextureSize, RasterTextureSize, _pixelData.AsBytes());
+        _rasterTexture = Texture.Create(
+            _pixelData.Width,
+            _pixelData.Height,
+            _pixelData.AsBytes(),
+            TextureFormat.RGBA8,
+            TextureFilter.Nearest,
+            "SpriteEditor");
         Input.PushInputSet(_input, inheritState: true);
 
         _commands =
@@ -89,14 +96,13 @@ public class SpriteEditor : DocumentEditor
 
         var shape = Document.GetFrame(_currentFrame).Shape;
 
-//        DrawRaster(shape);
         Render.PushState();
         Render.SetTransform(Document.Transform);
+        DrawRaster(shape);
         Render.SetLayer(EditorLayer.Gizmo);
         DrawSegments(shape);
         DrawAnchors(shape);
         Render.PopState();
-
     }
     
     private void UpdateRaster()
@@ -600,32 +606,26 @@ public class SpriteEditor : DocumentEditor
 
     private void DrawRaster(Shape shape)
     {
-        if (_pixelData == null || _rasterTexture == null)
-            return;
-
         var rb = shape.RasterBounds;
         if (rb.Width <= 0 || rb.Height <= 0)
             return;
 
-        if (EditorAssets.Shaders.Texture is Shader textureShader)
-            Render.SetShader(textureShader);
-
-        Render.SetTexture(_rasterTexture);
-
         var dpi = EditorApplication.Config?.AtlasDpi ?? 64f;
         var invDpi = 1f / dpi;
-
         var quadX = rb.X * invDpi;
         var quadY = rb.Y * invDpi;
         var quadW = rb.Width * invDpi;
         var quadH = rb.Height * invDpi;
-
         var texSize = (float)_pixelData.Width;
         var u1 = rb.Width / texSize;
         var v1 = rb.Height / texSize;
 
+        Render.PushState();
+        Render.SetShader(EditorAssets.Shaders.Texture!);
+        Render.SetTexture(_rasterTexture);
         Render.SetColor(Color.White);
         Render.Draw(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
+        Render.PopState();
     }
 
     private static void DrawSegment(Shape shape, ushort segmentIndex, float width, ushort order = 0)
