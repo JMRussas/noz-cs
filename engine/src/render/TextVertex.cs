@@ -15,7 +15,7 @@ public struct TextVertex : IVertex
     
     public Vector2 Position;
     public Vector2 UV;
-    public Color32 Color;
+    public Color Color;
 
     public static VertexFormatDescriptor GetFormatDescriptor() => new()
     {

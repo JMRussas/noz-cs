@@ -263,7 +263,7 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
         _gl.BindBuffer(BufferTargetARB.ElementArrayBuffer, glBuffer);
     }
 
-    public nuint CreateVertexFormat(in VertexFormatDescriptor descriptor)
+    public nuint CreateVertexFormat(in VertexFormatDescriptor descriptor, string? name)
     {
         var vao = _gl.GenVertexArray();
         _gl.BindVertexArray(vao);
@@ -302,6 +302,8 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
             }
         }
 
+        if (name != null)
+            SetDebugLabel(ObjectIdentifier.VertexArray, vao, name);
         
         var handle = _nextVertexFormatId++;
         _vertexFormats[handle] = (vao, descriptor.Stride);

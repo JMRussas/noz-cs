@@ -9,7 +9,7 @@
 
 layout(location = 0) in vec2 in_position;
 layout(location = 1) in vec2 in_uv;
-layout(location = 3) in vec4 in_color;
+layout(location = 2) in vec4 in_color;
 
 uniform mat4 u_projection;
 

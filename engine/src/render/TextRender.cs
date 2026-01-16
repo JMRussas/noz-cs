@@ -51,12 +51,16 @@ internal static class TextRender
     {
         if (_vertices.Length > 0)
         {
-            Render.Driver.BindVertexFormat(VertexFormat<UIVertex>.Handle);
+            Render.Driver.BindVertexFormat(VertexFormat<TextVertex>.Handle);
+            Render.Driver.BindVertexBuffer(_vertexBuffer);
             Render.Driver.UpdateVertexBuffer(_vertexBuffer, 0, _vertices.AsByteSpan());
         }
 
         if (_indices.Length > 0)
+        {
+            Render.Driver.BindIndexBuffer(_indexBuffer);
             Render.Driver.UpdateIndexBuffer(_indexBuffer, 0, _indices.AsSpan());
+        }
 
         _vertices.Clear();
         _indices.Clear();
@@ -91,7 +95,6 @@ internal static class TextRender
         if (atlasTexture == null)
             return;
 
-        Render.PushState();
         Render.SetShader(_textShader);
         Render.SetTexture(atlasTexture);
         Render.SetVertexBuffer<TextVertex>(_vertexBuffer);

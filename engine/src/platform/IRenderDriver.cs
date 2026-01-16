@@ -48,7 +48,7 @@ public interface IRenderDriver
     void UpdateIndexBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<ushort> data);
     void UpdateUniformBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data);
 
-    nuint CreateVertexFormat(in VertexFormatDescriptor descriptor);
+    nuint CreateVertexFormat(in VertexFormatDescriptor descriptor, string? name=null);
     void DestroyVertexFormat(nuint handle);
     void BindVertexFormat(nuint format);
 

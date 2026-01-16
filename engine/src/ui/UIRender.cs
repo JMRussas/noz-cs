@@ -159,7 +159,10 @@ public static class UIRender
             return;
 
         var vertexSpan = MemoryMarshal.AsBytes(_vertices.AsSpan(0, _vertexCount));
+        Render.Driver.BindVertexFormat(VertexFormat<UIVertex>.Handle);
+        Render.Driver.BindVertexBuffer(_vertexBuffer);
         Render.Driver.UpdateVertexBuffer(_vertexBuffer, 0, vertexSpan);
+        Render.Driver.BindIndexBuffer(_vertexBuffer);
         Render.Driver.UpdateIndexBuffer(_indexBuffer, 0, _indices.AsSpan(0, _indexCount));
         
         Render.PushState();

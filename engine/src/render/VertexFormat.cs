@@ -20,7 +20,7 @@ public static class VertexFormat<T> where T : unmanaged, IVertex
         {
             if (field == nuint.Zero)
             {
-                field = Render.Driver.CreateVertexFormat(T.GetFormatDescriptor());
+                field = Render.Driver.CreateVertexFormat(T.GetFormatDescriptor(), name: typeof(T).Name);
             }
 
             return field;
