@@ -159,7 +159,7 @@ public static class CommandPalette
         using (UI.BeginCanvas(id:EditorStyle.CanvasId.CommandPalette))
         using (UI.BeginContainer(EditorStyle.CommandPalette.RootContainer))
         using (UI.BeginColumn(EditorStyle.CommandPalette.ListColumn))
-        { 
+        {
             using (UI.BeginContainer(EditorStyle.CommandPalette.SearchContainer))
                 UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId);
             CommandList();
@@ -176,7 +176,7 @@ public static class CommandPalette
         using (UI.BeginExpanded())
         using (UI.BeginContainer())
         using (UI.BeginScrollable(offset: 0, id: CommandListId))
-        using (UI.BeginColumn(new ContainerStyle{Color=Color.Red}))
+        using (UI.BeginColumn())
         {
             var selectedIndex = _selectedIndex;
             for (var i = 0; i < _filteredCount; i++)
@@ -254,26 +254,25 @@ public static class CommandPalette
 
     private static void ScrollToSelection()
     {
-#if false
-        var maxListHeight = EditorStyle.CommandPalette.Height - EditorStyle.CommandPalette.InputHeight -
-                            EditorStyle.CommandPalette.Padding * 2 - EditorStyle.CommandPalette.ListSpacing;
-        var listHeight = Math.Min(_filteredCount * EditorStyle.CommandPalette.ItemHeight, maxListHeight);
+        var scrollableRect = UI.GetElementRect(CommandListId, EditorStyle.CanvasId.CommandPalette);
 
-        var itemTop = _selectedIndex * EditorStyle.CommandPalette.ItemHeight;
-        var itemBottom = itemTop + EditorStyle.CommandPalette.ItemHeight;
+        if (scrollableRect.Height <= 0)
+            return;
 
-        var currentScroll = UI.GetScrollOffset(ScrollableId, EditorStyle.CanvasId.CommandPalette);
+        var itemTop = _selectedIndex * EditorStyle.List.ItemHeight;
+        var itemBottom = itemTop + EditorStyle.List.ItemHeight;
+
+        var currentScroll = UI.GetScrollOffset(CommandListId, EditorStyle.CanvasId.CommandPalette);
         var viewTop = currentScroll;
-        var viewBottom = currentScroll + listHeight;
+        var viewBottom = currentScroll + scrollableRect.Height;
+        var newScroll = currentScroll;
 
-        float newScroll = currentScroll;
         if (itemTop < viewTop)
             newScroll = itemTop;
         else if (itemBottom > viewBottom)
-            newScroll = itemBottom - listHeight;
+            newScroll = itemBottom - scrollableRect.Height;
 
         if (newScroll != currentScroll)
-            UI.SetScrollOffset(ScrollableId, newScroll, EditorStyle.CanvasId.CommandPalette);
-#endif
+            UI.SetScrollOffset(CommandListId, newScroll, EditorStyle.CanvasId.CommandPalette);
     }
 }

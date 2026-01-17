@@ -257,7 +257,7 @@ public static class EditorStyle
             MinWidth = 24.0f,
             Height = 24.0f,
             Align = Align.Center,
-            Padding = EdgeInsets.LeftRight(4),
+            Padding = EdgeInsets.LeftRight(8),
             Color = Control.TextColor,
             Border = new BorderStyle { Radius = 8.0f }
         };

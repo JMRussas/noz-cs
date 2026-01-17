@@ -166,7 +166,7 @@ public static class InputCodeExtensions
         ";", "'", "-", "=",
         "~", "[", "]",
         "Space", "Enter", "Tab", ",", ".", "Backspace", "Escape",
-        "Left Shift", "Left Ctrl", "Left Alt", "Right Shift", "Right Ctrl", "Right Alt",
+        "Shift", "Ctrl", "Alt", "Shift", "Ctrl", "Alt",
         "Up", "Down", "Left", "Right", "Delete", "Insert", "Home", "End", "Page Up", "Page Down",
         "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12",
         "Left Super", "Right Super",

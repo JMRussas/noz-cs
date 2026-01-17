@@ -590,14 +590,14 @@ public static class UI
 
     public static byte GetElementId() => HasCurrentElement() ? GetCurrentElement().Id : (byte)0;
 
-    public static Rect GetElementRect(byte id)
+    public static Rect GetElementRect(byte id, byte canvasId = ElementIdNone)
     {
         if (id == ElementIdNone) return Rect.Zero;
 
-        // Check canvas-scoped state first if we're in a canvas context
-        if (_currentCanvasId != ElementIdNone)
+        var effectiveCanvasId = canvasId != ElementIdNone ? canvasId : _currentCanvasId;
+        if (effectiveCanvasId != ElementIdNone)
         {
-            ref var cs = ref _canvasStates[_currentCanvasId];
+            ref var cs = ref _canvasStates[effectiveCanvasId];
             if (cs.ElementStates != null)
                 return cs.ElementStates[id].Rect;
         }
@@ -1036,6 +1036,9 @@ public static class UI
             TextStart = textStart,
             TextLength = text.Length
         };
+
+        PushElement(e.Index);
+        PopElement();
     }
 
     public static void Image(Sprite sprite, ImageStyle style = default)
@@ -1053,6 +1056,9 @@ public static class UI
             Width = sprite.Width,
             Height = sprite.Height
         };
+
+        PushElement(e.Index);
+        PopElement();
     }
 
     public static void Image(Texture texture, float width, float height, ImageStyle style = default)
@@ -1070,6 +1076,9 @@ public static class UI
             Width = width,
             Height = height
         };
+
+        PushElement(e.Index);
+        PopElement();
     }
 
     public static bool TextBox(ref string text, TextBoxStyle style = default, byte id = 0)
@@ -1093,6 +1102,9 @@ public static class UI
                 textChanged = true;
             }
         }
+
+        PushElement(e.Index);
+        PopElement();
 
         return textChanged;
     }
@@ -1389,10 +1401,13 @@ public static class UI
         var contentHeight = 0f;
         var maxWidth = 0f;
 
+        // Give children unlimited height so they can expand to their natural size
+        var childAvailableSize = new Vector2(availableSize.X, float.MaxValue);
+
         for (var i = 0; i < e.ChildCount; i++)
         {
             ref var child = ref _elements[elementIndex];
-            elementIndex = MeasureElement(elementIndex, availableSize);
+            elementIndex = MeasureElement(elementIndex, childAvailableSize);
             contentHeight += child.MeasuredSize.Y;
             maxWidth = Math.Max(maxWidth, child.MeasuredSize.X);
         }
