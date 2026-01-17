@@ -102,12 +102,24 @@ public class SpriteDocument : Document
     {
         var pathIndex = f.Shape.AddPath();
         byte fillColor = 0;
+        var position = Vector2.Zero;
+        var rotation = 0f;
+        var scale = Vector2.One;
 
         while (!tk.IsEOF)
         {
             if (tk.ExpectIdentifier("c"))
             {
                 fillColor = (byte)tk.ExpectInt();
+            }
+            else if (tk.ExpectIdentifier("t"))
+            {
+                // Path transform: t <posX> <posY> <rotation> <scaleX> <scaleY>
+                position.X = tk.ExpectFloat();
+                position.Y = tk.ExpectFloat();
+                rotation = tk.ExpectFloat();
+                scale.X = tk.ExpectFloat();
+                scale.Y = tk.ExpectFloat();
             }
             else if (tk.ExpectIdentifier("a"))
             {
@@ -120,6 +132,7 @@ public class SpriteDocument : Document
         }
 
         f.Shape.SetPathFillColor(pathIndex, fillColor);
+        f.Shape.SetPathTransform(pathIndex, position, rotation, scale);
     }
 
     private static void ParseAnchor(Shape shape, ushort pathIndex, ref Tokenizer tk)
@@ -183,6 +196,17 @@ public class SpriteDocument : Document
             var path = shape.GetPath(pIdx);
 
             sb.AppendLine($"p c {path.FillColor}");
+
+            // Save transform if not identity
+            var hasTransform = path.Position != Vector2.Zero ||
+                               MathF.Abs(path.Rotation) > float.Epsilon ||
+                               path.Scale != Vector2.One;
+            if (hasTransform)
+            {
+                sb.AppendLine(string.Format(CultureInfo.InvariantCulture,
+                    "t {0} {1} {2} {3} {4}",
+                    path.Position.X, path.Position.Y, path.Rotation, path.Scale.X, path.Scale.Y));
+            }
 
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {

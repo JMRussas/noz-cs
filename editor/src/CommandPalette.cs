@@ -44,8 +44,8 @@ public struct CommandInputOptions
 
 public static class CommandPalette
 {
-    private const byte TextBoxId = 201;
-    private const byte ScrollableId = 202;
+    private const byte SearchId = 201;
+    private const byte CommandListId = 202;
     private const int MaxFilteredCommands = 32;
 
     private static string? _prefix;
@@ -86,7 +86,7 @@ public static class CommandPalette
         _popInput = true;
 
         UpdateFilteredCommands();
-        UI.SetFocus(TextBoxId, EditorStyle.CanvasId.CommandPalette);
+        UI.SetFocus(SearchId, EditorStyle.CanvasId.CommandPalette);
     }
 
     public static void End()
@@ -156,92 +156,66 @@ public static class CommandPalette
         if (_hideWhenEmpty && string.IsNullOrEmpty(_text))
             return;
 
-        UI.BeginCanvas(new CanvasStyle { Id = EditorStyle.CanvasId.CommandPalette });
-        UI.BeginContainer(new ContainerStyle
-        {
-            Width = EditorStyle.CommandPalette.Width,
-            Height = EditorStyle.CommandPalette.Height,
-            Align = Align.Center,
-            Padding = EdgeInsets.All(EditorStyle.CommandPalette.Padding),
-            Color = EditorStyle.Overlay.FillColor,
-            Border = new BorderStyle 
-            { 
-                Radius = EditorStyle.CommandPalette.BorderRadius
-            }
-        });
-
-        UI.BeginColumn(new ContainerStyle { Spacing = EditorStyle.CommandPalette.ListSpacing });
-        UI.TextBox(ref _text, new TextBoxStyle
-        {
-            Height = EditorStyle.CommandPalette.InputHeight,
-            FontSize = EditorStyle.CommandPalette.FontSize,
-            BackgroundColor = EditorStyle.ButtonColor,
-            TextColor = EditorStyle.Overlay.TextColor,
-            Border = new BorderStyle { Radius = 6, Width = 1, Color = EditorStyle.ButtonColor },
-            FocusBorder = new BorderStyle { Radius = 6, Width = 1, Color = EditorStyle.SelectionColor },
-            Id = TextBoxId
-        });
-
-        if (_filteredCount > 0)
-            DrawCommandList();
-
-        UI.EndColumn();
-        UI.EndContainer();
-        UI.EndCanvas();
+        using (UI.BeginCanvas(id:EditorStyle.CanvasId.CommandPalette))
+        using (UI.BeginContainer(EditorStyle.CommandPalette.RootContainer))
+        using (UI.BeginColumn(EditorStyle.CommandPalette.ListColumn))
+        { 
+            using (UI.BeginContainer(EditorStyle.CommandPalette.SearchContainer))
+                UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId);
+            CommandList();
+        }
     }
 
-    private static void DrawCommandList()
+    private static void CommandList()
     {
-        var maxListHeight = EditorStyle.CommandPalette.Height - EditorStyle.CommandPalette.InputHeight -
-                            EditorStyle.CommandPalette.Padding * 2 - EditorStyle.CommandPalette.ListSpacing;
-        var listHeight = Math.Min(_filteredCount * EditorStyle.CommandPalette.ItemHeight, maxListHeight);
-
-        UI.BeginContainer(new ContainerStyle { Height = listHeight });
-        UI.BeginScrollable(0, new ScrollableStyle { Id = ScrollableId });
-        UI.BeginColumn();
-
-        var selectedIndex = _selectedIndex;
+        //var maxListHeight = EditorStyle.CommandPalette.Height - EditorStyle.CommandPalette.InputHeight -
+        //                    EditorStyle.CommandPalette.Padding * 2 - EditorStyle.CommandPalette.ListSpacing;
+        //var listHeight = Math.Min(_filteredCount * EditorStyle.CommandPalette.ItemHeight, maxListHeight);
         var execute = false;
-        for (var i = 0; i < _filteredCount; i++)
+
+        using (UI.BeginContainer())
+        using (UI.BeginScrollable(offset: 0, id: CommandListId))
+        using (UI.BeginColumn())
         {
-            var cmd = _filteredCommands[i];
-            if (cmd == null) continue;
-
-            var isSelected = i == selectedIndex;
-
-            UI.BeginContainer(new ContainerStyle
+            var selectedIndex = _selectedIndex;
+            for (var i = 0; i < _filteredCount; i++)
             {
-                Height = EditorStyle.CommandPalette.ItemHeight,
-                Padding = EdgeInsets.LeftRight(EditorStyle.CommandPalette.ItemPadding),
-                Color = isSelected ? EditorStyle.List.ItemSelectedFillColor: Color.Transparent,
-                Border = new BorderStyle { Radius = 8 },
-                Id = (byte)(i + 10)
-            });
+                var cmd = _filteredCommands[i];
+                if (cmd == null) continue;
 
-            UI.Label(cmd.Name, new LabelStyle
-            {
-                FontSize = (int)EditorStyle.CommandPalette.ItemFontSize,
-                Color = isSelected ? EditorStyle.List.ItemSelectedTextColor : EditorStyle.List.ItemTextColor,
-                Align = Align.CenterLeft
-            });
+                var isSelected = i == selectedIndex;
 
-            if (cmd.Key != InputCode.None)
-                EditorUI.Shortcut(cmd);
+                using (UI.BeginContainer(
+                    id: (byte)(i + 10),
+                    style: isSelected
+                        ? EditorStyle.CommandPalette.SelectedCommandContainer
+                        : EditorStyle.CommandPalette.CommandContainer))
+                {
+                    using (UI.BeginRow())
+                    {
+                        using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
+                            ;
 
-            if (UI.WasClicked())
-            {
-                selectedIndex = i;
-                execute = true;
+                        UI.Label(cmd.Name, style: isSelected
+                            ? EditorStyle.CommandPalette.SelectedCommandText
+                            : EditorStyle.CommandPalette.CommandText);
+
+                        UI.Expanded();
+
+                        if (cmd.Key != InputCode.None)
+                            EditorUI.Shortcut(cmd);
+                    }
+
+                    if (UI.WasClicked())
+                    {
+                        selectedIndex = i;
+                        execute = true;
+                    }
+                }
             }
 
-            UI.EndContainer();
+            _selectedIndex = selectedIndex;
         }
-
-        _selectedIndex = selectedIndex;
-        
-        UI.EndColumn();
-        UI.EndScrollable();
-        UI.EndContainer();
 
         if (execute)
             ExecuteSelectedCommand();
@@ -279,6 +253,7 @@ public static class CommandPalette
 
     private static void ScrollToSelection()
     {
+#if false
         var maxListHeight = EditorStyle.CommandPalette.Height - EditorStyle.CommandPalette.InputHeight -
                             EditorStyle.CommandPalette.Padding * 2 - EditorStyle.CommandPalette.ListSpacing;
         var listHeight = Math.Min(_filteredCount * EditorStyle.CommandPalette.ItemHeight, maxListHeight);
@@ -298,5 +273,6 @@ public static class CommandPalette
 
         if (newScroll != currentScroll)
             UI.SetScrollOffset(ScrollableId, newScroll, EditorStyle.CanvasId.CommandPalette);
+#endif
     }
 }

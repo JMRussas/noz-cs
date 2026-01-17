@@ -74,8 +74,18 @@ public sealed unsafe class Shape : IDisposable
         public byte FillColor;
         public PathFlags Flags;
 
+        // Transform properties (anchors are in local space)
+        public Vector2 Position;
+        public float Rotation;
+        public Vector2 Scale;
+
         public bool IsSelected => (Flags & PathFlags.Selected) != 0;
         public bool IsFocused => (Flags & PathFlags.Focused) != 0;
+
+        public static Path CreateDefault() => new()
+        {
+            Scale = Vector2.One
+        };
     }
 
     public Shape()
@@ -179,21 +189,25 @@ public sealed unsafe class Shape : IDisposable
         for (ushort p = 0; p < PathCount; p++)
         {
             ref var path = ref _paths[p];
+            var transform = GetPathTransform(p);
+
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
                 var anchorIdx = (ushort)(path.AnchorStart + a);
                 ref var anchor = ref _anchors[anchorIdx];
 
-                min = Vector2.Min(min, anchor.Position);
-                max = Vector2.Max(max, anchor.Position);
+                var worldPos = Vector2.Transform(anchor.Position, transform);
+                min = Vector2.Min(min, worldPos);
+                max = Vector2.Max(max, worldPos);
 
                 if (MathF.Abs(anchor.Curve) > 0.0001f)
                 {
                     var samples = GetSegmentSamples(anchorIdx);
                     for (var s = 0; s < MaxSegmentSamples; s++)
                     {
-                        min = Vector2.Min(min, samples[s]);
-                        max = Vector2.Max(max, samples[s]);
+                        var sampleWorld = Vector2.Transform(samples[s], transform);
+                        min = Vector2.Min(min, sampleWorld);
+                        max = Vector2.Max(max, sampleWorld);
                     }
                 }
             }
@@ -221,13 +235,15 @@ public sealed unsafe class Shape : IDisposable
         for (ushort p = 0; p < PathCount; p++)
         {
             ref var path = ref _paths[p];
+            var transform = GetPathTransform(p);
 
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
                 var anchorIdx = path.AnchorStart + a;
                 ref var anchor = ref _anchors[anchorIdx];
 
-                var distSqr = Vector2.DistanceSquared(point, anchor.Position);
+                var worldPos = Vector2.Transform(anchor.Position, transform);
+                var distSqr = Vector2.DistanceSquared(point, worldPos);
                 if (distSqr >= anchorRadiusSqr || distSqr >= result.AnchorDistSqr) continue;
                 result.AnchorIndex = (ushort)anchorIdx;
                 result.AnchorDistSqr = distSqr;
@@ -242,10 +258,19 @@ public sealed unsafe class Shape : IDisposable
                 ref var a1 = ref _anchors[a1Idx];
                 var samples = GetSegmentSamples(a0Idx);
 
-                var distSqr = PointToSegmentDistSqr(point, a0.Position, samples[0]);
+                var a0World = Vector2.Transform(a0.Position, transform);
+                var a1World = Vector2.Transform(a1.Position, transform);
+                var sample0World = Vector2.Transform(samples[0], transform);
+
+                var distSqr = PointToSegmentDistSqr(point, a0World, sample0World);
                 for (var s = 0; s < MaxSegmentSamples - 1; s++)
-                    distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, samples[s], samples[s + 1]));
-                distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, samples[MaxSegmentSamples - 1], a1.Position));
+                {
+                    var sWorld = Vector2.Transform(samples[s], transform);
+                    var sNextWorld = Vector2.Transform(samples[s + 1], transform);
+                    distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, sWorld, sNextWorld));
+                }
+                var lastSampleWorld = Vector2.Transform(samples[MaxSegmentSamples - 1], transform);
+                distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, lastSampleWorld, a1World));
 
                 if (distSqr >= segmentRadiusSqr || distSqr >= result.SegmentDistSqr) continue;
 
@@ -358,6 +383,40 @@ public sealed unsafe class Shape : IDisposable
         }
     }
 
+    public Matrix3x2 GetPathTransform(ushort pathIndex)
+    {
+        ref var path = ref _paths[pathIndex];
+        return Matrix3x2.CreateScale(path.Scale) *
+               Matrix3x2.CreateRotation(path.Rotation) *
+               Matrix3x2.CreateTranslation(path.Position);
+    }
+
+    public Vector2 TransformPoint(ushort pathIndex, Vector2 localPoint)
+    {
+        var transform = GetPathTransform(pathIndex);
+        return Vector2.Transform(localPoint, transform);
+    }
+
+    public Vector2 GetPathCentroid(ushort pathIndex)
+    {
+        if (pathIndex >= PathCount)
+            return Vector2.Zero;
+
+        ref var path = ref _paths[pathIndex];
+        if (path.AnchorCount == 0)
+            return Vector2.Zero;
+
+        var sum = Vector2.Zero;
+        for (ushort a = 0; a < path.AnchorCount; a++)
+        {
+            var anchorIdx = (ushort)(path.AnchorStart + a);
+            sum += _anchors[anchorIdx].Position;
+        }
+
+        var localCentroid = sum / path.AnchorCount;
+        return TransformPoint(pathIndex, localCentroid);
+    }
+
     public Rect? GetPathBounds(ushort pathIndex)
     {
         if (pathIndex >= PathCount)
@@ -367,6 +426,7 @@ public sealed unsafe class Shape : IDisposable
         if (path.AnchorCount == 0)
             return null;
 
+        var transform = GetPathTransform(pathIndex);
         var min = new Vector2(float.MaxValue, float.MaxValue);
         var max = new Vector2(float.MinValue, float.MinValue);
 
@@ -375,16 +435,18 @@ public sealed unsafe class Shape : IDisposable
             var anchorIdx = (ushort)(path.AnchorStart + a);
             ref var anchor = ref _anchors[anchorIdx];
 
-            min = Vector2.Min(min, anchor.Position);
-            max = Vector2.Max(max, anchor.Position);
+            var worldPos = Vector2.Transform(anchor.Position, transform);
+            min = Vector2.Min(min, worldPos);
+            max = Vector2.Max(max, worldPos);
 
             if (MathF.Abs(anchor.Curve) > 0.0001f)
             {
                 var samples = GetSegmentSamples(anchorIdx);
                 for (var s = 0; s < MaxSegmentSamples; s++)
                 {
-                    min = Vector2.Min(min, samples[s]);
-                    max = Vector2.Max(max, samples[s]);
+                    var sampleWorld = Vector2.Transform(samples[s], transform);
+                    min = Vector2.Min(min, sampleWorld);
+                    max = Vector2.Max(max, sampleWorld);
                 }
             }
         }
@@ -415,6 +477,89 @@ public sealed unsafe class Shape : IDisposable
         return hasSelected ? Rect.FromMinMax(min, max) : null;
     }
 
+    public float? GetSelectedPathsCommonRotation()
+    {
+        float? commonRotation = null;
+
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            var rotation = _paths[p].Rotation;
+
+            if (!commonRotation.HasValue)
+            {
+                commonRotation = rotation;
+            }
+            else if (MathF.Abs(commonRotation.Value - rotation) > 0.0001f)
+            {
+                return null;
+            }
+        }
+
+        return commonRotation;
+    }
+
+    public (Rect bounds, Vector2 center, float rotation)? GetSelectedPathsRotatedBounds()
+    {
+        var commonRotation = GetSelectedPathsCommonRotation();
+        if (!commonRotation.HasValue)
+            return null;
+
+        var rotation = commonRotation.Value;
+        if (MathF.Abs(rotation) < 0.0001f)
+            return null;
+
+        var invRotation = Matrix3x2.CreateRotation(-rotation);
+
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+        var hasSelected = false;
+
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            ref var path = ref _paths[p];
+            var pathTransform = GetPathTransform(p);
+
+            for (ushort a = 0; a < path.AnchorCount; a++)
+            {
+                var anchorIdx = (ushort)(path.AnchorStart + a);
+                ref var anchor = ref _anchors[anchorIdx];
+
+                var worldPos = Vector2.Transform(anchor.Position, pathTransform);
+                var unrotatedPos = Vector2.Transform(worldPos, invRotation);
+                min = Vector2.Min(min, unrotatedPos);
+                max = Vector2.Max(max, unrotatedPos);
+                hasSelected = true;
+
+                if (MathF.Abs(anchor.Curve) > 0.0001f)
+                {
+                    var samples = GetSegmentSamples(anchorIdx);
+                    for (var s = 0; s < MaxSegmentSamples; s++)
+                    {
+                        var sampleWorld = Vector2.Transform(samples[s], pathTransform);
+                        var sampleUnrotated = Vector2.Transform(sampleWorld, invRotation);
+                        min = Vector2.Min(min, sampleUnrotated);
+                        max = Vector2.Max(max, sampleUnrotated);
+                    }
+                }
+            }
+        }
+
+        if (!hasSelected)
+            return null;
+
+        var localBounds = Rect.FromMinMax(min, max);
+        var localCenter = localBounds.Center;
+        var worldCenter = Vector2.Transform(localCenter, Matrix3x2.CreateRotation(rotation));
+
+        return (localBounds, worldCenter, rotation);
+    }
+
     public Rect? GetSelectedAnchorsBounds()
     {
         var min = new Vector2(float.MaxValue, float.MaxValue);
@@ -427,8 +572,10 @@ public sealed unsafe class Shape : IDisposable
                 continue;
 
             hasSelected = true;
-            min = Vector2.Min(min, _anchors[i].Position);
-            max = Vector2.Max(max, _anchors[i].Position);
+            var pathIndex = _anchors[i].Path;
+            var worldPos = TransformPoint(pathIndex, _anchors[i].Position);
+            min = Vector2.Min(min, worldPos);
+            max = Vector2.Max(max, worldPos);
         }
 
         return hasSelected ? Rect.FromMinMax(min, max) : null;
@@ -444,13 +591,9 @@ public sealed unsafe class Shape : IDisposable
             if (!_paths[p].IsSelected)
                 continue;
 
-            ref var path = ref _paths[p];
-            for (ushort a = 0; a < path.AnchorCount; a++)
-            {
-                var anchorIdx = (ushort)(path.AnchorStart + a);
-                sum += _anchors[anchorIdx].Position;
-                count++;
-            }
+            var centroid = GetPathCentroid(p);
+            sum += centroid;
+            count++;
         }
 
         return count > 0 ? sum / count : null;
@@ -466,7 +609,9 @@ public sealed unsafe class Shape : IDisposable
             if (!_anchors[i].IsSelected)
                 continue;
 
-            sum += _anchors[i].Position;
+            var pathIndex = _anchors[i].Path;
+            var worldPos = TransformPoint(pathIndex, _anchors[i].Position);
+            sum += worldPos;
             count++;
         }
 
@@ -491,10 +636,13 @@ public sealed unsafe class Shape : IDisposable
                 continue;
 
             ref var path = ref _paths[p];
+            var transform = GetPathTransform(p);
+
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
                 var anchorIdx = (ushort)(path.AnchorStart + a);
-                if (rect.Contains(_anchors[anchorIdx].Position))
+                var worldPos = Vector2.Transform(_anchors[anchorIdx].Position, transform);
+                if (rect.Contains(worldPos))
                     _anchors[anchorIdx].Flags |= AnchorFlags.Selected;
             }
         }
@@ -647,6 +795,9 @@ public sealed unsafe class Shape : IDisposable
             AnchorCount = 0,
             FillColor = fillColor,
             Flags = PathFlags.None,
+            Position = Vector2.Zero,
+            Rotation = 0f,
+            Scale = Vector2.One,
         };
 
         return pathIndex;
@@ -694,19 +845,21 @@ public sealed unsafe class Shape : IDisposable
         ref var path = ref _paths[pathIndex];
         if (path.AnchorCount < 3) return false;
 
+        var transform = GetPathTransform(pathIndex);
         var verts = new List<Vector2>();
+
         for (var a = 0; a < path.AnchorCount; a++)
         {
             var anchorIdx = (ushort)(path.AnchorStart + a);
             ref var anchor = ref _anchors[anchorIdx];
 
-            verts.Add(anchor.Position);
+            verts.Add(Vector2.Transform(anchor.Position, transform));
 
             if (MathF.Abs(anchor.Curve) > 0.0001f)
             {
                 var samples = GetSegmentSamples(anchorIdx);
                 for (var s = 0; s < MaxSegmentSamples; s++)
-                    verts.Add(samples[s]);
+                    verts.Add(Vector2.Transform(samples[s], transform));
             }
         }
 
@@ -913,6 +1066,148 @@ public sealed unsafe class Shape : IDisposable
         }
     }
 
+    public void SetPathTransform(ushort pathIndex, Vector2 position, float rotation, Vector2 scale)
+    {
+        if (pathIndex >= PathCount)
+            return;
+
+        _paths[pathIndex].Position = position;
+        _paths[pathIndex].Rotation = rotation;
+        _paths[pathIndex].Scale = scale;
+    }
+
+    public void RotateSelectedPaths(Vector2 pivot, float angle, Vector2[] savedCentroids, float[] savedRotations)
+    {
+        var cos = MathF.Cos(angle);
+        var sin = MathF.Sin(angle);
+
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            // Rotate saved world centroid around pivot
+            var offset = savedCentroids[p] - pivot;
+            var rotatedOffset = new Vector2(
+                offset.X * cos - offset.Y * sin,
+                offset.X * sin + offset.Y * cos
+            );
+            var newWorldCentroid = pivot + rotatedOffset;
+
+            // Update rotation
+            _paths[p].Rotation = savedRotations[p] + angle;
+
+            // Calculate new position so that the local centroid ends up at the new world position
+            var localCentroid = GetPathLocalCentroid(p);
+            var newTransform = Matrix3x2.CreateScale(_paths[p].Scale) *
+                               Matrix3x2.CreateRotation(_paths[p].Rotation);
+            var transformedLocalCentroid = Vector2.Transform(localCentroid, newTransform);
+            _paths[p].Position = newWorldCentroid - transformedLocalCentroid;
+        }
+    }
+
+    public void ScaleSelectedPaths(Vector2 pivot, Vector2 scale, Vector2[] savedCentroids, Vector2[] savedScales)
+    {
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            // Scale saved world centroid relative to pivot
+            var offset = savedCentroids[p] - pivot;
+            var scaledOffset = offset * scale;
+            var newWorldCentroid = pivot + scaledOffset;
+
+            // Update scale
+            _paths[p].Scale = savedScales[p] * scale;
+
+            // Calculate new position so that the local centroid ends up at the new world position
+            var localCentroid = GetPathLocalCentroid(p);
+            var newTransform = Matrix3x2.CreateScale(_paths[p].Scale) *
+                               Matrix3x2.CreateRotation(_paths[p].Rotation);
+            var transformedLocalCentroid = Vector2.Transform(localCentroid, newTransform);
+            _paths[p].Position = newWorldCentroid - transformedLocalCentroid;
+        }
+    }
+
+    public void RestoreSelectedPathTransforms(Vector2[] savedPositions, float[] savedRotations, Vector2[] savedScales)
+    {
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            _paths[p].Position = savedPositions[p];
+            _paths[p].Rotation = savedRotations[p];
+            _paths[p].Scale = savedScales[p];
+        }
+    }
+
+    public void SaveSelectedPathTransforms(Vector2[] outPositions, float[] outRotations, Vector2[] outScales)
+    {
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            outPositions[p] = _paths[p].Position;
+            outRotations[p] = _paths[p].Rotation;
+            outScales[p] = _paths[p].Scale;
+        }
+    }
+
+    public void SaveSelectedPathCentroids(Vector2[] outCentroids)
+    {
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            outCentroids[p] = GetPathCentroid(p);
+        }
+    }
+
+    public Vector2 GetPathLocalCentroid(ushort pathIndex)
+    {
+        if (pathIndex >= PathCount)
+            return Vector2.Zero;
+
+        ref var path = ref _paths[pathIndex];
+        if (path.AnchorCount == 0)
+            return Vector2.Zero;
+
+        var sum = Vector2.Zero;
+        for (ushort a = 0; a < path.AnchorCount; a++)
+        {
+            var anchorIdx = (ushort)(path.AnchorStart + a);
+            sum += _anchors[anchorIdx].Position;
+        }
+
+        return sum / path.AnchorCount;
+    }
+
+    public void ApplyTransformsToSelectedPaths()
+    {
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            ref var path = ref _paths[p];
+            var transform = GetPathTransform(p);
+
+            for (ushort a = 0; a < path.AnchorCount; a++)
+            {
+                var anchorIdx = (ushort)(path.AnchorStart + a);
+                _anchors[anchorIdx].Position = Vector2.Transform(_anchors[anchorIdx].Position, transform);
+            }
+
+            path.Position = Vector2.Zero;
+            path.Rotation = 0f;
+            path.Scale = Vector2.One;
+        }
+    }
+
     public void SelectAnchorsInRect(Rect rect)
     {
         for (ushort i = 0; i < AnchorCount; i++)
@@ -939,20 +1234,24 @@ public sealed unsafe class Shape : IDisposable
             ref var path = ref _paths[pIdx];
             if (path.AnchorCount < 3) continue;
 
+            var transform = GetPathTransform(pIdx);
             var vertexCount = 0;
+
             for (ushort aIdx = 0; aIdx < path.AnchorCount && vertexCount < maxPolyVerts; aIdx++)
             {
                 var anchorIdx = (ushort)(path.AnchorStart + aIdx);
                 ref var anchor = ref _anchors[anchorIdx];
 
-                polyVerts[vertexCount++] = anchor.Position * dpi;
+                var worldPos = Vector2.Transform(anchor.Position, transform);
+                polyVerts[vertexCount++] = worldPos * dpi;
 
                 if (MathF.Abs(anchor.Curve) > 0.0001f)
                 {
                     var samples = GetSegmentSamples(anchorIdx);
                     for (var s = 0; s < MaxSegmentSamples && vertexCount < maxPolyVerts; s++)
                     {
-                        polyVerts[vertexCount++] = samples[s] * dpi;
+                        var sampleWorld = Vector2.Transform(samples[s], transform);
+                        polyVerts[vertexCount++] = sampleWorld * dpi;
                     }
                 }
             }

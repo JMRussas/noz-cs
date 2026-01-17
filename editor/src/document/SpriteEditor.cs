@@ -59,6 +59,7 @@ public class SpriteEditor : DocumentEditor
             new Command { Name = "Scale", ShortName = "scale", Handler = BeginScaleTool, Key = InputCode.KeyS },
             new Command { Name = "Path Mode", ShortName = "path", Handler = SwitchToPathMode, Key = InputCode.KeyV },
             new Command { Name = "Anchor Mode", ShortName = "anchor", Handler = SwitchToAnchorMode, Key = InputCode.KeyA },
+            new Command { Name = "Apply Transforms", ShortName = "apply", Handler = ApplyTransforms, Key = InputCode.KeyA, Ctrl = true },
         ];
     }
 
@@ -73,6 +74,13 @@ public class SpriteEditor : DocumentEditor
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
     private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
     private ushort _curveAnchor = ushort.MaxValue;
+
+    // Path transform tool state
+    private readonly Vector2[] _savedPathPositions = new Vector2[Shape.MaxPaths];
+    private readonly float[] _savedPathRotations = new float[Shape.MaxPaths];
+    private readonly Vector2[] _savedPathScales = new Vector2[Shape.MaxPaths];
+    private readonly Vector2[] _savedPathCentroids = new Vector2[Shape.MaxPaths];
+    private bool _isRotating;
 
     // Hover state
     private ushort _hoveredAnchor = ushort.MaxValue;
@@ -485,34 +493,36 @@ public class SpriteEditor : DocumentEditor
         var worldPivot = Vector2.Transform(localPivot.Value, Document.Transform);
         Matrix3x2.Invert(Document.Transform, out var invTransform);
 
-        for (ushort i = 0; i < shape.AnchorCount; i++)
-            _savedPositions[i] = shape.GetAnchor(i).Position;
-
         Undo.Record(Document);
 
         if (_mode == SpriteEditorMode.Path)
         {
+            // Save path transforms and centroids
+            shape.SaveSelectedPathTransforms(_savedPathPositions, _savedPathRotations, _savedPathScales);
+            shape.SaveSelectedPathCentroids(_savedPathCentroids);
+            _isRotating = true;
+
             Workspace.BeginTool(new RotateTool(
                 worldPivot,
                 localPivot.Value,
                 invTransform,
                 update: angle =>
                 {
-                    shape.RotateAnchorsInSelectedPaths(localPivot.Value, angle, _savedPositions);
-                    shape.UpdateSamples();
+                    shape.RotateSelectedPaths(localPivot.Value, angle, _savedPathCentroids, _savedPathRotations);
                     shape.UpdateBounds();
                     MarkRasterDirty();
                 },
                 commit: _ =>
                 {
+                    _isRotating = false;
                     Document.MarkModified();
                     Document.UpdateBounds();
                     MarkRasterDirty();
                 },
                 cancel: () =>
                 {
-                    shape.RestoreAnchorsInSelectedPaths(_savedPositions);
-                    shape.UpdateSamples();
+                    _isRotating = false;
+                    shape.RestoreSelectedPathTransforms(_savedPathPositions, _savedPathRotations, _savedPathScales);
                     shape.UpdateBounds();
                     Undo.Cancel();
                 }
@@ -520,6 +530,9 @@ public class SpriteEditor : DocumentEditor
         }
         else
         {
+            for (ushort i = 0; i < shape.AnchorCount; i++)
+                _savedPositions[i] = shape.GetAnchor(i).Position;
+
             Workspace.BeginTool(new RotateTool(
                 worldPivot,
                 localPivot.Value,
@@ -557,19 +570,19 @@ public class SpriteEditor : DocumentEditor
 
         var worldPivot = Vector2.Transform(localPivot.Value, Document.Transform);
 
-        for (ushort i = 0; i < shape.AnchorCount; i++)
-            _savedPositions[i] = shape.GetAnchor(i).Position;
-
         Undo.Record(Document);
 
         if (_mode == SpriteEditorMode.Path)
         {
+            // Save path transforms and centroids
+            shape.SaveSelectedPathTransforms(_savedPathPositions, _savedPathRotations, _savedPathScales);
+            shape.SaveSelectedPathCentroids(_savedPathCentroids);
+
             Workspace.BeginTool(new ScaleTool(
                 worldPivot,
                 update: scale =>
                 {
-                    shape.ScaleAnchorsInSelectedPaths(localPivot.Value, scale, _savedPositions);
-                    shape.UpdateSamples();
+                    shape.ScaleSelectedPaths(localPivot.Value, scale, _savedPathCentroids, _savedPathScales);
                     shape.UpdateBounds();
                     MarkRasterDirty();
                 },
@@ -581,8 +594,7 @@ public class SpriteEditor : DocumentEditor
                 },
                 cancel: () =>
                 {
-                    shape.RestoreAnchorsInSelectedPaths(_savedPositions);
-                    shape.UpdateSamples();
+                    shape.RestoreSelectedPathTransforms(_savedPathPositions, _savedPathRotations, _savedPathScales);
                     shape.UpdateBounds();
                     Undo.Cancel();
                 }
@@ -590,6 +602,9 @@ public class SpriteEditor : DocumentEditor
         }
         else
         {
+            for (ushort i = 0; i < shape.AnchorCount; i++)
+                _savedPositions[i] = shape.GetAnchor(i).Position;
+
             Workspace.BeginTool(new ScaleTool(
                 worldPivot,
                 update: scale =>
@@ -622,6 +637,24 @@ public class SpriteEditor : DocumentEditor
             return shape.GetSelectedPathsCentroid();
         else
             return shape.GetSelectedAnchorsCentroid();
+    }
+
+    private void ApplyTransforms()
+    {
+        if (_mode != SpriteEditorMode.Path)
+            return;
+
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        if (!shape.HasSelectedPaths())
+            return;
+
+        Undo.Record(Document);
+        shape.ApplyTransformsToSelectedPaths();
+        shape.UpdateSamples();
+        shape.UpdateBounds();
+        Document.MarkModified();
+        Document.UpdateBounds();
+        MarkRasterDirty();
     }
 
     private void BeginCurveTool(ushort anchorIndex)
@@ -891,19 +924,23 @@ public class SpriteEditor : DocumentEditor
         Render.PopState();
     }
 
-    private static void DrawSegment(Shape shape, ushort segmentIndex, float width, ushort order = 0)
+    private static void DrawSegment(Shape shape, ushort pathIndex, ushort segmentIndex, float width, ushort order = 0)
     {
+        var transform = shape.GetPathTransform(pathIndex);
         var samples = shape.GetSegmentSamples(segmentIndex);
         ref readonly var anchor = ref shape.GetAnchor(segmentIndex);
-        var prev = anchor.Position;
+
+        var prev = Vector2.Transform(anchor.Position, transform);
         foreach (var sample in samples)
         {
-            Gizmos.DrawLine(prev, sample, width, order: order);
-            prev = sample;
+            var worldSample = Vector2.Transform(sample, transform);
+            Gizmos.DrawLine(prev, worldSample, width, order: order);
+            prev = worldSample;
         }
 
         ref readonly var nextAnchor = ref shape.GetNextAnchor(segmentIndex);
-        Gizmos.DrawLine(prev, nextAnchor.Position, width, order: order);
+        var nextWorld = Vector2.Transform(nextAnchor.Position, transform);
+        Gizmos.DrawLine(prev, nextWorld, width, order: order);
     }
 
     private void DrawSegments(Shape shape)
@@ -912,8 +949,9 @@ public class SpriteEditor : DocumentEditor
         if (_hoveredSegment != ushort.MaxValue)
         {
             Render.PushState();
-//            Render.SetColor(EditorStyle.Shape.HoverColor);
-            DrawSegment(shape, _hoveredSegment, EditorStyle.Shape.SegmentHoverWidth, 0);
+            var pathIndex = FindPathForAnchor(shape, _hoveredSegment);
+            if (pathIndex != ushort.MaxValue)
+                DrawSegment(shape, pathIndex, _hoveredSegment, EditorStyle.Shape.SegmentHoverWidth, 0);
             Render.PopState();
         }
 
@@ -921,40 +959,56 @@ public class SpriteEditor : DocumentEditor
         Render.PushState();
         Render.SetColor(EditorStyle.Shape.SegmentColor);
         for (ushort anchorIndex=0; anchorIndex < shape.AnchorCount; anchorIndex++)
+        {
             if (!shape.IsSegmentSelected(anchorIndex))
-                DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
+            {
+                var pathIndex = FindPathForAnchor(shape, anchorIndex);
+                if (pathIndex != ushort.MaxValue)
+                    DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
+            }
+        }
         Render.PopState();
 
         // selected
         Render.PushState();
-        //Render.SetColor(EditorStyle.Shape.SelectionColor);
         for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
+        {
             if (shape.IsSegmentSelected(anchorIndex))
-                DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
-        Render.PopState();        
+            {
+                var pathIndex = FindPathForAnchor(shape, anchorIndex);
+                if (pathIndex != ushort.MaxValue)
+                    DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
+            }
+        }
+        Render.PopState();
     }
 
-    private static void DrawAnchor(ref readonly Shape.Anchor anchor)
+    private static void DrawAnchor(Vector2 worldPosition)
     {
         Gizmos.SetColor(EditorStyle.Shape.AnchorColor);
-        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
+        Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
         Render.SetColor(EditorStyle.Shape.AnchorOutlineColor);
-        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize, order: 4);
+        Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize, order: 4);
     }
 
-    private static void DrawSelectedAnchor(ref readonly Shape.Anchor anchor)
+    private static void DrawSelectedAnchor(Vector2 worldPosition)
     {
         Render.SetColor(EditorStyle.Shape.AnchorOutlineColor);
-        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
+        Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
         Gizmos.SetColor(EditorStyle.Shape.AnchorColor);
-        Gizmos.DrawRect(anchor.Position, EditorStyle.Shape.AnchorSize, order: 4);
+        Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize, order: 4);
     }
 
     private void DrawAnchors(Shape shape)
     {
         // hovered
         if (_hoveredAnchor != ushort.MaxValue)
-            DrawSelectedAnchor(in shape.GetAnchor(_hoveredAnchor));
+        {
+            ref readonly var hoveredAnchorRef = ref shape.GetAnchor(_hoveredAnchor);
+            var pathIndex = hoveredAnchorRef.Path;
+            var worldPos = shape.TransformPoint(pathIndex, hoveredAnchorRef.Position);
+            DrawSelectedAnchor(worldPos);
+        }
 
         // default
         Render.PushState();
@@ -964,7 +1018,8 @@ public class SpriteEditor : DocumentEditor
             if (i == _hoveredAnchor) continue;
             ref readonly var anchor = ref shape.GetAnchor(i);
             if (anchor.IsSelected) continue;
-            DrawAnchor(in anchor);
+            var worldPos = shape.TransformPoint(anchor.Path, anchor.Position);
+            DrawAnchor(worldPos);
         }
 
         for (ushort i = 0; i < shape.AnchorCount; i++)
@@ -972,7 +1027,8 @@ public class SpriteEditor : DocumentEditor
             if (i == _hoveredAnchor) continue;
             ref readonly var anchor = ref shape.GetAnchor(i);
             if (!anchor.IsSelected) continue;
-            DrawSelectedAnchor(in anchor);
+            var worldPos = shape.TransformPoint(anchor.Path, anchor.Position);
+            DrawSelectedAnchor(worldPos);
         }
 
         Render.PopState();
@@ -987,7 +1043,7 @@ public class SpriteEditor : DocumentEditor
         {
             var pathIndex = FindPathForAnchor(shape, anchorIndex);
             if (pathIndex != ushort.MaxValue && shape.IsPathSelected(pathIndex))
-                DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
+                DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
         }
 
         Render.PopState();
@@ -995,15 +1051,54 @@ public class SpriteEditor : DocumentEditor
 
     private void DrawSelectedPathsBounds(Shape shape)
     {
-        var bounds = shape.GetSelectedPathsBounds();
-        if (!bounds.HasValue)
-            return;
+        var lineWidth = EditorStyle.Shape.SegmentWidth * 2f;
 
         Render.PushState();
         Render.SetColor(EditorStyle.SelectionColor);
-        var lineWidth = EditorStyle.Shape.SegmentWidth * 2f;
-        Gizmos.DrawRect(bounds.Value, lineWidth, order: 3);
+
+        // Show rotated bounds if all selected paths have the same rotation
+        var rotatedBounds = shape.GetSelectedPathsRotatedBounds();
+        if (rotatedBounds.HasValue)
+        {
+            var (localBounds, _, rotation) = rotatedBounds.Value;
+            DrawRotatedRect(localBounds, rotation, lineWidth);
+        }
+        else
+        {
+            // Fall back to axis-aligned bounds
+            var bounds = shape.GetSelectedPathsBounds();
+            if (bounds.HasValue)
+                Gizmos.DrawRect(bounds.Value, lineWidth, order: 3);
+        }
+
         Render.PopState();
+    }
+
+    private static void DrawRotatedRect(Rect localBounds, float rotation, float lineWidth)
+    {
+        var cos = MathF.Cos(rotation);
+        var sin = MathF.Sin(rotation);
+
+        var corners = new Vector2[4];
+        corners[0] = new Vector2(localBounds.X, localBounds.Y);
+        corners[1] = new Vector2(localBounds.Right, localBounds.Y);
+        corners[2] = new Vector2(localBounds.Right, localBounds.Bottom);
+        corners[3] = new Vector2(localBounds.X, localBounds.Bottom);
+
+        for (var i = 0; i < 4; i++)
+        {
+            var c = corners[i];
+            corners[i] = new Vector2(
+                c.X * cos - c.Y * sin,
+                c.X * sin + c.Y * cos
+            );
+        }
+
+        for (var i = 0; i < 4; i++)
+        {
+            var next = (i + 1) % 4;
+            Gizmos.DrawLine(corners[i], corners[next], lineWidth, order: 3);
+        }
     }
 
     private void DrawSegmentsForFocusedPaths(Shape shape)
@@ -1017,7 +1112,7 @@ public class SpriteEditor : DocumentEditor
         {
             var pathIndex = FindPathForAnchor(shape, anchorIndex);
             if (pathIndex != ushort.MaxValue && !shape.IsPathFocused(pathIndex))
-                DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
+                DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
         }
 
         // Focused paths - normal color
@@ -1028,7 +1123,7 @@ public class SpriteEditor : DocumentEditor
             if (pathIndex != ushort.MaxValue && shape.IsPathFocused(pathIndex))
             {
                 if (!shape.IsSegmentSelected(anchorIndex))
-                    DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
+                    DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
             }
         }
 
@@ -1039,7 +1134,7 @@ public class SpriteEditor : DocumentEditor
             if (pathIndex != ushort.MaxValue && shape.IsPathFocused(pathIndex))
             {
                 if (shape.IsSegmentSelected(anchorIndex))
-                    DrawSegment(shape, anchorIndex, EditorStyle.Shape.SegmentWidth, 3);
+                    DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 3);
             }
         }
 
@@ -1048,7 +1143,7 @@ public class SpriteEditor : DocumentEditor
         {
             var pathIndex = FindPathForAnchor(shape, _hoveredSegment);
             if (pathIndex != ushort.MaxValue && shape.IsPathFocused(pathIndex))
-                DrawSegment(shape, _hoveredSegment, EditorStyle.Shape.SegmentHoverWidth, 4);
+                DrawSegment(shape, pathIndex, _hoveredSegment, EditorStyle.Shape.SegmentHoverWidth, 4);
         }
 
         Render.PopState();
@@ -1072,10 +1167,12 @@ public class SpriteEditor : DocumentEditor
                     continue;
 
                 ref readonly var anchor = ref shape.GetAnchor(anchorIdx);
+                var worldPos = shape.TransformPoint(p, anchor.Position);
+
                 if (anchor.IsSelected)
-                    DrawSelectedAnchor(in anchor);
+                    DrawSelectedAnchor(worldPos);
                 else
-                    DrawAnchor(in anchor);
+                    DrawAnchor(worldPos);
             }
         }
 
@@ -1084,7 +1181,11 @@ public class SpriteEditor : DocumentEditor
         {
             var pathIndex = FindPathForAnchor(shape, _hoveredAnchor);
             if (pathIndex != ushort.MaxValue && shape.IsPathFocused(pathIndex))
-                DrawSelectedAnchor(in shape.GetAnchor(_hoveredAnchor));
+            {
+                ref readonly var anchor = ref shape.GetAnchor(_hoveredAnchor);
+                var worldPos = shape.TransformPoint(pathIndex, anchor.Position);
+                DrawSelectedAnchor(worldPos);
+            }
         }
 
         Render.PopState();

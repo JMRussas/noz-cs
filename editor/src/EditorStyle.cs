@@ -122,11 +122,14 @@ public static class EditorStyle
     {
         public static Color TextColor => _current.ControlTextColor;
         public static Color IconColor => _current.ControlIconColor;
-        public static Color BackgroundColor => _current.ControlBackgroundColor;
+        public static Color FillColor => _current.ControlBackgroundColor;
     }
 
     public static class List
     {
+        public const float ItemHeight = 28f;
+        public const float ItemPadding = 8f;
+        public const float ItemTextSize = 14.0f;
         public static Color ItemSelectedFillColor => _current.ListItemSelectedFillColor;
         public static Color ItemSelectedTextColor => _current.ListItemSelectedTextColor;
         public static Color ItemTextColor => _current.ListItemTextColor;
@@ -151,20 +154,65 @@ public static class EditorStyle
         public static Color LineColor => _current.BoxSelectLineColor;
         public static Color FillColor => _current.BoxSelectFillColor;
     }
-    
+
     public static class CommandPalette
     {
-        public const float FontSize = 18.0f;
-        public const float Width = 600.0f;
-        public const float Height = 200.0f;
-        public const float Padding = 8.0f;
-        public const float BorderRadius = 10.0f;
-        public const float InputHeight = 24.0f;
-        public const float ItemHeight = 32.0f;
-        public const float ItemFontSize = 14.0f;
-        public const float ItemPadding = 8.0f;
-        public const float ListSpacing = 4.0f;
-        public const float ShortcutFontSize = 12.0f;
+        private const float IconSize = 24.0f;
+
+        public static readonly ContainerStyle RootContainer = new()
+        {
+            Width = 600.0f,
+            Height = 200.0f,
+            Align = Align.Center,
+            Padding = EdgeInsets.All(8.0f),
+            Color = EditorStyle.Overlay.FillColor,
+            Border = new BorderStyle { Radius = 10.0f }
+        };
+
+        public static readonly ContainerStyle SearchContainer = new()
+        {
+            Margin = EdgeInsets.Left(List.ItemHeight)
+        };
+
+        public static readonly TextBoxStyle SearchTextBox = new()
+        { 
+            Height = 24.0f,
+            FontSize = 18.0f,
+            BackgroundColor = Overlay.FillColor,
+            TextColor = List.ItemSelectedTextColor,
+            PlaceholderColor = List.HeaderTextColor,
+        };
+
+        public static readonly ContainerStyle ListColumn = new()
+        {
+            Spacing = 4.0f
+        };
+
+        public static readonly ContainerStyle CommandContainer = new()
+        {
+            Height = List.ItemHeight,
+            Color = Color.Transparent,
+            Border = new BorderStyle { Radius = 8 }
+        };
+
+        public static readonly ContainerStyle CommandIconContainer = new()
+        {
+            Width = List.ItemHeight,
+            Height = List.ItemHeight
+        };
+
+        public static readonly ContainerStyle SelectedCommandContainer = 
+            CommandContainer.WithColor(List.ItemSelectedFillColor);
+
+        public static readonly LabelStyle CommandText = new()
+        {
+            FontSize = List.ItemTextSize,
+            Color = EditorStyle.List.ItemTextColor,
+            Align = Align.CenterLeft
+        };
+
+        public static readonly LabelStyle SelectedCommandText =
+            CommandText.WithColor(List.ItemSelectedTextColor);
     }
 
     public static class Shape
@@ -197,7 +245,29 @@ public static class EditorStyle
     {
         public const float Size = 24.0f;
         public const float TextSize = 10;
-        public const float BorderRadius = 8.0f;
+
+        public static readonly ContainerStyle ListContainer = new()
+        {
+            Spacing = 4.0f,
+            Align = Align.CenterLeft
+        };
+
+        public static readonly ContainerStyle RootContainer = new()
+        {
+            MinWidth = 24.0f,
+            Height = 24.0f,
+            Align = Align.Center,
+            Padding = EdgeInsets.LeftRight(4),
+            Color = Control.TextColor,
+            Border = new BorderStyle { Radius = 8.0f }
+        };
+
+        public static readonly LabelStyle TextStyle = new()
+        {
+            FontSize = 10.0f,
+            Color = Control.FillColor,
+            Align = Align.Center
+        };
     }
 
     // Toggle Button

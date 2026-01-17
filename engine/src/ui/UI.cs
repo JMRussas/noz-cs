@@ -69,23 +69,23 @@ public enum CanvasType : byte
 
 public readonly struct EdgeInsets(float top, float left, float bottom, float right)
 {
-    public readonly float Top = top;
-    public readonly float Left = left;
-    public readonly float Bottom = bottom;
-    public readonly float Right = right;
+    public readonly float T = top;
+    public readonly float L = left;
+    public readonly float B = bottom;
+    public readonly float R = right;
 
     public EdgeInsets(float all) : this(all, all, all, all)
     {
     }
 
-    public float Horizontal => Left + Right;
-    public float Vertical => Top + Bottom;
+    public float Horizontal => L + R;
+    public float Vertical => T + B;
 
     public static EdgeInsets All(float v) => new(v, v, v, v);
-    public static EdgeInsets TopOnly(float v) => new(v, 0, 0, 0);
-    public static EdgeInsets BottomOnly(float v) => new(0, 0, v, 0);
-    public static EdgeInsets LeftOnly(float v) => new(0, v, 0, 0);
-    public static EdgeInsets RightOnly(float v) => new(0, 0, 0, v);
+    public static EdgeInsets Top(float v) => new(v, 0, 0, 0);
+    public static EdgeInsets Bottom(float v) => new(0, 0, v, 0);
+    public static EdgeInsets Left(float v) => new(0, v, 0, 0);
+    public static EdgeInsets Right(float v) => new(0, 0, 0, v);
     public static EdgeInsets TopBottom(float v) => new(v, 0, v, 0);
     public static EdgeInsets LeftRight(float v) => new(0, v, 0, v);
     public static EdgeInsets LeftRight(float l, float r) => new(0, l, 0, r);
@@ -337,144 +337,6 @@ public struct Element
     public Font Font;
 }
 
-public struct ContainerStyle()
-{
-    public float Width = float.MaxValue;
-    public float Height = float.MaxValue;
-    public float MinWidth = 0;
-    public float MinHeight = 0;
-    public Align Align = Align.None;
-    public EdgeInsets Margin = EdgeInsets.Zero;
-    public EdgeInsets Padding = EdgeInsets.Zero;
-    public Color Color = Color.Transparent;
-    public BorderStyle Border = BorderStyle.None;
-    public float Spacing = 0;
-    public byte Id = 0;
-    public bool Clip = false;
-
-    public ContainerData ToData() => new()
-    {
-        Width = Width,
-        Height = Height,
-        MinWidth = MinWidth,
-        MinHeight = MinHeight,
-        Align = Align,
-        Margin = Margin,
-        Padding = Padding,
-        Color = Color,
-        Border = Border,
-        Spacing = Spacing,
-        Clip = Clip
-    };
-}
-
-public struct LabelStyle()
-{
-    public float FontSize = 16;
-    public Color Color = Color.White;
-    public Align Align = Align.None;
-    public Font? Font = null;
-}
-
-public struct ImageStyle()
-{
-    public ImageStretch Stretch = ImageStretch.Uniform;
-    public Align Align = Align.None;
-    public float Scale = 1.0f;
-    public Color Color = Color.White;
-}
-
-public struct RectangleStyle()
-{
-    public float Width = float.MaxValue;
-    public float Height = float.MaxValue;
-    public Color Color = Color.White;
-}
-
-public struct ExpandedStyle()
-{
-    public float Flex = 1.0f;
-}
-
-public struct TransformStyle()
-{
-    public Vector2 Origin = new(0.5f, 0.5f);
-    public Vector2 Translate = Vector2.Zero;
-    public float Rotate = 0;
-    public Vector2 Scale = Vector2.One;
-}
-
-public struct ScrollableStyle()
-{
-    public byte Id = 0;
-}
-
-public struct GridStyle()
-{
-    public float Spacing = 0;
-    public int Columns = 3;
-    public float CellWidth = 100;
-    public float CellHeight = 100;
-    public int VirtualCount = 0;
-    public byte ScrollId = 0;
-    public Action<int, int>? VirtualCellFunc = null;
-    public Action<int, int>? VirtualRangeFunc = null;
-}
-
-public struct PopupStyle()
-{
-    public Align Anchor = Align.TopLeft;
-    public Align PopupAlign = Align.TopLeft;
-    public EdgeInsets Margin = EdgeInsets.Zero;
-}
-
-public struct CanvasStyle()
-{
-    public CanvasType Type = CanvasType.Screen;
-    public Color Color = Color.Transparent;
-    public Vector2Int ColorOffset = Vector2Int.Zero;
-    public Vector2 WorldPosition = Vector2.Zero;
-    public Vector2 WorldSize = Vector2.Zero;
-    public Camera? WorldCamera = null;
-    public byte Id = 0;
-
-    public CanvasData ToData() => new()
-    {
-        Type = Type,
-        Color = Color,
-        ColorOffset = ColorOffset,
-        WorldPosition = WorldPosition,
-        WorldSize = WorldSize
-    };
-}
-
-public struct TextBoxStyle()
-{
-    public float Height = 28f;
-    public float FontSize = 16;
-    public Color BackgroundColor = new(0.22f, 0.22f, 0.22f, 1f);
-    public Color TextColor = Color.White;
-    public Color PlaceholderColor = new(0.4f, 0.4f, 0.4f, 1f);
-    public BorderStyle Border = BorderStyle.None;
-    public BorderStyle FocusBorder = BorderStyle.None;
-    public bool IsPassword = false;
-    public byte Id = 0;
-
-    public TextBoxData ToData() => new()
-    {
-        Height = Height,
-        FontSize = FontSize,
-        BackgroundColor = BackgroundColor,
-        TextColor = TextColor,
-        PlaceholderColor = PlaceholderColor,
-        Border = Border,
-        FocusBorder = FocusBorder,
-        Password = IsPassword,
-        TextStart = 0,
-        TextLength = 0
-    };
-}
-
 public static class UI
 {
     private const int MaxElements = 4096;
@@ -530,6 +392,13 @@ public static class UI
         public ElementState[]? ElementStates;
     }
 
+    public struct AutoCanvas : IDisposable { readonly void IDisposable.Dispose() => EndCanvas(); }
+    public struct AutoContainer : IDisposable { readonly void IDisposable.Dispose() => EndContainer(); }
+    public struct AutoColumn : IDisposable { readonly void IDisposable.Dispose() => EndColumn(); }
+    public struct AutoRow : IDisposable { readonly void IDisposable.Dispose() => EndRow(); }
+    public struct AutoScrollable: IDisposable { readonly void IDisposable.Dispose() => EndScrollable(); }
+
+
     // Element storage
     private static readonly Element[] _elements = new Element[MaxElements];
     private static readonly int[] _elementStack = new int[MaxElementStack];
@@ -570,7 +439,7 @@ public static class UI
 
     public static float GetUIScale() => Application.Platform.DisplayScale * UserScale;
 
-    public static Camera? Camera { get; private set; }
+    public static Camera? Camera { get; private set; } = null!;
 
     public static Vector2Int GetRefSize()
     {
@@ -774,7 +643,7 @@ public static class UI
     {
         if (!HasCurrentElement()) return Vector2.Zero;
         ref var e = ref GetCurrentElement();
-        return Vector2.Transform(Camera.ScreenToWorld(screen), e.WorldToLocal);
+        return Vector2.Transform(Camera!.ScreenToWorld(screen), e.WorldToLocal);
     }
 
     public static bool HasFocus()
@@ -877,31 +746,31 @@ public static class UI
             _orthoSize.Y = sh;
         }
 
-        Camera.SetExtents(new Rect(0, 0, _orthoSize.X, _orthoSize.Y));
-        Camera.Update();
+        Camera!.SetExtents(new Rect(0, 0, _orthoSize.X, _orthoSize.Y));
+        Camera!.Update();
 
         // Apply pending focus (element ID + canvas ID)
         _focusId = _pendingFocusId;
         _focusCanvasId = _pendingFocusCanvasId;
     }
 
-    public static void BeginCanvas(CanvasStyle style = default)
+    public static AutoCanvas BeginCanvas(CanvasStyle style = default, byte id = 0)
     {
         ref var e = ref CreateElement(ElementType.Canvas);
         e.Data.Canvas = style.ToData();
 
-        // Register canvas by ID for input tracking
-        if (style.Id != ElementIdNone && _activeCanvasCount < MaxActiveCanvases)
+        if (id != ElementIdNone && _activeCanvasCount < MaxActiveCanvases)
         {
-            _currentCanvasId = style.Id;
-            _activeCanvasIds[_activeCanvasCount++] = style.Id;
-            _canvasStates[style.Id].ElementIndex = e.Index;
-            _canvasStates[style.Id].ElementStates ??= new ElementState[ElementIdMax + 1];
+            _currentCanvasId = id;
+            _activeCanvasIds[_activeCanvasCount++] = id;
+            _canvasStates[id].ElementIndex = e.Index;
+            _canvasStates[id].ElementStates ??= new ElementState[ElementIdMax + 1];
         }
 
         e.CanvasId = _currentCanvasId;
-        SetId(ref e, style.Id);
+        SetId(ref e, id);
         PushElement(e.Index);
+        return new AutoCanvas();
     }
 
     public static void EndCanvas()
@@ -910,19 +779,22 @@ public static class UI
         _currentCanvasId = ElementIdNone;
     }
 
-    public static void BeginContainer()
+    public static AutoContainer BeginContainer(byte id=0)
     {
         ref var e = ref CreateElement(ElementType.Container);
         e.Data.Container = ContainerData.Default;
+        SetId(ref e, id);
         PushElement(e.Index);
+        return new AutoContainer();
     }
 
-    public static void BeginContainer(ContainerStyle style)
+    public static AutoContainer BeginContainer(in ContainerStyle style, byte id=0)
     {
         ref var e = ref CreateElement(ElementType.Container);
         e.Data.Container = style.ToData();
-        SetId(ref e, style.Id);
+        SetId(ref e, id);
         PushElement(e.Index);
+        return new AutoContainer();
     }
 
     public static void EndContainer() => EndElement(ElementType.Container);
@@ -939,34 +811,38 @@ public static class UI
         EndContainer();
     }
 
-    public static void BeginColumn()
+    public static AutoColumn BeginColumn()
     {
         ref var e = ref CreateElement(ElementType.Column);
         e.Data.Container = ContainerData.Default;
         PushElement(e.Index);
+        return new AutoColumn();
     }
 
-    public static void BeginColumn(ContainerStyle style)
+    public static AutoColumn BeginColumn(ContainerStyle style)
     {
         ref var e = ref CreateElement(ElementType.Column);
         e.Data.Container = style.ToData();
         PushElement(e.Index);
+        return new AutoColumn();
     }
 
     public static void EndColumn() => EndElement(ElementType.Column);
 
-    public static void BeginRow()
+    public static AutoRow BeginRow()
     {
         ref var e = ref CreateElement(ElementType.Row);
         e.Data.Container = ContainerData.Default;
         PushElement(e.Index);
+        return new AutoRow();
     }
 
-    public static void BeginRow(ContainerStyle style)
+    public static AutoRow BeginRow(ContainerStyle style)
     {
         ref var e = ref CreateElement(ElementType.Row);
         e.Data.Container = style.ToData();
         PushElement(e.Index);
+        return new AutoRow();
     }
 
     public static void EndRow() => EndElement(ElementType.Row);
@@ -1040,25 +916,25 @@ public static class UI
 
     public static void EndTransformed() => EndElement(ElementType.Transform);
 
-    public static float BeginScrollable(float offset = 0, ScrollableStyle style = default)
+    public static AutoScrollable BeginScrollable(float offset = 0, byte id = 0, ScrollableStyle style = default)
     {
         ref var e = ref CreateElement(ElementType.Scrollable);
         e.Data.Scrollable.ContentHeight = 0;
-        SetId(ref e, style.Id);
+        SetId(ref e, id);
 
-        if (style.Id != ElementIdNone)
+        if (id != ElementIdNone)
         {
             if (_currentCanvasId != ElementIdNone)
             {
                 ref var cs = ref _canvasStates[_currentCanvasId];
                 if (cs.ElementStates != null)
-                    e.Data.Scrollable.Offset = cs.ElementStates[style.Id].ScrollOffset;
+                    e.Data.Scrollable.Offset = cs.ElementStates[id].ScrollOffset;
                 else
-                    e.Data.Scrollable.Offset = _elementStates[style.Id].ScrollOffset;
+                    e.Data.Scrollable.Offset = _elementStates[id].ScrollOffset;
             }
             else
             {
-                e.Data.Scrollable.Offset = _elementStates[style.Id].ScrollOffset;
+                e.Data.Scrollable.Offset = _elementStates[id].ScrollOffset;
             }
         }
         else
@@ -1067,7 +943,7 @@ public static class UI
         }
 
         PushElement(e.Index);
-        return e.Data.Scrollable.Offset;
+        return new AutoScrollable();
     }
 
     public static void EndScrollable() => EndElement(ElementType.Scrollable);
@@ -1190,21 +1066,21 @@ public static class UI
         };
     }
 
-    public static bool TextBox(ref string text, TextBoxStyle style = default)
+    public static bool TextBox(ref string text, TextBoxStyle style = default, byte id = 0)
     {
         ref var e = ref CreateElement(ElementType.TextBox);
         var textStart = AddText(text);
         e.Data.TextBox = style.ToData();
         e.Data.TextBox.TextStart = textStart;
         e.Data.TextBox.TextLength = text.Length;
-        SetId(ref e, style.Id);
+        SetId(ref e, id);
 
         var textChanged = false;
-        var isFocused = _focusId != 0 && style.Id == _focusId;
+        var isFocused = _focusId != 0 && id == _focusId;
 
-        if (isFocused && style.Id != 0)
+        if (isFocused && id != 0)
         {
-            ref var state = ref _elementStates[style.Id];
+            ref var state = ref _elementStates[id];
             if (state.Text != null && state.Text != text)
             {
                 text = state.Text;
@@ -1336,17 +1212,17 @@ public static class UI
 
         var contentSize = Vector2.Zero;
         if (isAutoWidth)
-            contentSize.X = availableSize.X - style.Margin.Left - style.Margin.Right;
+            contentSize.X = availableSize.X - style.Margin.L - style.Margin.R;
         else
             contentSize.X = style.Width;
 
         if (isAutoHeight)
-            contentSize.Y = availableSize.Y - style.Margin.Top - style.Margin.Bottom;
+            contentSize.Y = availableSize.Y - style.Margin.T - style.Margin.B;
         else
             contentSize.Y = style.Height;
 
-        contentSize.X -= style.Padding.Left + style.Padding.Right + style.Border.Width * 2;
-        contentSize.Y -= style.Padding.Top + style.Padding.Bottom + style.Border.Width * 2;
+        contentSize.X -= style.Padding.L + style.Padding.R + style.Border.Width * 2;
+        contentSize.Y -= style.Padding.T + style.Padding.B + style.Border.Width * 2;
 
         var maxContentSize = Vector2.Zero;
 
@@ -1368,16 +1244,16 @@ public static class UI
         }
 
         if (!isAutoWidth)
-            e.MeasuredSize.X = style.Width;
+            e.MeasuredSize.X = style.Width + style.Margin.L + style.Margin.R;
         else
             e.MeasuredSize.X = Math.Min(availableSize.X,
-                maxContentSize.X + style.Padding.Left + style.Padding.Right + style.Border.Width * 2);
+                maxContentSize.X + style.Padding.L + style.Padding.R + style.Border.Width * 2 + style.Margin.L + style.Margin.R);
 
         if (!isAutoHeight)
-            e.MeasuredSize.Y = style.Height;
+            e.MeasuredSize.Y = style.Height + style.Margin.T + style.Margin.B;
         else
             e.MeasuredSize.Y = Math.Min(availableSize.Y,
-                maxContentSize.Y + style.Padding.Top + style.Padding.Bottom + style.Border.Width * 2);
+                maxContentSize.Y + style.Padding.T + style.Padding.B + style.Border.Width * 2 + style.Margin.T + style.Margin.B);
 
         e.MeasuredSize.X = Math.Max(e.MeasuredSize.X, style.MinWidth);
         e.MeasuredSize.Y = Math.Max(e.MeasuredSize.Y, style.MinHeight);
@@ -1426,6 +1302,9 @@ public static class UI
             var flexAvailable =
                 Math.Max(0, GetComponent(availableSize, axis) - GetComponent(maxContentSize, axis)) -
                 spacing;
+
+            Console.WriteLine($"FLEX: availableSize[{axis}]={GetComponent(availableSize, axis)}, maxContent[{axis}]={GetComponent(maxContentSize, axis)}, spacing={spacing}, flexAvailable={flexAvailable}, flexTotal={flexTotal}");
+
             SetComponent(ref maxContentSize, axis,
                 Math.Max(GetComponent(maxContentSize, axis), GetComponent(availableSize, axis)));
 
@@ -1437,8 +1316,12 @@ public static class UI
                 ref var child = ref _elements[childElementIndex];
                 if (child.Type == ElementType.Expanded)
                 {
-                    SetComponent(ref childAvailSize, axis, child.Data.Expanded.Flex / flexTotal * flexAvailable);
+                    var flexSize = child.Data.Expanded.Flex / flexTotal * flexAvailable;
+                    SetComponent(ref childAvailSize, axis, flexSize);
+                    Console.WriteLine($"  EXPANDED child#{i} index={childElementIndex}: flex={child.Data.Expanded.Flex}, allocating {flexSize}px on axis {axis}");
+                    Console.WriteLine($"    Before remeasure: MeasuredSize={child.MeasuredSize}");
                     MeasureElement(childElementIndex, childAvailSize);
+                    Console.WriteLine($"    After remeasure: MeasuredSize={child.MeasuredSize}");
                 }
 
                 childElementIndex = child.NextSiblingIndex;
@@ -1620,39 +1503,35 @@ public static class UI
     {
         ref var style = ref e.Data.Container;
         ref readonly var alignInfo = ref AlignInfoTable[(int)style.Align];
-        var subtractMarginX = false;
-        var subtractMarginY = false;
+
+        // MeasuredSize includes margin, but Rect.Width/Height should not (margin is external)
+        // So we subtract margin from MeasuredSize to get the actual rect size
+        var rectWidth = e.MeasuredSize.X - style.Margin.L - style.Margin.R;
+        var rectHeight = e.MeasuredSize.Y - style.Margin.T - style.Margin.B;
+
+        e.Rect.Width = rectWidth;
+        e.Rect.Height = rectHeight;
 
         if (alignInfo.HasX)
         {
-            var availWidth = size.X - e.Rect.Width - style.Margin.Left - style.Margin.Right;
+            var availWidth = size.X - e.Rect.Width - style.Margin.L - style.Margin.R;
             e.Rect.X = availWidth * alignInfo.X;
-        }
-        else if (IsAuto(style.Width))
-        {
-            e.Rect.Width = size.X;
-            subtractMarginX = true;
         }
 
         if (alignInfo.HasY)
         {
-            var availHeight = size.Y - e.Rect.Height - style.Margin.Top - style.Margin.Bottom;
+            var availHeight = size.Y - e.Rect.Height - style.Margin.T - style.Margin.B;
             e.Rect.Y = availHeight * alignInfo.Y;
-        }
-        else if (IsAuto(style.Height))
-        {
-            e.Rect.Height = size.Y;
-            subtractMarginY = true;
         }
 
         var childOffset = new Vector2(
-            style.Padding.Left + style.Border.Width,
-            style.Padding.Top + style.Border.Width
+            style.Padding.L + style.Border.Width,
+            style.Padding.T + style.Border.Width
         );
 
         var contentSize = e.Rect.Size;
-        contentSize.X -= style.Padding.Left + style.Padding.Right + style.Border.Width * 2;
-        contentSize.Y -= style.Padding.Top + style.Padding.Bottom + style.Border.Width * 2;
+        contentSize.X -= style.Padding.L + style.Padding.R + style.Border.Width * 2;
+        contentSize.Y -= style.Padding.T + style.Padding.B + style.Border.Width * 2;
 
         if (e.Type == ElementType.Container)
         {
@@ -1689,13 +1568,8 @@ public static class UI
             }
         }
 
-        e.Rect.X += style.Margin.Left;
-        e.Rect.Y += style.Margin.Top;
-
-        if (subtractMarginX)
-            e.Rect.Width -= style.Margin.Left + style.Margin.Right;
-        if (subtractMarginY)
-            e.Rect.Height -= style.Margin.Top + style.Margin.Bottom;
+        e.Rect.X += style.Margin.L;
+        e.Rect.Y += style.Margin.T;
 
         return elementIndex;
     }
@@ -1739,8 +1613,8 @@ public static class UI
         var popupOffsetX = alignInfo.HasX ? e.Rect.Width * alignInfo.X : 0;
         var popupOffsetY = alignInfo.HasY ? e.Rect.Height * alignInfo.Y : 0;
 
-        e.Rect.X = anchorX - popupOffsetX + popup.Margin.Left;
-        e.Rect.Y = anchorY - popupOffsetY + popup.Margin.Top;
+        e.Rect.X = anchorX - popupOffsetX + popup.Margin.L;
+        e.Rect.Y = anchorY - popupOffsetY + popup.Margin.T;
 
         return elementIndex;
     }
@@ -1789,7 +1663,7 @@ public static class UI
     // Input handling
     private static void HandleInput()
     {
-        var mouse = Camera.ScreenToWorld(Input.MousePosition);
+        var mouse = Camera!.ScreenToWorld(Input.MousePosition);
         var mouseLeftPressed = Input.WasButtonPressedRaw(InputCode.MouseLeft);
         var buttonDown = Input.IsButtonDownRaw(InputCode.MouseLeft);
 
@@ -2013,7 +1887,7 @@ public static class UI
         if (useScissor)
         {
             var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
-            var screenPos = Camera.WorldToScreen(pos);
+            var screenPos = Camera!.WorldToScreen(pos);
             var scale = Application.WindowSize.Y / _orthoSize.Y;
             var screenHeight = Application.WindowSize.Y;
 
@@ -2068,9 +1942,22 @@ public static class UI
         var font = e.Font ?? _defaultFont!;
         var text = new string(GetText(e.Data.Label.TextStart, e.Data.Label.TextLength));
 
+        // Calculate alignment offset
+        var offset = Vector2.Zero;
+        if (e.Data.Label.Align != Align.None)
+        {
+            ref readonly var alignInfo = ref AlignInfoTable[(int)e.Data.Label.Align];
+            var availableSpace = e.Rect.Size - e.MeasuredSize;
+
+            if (alignInfo.HasX)
+                offset.X = availableSpace.X * alignInfo.X;
+            if (alignInfo.HasY)
+                offset.Y = availableSpace.Y * alignInfo.Y;
+        }
+
         Render.PushState();
         Render.SetColor(e.Data.Label.Color);
-        Render.SetTransform(e.LocalToWorld);
+        Render.SetTransform(e.LocalToWorld * Matrix3x2.CreateTranslation(offset));
         TextRender.Draw(text, font, e.Data.Label.FontSize);
         Render.PopState();
     }
@@ -2107,7 +1994,7 @@ public static class UI
         );
 
         // Convert UI coordinates to screen coordinates for the native textbox
-        var screenPos = Camera.WorldToScreen(pos);
+        var screenPos = Camera!.WorldToScreen(pos);
         var scale = GetUIScale();
         var screenRect = new Rect(
             screenPos.X,
