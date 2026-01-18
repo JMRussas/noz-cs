@@ -11,19 +11,17 @@ public static class Input
 {
     private static readonly bool[] ButtonState = new bool[(int)InputCode.Count];
     private static readonly bool[] ButtonPressedThisFrame = new bool[(int)InputCode.Count];
+    private static readonly bool[] ButtonReleasedThisFrame = new bool[(int)InputCode.Count];
     private static readonly bool[] ButtonRepeatThisFrame = new bool[(int)InputCode.Count];
     private static readonly float[] ButtonHeldTime = new float[(int)InputCode.Count];
     private static readonly float[] AxisState = new float[(int)InputCode.Count];
 
     private const float RepeatDelay = 0.4f;
     private const float RepeatInterval = 0.05f;
-    private static readonly Stack<InputSet> InputSetStack = new();
 
     private static float _scrollX;
     private static float _scrollY;
     private static string _textInput = string.Empty;
-
-    public static InputSet? CurrentInputSet => InputSetStack.Count > 0 ? InputSetStack.Peek() : null;
 
     public static void Init()
     {
@@ -31,44 +29,6 @@ public static class Input
 
     public static void Shutdown()
     {
-        InputSetStack.Clear();
-    }
-
-    public static void PushInputSet(InputSet set, bool inheritState = false)
-    {
-        if (inheritState && InputSetStack.Count > 0)
-            set.CopyFrom(InputSetStack.Peek());
-
-        CurrentInputSet?.Reset();
-        CurrentInputSet?.SetActive(false);
-
-        InputSetStack.Push(set);
-        set.SetActive(true);
-    }
-
-    public static void PopInputSet()
-    {
-        if (InputSetStack.Count == 0)
-            return;
-
-        var old = InputSetStack.Pop();
-        old.SetActive(false);
-
-        if (InputSetStack.Count > 0)
-        {
-            var current = InputSetStack.Peek();
-            current.SetActive(true);
-            current.Reset();
-        }
-    }
-
-    public static void SetInputSet(InputSet set)
-    {
-        while (InputSetStack.Count > 0)
-            InputSetStack.Pop().SetActive(false);
-
-        InputSetStack.Push(set);
-        set.SetActive(true);
     }
 
     public static void BeginFrame()
@@ -77,13 +37,13 @@ public static class Input
         _scrollY = 0;
         _textInput = string.Empty;
         Array.Clear(ButtonPressedThisFrame);
+        Array.Clear(ButtonReleasedThisFrame);
         Array.Clear(ButtonRepeatThisFrame);
     }
 
     public static void Update()
     {
         UpdateRepeat();
-        CurrentInputSet?.Update();
     }
 
     private static void UpdateRepeat()
@@ -129,7 +89,10 @@ public static class Input
 
             case PlatformEventType.KeyUp:
                 if (evt.KeyCode != InputCode.None)
+                {
                     ButtonState[(int)evt.KeyCode] = false;
+                    ButtonReleasedThisFrame[(int)evt.KeyCode] = true;
+                }
                 break;
 
             case PlatformEventType.TextInput:
@@ -151,7 +114,10 @@ public static class Input
 
             case PlatformEventType.MouseButtonUp:
                 if (evt.MouseButton != InputCode.None)
+                {
                     ButtonState[(int)evt.MouseButton] = false;
+                    ButtonReleasedThisFrame[(int)evt.MouseButton] = true;
+                }
 
                 ButtonState[(int)InputCode.MouseLeftDoubleClick] = false;
                 break;
@@ -180,7 +146,6 @@ public static class Input
                 {
                     AxisState[(int)evt.GamepadAxis] = evt.AxisValue;
 
-                    // Generate virtual button states from analog sticks
                     switch (evt.GamepadAxis)
                     {
                         case InputCode.GamepadLeftStickX:
@@ -207,6 +172,7 @@ public static class Input
 
     internal static bool IsButtonDownRaw(InputCode code) => ButtonState[(int)code];
     internal static bool WasButtonPressedRaw(InputCode code) => ButtonPressedThisFrame[(int)code];
+    internal static bool WasButtonReleasedRaw(InputCode code) => ButtonReleasedThisFrame[(int)code];
     internal static bool WasButtonRepeatRaw(InputCode code) => ButtonRepeatThisFrame[(int)code];
 
     internal static float GetAxisValue(InputCode code)
@@ -221,12 +187,18 @@ public static class Input
         };
     }
 
-    public static bool IsButtonDown(InputCode code) => CurrentInputSet?.IsButtonDown(code) ?? false;
-    public static bool WasButtonPressed(InputCode code) => CurrentInputSet?.WasButtonPressed(code) ?? false;
-    public static bool WasButtonPressed(InputCode code, bool allowRepeat) => CurrentInputSet?.WasButtonPressed(code, allowRepeat) ?? false;
-    public static bool WasButtonReleased(InputCode code) => CurrentInputSet?.WasButtonReleased(code) ?? false;
-    public static float GetAxis(InputCode code) => CurrentInputSet?.GetAxis(code) ?? 0.0f;
-    public static void ConsumeButton(InputCode code) => CurrentInputSet?.ConsumeButton(code);
+    public static bool IsButtonDown(InputCode code) => ButtonState[(int)code];
+    public static bool WasButtonPressed(InputCode code) => ButtonPressedThisFrame[(int)code];
+    public static bool WasButtonPressed(InputCode code, bool allowRepeat) =>
+        ButtonPressedThisFrame[(int)code] || (allowRepeat && ButtonRepeatThisFrame[(int)code]);
+    public static bool WasButtonReleased(InputCode code) => ButtonReleasedThisFrame[(int)code];
+    public static float GetAxis(InputCode code) => GetAxisValue(code);
+
+    public static void ConsumeButton(InputCode code)
+    {
+        ButtonPressedThisFrame[(int)code] = false;
+        ButtonReleasedThisFrame[(int)code] = false;
+    }
 
     public static bool IsShiftDown() => IsButtonDown(InputCode.KeyLeftShift) || IsButtonDown(InputCode.KeyRightShift);
     public static bool IsCtrlDown() => IsButtonDown(InputCode.KeyLeftCtrl) || IsButtonDown(InputCode.KeyRightCtrl);

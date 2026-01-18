@@ -54,8 +54,6 @@ public static class CommandPalette
     private static bool _enabled;
     private static string _text = string.Empty;
     private static string _lastFilterText = string.Empty;
-    private static InputSet _input = null!;
-    private static bool _popInput;
     private static readonly Command?[] _filteredCommands = new Command?[MaxFilteredCommands];
     private static int _filteredCount;
     private static int _selectedIndex;
@@ -64,7 +62,6 @@ public static class CommandPalette
 
     public static void Init()
     {
-        _input = new InputSet("CommandPalette");
     }
 
     public static void Shutdown()
@@ -82,9 +79,6 @@ public static class CommandPalette
         _selectedIndex = 0;
         _filteredCount = 0;
 
-        Input.PushInputSet(_input);
-        _popInput = true;
-
         UpdateFilteredCommands();
         UI.SetFocus(SearchId, EditorStyle.CanvasId.CommandPalette);
     }
@@ -93,12 +87,6 @@ public static class CommandPalette
     {
         if (!_enabled)
             return;
-
-        if (_popInput)
-        {
-            Input.PopInputSet();
-            _popInput = false;
-        }
 
         UI.ClearFocus();
 
@@ -116,8 +104,9 @@ public static class CommandPalette
         if (!_enabled)
             return;
 
-        if (Input.WasButtonPressedRaw(InputCode.KeyEscape))
+        if (Input.WasButtonPressed(InputCode.KeyEscape))
         {
+            Input.ConsumeButton(InputCode.KeyEscape);
             End();
             return;
         }

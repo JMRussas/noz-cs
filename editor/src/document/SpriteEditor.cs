@@ -25,7 +25,6 @@ public class SpriteEditor : DocumentEditor
 
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
-    private readonly InputSet _input = new("SpriteEditor");
     private ushort _currentFrame;
     private bool _isPlaying;
     private float _playTimer;
@@ -46,7 +45,6 @@ public class SpriteEditor : DocumentEditor
             TextureFormat.RGBA8,
             TextureFilter.Nearest,
             "SpriteEditor");
-        Input.PushInputSet(_input, inheritState: true);
 
         _commands =
         [
@@ -102,7 +100,6 @@ public class SpriteEditor : DocumentEditor
 
     public override void Dispose()
     {
-        Input.PopInputSet();
         _rasterTexture.Dispose();
         _pixelData.Dispose();
     }

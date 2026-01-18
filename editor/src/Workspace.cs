@@ -54,7 +54,6 @@ public static class Workspace
     private const float UIScaleStep = 0.1f;
 
     private static Camera _camera = null!;
-    private static InputSet _input = null!;
 
     private static float _zoom = ZoomDefault;
     private static float _dpi = DefaultDpi;
@@ -117,9 +116,6 @@ public static class Workspace
         _uiScale = 1f;
         _showGrid = true;
 
-        _input = new InputSet("Workspace");
-        Input.PushInputSet(_input);
-
         RegisterCommands();
         UpdateCamera();
 
@@ -134,8 +130,6 @@ public static class Workspace
     {
         _whiteTexture?.Dispose();
         _whiteTexture = null;
-
-        Input.PopInputSet();
     }
 
     public static void LoadUserSettings(PropertySet props)

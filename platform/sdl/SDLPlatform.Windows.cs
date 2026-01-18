@@ -252,34 +252,29 @@ public unsafe partial class SDLPlatform
 
     private nint EditSubclassProc(nint hWnd, uint msg, nint wParam, nint lParam)
     {
-        // Intercept Enter/Escape/Tab/Arrow key events and forward them to SDL
-        if (wParam == User32.VK_RETURN || wParam == User32.VK_ESCAPE || wParam == User32.VK_TAB ||
-            wParam == User32.VK_UP || wParam == User32.VK_DOWN)
+        // Forward all key events to the input system
+        if (msg == User32.WM_KEYDOWN || msg == User32.WM_KEYUP)
         {
-            if (msg == User32.WM_CHAR)
-                return 0;
-
-            if (msg == User32.WM_KEYDOWN || msg == User32.WM_KEYUP)
+            var code = VirtualKeyToInputCode((int)wParam);
+            if (code != InputCode.None)
             {
-                var code = wParam switch
-                {
-                    User32.VK_RETURN => InputCode.KeyEnter,
-                    User32.VK_ESCAPE => InputCode.KeyEscape,
-                    User32.VK_TAB => InputCode.KeyTab,
-                    User32.VK_UP => InputCode.KeyUp,
-                    User32.VK_DOWN => InputCode.KeyDown,
-                    _ => InputCode.None
-                };
-
-                if (code != InputCode.None)
-                {
-                    var evt = msg == User32.WM_KEYDOWN
-                        ? PlatformEvent.KeyDown(code)
-                        : PlatformEvent.KeyUp(code);
-                    OnEvent?.Invoke(evt);
-                }
-                return 0;
+                var evt = msg == User32.WM_KEYDOWN
+                    ? PlatformEvent.KeyDown(code)
+                    : PlatformEvent.KeyUp(code);
+                OnEvent?.Invoke(evt);
             }
+
+            // For special keys (Enter/Escape/Tab/Arrows), don't pass to textbox
+            if (wParam == User32.VK_RETURN || wParam == User32.VK_ESCAPE || wParam == User32.VK_TAB ||
+                wParam == User32.VK_UP || wParam == User32.VK_DOWN)
+                return 0;
+        }
+
+        // Block WM_CHAR for special keys
+        if (msg == User32.WM_CHAR)
+        {
+            if (wParam == User32.VK_RETURN || wParam == User32.VK_ESCAPE || wParam == User32.VK_TAB)
+                return 0;
         }
 
         // Handle WM_PAINT to draw placeholder when text is empty
@@ -434,6 +429,12 @@ public unsafe partial class SDLPlatform
     {
         if (_editHwnd == nint.Zero) return;
 
+        // Send KeyUp for special keys to prevent them getting stuck
+        // when focus changes away from the textbox
+        OnEvent?.Invoke(PlatformEvent.KeyUp(InputCode.KeyEscape));
+        OnEvent?.Invoke(PlatformEvent.KeyUp(InputCode.KeyEnter));
+        OnEvent?.Invoke(PlatformEvent.KeyUp(InputCode.KeyTab));
+
         User32.ShowWindow(_editHwnd, User32.SW_HIDE);
         User32.InvalidateRect(_editHwnd, nint.Zero, true);
         User32.UpdateWindow(_editHwnd);
@@ -560,5 +561,51 @@ public unsafe partial class SDLPlatform
                 return (fontFamily[..^suffix.Length], weight);
 
         return (fontFamily, 0);
+    }
+
+    private static InputCode VirtualKeyToInputCode(int vk)
+    {
+        return vk switch
+        {
+            0x08 => InputCode.KeyBackspace,
+            0x09 => InputCode.KeyTab,
+            0x0D => InputCode.KeyEnter,
+            0x10 => InputCode.KeyLeftShift,
+            0x11 => InputCode.KeyLeftCtrl,
+            0x12 => InputCode.KeyLeftAlt,
+            0x1B => InputCode.KeyEscape,
+            0x20 => InputCode.KeySpace,
+            0x21 => InputCode.KeyPageUp,
+            0x22 => InputCode.KeyPageDown,
+            0x23 => InputCode.KeyEnd,
+            0x24 => InputCode.KeyHome,
+            0x25 => InputCode.KeyLeft,
+            0x26 => InputCode.KeyUp,
+            0x27 => InputCode.KeyRight,
+            0x28 => InputCode.KeyDown,
+            0x2D => InputCode.KeyInsert,
+            0x2E => InputCode.KeyDelete,
+            >= 0x30 and <= 0x39 => InputCode.Key0 + (vk - 0x30),
+            >= 0x41 and <= 0x5A => InputCode.KeyA + (vk - 0x41),
+            0x5B => InputCode.KeyLeftSuper,
+            0x5C => InputCode.KeyRightSuper,
+            >= 0x70 and <= 0x7B => InputCode.KeyF1 + (vk - 0x70),
+            0xA0 => InputCode.KeyLeftShift,
+            0xA1 => InputCode.KeyRightShift,
+            0xA2 => InputCode.KeyLeftCtrl,
+            0xA3 => InputCode.KeyRightCtrl,
+            0xA4 => InputCode.KeyLeftAlt,
+            0xA5 => InputCode.KeyRightAlt,
+            0xBA => InputCode.KeySemicolon,
+            0xBB => InputCode.KeyEquals,
+            0xBC => InputCode.KeyComma,
+            0xBD => InputCode.KeyMinus,
+            0xBE => InputCode.KeyPeriod,
+            0xC0 => InputCode.KeyTilde,
+            0xDB => InputCode.KeyLeftBracket,
+            0xDD => InputCode.KeyRightBracket,
+            0xDE => InputCode.KeyQuote,
+            _ => InputCode.None
+        };
     }
 }
