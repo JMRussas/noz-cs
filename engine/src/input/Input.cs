@@ -10,6 +10,7 @@ namespace NoZ;
 public static class Input
 {
     private static readonly bool[] ButtonState = new bool[(int)InputCode.Count];
+    private static readonly bool[] PhysicalButtonState = new bool[(int)InputCode.Count];
     private static readonly bool[] ButtonPressedThisFrame = new bool[(int)InputCode.Count];
     private static readonly bool[] ButtonReleasedThisFrame = new bool[(int)InputCode.Count];
     private static readonly bool[] ButtonRepeatThisFrame = new bool[(int)InputCode.Count];
@@ -40,6 +41,13 @@ public static class Input
         Array.Clear(ButtonPressedThisFrame);
         Array.Clear(ButtonReleasedThisFrame);
         Array.Clear(ButtonRepeatThisFrame);
+
+        // Clear consumed flags for buttons that are physically released
+        for (var i = 0; i < (int)InputCode.Count; i++)
+        {
+            if (ButtonConsumed[i] && !PhysicalButtonState[i])
+                ButtonConsumed[i] = false;
+        }
     }
 
     public static void Update()
@@ -80,20 +88,24 @@ public static class Input
         switch (evt.Type)
         {
             case PlatformEventType.KeyDown:
-                if (evt.KeyCode != InputCode.None && !ButtonConsumed[(int)evt.KeyCode])
+                if (evt.KeyCode != InputCode.None)
                 {
-                    if (!ButtonState[(int)evt.KeyCode])
-                        ButtonPressedThisFrame[(int)evt.KeyCode] = true;
-                    ButtonState[(int)evt.KeyCode] = true;
+                    PhysicalButtonState[(int)evt.KeyCode] = true;
+                    if (!ButtonConsumed[(int)evt.KeyCode])
+                    {
+                        if (!ButtonState[(int)evt.KeyCode])
+                            ButtonPressedThisFrame[(int)evt.KeyCode] = true;
+                        ButtonState[(int)evt.KeyCode] = true;
+                    }
                 }
                 break;
 
             case PlatformEventType.KeyUp:
                 if (evt.KeyCode != InputCode.None)
                 {
+                    PhysicalButtonState[(int)evt.KeyCode] = false;
                     ButtonState[(int)evt.KeyCode] = false;
                     ButtonReleasedThisFrame[(int)evt.KeyCode] = true;
-                    ButtonConsumed[(int)evt.KeyCode] = false;
                 }
                 break;
 
@@ -103,11 +115,15 @@ public static class Input
                 break;
 
             case PlatformEventType.MouseButtonDown:
-                if (evt.MouseButton != InputCode.None && !ButtonConsumed[(int)evt.MouseButton])
+                if (evt.MouseButton != InputCode.None)
                 {
-                    if (!ButtonState[(int)evt.MouseButton])
-                        ButtonPressedThisFrame[(int)evt.MouseButton] = true;
-                    ButtonState[(int)evt.MouseButton] = true;
+                    PhysicalButtonState[(int)evt.MouseButton] = true;
+                    if (!ButtonConsumed[(int)evt.MouseButton])
+                    {
+                        if (!ButtonState[(int)evt.MouseButton])
+                            ButtonPressedThisFrame[(int)evt.MouseButton] = true;
+                        ButtonState[(int)evt.MouseButton] = true;
+                    }
                 }
 
                 if (evt.ClickCount == 2 && evt.MouseButton == InputCode.MouseLeft && !ButtonConsumed[(int)InputCode.MouseLeftDoubleClick])
@@ -117,13 +133,12 @@ public static class Input
             case PlatformEventType.MouseButtonUp:
                 if (evt.MouseButton != InputCode.None)
                 {
+                    PhysicalButtonState[(int)evt.MouseButton] = false;
                     ButtonState[(int)evt.MouseButton] = false;
                     ButtonReleasedThisFrame[(int)evt.MouseButton] = true;
-                    ButtonConsumed[(int)evt.MouseButton] = false;
                 }
 
                 ButtonState[(int)InputCode.MouseLeftDoubleClick] = false;
-                ButtonConsumed[(int)InputCode.MouseLeftDoubleClick] = false;
                 break;
 
             case PlatformEventType.MouseMove:
@@ -137,12 +152,18 @@ public static class Input
 
             case PlatformEventType.GamepadButtonDown:
                 if (evt.GamepadButton != InputCode.None)
+                {
+                    PhysicalButtonState[(int)evt.GamepadButton] = true;
                     ButtonState[(int)evt.GamepadButton] = true;
+                }
                 break;
 
             case PlatformEventType.GamepadButtonUp:
                 if (evt.GamepadButton != InputCode.None)
+                {
+                    PhysicalButtonState[(int)evt.GamepadButton] = false;
                     ButtonState[(int)evt.GamepadButton] = false;
+                }
                 break;
 
             case PlatformEventType.GamepadAxis:
@@ -203,14 +224,16 @@ public static class Input
     public static bool WasButtonPressed(InputCode code) => ButtonPressedThisFrame[(int)code];
     public static bool WasButtonPressed(InputCode code, bool allowRepeat) =>
         ButtonPressedThisFrame[(int)code] || (allowRepeat && ButtonRepeatThisFrame[(int)code]);
-    public static bool WasButtonReleased(InputCode code) => ButtonReleasedThisFrame[(int)code];
+    public static bool WasButtonReleased(InputCode code) => ButtonReleasedThisFrame[(int)code] && !ButtonConsumed[(int)code];
     public static float GetAxis(InputCode code) => GetAxisValue(code);
 
     public static void ConsumeButton(InputCode code)
     {
+        Log.Debug($"ConsumeButton: {code}");
         ButtonPressedThisFrame[(int)code] = false;
         ButtonReleasedThisFrame[(int)code] = false;
         ButtonState[(int)code] = false;
+        ButtonConsumed[(int)code] = true;
     }
 
     public static bool IsShiftDown() => IsButtonDown(InputCode.KeyLeftShift) || IsButtonDown(InputCode.KeyRightShift);
