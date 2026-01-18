@@ -50,27 +50,28 @@ internal static class TextRender
         _indices.Clear();
     }
     
-    public static Vector2 Measure(string text, Font font, float fontSize)
+    public static Vector2 Measure(string text, Font font, float fontSize, float scale = 1f)
     {
         if (string.IsNullOrEmpty(text))
             return Vector2.Zero;
 
         var totalWidth = 0f;
-
         for (var i = 0; i < text.Length; i++)
         {
             var glyph = font.GetGlyph(text[i]);
-            totalWidth += glyph.Advance * fontSize;
+            var advance = glyph.Advance * fontSize;
 
             if (i + 1 < text.Length)
-                totalWidth += font.GetKerning(text[i], text[i + 1]) * fontSize;
+                advance += font.GetKerning(text[i], text[i + 1]) * fontSize;
+
+            totalWidth += MathF.Ceiling(advance * scale) / scale;
         }
 
         var totalHeight = font.LineHeight * fontSize;
         return new Vector2(totalWidth, totalHeight);
     }
 
-    public static void Draw(string text, Font font, float fontSize, ushort order = 0)
+    public static void Draw(string text, Font font, float fontSize, float scale = 1f, ushort order = 0)
     {
         if (string.IsNullOrEmpty(text) || _textShader == null)
             return;
@@ -84,7 +85,10 @@ internal static class TextRender
         Render.SetMesh(_mesh);
 
         var currentX = 0f;
-        var baselineY = (font.LineHeight - font.Baseline) * fontSize;
+        // Baseline = usWinAscent (includes internal leading)
+        // Add half of internal leading to center text vertically within line height
+        // This matches how Windows GDI positions text within single-line edit controls
+        var baselineY = (font.Baseline + font.InternalLeading * 0.5f) * fontSize;
         var baseIndex = _indices.Length;
 
         for (var i = 0; i < text.Length; i++)
@@ -97,10 +101,10 @@ internal static class TextRender
                 var x0 = currentX + glyph.Bearing.X * fontSize;
                 var x1 = x0 + glyph.Size.X * fontSize;
                 var y0 = baselineY + glyph.Bearing.Y * fontSize - glyph.Size.Y * fontSize;
-                var y1 = y0 + glyph.Size.Y * fontSize; 
+                var y1 = y0 + glyph.Size.Y * fontSize;
 
                 var baseVertex = _vertices.Length;
-                
+
                 _vertices.Add(new TextVertex
                 {
                     Position = Vector2.Transform(new Vector2(x0, y0), Render.Transform),
@@ -136,14 +140,15 @@ internal static class TextRender
                 _indices.Add((ushort)(baseVertex + 3));
                 _indices.Add((ushort)(baseVertex + 0));
                 Render.DrawElements(6, baseIndex, order);
-                
+
                 baseIndex += 6;
             }
 
-            currentX += glyph.Advance * fontSize;
-
+            var advance = glyph.Advance * fontSize;
             if (i + 1 < text.Length)
-                currentX += font.GetKerning(ch, text[i + 1]) * fontSize;
+                advance += font.GetKerning(ch, text[i + 1]) * fontSize;
+
+            currentX += MathF.Ceiling(advance * scale) / scale;
         }
     }
 }

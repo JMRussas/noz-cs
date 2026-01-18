@@ -660,7 +660,7 @@ public static unsafe class Render
         {
             SetMesh(_mesh);
         }
-        
+
         if (_batchStateDirty)
             AddBatchState();
 

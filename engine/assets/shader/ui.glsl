@@ -61,22 +61,13 @@ void main() {
 
     // Premultiply colors
     vec4 color = v_color;
-    color.rgb *= color.a;
-
     vec4 border_color = v_border_color;
-    border_color.rgb *= border_color.a;
 
-    // Border calculation (border_ratio = border_width / border_radius)
     float border = (1.0 + edge) - v_border_ratio;
     color = mix(color, border_color, smoothstep(border - edge, border, dist));
+    color.a = 1.0 - smoothstep(1.0 - edge, 1.0, dist);
 
-    // Edge falloff (premultiplied alpha - multiply RGBA by the edge falloff)
-    float radius_alpha = 1.0 - smoothstep(1.0 - edge, 1.0, dist);
-
-    // Discard fragments outside the rounded rect
-    if (radius_alpha < 0.001) discard;
-
-    color *= radius_alpha;
+    if (color.a < 0.001) discard;
 
     f_color = color;
 }

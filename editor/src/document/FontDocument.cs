@@ -182,14 +182,19 @@ public class FontDocument : Document
         writer.Write(Font.Version);
         writer.Write((ushort)0); // flags
 
-        // Font metrics
         writer.Write((uint)FontSize);
         writer.Write((uint)atlasSize.X);
         writer.Write((uint)atlasSize.Y);
         writer.Write((float)(ttf.Ascent * fontSizeInv));
         writer.Write((float)(ttf.Descent * fontSizeInv));
-        writer.Write((float)((ttf.Height + ttf.Descent) * fontSizeInv));
-        writer.Write(0.0f); // baseline
+        writer.Write((float)(ttf.Height * fontSizeInv));
+        writer.Write((float)(ttf.Ascent * fontSizeInv));
+        writer.Write((float)(ttf.InternalLeading * fontSizeInv));
+
+        // Font family name
+        writer.Write((ushort)ttf.FamilyName.Length);
+        if (ttf.FamilyName.Length > 0)
+            writer.Write(ttf.FamilyName.ToCharArray());
 
         // Write glyph count and data
         writer.Write((ushort)glyphs.Count);
@@ -197,15 +202,30 @@ public class FontDocument : Document
         {
             writer.Write((uint)glyph.Ascii);
 
-            // UV coordinates
-            writer.Write((float)glyph.PackedRect.X / atlasSize.X);
-            writer.Write((float)glyph.PackedRect.Y / atlasSize.Y);
-            writer.Write((float)(glyph.PackedRect.X + glyph.PackedRect.Width) / atlasSize.X);
-            writer.Write((float)(glyph.PackedRect.Y + glyph.PackedRect.Height) / atlasSize.Y);
+            // Glyphs with no contours (space, etc.) have no atlas entry - write zero UVs
+            var hasContours = glyph.Ttf.contours != null && glyph.Ttf.contours.Length > 0;
+            if (hasContours)
+            {
+                // UV coordinates (offset by Padding to exclude padding from sampling)
+                writer.Write((float)(glyph.PackedRect.X + Padding) / atlasSize.X);
+                writer.Write((float)(glyph.PackedRect.Y + Padding) / atlasSize.Y);
+                writer.Write((float)(glyph.PackedRect.X + Padding + glyph.Size.x) / atlasSize.X);
+                writer.Write((float)(glyph.PackedRect.Y + Padding + glyph.Size.y) / atlasSize.Y);
 
-            // Size
-            writer.Write((float)(glyph.Size.x * fontSizeInv));
-            writer.Write((float)(glyph.Size.y * fontSizeInv));
+                // Size
+                writer.Write((float)(glyph.Size.x * fontSizeInv));
+                writer.Write((float)(glyph.Size.y * fontSizeInv));
+            }
+            else
+            {
+                // No visual representation - zero UVs and size
+                writer.Write(0f);
+                writer.Write(0f);
+                writer.Write(0f);
+                writer.Write(0f);
+                writer.Write(0f);
+                writer.Write(0f);
+            }
 
             // Advance
             writer.Write((float)(glyph.Advance * fontSizeInv));

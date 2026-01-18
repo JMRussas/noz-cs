@@ -17,7 +17,7 @@ public struct FontGlyph
 
 public class Font : Asset
 {
-    internal const byte Version = 1;
+    internal const byte Version = 3;
     private const int MaxGlyphs = 256;
     private const int MaxKerningPairs = MaxGlyphs * MaxGlyphs;
 
@@ -28,6 +28,8 @@ public class Font : Asset
     public float Descent { get; private init; }
     public float LineHeight { get; private init; }
     public float Baseline { get; private init; }
+    public float InternalLeading { get; private init; }
+    public string FamilyName { get; private init; } = "";
 
     private readonly FontGlyph[] _glyphs = new FontGlyph[MaxGlyphs];
     private readonly ushort[] _kerningIndex = new ushort[MaxKerningPairs];
@@ -80,6 +82,13 @@ public class Font : Asset
         var descent = reader.ReadSingle();
         var lineHeight = reader.ReadSingle();
         var baseline = reader.ReadSingle();
+        var internalLeading = reader.ReadSingle();
+
+        // Read family name (added in version 2)
+        var familyNameLength = reader.ReadUInt16();
+        var familyName = familyNameLength > 0
+            ? new string(reader.ReadChars(familyNameLength))
+            : "";
 
         var font = new Font(name)
         {
@@ -89,7 +98,9 @@ public class Font : Asset
             Ascent = ascent,
             Descent = descent,
             LineHeight = lineHeight,
-            Baseline = baseline
+            Baseline = baseline,
+            InternalLeading = internalLeading,
+            FamilyName = familyName
         };
 
         // Read glyphs

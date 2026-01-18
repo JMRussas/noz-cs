@@ -116,7 +116,7 @@ public static class CommandPalette
         if (!_enabled)
             return;
 
-        if (Input.WasButtonPressed(InputCode.KeyEscape))
+        if (Input.WasButtonPressedRaw(InputCode.KeyEscape))
         {
             End();
             return;
@@ -161,8 +161,12 @@ public static class CommandPalette
         using (UI.BeginColumn(EditorStyle.CommandPalette.ListColumn))
         {
             using (UI.BeginContainer(EditorStyle.CommandPalette.SearchContainer))
-                UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId);
-            CommandList();
+                UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId, placeholder: "Search...");
+
+            EditorUI.PopupSeparator(16);
+
+            using (UI.BeginExpanded())
+                CommandList();
         }
     }
 
@@ -173,9 +177,7 @@ public static class CommandPalette
         //var listHeight = Math.Min(_filteredCount * EditorStyle.CommandPalette.ItemHeight, maxListHeight);
         var execute = false;
 
-        using (UI.BeginExpanded())
-        using (UI.BeginContainer())
-        using (UI.BeginScrollable(offset: 0, id: CommandListId))
+        using (UI.BeginContainer())using (UI.BeginScrollable(offset: 0, id: CommandListId))
         using (UI.BeginColumn())
         {
             var selectedIndex = _selectedIndex;
@@ -204,7 +206,7 @@ public static class CommandPalette
                         UI.Expanded();
 
                         if (cmd.Key != InputCode.None)
-                            EditorUI.Shortcut(cmd);
+                            EditorUI.Shortcut(cmd, selected: isSelected);
                     }
 
                     if (UI.WasClicked())

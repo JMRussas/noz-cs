@@ -266,6 +266,8 @@ public struct TextBoxData
     public bool Password;
     public int TextStart;
     public int TextLength;
+    public int PlaceholderStart;
+    public int PlaceholderLength;
 
     public static TextBoxData Default => new()
     {
@@ -274,6 +276,8 @@ public struct TextBoxData
         BackgroundColor = new Color(0.22f, 0.22f, 0.22f, 1f),
         TextColor = Color.White,
         PlaceholderColor = new Color(0.4f, 0.4f, 0.4f, 1f),
+        PlaceholderStart = 0,
+        PlaceholderLength = 0,
         Border = BorderStyle.None,
         FocusBorder = BorderStyle.None,
         Password = false,
@@ -345,9 +349,11 @@ public static class UI
     private const int MaxTextBuffer = 64 * 1024;
     private const byte ElementIdNone = 0;
     private const byte ElementIdMax = 255;
+    private static readonly string PasswordMask = new('*', 64);
 
     private static Font? _defaultFont;
 
+    public static Font? DefaultFont => _defaultFont;
     public static UIConfig Config { get; private set; } = new();
 
     private static readonly AlignInfo[] AlignInfoTable =
@@ -800,15 +806,15 @@ public static class UI
 
     public static void EndContainer() => EndElement(ElementType.Container);
 
-    public static void Container()
+    public static void Container(byte id=0)
     {
-        BeginContainer();
+        BeginContainer(id:id);
         EndContainer();
     }
 
-    public static void Container(ContainerStyle style)
+    public static void Container(ContainerStyle style, byte id=0)
     {
-        BeginContainer(style);
+        BeginContainer(style, id:id);
         EndContainer();
     }
 
@@ -895,6 +901,9 @@ public static class UI
 
         ref var e = ref CreateElement(ElementType.Spacer);
         e.Data.Spacer.Size = parent.Type == ElementType.Row ? new Vector2(size, 0) : new Vector2(0, size);
+
+        PushElement(e.Index);
+        PopElement();
     }
 
     public static void BeginBorder(BorderStyle style)
@@ -1081,13 +1090,20 @@ public static class UI
         PopElement();
     }
 
-    public static bool TextBox(ref string text, TextBoxStyle style = default, byte id = 0)
+    public static bool TextBox(ref string text, TextBoxStyle style = default, byte id = 0, string? placeholder = null)
     {
         ref var e = ref CreateElement(ElementType.TextBox);
         var textStart = AddText(text);
         e.Data.TextBox = style.ToData();
         e.Data.TextBox.TextStart = textStart;
         e.Data.TextBox.TextLength = text.Length;
+
+        if (!string.IsNullOrEmpty(placeholder))
+        {
+            e.Data.TextBox.PlaceholderStart = AddText(placeholder);
+            e.Data.TextBox.PlaceholderLength = placeholder.Length;
+        }
+
         SetId(ref e, id);
 
         var textChanged = false;
@@ -1263,12 +1279,15 @@ public static class UI
 
         if (!isAutoWidth)
             e.MeasuredSize.X = style.Width + style.Margin.L + style.Margin.R;
+        else if (e.ChildCount == 0 && maxContentSize.X == 0)
+            e.MeasuredSize.X = availableSize.X;
         else
-            e.MeasuredSize.X = Math.Min(availableSize.X,
-                maxContentSize.X + style.Padding.L + style.Padding.R + style.Border.Width * 2 + style.Margin.L + style.Margin.R);
+            e.MeasuredSize.X = Math.Min(availableSize.X, maxContentSize.X + style.Padding.L + style.Padding.R + style.Border.Width * 2 + style.Margin.L + style.Margin.R);
 
         if (!isAutoHeight)
             e.MeasuredSize.Y = style.Height + style.Margin.T + style.Margin.B;
+        else if (e.ChildCount == 0 && maxContentSize.Y == 0)
+            e.MeasuredSize.Y = availableSize.Y;
         else
             e.MeasuredSize.Y = Math.Min(availableSize.Y,
                 maxContentSize.Y + style.Padding.T + style.Padding.B + style.Border.Width * 2 + style.Margin.T + style.Margin.B);
@@ -1367,7 +1386,7 @@ public static class UI
         var fontSize = e.Data.Label.FontSize;
         var font = e.Font ?? _defaultFont!;
         var text = GetText(e.Data.Label.TextStart, e.Data.Label.TextLength);
-        e.MeasuredSize = TextRender.Measure(new string(text), font, fontSize);
+        e.MeasuredSize = TextRender.Measure(new string(text), font, fontSize, GetUIScale());
     }
 
     private static void MeasureImage(ref Element e)
@@ -1990,7 +2009,7 @@ public static class UI
         Render.PushState();
         Render.SetColor(e.Data.Label.Color);
         Render.SetTransform(e.LocalToWorld * Matrix3x2.CreateTranslation(offset));
-        TextRender.Draw(text, font, e.Data.Label.FontSize);
+        TextRender.Draw(text, font, e.Data.Label.FontSize, GetUIScale());
         Render.PopState();
     }
 
@@ -2040,9 +2059,11 @@ public static class UI
         // Mark that this textbox was rendered this frame (for cleanup detection)
         _textboxRenderedThisFrame = _textboxRenderedThisFrame || (_textboxFocusId == e.Id && _textboxFocusCanvasId == e.CanvasId);
 
+        var isNativeTextboxActive = _textboxFocusId == e.Id && _textboxFocusCanvasId == e.CanvasId;
+
         if (isFocused)
         {
-            if (_textboxFocusId != e.Id || _textboxFocusCanvasId != e.CanvasId)
+            if (!isNativeTextboxActive)
             {
                 // Focus just changed to this textbox
                 if (_textboxVisible)
@@ -2052,12 +2073,19 @@ public static class UI
                     ? new string(GetText(e.Data.TextBox.TextStart, e.Data.TextBox.TextLength))
                     : string.Empty;
 
+                var placeholder = tb.PlaceholderLength > 0
+                    ? new string(GetText(tb.PlaceholderStart, tb.PlaceholderLength))
+                    : null;
+
                 Application.Platform.ShowTextbox(screenRect, initialText, new Platform.NativeTextboxStyle
                 {
                     BackgroundColor = tb.BackgroundColor.ToColor32(),
                     TextColor = tb.TextColor.ToColor32(),
+                    PlaceholderColor = tb.PlaceholderColor.ToColor32(),
                     FontSize = scaledFontSize,
-                    Password = tb.Password
+                    Password = tb.Password,
+                    Placeholder = placeholder,
+                    FontFamily = _defaultFont?.FamilyName
                 });
                 _textboxFocusId = e.Id;
                 _textboxFocusCanvasId = e.CanvasId;
@@ -2076,13 +2104,65 @@ public static class UI
                     _elementStates[e.Id].Text = currentText;
             }
         }
-        else if (_textboxFocusId == e.Id && _textboxFocusCanvasId == e.CanvasId)
+        else
         {
-            // Lost focus - hide textbox
-            Application.Platform.HideTextbox();
-            _textboxFocusId = 0;
-            _textboxFocusCanvasId = 0;
-            _textboxVisible = false;
+            // Native textbox not active - render text ourselves
+            if (isNativeTextboxActive)
+            {
+                // Lost focus - hide textbox
+                Application.Platform.HideTextbox();
+                _textboxFocusId = 0;
+                _textboxFocusCanvasId = 0;
+                _textboxVisible = false;
+            }
+
+            // Get the current text (from element state if available, otherwise from the buffer)
+            var hasText = false;
+            string displayText;
+
+            if (e.Id != 0 && _elementStates[e.Id].Text != null)
+            {
+                displayText = _elementStates[e.Id].Text;
+                hasText = displayText.Length > 0;
+            }
+            else if (tb.TextLength > 0)
+            {
+                displayText = new string(GetText(tb.TextStart, tb.TextLength));
+                hasText = true;
+            }
+            else
+            {
+                displayText = string.Empty;
+            }
+
+            var font = _defaultFont!;
+            var uiScale = GetUIScale();
+            var textOffsetX = 1f / uiScale;
+            var glyphHeight = (font.Ascent - font.Descent) * tb.FontSize;
+            var textPos = pos + new Vector2(textOffsetX, (e.Rect.Height - glyphHeight) * 0.5f);
+            var textColor = tb.TextColor;
+            string? textToRender = null;
+
+            if (hasText)
+            {
+                textToRender = tb.Password
+                    ? PasswordMask[..Math.Min(displayText.Length, PasswordMask.Length)]
+                    : displayText;
+            }
+            else if (tb.PlaceholderLength > 0)
+            {
+                textToRender = new string(GetText(tb.PlaceholderStart, tb.PlaceholderLength));
+                textColor = tb.PlaceholderColor;
+            }
+
+            if (textToRender != null)
+            {
+                Render.PushState();
+                Render.SetColor(textColor);
+                Render.SetTransform(Matrix3x2.CreateTranslation(textPos));
+                TextRender.Draw(textToRender, font, tb.FontSize, uiScale);
+                Render.PopState();
+            }
         }
     }
 

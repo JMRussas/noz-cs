@@ -22,7 +22,9 @@ namespace NoZ.Editor
                 HHEA,
                 CMAP,
                 MAXP,
-                KERN
+                KERN,
+                NAME,
+                OS2
             }
 
             private BinaryReader _reader;
@@ -420,6 +422,7 @@ namespace NoZ.Editor
                 ReadFixed();
                 _ttf.Ascent = ReadFUnit();
                 _ttf.Descent = ReadFUnit();
+                _ttf.LineGap = ReadFUnit();
                 _ttf.Height = _ttf.Ascent - _ttf.Descent;
 
                 // Skip
@@ -439,10 +442,54 @@ namespace NoZ.Editor
                         throw new NotImplementedException();
 
                     Seek(TableName.HMTX, _ttf._glyphs[i].id * 4);
-
                     _ttf._glyphs[i].advance = ReadUFUnit();
                     double leftBearing = ReadFUnit();
                 }
+            }
+
+            private void ReadOS2()
+            {
+                if (_tableOffsets[(int)TableName.OS2] == 0)
+                {
+                    Log.Debug("OS/2 table not found");
+                    return;
+                }
+
+                Seek(TableName.OS2);
+
+                var version = ReadUInt16();
+                ReadInt16(); // xAvgCharWidth
+                ReadUInt16(); // usWeightClass
+                ReadUInt16(); // usWidthClass
+                ReadUInt16(); // fsType
+                ReadInt16(); // ySubscriptXSize
+                ReadInt16(); // ySubscriptYSize
+                ReadInt16(); // ySubscriptXOffset
+                ReadInt16(); // ySubscriptYOffset
+                ReadInt16(); // ySuperscriptXSize
+                ReadInt16(); // ySuperscriptYSize
+                ReadInt16(); // ySuperscriptXOffset
+                ReadInt16(); // ySuperscriptYOffset
+                ReadInt16(); // yStrikeoutSize
+                ReadInt16(); // yStrikeoutPosition
+                ReadInt16(); // sFamilyClass
+                _reader.ReadBytes(10); // panose
+                _reader.ReadBytes(16); // ulUnicodeRange1-4
+                _reader.ReadBytes(4); // achVendID
+                ReadUInt16(); // fsSelection
+                ReadUInt16(); // usFirstCharIndex
+                ReadUInt16(); // usLastCharIndex
+                var sTypoAscender = ReadFUnit();
+                ReadFUnit(); // sTypoDescender
+                var sTypoLineGap = ReadFUnit();
+                var usWinAscent = ReadUFUnit();
+                var usWinDescent = ReadUFUnit();
+
+                _ttf.Ascent = usWinAscent;
+                _ttf.Descent = -usWinDescent;
+                _ttf.Height = usWinAscent + usWinDescent;
+                _ttf.LineGap = sTypoLineGap;
+                _ttf.InternalLeading = usWinAscent - sTypoAscender;
             }
 
             private void ReadMAXP()
@@ -450,6 +497,55 @@ namespace NoZ.Editor
                 Seek(TableName.MAXP, 0);
                 var version = ReadFixed();
                 _glyphsById = new Glyph[ReadUInt16()];
+            }
+
+            private void ReadNAME()
+            {
+                if (_tableOffsets[(int)TableName.NAME] == 0)
+                    return;
+
+                Seek(TableName.NAME, 0);
+
+                var format = ReadUInt16();
+                var count = ReadUInt16();
+                var stringOffset = ReadUInt16();
+
+                // Look for the font family name (nameID = 1)
+                // Prefer Windows platform (3) with Unicode encoding (1)
+                for (int i = 0; i < count; i++)
+                {
+                    var platformId = ReadUInt16();
+                    var encodingId = ReadUInt16();
+                    var languageId = ReadUInt16();
+                    var nameId = ReadUInt16();
+                    var length = ReadUInt16();
+                    var offset = ReadUInt16();
+
+                    // nameID 1 = Font Family name
+                    if (nameId == 1)
+                    {
+                        var pos = Position;
+                        Seek(TableName.NAME, stringOffset + offset);
+
+                        // Windows platform uses UTF-16 BE
+                        if (platformId == 3 && encodingId == 1)
+                        {
+                            var chars = new char[length / 2];
+                            for (int j = 0; j < chars.Length; j++)
+                                chars[j] = (char)ReadUInt16();
+                            _ttf.FamilyName = new string(chars);
+                            return;
+                        }
+                        // Mac or Unicode platform - ASCII/UTF-8
+                        else if (platformId == 0 || platformId == 1)
+                        {
+                            _ttf.FamilyName = ReadString(length);
+                            // Keep looking for Windows platform which is preferred
+                        }
+
+                        Seek(pos);
+                    }
+                }
             }
 
             private void ReadKERN()
@@ -493,7 +589,6 @@ namespace NoZ.Editor
                                     (float)kern
                                     ));
                             }
-
                             break;
                         }
 
@@ -528,7 +623,10 @@ namespace NoZ.Editor
                     var length = ReadUInt32();
 
                     TableName name = TableName.None;
-                    if (!Enum.TryParse(tag.ToUpper(), out name))
+                    // OS/2 table has a slash which doesn't parse as enum
+                    if (tag == "OS/2")
+                        name = TableName.OS2;
+                    else if (!Enum.TryParse(tag.ToUpper(), out name))
                         continue;
 
                     _tableOffsets[(int)name] = offset;
@@ -557,9 +655,13 @@ namespace NoZ.Editor
 
                 ReadHHEA();
 
+                ReadOS2();
+
                 ReadGlyphs();
 
                 ReadKERN();
+
+                ReadNAME();
 
                 return _ttf;
             }

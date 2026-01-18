@@ -160,11 +160,12 @@ public static class Workspace
     
     public static void Update()
     {
+        UpdateCamera();
+
         if (!CommandPalette.IsEnabled)
         {
             CommandManager.ProcessShortcuts();
 
-            UpdateCamera();
             UpdateMouse();
             UpdatePan();
             UpdateZoom();
@@ -368,18 +369,6 @@ public static class Workspace
     private static void ToggleNames()
     {
         _showNames = !_showNames;
-    }
-
-    private static void SetZoom(float zoom)
-    {
-        _zoom = Math.Clamp(zoom, ZoomMin, ZoomMax);
-        UpdateCamera();
-    }
-
-    private static void SetDpi(float dpi)
-    {
-        _dpi = dpi > 0 ? dpi : DefaultDpi;
-        UpdateCamera();
     }
 
     private static void UpdateCamera()

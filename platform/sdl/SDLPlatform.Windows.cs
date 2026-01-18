@@ -35,13 +35,35 @@ internal static partial class User32
     public const int VK_TAB = 0x09;
     public const int VK_UP = 0x26;
     public const int VK_DOWN = 0x28;
+    public const int FW_THIN = 100;
+    public const int FW_LIGHT = 300;
     public const int FW_NORMAL = 400;
     public const int DEFAULT_CHARSET = 1;
     public const int OUT_DEFAULT_PRECIS = 0;
     public const int CLIP_DEFAULT_PRECIS = 0;
+    public const int ANTIALIASED_QUALITY = 4;
     public const int CLEARTYPE_QUALITY = 5;
     public const int DEFAULT_PITCH = 0;
     public const int FF_DONTCARE = 0;
+    public const int EM_SETCUEBANNER = 0x1501;
+    public const int WM_PAINT = 0x000F;
+    public const int DT_SINGLELINE = 0x0020;
+    public const int DT_VCENTER = 0x0004;
+    public const int DT_LEFT = 0x0000;
+    public const int WM_LBUTTONDBLCLK = 0x0203;
+
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetClientRect(nint hWnd, out RECT lpRect);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int DrawTextW(nint hdc, string lpchText, int cchText, ref RECT lprc, uint format);
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT
+    {
+        public int Left, Top, Right, Bottom;
+    }
 
     public delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
 
@@ -72,6 +94,9 @@ internal static partial class User32
 
     [LibraryImport("user32.dll")]
     public static partial nint SendMessageW(nint hWnd, uint msg, nint wParam, nint lParam);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern nint SendMessageW(nint hWnd, uint msg, nint wParam, string lParam);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     public static extern int GetWindowTextW(nint hWnd, char[] lpString, int nMaxCount);
@@ -181,6 +206,9 @@ public unsafe partial class SDLPlatform
     private nint _parentOriginalWndProc;
     private User32.WndProc? _editWndProcDelegate;
     private User32.WndProc? _parentWndProcDelegate;
+    private string? _editPlaceholder;
+    private uint _editPlaceholderColor;
+    private string? _editFontFamily;
 
     public bool IsTextboxVisible => _editVisible;
 
@@ -254,6 +282,52 @@ public unsafe partial class SDLPlatform
             }
         }
 
+        // Handle WM_PAINT to draw placeholder when text is empty
+        if (msg == User32.WM_PAINT && !string.IsNullOrEmpty(_editPlaceholder))
+        {
+            // Let the default paint happen first
+            var result = User32.CallWindowProcW(_editOriginalWndProc, hWnd, msg, wParam, lParam);
+
+            // Check if text is empty
+            var textLength = User32.GetWindowTextLengthW(hWnd);
+            if (textLength == 0)
+            {
+                var hdc = User32.GetDC(hWnd);
+                var oldFont = User32.SelectObject(hdc, _editFont);
+                User32.SetTextColor(hdc, _editPlaceholderColor);
+                User32.SetBkColor(hdc, _editBgColor);
+
+                User32.GetClientRect(hWnd, out var rect);
+                rect.Left += 1; // Match the edit control's internal text offset
+                User32.DrawTextW(hdc, _editPlaceholder, _editPlaceholder.Length, ref rect,
+                    User32.DT_SINGLELINE | User32.DT_VCENTER | User32.DT_LEFT);
+
+                User32.SelectObject(hdc, oldFont);
+                User32.ReleaseDC(hWnd, hdc);
+            }
+
+            return result;
+        }
+
+        // Force repaint when text changes (to show/hide placeholder)
+        if (msg == User32.WM_CHAR || msg == User32.WM_KEYDOWN)
+        {
+            var result = User32.CallWindowProcW(_editOriginalWndProc, hWnd, msg, wParam, lParam);
+            if (!string.IsNullOrEmpty(_editPlaceholder))
+            {
+                User32.InvalidateRect(hWnd, nint.Zero, true);
+            }
+            return result;
+        }
+
+        // Force repaint after double-click to ensure placeholder is redrawn
+        if (msg == User32.WM_LBUTTONDBLCLK && !string.IsNullOrEmpty(_editPlaceholder))
+        {
+            var result = User32.CallWindowProcW(_editOriginalWndProc, hWnd, msg, wParam, lParam);
+            User32.InvalidateRect(hWnd, nint.Zero, true);
+            return result;
+        }
+
         return User32.CallWindowProcW(_editOriginalWndProc, hWnd, msg, wParam, lParam);
     }
 
@@ -313,6 +387,17 @@ public unsafe partial class SDLPlatform
         if (_editHwnd == nint.Zero) return;
 
         _editTextColor = ColorToColorRef(style.TextColor);
+        _editPlaceholder = style.Placeholder;
+        _editPlaceholderColor = ColorToColorRef(style.PlaceholderColor);
+
+        // Update font family if changed
+        var fontFamily = string.IsNullOrEmpty(style.FontFamily) ? "Segoe UI" : style.FontFamily;
+        if (_editFontFamily != fontFamily)
+        {
+            _editFontFamily = fontFamily;
+            _editFontSize = -1; // Force font recreation
+        }
+
         var bgColor = ColorToColorRef(style.BackgroundColor);
         if (_editBgColor != bgColor)
         {
@@ -412,11 +497,24 @@ public unsafe partial class SDLPlatform
             User32.DeleteObject(_editFont);
 
         _editFontSize = fontSize;
+        var fontFamily = _editFontFamily ?? "Segoe UI";
+        var weight = User32.FW_NORMAL;
+
+        // Extract weight from font family name if present (e.g., "Segoe UI Semibold" -> "Segoe UI", weight=600)
+        var (baseFontFamily, extractedWeight) = ExtractFontWeight(fontFamily);
+        if (extractedWeight > 0)
+        {
+            fontFamily = baseFontFamily;
+            weight = extractedWeight;
+        }
+
+        // fontSize is already in physical pixels (scaled by UI scale)
+        // Use negative height for character cell height
         _editFont = User32.CreateFontW(
-            -fontSize, 0, 0, 0, User32.FW_NORMAL,
+            -fontSize, 0, 0, 0, weight,
             0, 0, 0, User32.DEFAULT_CHARSET,
             User32.OUT_DEFAULT_PRECIS, User32.CLIP_DEFAULT_PRECIS, User32.CLEARTYPE_QUALITY,
-            User32.DEFAULT_PITCH | User32.FF_DONTCARE, "Segoe UI");
+            User32.DEFAULT_PITCH | User32.FF_DONTCARE, fontFamily);
 
         User32.SendMessageW(_editHwnd, User32.WM_SETFONT, _editFont, 1);
     }
@@ -436,4 +534,31 @@ public unsafe partial class SDLPlatform
     }
 
     private static uint ColorToColorRef(Color32 c) => (uint)(c.R | (c.G << 8) | (c.B << 16));
+    private static (string baseName, int weight) ExtractFontWeight(string fontFamily)
+    {
+        // Common font weight suffixes and their Windows font weight values
+        var weightSuffixes = new (string suffix, int weight)[]
+        {
+            (" Thin", 100),
+            (" ExtraLight", 200),
+            (" UltraLight", 200),
+            (" Light", 300),
+            (" Regular", 400),
+            (" Medium", 500),
+            (" SemiBold", 600),
+            (" Semibold", 600),
+            (" DemiBold", 600),
+            (" Bold", 700),
+            (" ExtraBold", 800),
+            (" UltraBold", 800),
+            (" Black", 900),
+            (" Heavy", 900),
+        };
+
+        foreach (var (suffix, weight) in weightSuffixes)
+            if (fontFamily.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                return (fontFamily[..^suffix.Length], weight);
+
+        return (fontFamily, 0);
+    }
 }

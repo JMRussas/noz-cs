@@ -47,7 +47,8 @@ public class Style
 
     // Control
     public Color ControlTextColor;
-    public Color ControlBackgroundColor;
+    public Color ControlFillColor;
+    public Color ControlSelectedFillColor;
     public Color ControlIconColor;
 
     // List
@@ -55,6 +56,13 @@ public class Style
     public Color ListItemSelectedTextColor;
     public Color ListItemTextColor;
     public Color ListHeaderTextColor;
+
+    // Popup
+    public Color PopupFillColor;
+    public Color PopupTextColor;
+    public Color PopupSpacerColor;
+    public Color PopupShortcutColor;
+    public Color PopupSelectionColor;
 }
 
 public static class EditorStyle
@@ -118,16 +126,31 @@ public static class EditorStyle
 
     // Workspace
 
+    public static class Popup
+    {
+        public const float TextSize = 13.0f;
+        public static Color FillColor => _current.PopupFillColor;
+        public static Color TextColor => _current.PopupTextColor;
+        public static Color SpacerColor => _current.PopupSpacerColor;
+        public static Color ShortcutColor => _current.PopupShortcutColor;
+        public static Color SelectionColor => _current.PopupSelectionColor;
+        public readonly static ContainerStyle Item = new()
+        {
+            Height = 46.0f
+        };
+    }
+
     public static class Control
     {
         public static Color TextColor => _current.ControlTextColor;
         public static Color IconColor => _current.ControlIconColor;
-        public static Color FillColor => _current.ControlBackgroundColor;
+        public static Color FillColor => _current.ControlFillColor;
+        public static Color SelectedFillColor => _current.ControlSelectedFillColor;
     }
 
     public static class List
     {
-        public const float ItemHeight = 28f;
+        public const float ItemHeight = 32f;
         public const float ItemPadding = 8f;
         public const float ItemTextSize = 14.0f;
         public static Color ItemSelectedFillColor => _current.ListItemSelectedFillColor;
@@ -161,11 +184,11 @@ public static class EditorStyle
 
         public static readonly ContainerStyle RootContainer = new()
         {
-            Width = 600.0f,
+            Width = 450.0f,
             Height = 500.0f,
             Align = Align.Center,
             Padding = EdgeInsets.All(8.0f),
-            Color = Overlay.FillColor,
+            Color = Popup.FillColor,
             Border = new BorderStyle { Radius = 10.0f }
         };
 
@@ -178,20 +201,21 @@ public static class EditorStyle
         { 
             Height = 24.0f,
             FontSize = 18.0f,
-            BackgroundColor = Overlay.FillColor,
+            BackgroundColor = RootContainer.Color,
             TextColor = List.ItemSelectedTextColor,
             PlaceholderColor = List.HeaderTextColor,
         };
 
         public static readonly ContainerStyle ListColumn = new()
         {
-            Spacing = 4.0f
+            Spacing = 0.0f
         };
 
         public static readonly ContainerStyle CommandContainer = new()
         {
             Height = List.ItemHeight,
             Color = Color.Transparent,
+            Padding = EdgeInsets.Right(8),
             Border = new BorderStyle { Radius = 8 }
         };
 
@@ -202,12 +226,12 @@ public static class EditorStyle
         };
 
         public static readonly ContainerStyle SelectedCommandContainer = 
-            CommandContainer.WithColor(List.ItemSelectedFillColor);
+            CommandContainer.WithColor(Popup.SelectionColor);
 
         public static readonly LabelStyle CommandText = new()
         {
-            FontSize = List.ItemTextSize,
-            Color = EditorStyle.List.ItemTextColor,
+            FontSize = Popup.TextSize,
+            Color = Popup.TextColor,
             Align = Align.CenterLeft
         };
 
@@ -243,12 +267,9 @@ public static class EditorStyle
 
     public static class Shortcut
     {
-        public const float Size = 24.0f;
-        public const float TextSize = 10;
-
         public static readonly ContainerStyle ListContainer = new()
         {
-            Spacing = 4.0f,
+            Spacing = 2.0f,
             Align = Align.CenterLeft
         };
 
@@ -258,16 +279,22 @@ public static class EditorStyle
             Height = 24.0f,
             Align = Align.Center,
             Padding = EdgeInsets.LeftRight(8),
-            Color = Control.TextColor,
-            Border = new BorderStyle { Radius = 8.0f }
+            //Color = Control.FillColor,
+            Border = new BorderStyle { Radius = 4f }
         };
 
-        public static readonly LabelStyle TextStyle = new()
+        public static readonly ContainerStyle SelectedRootContainer =
+            //RootContainer.WithColor(Control.SelectedFillColor);
+            RootContainer;
+
+        public static readonly LabelStyle Text = new()
         {
-            FontSize = 10.0f,
-            Color = Control.FillColor,
+            FontSize = 12.0f,
+            Color = Popup.ShortcutColor,
             Align = Align.Center
         };
+
+        public static readonly LabelStyle SelectedText = Text.WithColor(Popup.TextColor);
     }
 
     // Toggle Button
@@ -329,7 +356,7 @@ public static class EditorStyle
             ButtonCheckedTextColor = Color.FromRgb(0xf0f0f0),
             ButtonDisabledColor = Color.FromRgb(0x2a2a2a),
             ButtonDisabledTextColor = Color.FromRgb(0x636363),
-            
+
             WorkspaceColor = Color.FromRgb(0x1d1d1d),
             WorkspaceGridColor = new Color(128, 127, 128),
 
@@ -353,12 +380,19 @@ public static class EditorStyle
 
             ControlTextColor = Color.FromRgb(0xeeeeee),
             ControlIconColor = Color.FromRgb(0x999999),
-            ControlBackgroundColor = Color.FromRgb(0x2b2b2b),
+            ControlFillColor = Color.FromRgb(0x2b2b2b),
+            ControlSelectedFillColor = Color.FromRgb(0x555555),
 
             ListItemSelectedFillColor = Color.FromRgb(0x2b2b2b),
             ListItemSelectedTextColor = Color.FromRgb(0xf4f4f4),
             ListItemTextColor = Color.FromRgb(0x999999),
-            ListHeaderTextColor = Color.FromRgb(0x666666)
+            ListHeaderTextColor = Color.FromRgb(0x666666),
+
+            PopupFillColor = Color.FromRgb(0x2b2b2b),
+            PopupTextColor = Color.FromRgb(0xFFFFFF),
+            PopupSpacerColor = Color.FromRgb(0x363636),
+            PopupShortcutColor = Color.FromRgb(0x777777),
+            PopupSelectionColor = Color.FromRgb(0x0099ff),
         };
     }
 }

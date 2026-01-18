@@ -10,8 +10,11 @@ public struct NativeTextboxStyle
 {
     public Color32 BackgroundColor;
     public Color32 TextColor;
+    public Color32 PlaceholderColor;
     public int FontSize;
     public bool Password;
+    public string? Placeholder;
+    public string? FontFamily;
 }
 
 public interface IPlatform

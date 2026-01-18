@@ -42,7 +42,10 @@ namespace NoZ.Editor
 
         public double Ascent { get; private set; }
         public double Descent { get; private set; }
+        public double LineGap { get; private set; }
         public double Height { get; private set; }
+        public double InternalLeading { get; internal set; }
+        public string FamilyName { get; internal set; } = "";
 
         private Glyph[] _glyphs;
         internal List<Tuple<ushort, float>> _kerning;

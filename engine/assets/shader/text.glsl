@@ -48,8 +48,8 @@ void main() {
     float dy = dFdy(dist);
     float edgeWidth = 0.7 * length(vec2(dx, dy));
 
-    // Distance threshold (0.5 = edge in normalized SDF)
-    float threshold = 0.5;
+    // Distance threshold (0.5 = edge in normalized SDF, lower = thicker text)
+    float threshold = 0.49;
 
     // Main text alpha
     float textAlpha = smoothstep(threshold - edgeWidth, threshold + edgeWidth, dist);
