@@ -418,8 +418,6 @@ public static partial class UI
         // Apply pending focus (element ID + canvas ID)
         _focusId = _pendingFocusId;
         _focusCanvasId = _pendingFocusCanvasId;
-
-        LogUI("Begin");
     }
 
     public static AutoCanvas BeginCanvas(CanvasStyle style = default, byte id = 0)
@@ -688,6 +686,7 @@ public static partial class UI
     {
         ref var e = ref CreateElement(ElementType.Label);
         var textStart = AddText(text);
+        e.Font = style.Font ?? _defaultFont;
         e.Data.Label = new LabelData
         {
             FontSize = style.FontSize > 0 ? style.FontSize : 16,
@@ -787,13 +786,13 @@ public static partial class UI
 
     internal static void End()
     {
-        LogUI("Layout");
+        LogUI("Layout", condition: () => _elementCount > 0);
         for (int elementIndex=0; elementIndex < _elementCount;) 
             elementIndex = LayoutCanvas(elementIndex);
 
         Render.SetCamera(Camera);
 
-        LogUI("Draw");
+        LogUI("Draw", condition: () => _elementCount > 0);
         for (int elementIndex = 0; elementIndex < _elementCount;)
             elementIndex = DrawElement(elementIndex, false);
 
@@ -1586,14 +1585,6 @@ public static partial class UI
     }
 #endif
 
-    private static float GetAlignFactor(Align align) => align switch
-    {
-        Align.Min => 0f,
-        Align.Center => 0.5f,
-        Align.Max => 1f,
-        _ => 0f // Fill treated as Min for positioning
-    };
-
     // Transform calculation
     private static int CalculateTransforms(int elementIndex, Matrix3x2 parentTransform)
     {
@@ -1844,15 +1835,16 @@ public static partial class UI
     }
 
     [Conditional("NOZ_UI_DEBUG")]
-    private static void LogUI(string msg, int depth=0)
+    private static void LogUI(string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)
     {
-        Log.Debug($"[UI] {new string(' ', depth)}{msg}");
+        if (condition == null || condition())
+            Log.Debug($"[UI] {new string(' ', depth)}{msg}{Log.Params(values)}");
     }
 
     [Conditional("NOZ_UI_DEBUG")]
-    private static void LogUI(in Element e, string msg)
+    private static void LogUI(in Element e, string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)
     {
-        Log.Debug($"[UI]   {new string(' ', GetDepth(in e) * 2)}{msg}");
+        if (condition == null || condition())
+            Log.Debug($"[UI]   {new string(' ', GetDepth(in e) * 2 + depth * 2)}{msg}{Log.Params(values)}");
     }
-
 }

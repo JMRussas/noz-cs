@@ -34,8 +34,7 @@ public struct ContainerStyle()
 
     internal ContainerData ToData() => new()
     {
-        Width = Width,
-        Height = Height,
+        Size = new Size2(Width, Height),
         MinWidth = MinWidth,
         MinHeight = MinHeight,
         MaxWidth = MaxWidth,
@@ -132,7 +131,7 @@ public struct TextBoxStyle()
 {
     public Size Height = 28f;
     public float FontSize = 16;
-    public Color BackgroundColor = new(0.22f, 0.22f, 0.22f, 1f);
+    public Color BackgroundColor = Color.Transparent;
     public Color TextColor = Color.White;
     public Color PlaceholderColor = new(0.4f, 0.4f, 0.4f, 1f);
     public Color SelectionColor = new(0.2f, 0.4f, 0.8f, 0.5f);

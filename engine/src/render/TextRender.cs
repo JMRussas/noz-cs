@@ -50,6 +50,26 @@ internal static class TextRender
         _indices.Clear();
     }
     
+    public static Vector2 Measure(ReadOnlySpan<char> text, Font font, float fontSize)
+    {
+        if (text.Length == 0) return Vector2.Zero;
+
+        var totalWidth = 0f;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var glyph = font.GetGlyph(text[i]);
+            var advance = glyph.Advance * fontSize;
+
+            if (i + 1 < text.Length)
+                advance += font.GetKerning(text[i], text[i + 1]) * fontSize;
+
+            totalWidth += advance;
+        }
+
+        var totalHeight = font.LineHeight * fontSize;
+        return new Vector2(totalWidth, totalHeight);
+    }
+
     public static Vector2 Measure(string text, Font font, float fontSize)
     {
         if (string.IsNullOrEmpty(text))

@@ -9,8 +9,7 @@ namespace NoZ.Engine.UI;
 
 internal struct ContainerData
 {
-    public Size Width;
-    public Size Height;
+    public Size2 Size;
     public float MinWidth;
     public float MinHeight;
     public float MaxWidth;
@@ -26,8 +25,7 @@ internal struct ContainerData
 
     public static ContainerData Default => new()
     {
-        Width = 0,
-        Height = 0,
+        Size = Size2.Default,
         MinWidth = 0,
         MinHeight = 0,
         MaxWidth = float.MaxValue,

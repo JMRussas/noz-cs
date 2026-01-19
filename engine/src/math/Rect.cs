@@ -128,5 +128,5 @@ public struct Rect(float x, float y, float width, float height)
     public static bool operator ==(Rect left, Rect right) => left.Equals(right);
     public static bool operator !=(Rect left, Rect right) => !left.Equals(right);
 
-    public override string ToString() => $"Rect({X}, {Y}, {Width}, {Height})";
+    public override string ToString() => $"<{X}, {Y}, {Width}, {Height}>";
 }

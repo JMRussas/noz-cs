@@ -51,6 +51,11 @@ public readonly struct Color32(byte r, byte g, byte b, byte a=255)
     public static readonly Color32 Green = new(0, 255, 0);
     public static readonly Color32 Blue = new(0, 0, 255);
     public static readonly Color32 Transparent = new(0, 0, 0, 0);
+
+    public override string ToString()
+    {
+        return $"(R:{R}, G:{G}, B:{B}, A:{A})";            
+    }
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -75,6 +80,11 @@ public readonly struct Color24(byte r, byte g, byte b) : IEquatable<Color24>
     public static readonly Color24 Red = new(255, 0, 0);
     public static readonly Color24 Green = new(0, 255, 0);
     public static readonly Color24 Blue = new(0, 0, 255);
+
+    public override string ToString()
+    {
+        return $"(R:{R}, G:{G}, B:{B})";
+    }
 }
 
 [StructLayout(LayoutKind.Sequential)]
@@ -189,4 +199,9 @@ public readonly struct Color(float r, float g, float b, float a)
     public static readonly Color White2Pct = new(1f, 1f, 1f, 0.02f);
     public static readonly Color White5Pct = new(1f, 1f, 1f, 0.05f);
     public static readonly Color White10Pct = new(1f, 1f, 1f, 0.1f);
+
+    public override string ToString()
+    {
+        return $"(R:{R}, G:{G}, B:{B}, A:{A})";
+    }
 }

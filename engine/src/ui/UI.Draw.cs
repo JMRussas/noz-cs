@@ -1,7 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿//
+//  NoZ - Copyright(c) 2026 NoZ Games, LLC
+//
+
+#define NOZ_UI_DEBUG
+
 using System.Numerics;
-using System.Text;
 
 namespace NoZ.Engine.UI;
 
@@ -38,8 +41,6 @@ public static partial class UI
                 break;
 
             case ElementType.Popup when !isPopup:
-
-
                 return e.NextSiblingIndex;
         }
 
@@ -95,28 +96,27 @@ public static partial class UI
             style.Border.Width,
             style.Border.Color
         );
+
+        LogUI(e, $"{e.Type}: Rect={new Rect(pos.X, pos.Y, e.Rect.Width, e.Rect.Height)} Color={e.Data.Container.Color}");
     }
 
-    private static Vector2 GetTextOffset(Font font, float fontSize, Vector2 containerSize, Align alignX, Align alignY)
+    private static Vector2 GetTextOffset(string text, Font font, float fontSize, in Vector2 containerSize, Align alignX, Align alignY)
     {
-        var textSize = new Vector2(0, font.LineHeight * fontSize);
-
+        var size = new Vector2(TextRender.Measure(text, font, fontSize).X, font.LineHeight * fontSize);
         var offset = new Vector2(
-            (containerSize.X - textSize.X) * GetAlignFactor(alignX),
-            (containerSize.Y - textSize.Y) * GetAlignFactor(alignY)
+            (containerSize.X - size.X) * alignX.ToFactor(),
+            (containerSize.Y - size.Y) * alignY.ToFactor()
         );
 
-        // Snap to screen pixel boundaries for consistent SDF rendering
         var displayScale = Application.Platform.DisplayScale;
         offset.X = MathF.Round(offset.X * displayScale) / displayScale;
         offset.Y = MathF.Round(offset.Y * displayScale) / displayScale;
-
         return offset;
     }
 
     internal static void DrawText(string text, Font font, float fontSize, Color color, Matrix3x2 localToWorld, Vector2 containerSize, Align alignX = Align.Min, Align alignY = Align.Center)
     {
-        var offset = GetTextOffset(font, fontSize, containerSize, alignX, alignY);
+        var offset = GetTextOffset(text, font, fontSize, containerSize, alignX, alignY);
 
         var transform = localToWorld * Matrix3x2.CreateTranslation(offset);
 
@@ -131,7 +131,16 @@ public static partial class UI
     {
         var font = e.Font ?? _defaultFont!;
         var text = new string(GetText(e.Data.Label.TextStart, e.Data.Label.TextLength));
-        DrawText(text, font, e.Data.Label.FontSize, e.Data.Label.Color, e.LocalToWorld, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
+        var offset = GetTextOffset(text, font, e.Data.Label.FontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
+        var transform = e.LocalToWorld * Matrix3x2.CreateTranslation(offset);
+
+        LogUI(e, $"{e.Type}: Offset={offset} AlignX={e.Data.Label.AlignX}  AlignY={e.Data.Label.AlignY}");
+
+        Render.PushState();
+        Render.SetColor(e.Data.Label.Color);
+        Render.SetTransform(transform);
+        TextRender.Draw(text, font, e.Data.Label.FontSize);
+        Render.PopState();
     }
 
     private static void DrawImage(ref Element e)

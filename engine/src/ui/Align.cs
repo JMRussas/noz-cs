@@ -10,3 +10,10 @@ public enum Align
     Center,
     Max
 }
+
+public static class AlignExtensions
+{
+    private static readonly float[] AlignFactor = [0.0f, 0.5f, 1.0f];
+
+    public static float ToFactor(this Align align) => AlignFactor[(int)align];
+}

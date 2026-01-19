@@ -56,6 +56,7 @@ public static class UIRender
         Color borderColor = default)
     {
         if (!_initialized || _shader == null) return;
+        if (borderColor.A < 0) return;
 
         var vertexOffset = _vertices.Length;
         var indexOffset = _indices.Length;

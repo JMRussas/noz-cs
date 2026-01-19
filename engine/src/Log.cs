@@ -25,4 +25,21 @@ public static class Log
     {
         System.Diagnostics.Debug.WriteLine($"[ERROR] {message}");
     }
+
+
+    public static string Params((string name, object? value, bool condition)[]? values)
+    {
+        if (values == null)
+            return string.Empty;
+
+        var stringBuilder = new System.Text.StringBuilder(1024);
+        foreach (var (name, value, condition) in values)
+            if (condition)
+                stringBuilder.Append($"  {name}={value}");  
+
+        return stringBuilder.ToString();
+    }
+
+    public static string Param(string name, object? value, bool condition=true) =>
+        condition ? $"  {name}={value}" : "";
 }
