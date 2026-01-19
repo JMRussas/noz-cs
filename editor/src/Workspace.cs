@@ -242,21 +242,27 @@ public static class Workspace
     {
         Workspace.ActiveEditor?.UpdateUI();
 
+#if false
         UI.BeginCanvas();
         UI.BeginContainer(style: ContainerStyle.Default with {
-            Width = Size.Inherit(0.5f),
-            Height = 400,
+            Width = Size.Percent(0.5f),
+            Height = Size.Fit(),
             Color = Color.Red,
             AlignX = Align.Center,
             AlignY = Align.Center,
         });
 
-        UI.Container(style: ContainerStyle.Default with {
-            Color = Color.Green,
-        });
+        UI.BeginColumn(new ContainerStyle { Height = Size.Fit(), Color = Color.Yellow});
+        UI.BeginContainer(new ContainerStyle { Color= Color.Blue, Height=100});
+        UI.Label("test1", new LabelStyle { Color=Color.White, FontSize = 40, AlignX = Align.Center, AlignY = Align.Center});
+        UI.EndContainer();
+        UI.Label("test2", new LabelStyle { Color = Color.White, FontSize = 40 });
+        UI.Label("test2", new LabelStyle { Color = Color.White, FontSize = 40, AlignX = Align.Max});
+        UI.EndColumn();
 
         UI.EndContainer();
         UI.EndCanvas();
+#endif
     }
 
     private static void UpdateCulling()

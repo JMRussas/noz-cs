@@ -209,10 +209,12 @@ public static class EditorStyle
     {
         private const float IconSize = 24.0f;
 
-        public static readonly ContainerStyle RootContainer = Popup.RootContainer
-            .WithSize(width: 450.0f)
-            .WithMinSize(minHeight: 100)
-            .WithMaxSize(maxHeight: 400);
+        public static readonly ContainerStyle RootContainer = Popup.RootContainer with
+        {
+            Width = 450.0f,
+            MinHeight = 100.0f,
+            MaxHeight = 400.0f
+        };
 
         public static readonly ContainerStyle SearchContainer = Popup.Item;
 
@@ -220,7 +222,6 @@ public static class EditorStyle
         { 
             Height = Popup.Item.Height,
             FontSize = Control.TextSize,
-            BackgroundColor = RootContainer.Color,
             TextColor = Control.TextColor,
             SelectionColor = SelectionColor,
             PlaceholderColor = Control.PlaceholderTextColor

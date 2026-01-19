@@ -18,19 +18,13 @@ public class Command
     public bool Shift { get; init; }
 }
 
-public readonly struct ParsedCommand
+public readonly struct ParsedCommand(string name, string[] args)
 {
     public const int MaxArgs = 4;
     public const int MaxArgSize = 128;
 
-    public readonly string Name;
-    public readonly string[] Args;
-
-    public ParsedCommand(string name, string[] args)
-    {
-        Name = name;
-        Args = args;
-    }
+    public readonly string Name = name;
+    public readonly string[] Args = args;
 
     public string GetArg(int index) => index < Args.Length ? Args[index] : string.Empty;
     public int ArgCount => Args.Length;
@@ -148,16 +142,14 @@ public static class CommandPalette
             return;
 
         using (UI.BeginCanvas(id:EditorStyle.CanvasId.CommandPalette))
-        using (UI.BeginContainer(EditorStyle.CommandPalette.RootContainer))
-        using (UI.BeginColumn(EditorStyle.CommandPalette.ListColumn))
+        using (UI.BeginColumn(EditorStyle.CommandPalette.RootContainer))
         {
-            using (UI.BeginRow(ContainerStyle.Default))
+            using (UI.BeginRow(EditorStyle.Popup.Item with { Color = Color.Red}))
             {
                 using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
                     ;
 
                 using (UI.BeginFlex())
-                using (UI.BeginContainer(EditorStyle.CommandPalette.SearchContainer))
                     UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId, placeholder: "Search...");
             }
 
