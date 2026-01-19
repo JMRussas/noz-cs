@@ -2,6 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using NoZ.Engine.UI;
+
 using System.Numerics;
 
 namespace NoZ.Editor;
@@ -134,7 +136,7 @@ public static class ContextMenu
 
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.ContextMenu))
         {
-            using (UI.BeginContainer(style: ContainerStyle.Default.WithFill(), id: CloseId))
+            using (UI.BeginContainer(style: ContainerStyle.Default, id: CloseId))
                 if (UI.WasPressed())
                     Close();
 
@@ -238,7 +240,7 @@ public static class ContextMenu
                             Color = EditorStyle.SelectionColor
                         });
 
-                    using (UI.BeginRow())
+                    using (UI.BeginRow(ContainerStyle.Default))
                     {
                         UI.Label(item.Label, new LabelStyle
                         {

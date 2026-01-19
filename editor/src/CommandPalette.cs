@@ -2,6 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using NoZ.Engine.UI;
+
 namespace NoZ.Editor;
 
 public class Command
@@ -149,7 +151,7 @@ public static class CommandPalette
         using (UI.BeginContainer(EditorStyle.CommandPalette.RootContainer))
         using (UI.BeginColumn(EditorStyle.CommandPalette.ListColumn))
         {
-            using (UI.BeginRow())
+            using (UI.BeginRow(ContainerStyle.Default))
             {
                 using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
                     ;
@@ -170,9 +172,8 @@ public static class CommandPalette
     {
         var execute = false;
 
-        using (UI.BeginContainer(ContainerStyle.Default.WithAlign(Align.Min)))
         using (UI.BeginScrollable(offset: 0, id: CommandListId))
-        using (UI.BeginColumn(ContainerStyle.Default.WithAlign(Align.Min)))
+        using (UI.BeginColumn(ContainerStyle.Default.WithAlignY(Align.Min)))
         {
             var selectedIndex = _selectedIndex;
             for (var i = 0; i < _filteredCount; i++)
@@ -188,7 +189,7 @@ public static class CommandPalette
                         ? EditorStyle.CommandPalette.SelectedCommandContainer
                         : EditorStyle.CommandPalette.CommandContainer))
                 {
-                    using (UI.BeginRow())
+                    using (UI.BeginRow(ContainerStyle.Default))
                     {
                         using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
                             ;

@@ -6,10 +6,10 @@ using System.Numerics;
 using System.Runtime.InteropServices;
 using NoZ.Platform;
 
-namespace NoZ;
+namespace NoZ.Engine.UI;
 
 [StructLayout(LayoutKind.Sequential)]
-public struct UIVertex : IVertex
+internal struct UIVertex : IVertex
 {
     public Vector2 Position;
     public Vector2 UV;

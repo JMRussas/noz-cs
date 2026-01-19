@@ -6,7 +6,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using NoZ.Platform;
 
-namespace NoZ;
+namespace NoZ.Engine.UI;
 
 public static class UIRender
 {
@@ -19,7 +19,7 @@ public static class UIRender
     private static Shader? _shader;
     private static bool _initialized;
 
-    public static void Init(UIConfig config)
+    public static void Init(Config config)
     {
         if (_initialized) return;
 

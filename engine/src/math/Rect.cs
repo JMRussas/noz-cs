@@ -3,9 +3,12 @@
 //
 
 using System.Numerics;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace NoZ;
 
+[StructLayout(LayoutKind.Sequential, Pack = 0)]
 public struct Rect(float x, float y, float width, float height)
     : IEquatable<Rect>
 {
@@ -40,6 +43,12 @@ public struct Rect(float x, float y, float width, float height)
     public Vector2 TopRight => new(X + Width, Y);
     public Vector2 BottomLeft => new(X, Y + Height);
     public Vector2 BottomRight => new(X + Width, Y + Height);
+
+    public unsafe float GetSize(int axis)
+    {
+        fixed (float* ptr = &Width)
+            return ptr[axis];
+    }
 
     public bool Contains(float px, float py)
     {

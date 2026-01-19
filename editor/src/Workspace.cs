@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using NoZ.Engine.UI;
 
 namespace NoZ.Editor;
 
@@ -240,6 +241,22 @@ public static class Workspace
     public static void UpdateUI()
     {
         Workspace.ActiveEditor?.UpdateUI();
+
+        UI.BeginCanvas();
+        UI.BeginContainer(style: ContainerStyle.Default with {
+            Width = Size.Inherit(0.5f),
+            Height = 400,
+            Color = Color.Red,
+            AlignX = Align.Center,
+            AlignY = Align.Center,
+        });
+
+        UI.Container(style: ContainerStyle.Default with {
+            Color = Color.Green,
+        });
+
+        UI.EndContainer();
+        UI.EndCanvas();
     }
 
     private static void UpdateCulling()

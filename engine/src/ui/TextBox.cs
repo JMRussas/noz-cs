@@ -5,11 +5,11 @@
 using System.Numerics;
 using NoZ.Platform;
 
-namespace NoZ;
+namespace NoZ.Engine.UI;
 
 public struct TextBoxData
 {
-    public float Height;
+    public Size Height;
     public float FontSize;
     public Color BackgroundColor;
     public Color TextColor;
@@ -77,13 +77,13 @@ internal static class TextBoxElement
 
     public static void Measure(ref Element e, Vector2 availableSize)
     {
-        e.MeasuredSize = new Vector2(availableSize.X, e.Data.TextBox.Height);
+        //e.MeasuredSize = new Vector2(availableSize.X, e.Data.TextBox.Height);
     }
 
     public static void Layout(ref Element e, Vector2 size)
     {
         e.Rect.Width = size.X;
-        e.Rect.Height = e.Data.TextBox.Height;
+        //e.Rect.Height = e.Data.TextBox.Height;
     }
 
     public static void Draw(ref Element e)

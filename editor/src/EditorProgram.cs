@@ -29,7 +29,7 @@ Application.Init(new ApplicationConfig
     AudioBackend = new SdlAudioDriver(),
     Vtable = new EditorVtable(),
 
-    UI = new UIConfig()
+    UI = new NoZ.Engine.UI.Config()
     {
         DefaultFont = EditorAssets.Names.Seguisb
     },

@@ -2,9 +2,9 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-namespace NoZ;
+namespace NoZ.Engine.UI;
 
-public class UIConfig
+public class Config
 {
     public string UIShader { get; init; } = "ui";
     public string DefaultFont { get; init; } = "";

@@ -2,6 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using NoZ.Engine.UI;
+
 namespace NoZ.Editor;
 
 internal static class EditorUI

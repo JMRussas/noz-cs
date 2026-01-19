@@ -2,6 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using NoZ.Engine.UI;
+
 namespace NoZ.Editor;
 
 public class Style
@@ -136,7 +138,6 @@ public static class EditorStyle
         public readonly static ContainerStyle Separator = new() { 
             Height = 1,
             Margin = EdgeInsets.TopBottom(6),
-            AlignX = Align.Fill,
             Color = _current.PopupSpacerColor
         };
         public readonly static ContainerStyle RootContainer = new()
@@ -227,13 +228,13 @@ public static class EditorStyle
 
         public static readonly ContainerStyle ListColumn = new()
         {
-            Spacing = 0.0f
+            Spacing = 0.0f,
         };       
 
         public static readonly ContainerStyle CommandContainer = new()
         {
             Height = Popup.Item.Height,
-            Padding = EdgeInsets.Right(8)
+            Padding = EdgeInsets.Right(8),
         };
 
         public static readonly ContainerStyle CommandIconContainer = new()
