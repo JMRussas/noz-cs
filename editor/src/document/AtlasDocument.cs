@@ -113,19 +113,17 @@ namespace NoZ.Editor
 
         public Rect ToUV(RectInt rect)
         {
-            var tw = (float)_texture.Width;
-            var th = (float)_texture.Height;
-            var u = rect.Left / tw;
-            var v = rect.Top / th;
-            var s = rect.Right / tw;
-            var t = rect.Bottom / th;
-            var hpu = 0.1f / tw;
-            var hpv = 0.1f / th;
+            var ts = (float)EditorApplication.Config.AtlasSize;
+            var u = rect.Left / ts;
+            var v = rect.Top / ts;
+            var s = rect.Right / ts;
+            var t = rect.Bottom / ts;
+            var hp = 0.1f / ts;
 
-            //u += hpu;
-            //v += hpv;
-            //s -= hpu;
-            //t -= hpv;
+            //u += hp;
+            //v += hp;
+            //s -= hp;
+            //t -= hp;
 
             return Rect.FromMinMax(u, v, s, t);
         }
@@ -136,6 +134,8 @@ namespace NoZ.Editor
             for (int i = 0; i < span.Length; i++)
             {
                 ref var rect = ref span[i];
+                if (rect.Sprite != null) continue;
+
                 rect.Sprite = DocumentManager.Find(AssetType.Sprite, rect.Name) as SpriteDocument;
                 if (rect.Sprite == null) continue;
                 
@@ -226,7 +226,8 @@ namespace NoZ.Editor
                 }
             }
 
-            _texture.Update(_image.AsByteSpan());
+            if (_texture != null)
+                _texture.Update(_image.AsByteSpan());
         }
 
         public override void Draw()
@@ -243,8 +244,6 @@ namespace NoZ.Editor
 
         public override void Import(string outputPath, PropertySet config, PropertySet meta)
         {
-            Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath) ?? "");
-
             using var writer = new BinaryWriter(File.Create(outputPath));
             writer.WriteAssetHeader(AssetType.Atlas, Atlas.Version, 0);
 

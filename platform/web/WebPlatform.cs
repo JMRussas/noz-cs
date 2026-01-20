@@ -21,7 +21,10 @@ public class WebPlatform : IPlatform
     public Vector2 WindowSize => _windowSize;
     public float DisplayScale => 1.0f; // TODO: Get from browser
     public bool IsTextboxVisible => false; // TODO: Implement
+    public nint WindowHandle => nint.Zero; // Not applicable for web
     public event Action<PlatformEvent>? OnEvent;
+
+    public nint GetGraphicsProcAddress(string name) => nint.Zero; // Not applicable for web
 
     public WebPlatform(IJSRuntime js)
     {

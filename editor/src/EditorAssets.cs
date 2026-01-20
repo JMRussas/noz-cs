@@ -227,7 +227,7 @@ public static class EditorAssets
         Textures.Load();
 
         // Create texture array from all atlases
-        AtlasArray = Texture.CreateArray(Atlases.EditorAtlas00);
+        AtlasArray = Texture.CreateArray("SpriteAtlas",Atlases.EditorAtlas00);
         Graphics.SpriteAtlas = AtlasArray;
     }
 

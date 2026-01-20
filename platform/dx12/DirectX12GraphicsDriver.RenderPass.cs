@@ -195,7 +195,7 @@ public unsafe partial class DirectX12GraphicsDriver
         _device.CreateDepthStencilView(_offscreenDepthStencil, &dsvDesc, dsvHandle);
 
         // Create SRV for the resolve target (or non-MSAA render target)
-        _offscreenSrvDescriptorIndex = MaxBuffers + MaxTextures + MaxTextureArrays; // Use a reserved slot
+        _offscreenSrvDescriptorIndex = MaxBuffers + MaxTextures; // Use a reserved slot after textures
 
         var srvHandle = _cbvSrvUavHeap.GetCPUDescriptorHandleForHeapStart();
         srvHandle.Ptr += (nuint)(_offscreenSrvDescriptorIndex * _cbvSrvUavDescriptorSize);

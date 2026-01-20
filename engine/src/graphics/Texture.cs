@@ -14,11 +14,13 @@ public class Texture : Asset
     public TextureFilter Filter { get; private set; }
     public TextureClamp Clamp { get; private set; }
     public byte[] Data { get; private init; } = [];
+    public bool IsArray { get; private set; }   
 
     internal nuint Handle { get; private set; }
 
-    private Texture(string name) : base(AssetType.Texture, name)
+    private Texture(string name, bool isArray) : base(AssetType.Texture, name)
     {
+        IsArray = isArray;  
     }
 
     public static Texture Create(
@@ -29,7 +31,7 @@ public class Texture : Asset
         TextureFilter filter = TextureFilter.Linear,
         string name = "")
     {
-        var texture = new Texture(name)
+        var texture = new Texture(name, false)
         {
             Width = width,
             Height = height,
@@ -55,7 +57,7 @@ public class Texture : Asset
         var dataSize = width * height * GetBytesPerPixel(format);
         var data = reader.ReadBytes(dataSize);
 
-        var texture = new Texture(name)
+        var texture = new Texture(name, false)
         {
             Width = width,
             Height = height,
@@ -77,7 +79,7 @@ public class Texture : Asset
         Handle = Graphics.Driver.CreateTexture(Width, Height, Data, Format, Filter);
     }
 
-    public static Texture? CreateArray(params Atlas?[] atlases)
+    public static Texture? CreateArray(string name, params Atlas?[] atlases)
     {
         var validAtlases = atlases.Where(a => a != null).ToArray();
         if (validAtlases.Length == 0)
@@ -90,9 +92,9 @@ public class Texture : Asset
         var filter = first.Filter;
 
         var layerData = validAtlases.Select(a => a!.Data).ToArray();
-        var handle = Graphics.Driver.CreateTextureArray(width, height, layerData, format, filter);
+        var handle = Graphics.Driver.CreateTextureArray(width, height, layerData, format, filter, name);
 
-        var texture = new Texture("atlas_array")
+        var texture = new Texture(name, true)
         {
             Width = width,
             Height = height,
@@ -119,6 +121,8 @@ public class Texture : Asset
 
     public override void Dispose()
     {
+        GC.SuppressFinalize(this);
+
         if (Handle != nuint.Zero)
         {
             Graphics.Driver.DestroyTexture(Handle);

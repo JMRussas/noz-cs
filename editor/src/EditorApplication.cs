@@ -48,6 +48,8 @@ public static class EditorApplication
         }
 
         DocumentManager.Init(Config.SourcePaths, Config.OutputPath);
+        PaletteManager.Init(Config);
+        AtlasManager.Init();
         Importer.Init(clean);
         AssetManifest.Generate(Config);
     }
@@ -58,8 +60,6 @@ public static class EditorApplication
             return;
 
         DocumentManager.PostLoad();
-        PaletteManager.Init(Config);
-        AtlasManager.Init();
         EditorStyle.Init();
         CommandPalette.Init();
         ContextMenu.Init();

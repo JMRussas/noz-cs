@@ -5,30 +5,41 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using Microsoft.JSInterop;
-using noz.Platform;
 
-namespace noz;
+namespace NoZ.Platform;
 
-public class WebGLRender : IRender
+public class WebGLGraphicsDriver : IGraphicsDriver
 {
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
-    private RenderBackendConfig _config = null!;
+    private GraphicsDriverConfig _config = null!;
 
     public string ShaderExtension => ".gles";
 
-    public WebGLRender(IJSRuntime js)
+    private struct TextureInfo
+    {
+        public uint JsHandle;
+        public int Width;
+        public int Height;
+        public int Layers;
+        public bool IsArray;
+    }
+
+    private const int MaxTextures = 1024;
+    private readonly TextureInfo[] _textures = new TextureInfo[MaxTextures];
+    private int _nextTextureId = 1;
+
+    public WebGLGraphicsDriver(IJSRuntime js)
     {
         _js = js;
     }
 
-    public void Init(RenderBackendConfig config)
+    public void Init(GraphicsDriverConfig config)
     {
         _config = config;
-        // JS module initialization happens async in InitAsync
     }
 
-    public async Task InitAsync(RenderBackendConfig config)
+    public async Task InitAsync(GraphicsDriverConfig config)
     {
         _config = config;
         _module = await _js.InvokeAsync<IJSObjectReference>("import", "./js/noz/noz-webgl.js");
@@ -70,132 +81,163 @@ public class WebGLRender : IRender
         _module?.InvokeVoidAsync("disableScissor");
     }
 
-    // === Buffer Management ===
+    // === Mesh Management ===
 
-    public BufferHandle CreateVertexBuffer(int sizeInBytes, BufferUsage usage)
+    public nuint CreateMesh<T>(int maxVertices, int maxIndices, BufferUsage usage, string name = "") where T : IVertex
     {
-        if (_module == null) return BufferHandle.Invalid;
-        var id = _module.InvokeAsync<uint>("createVertexBuffer", sizeInBytes, (int)usage).AsTask().Result;
-        return new BufferHandle(id);
+        if (_module == null) return 0;
+        var descriptor = T.GetFormatDescriptor();
+        var id = _module.InvokeAsync<uint>("createMesh", maxVertices, maxIndices, descriptor.Stride, (int)usage).AsTask().Result;
+        return (nuint)id;
     }
 
-    public BufferHandle CreateIndexBuffer(int sizeInBytes, BufferUsage usage)
+    public void DestroyMesh(nuint handle)
     {
-        if (_module == null) return BufferHandle.Invalid;
-        var id = _module.InvokeAsync<uint>("createIndexBuffer", sizeInBytes, (int)usage).AsTask().Result;
-        return new BufferHandle(id);
+        _module?.InvokeVoidAsync("destroyMesh", (uint)handle);
     }
 
-    public void DestroyBuffer(BufferHandle handle)
+    public void BindMesh(nuint handle)
     {
-        _module?.InvokeVoidAsync("destroyBuffer", handle.Id);
+        _module?.InvokeVoidAsync("bindMesh", (uint)handle);
     }
 
-    public void UpdateVertexBufferRange(BufferHandle buffer, int offsetBytes, ReadOnlySpan<MeshVertex> data)
+    public void UpdateMesh(nuint handle, ReadOnlySpan<byte> vertexData, ReadOnlySpan<ushort> indexData)
     {
         if (_module == null) return;
-
-        // Convert MeshVertex span to byte array for JS interop
-        var bytes = MemoryMarshal.AsBytes(data).ToArray();
-        _module.InvokeVoidAsync("updateVertexBufferRange", buffer.Id, offsetBytes, bytes);
+        _module.InvokeVoidAsync("updateMesh", (uint)handle, vertexData.ToArray(), MemoryMarshal.AsBytes(indexData).ToArray());
     }
 
-    public void UpdateIndexBufferRange(BufferHandle buffer, int offsetBytes, ReadOnlySpan<ushort> data)
+    // === Uniform Buffer Management ===
+
+    public nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage, string name = "")
+    {
+        if (_module == null) return 0;
+        var id = _module.InvokeAsync<uint>("createUniformBuffer", sizeInBytes, (int)usage).AsTask().Result;
+        return (nuint)id;
+    }
+
+    public void DestroyBuffer(nuint handle)
+    {
+        _module?.InvokeVoidAsync("destroyBuffer", (uint)handle);
+    }
+
+    public void UpdateUniformBuffer(nuint buffer, int offsetBytes, ReadOnlySpan<byte> data)
     {
         if (_module == null) return;
-
-        // Convert ushort span to byte array for JS interop
-        var bytes = MemoryMarshal.AsBytes(data).ToArray();
-        _module.InvokeVoidAsync("updateIndexBufferRange", buffer.Id, offsetBytes, bytes);
+        _module.InvokeVoidAsync("updateUniformBuffer", (uint)buffer, offsetBytes, data.ToArray());
     }
 
-    public void BindVertexBuffer(BufferHandle buffer)
+    public void BindUniformBuffer(nuint buffer, int slot)
     {
-        _module?.InvokeVoidAsync("bindVertexBuffer", buffer.Id);
-    }
-
-    public void BindIndexBuffer(BufferHandle buffer)
-    {
-        _module?.InvokeVoidAsync("bindIndexBuffer", buffer.Id);
+        _module?.InvokeVoidAsync("bindUniformBuffer", (uint)buffer, slot);
     }
 
     // === Texture Management ===
 
-    public TextureHandle CreateTexture(int width, int height, ReadOnlySpan<byte> data)
+    public nuint CreateTexture(int width, int height, ReadOnlySpan<byte> data, TextureFormat format = TextureFormat.RGBA8, TextureFilter filter = TextureFilter.Linear)
     {
-        if (_module == null) return TextureHandle.Invalid;
-        var id = _module.InvokeAsync<ushort>("createTexture", width, height, data.ToArray()).AsTask().Result;
-        return new TextureHandle(id);
+        if (_module == null) return 0;
+        var jsHandle = _module.InvokeAsync<uint>("createTexture", width, height, data.ToArray(), (int)format, (int)filter).AsTask().Result;
+
+        var handle = _nextTextureId++;
+        _textures[handle] = new TextureInfo
+        {
+            JsHandle = jsHandle,
+            Width = width,
+            Height = height,
+            Layers = 0,
+            IsArray = false
+        };
+        return (nuint)handle;
     }
 
-    public void UpdateTexture(TextureHandle handle, int width, int height, ReadOnlySpan<byte> data)
+    public void UpdateTexture(nuint handle, int width, int height, ReadOnlySpan<byte> data)
     {
-        _module?.InvokeVoidAsync("updateTexture", handle.Id, width, height, data.ToArray());
+        ref var info = ref _textures[(int)handle];
+        if (info.JsHandle == 0) return;
+        _module?.InvokeVoidAsync("updateTexture", info.JsHandle, width, height, data.ToArray());
     }
 
-    public void DestroyTexture(TextureHandle handle)
+    public void DestroyTexture(nuint handle)
     {
-        _module?.InvokeVoidAsync("destroyTexture", handle.Id);
+        ref var info = ref _textures[(int)handle];
+        if (info.JsHandle != 0)
+        {
+            _module?.InvokeVoidAsync("destroyTexture", info.JsHandle);
+            info = default;
+        }
     }
 
-    public void BindTexture(int slot, TextureHandle handle)
+    public void BindTexture(nuint handle, int slot)
     {
-        _module?.InvokeVoidAsync("bindTexture", slot, handle.Id);
+        ref var info = ref _textures[(int)handle];
+        if (info.JsHandle == 0) return;
+
+        if (info.IsArray)
+            _module?.InvokeVoidAsync("bindTextureArray", slot, info.JsHandle);
+        else
+            _module?.InvokeVoidAsync("bindTexture", slot, info.JsHandle);
     }
 
     // === Texture Array Management ===
 
-    public TextureHandle CreateTextureArray(int width, int height, int layers)
+    public nuint CreateTextureArray(int width, int height, int layers)
     {
-        if (_module == null) return TextureHandle.Invalid;
-        var id = _module.InvokeAsync<ushort>("createTextureArray", width, height, layers).AsTask().Result;
-        return new TextureHandle(id);
+        if (_module == null) return 0;
+        var jsHandle = _module.InvokeAsync<uint>("createTextureArray", width, height, layers).AsTask().Result;
+
+        var handle = _nextTextureId++;
+        _textures[handle] = new TextureInfo
+        {
+            JsHandle = jsHandle,
+            Width = width,
+            Height = height,
+            Layers = layers,
+            IsArray = true
+        };
+        return (nuint)handle;
     }
 
-    public TextureHandle CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter)
+    public nuint CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter, string? name = null)
     {
-        if (_module == null) return TextureHandle.Invalid;
+        if (_module == null) return 0;
         var layers = layerData.Length;
         var handle = CreateTextureArray(width, height, layers);
-        for (int i = 0; i < layers; i++)
-            UpdateTextureArrayLayer(handle, i, layerData[i]);
+        for (var i = 0; i < layers; i++)
+            UpdateTextureLayer(handle, i, layerData[i]);
         return handle;
     }
 
-    public void UpdateTextureArrayLayer(TextureHandle handle, int layer, ReadOnlySpan<byte> data)
+    public void UpdateTextureLayer(nuint handle, int layer, ReadOnlySpan<byte> data)
     {
-        _module?.InvokeVoidAsync("updateTextureArrayLayer", handle.Id, layer, data.ToArray());
-    }
-
-    public void BindTextureArray(int slot, TextureHandle handle)
-    {
-        _module?.InvokeVoidAsync("bindTextureArray", slot, handle.Id);
+        ref var info = ref _textures[(int)handle];
+        if (info.JsHandle == 0 || !info.IsArray) return;
+        _module?.InvokeVoidAsync("updateTextureArrayLayer", info.JsHandle, layer, data.ToArray());
     }
 
     // === Shader Management ===
 
-    public ShaderHandle CreateShader(string name, string vertexSource, string fragmentSource)
+    public nuint CreateShader(string name, string vertexSource, string fragmentSource)
     {
-        if (_module == null) return ShaderHandle.Invalid;
-        var id = _module.InvokeAsync<byte>("createShader", name, vertexSource, fragmentSource).AsTask().Result;
-        return new ShaderHandle(id);
+        if (_module == null) return 0;
+        var id = _module.InvokeAsync<uint>("createShader", name, vertexSource, fragmentSource).AsTask().Result;
+        return (nuint)id;
     }
 
-    public void DestroyShader(ShaderHandle handle)
+    public void DestroyShader(nuint handle)
     {
-        _module?.InvokeVoidAsync("destroyShader", handle.Id);
+        _module?.InvokeVoidAsync("destroyShader", (uint)handle);
     }
 
-    public void BindShader(ShaderHandle handle)
+    public void BindShader(nuint handle)
     {
-        _module?.InvokeVoidAsync("bindShader", handle.Id);
+        _module?.InvokeVoidAsync("bindShader", (uint)handle);
     }
 
     public void SetUniformMatrix4x4(string name, in Matrix4x4 value)
     {
         if (_module == null) return;
 
-        // Convert to column-major array for WebGL
         float[] data =
         [
             value.M11, value.M21, value.M31, value.M41,
@@ -235,31 +277,31 @@ public class WebGLRender : IRender
 
     // === Drawing ===
 
-    public void DrawIndexedRange(int firstIndex, int indexCount, int baseVertex = 0)
+    public void DrawElements(int firstIndex, int indexCount, int baseVertex = 0)
     {
-        _module?.InvokeVoidAsync("drawIndexedRange", firstIndex, indexCount, baseVertex);
+        _module?.InvokeVoidAsync("drawElements", firstIndex, indexCount, baseVertex);
     }
 
     // === Synchronization ===
 
-    public FenceHandle CreateFence()
+    public nuint CreateFence()
     {
-        if (_module == null) return FenceHandle.Invalid;
-        var id = _module.InvokeAsync<ulong>("createFence").AsTask().Result;
-        return new FenceHandle(id);
+        if (_module == null) return 0;
+        var id = _module.InvokeAsync<uint>("createFence").AsTask().Result;
+        return (nuint)id;
     }
 
-    public void WaitFence(FenceHandle fence)
+    public void WaitFence(nuint fence)
     {
-        _module?.InvokeVoidAsync("waitFence", fence.Id);
+        _module?.InvokeVoidAsync("waitFence", (uint)fence);
     }
 
-    public void DeleteFence(FenceHandle fence)
+    public void DeleteFence(nuint fence)
     {
-        _module?.InvokeVoidAsync("deleteFence", fence.Id);
+        _module?.InvokeVoidAsync("deleteFence", (uint)fence);
     }
 
-    // === Render Passes (stubs - to be implemented) ===
+    // === Render Passes ===
 
     public void ResizeOffscreenTarget(int width, int height, int msaaSamples)
     {
@@ -268,7 +310,6 @@ public class WebGLRender : IRender
 
     public void BeginScenePass(Color clearColor)
     {
-        // For now, just clear - no offscreen rendering
         Clear(clearColor);
     }
 
@@ -277,7 +318,7 @@ public class WebGLRender : IRender
         // TODO: Implement MSAA resolve for WebGL
     }
 
-    public void Composite(ShaderHandle compositeShader)
+    public void Composite(nuint compositeShader)
     {
         // TODO: Implement composite for WebGL
     }

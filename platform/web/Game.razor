@@ -1,6 +1,7 @@
 @using Microsoft.JSInterop
 @using StickCraft
-@using noz.Platform
+@using NoZ.Platform
+@using NoZ.Platform.Web
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
@@ -15,7 +16,7 @@
     private int _width;
     private int _height;
     private WebPlatform? _platform;
-    private WebGLRender? _render;
+    private WebGLGraphicsDriver? _render;
     private IJSObjectReference? _gameLoop;
     private DotNetObjectReference<Game>? _dotNetRef;
     private bool _initialized;
@@ -39,7 +40,7 @@
     {
         // Create platform and render backend
         _platform = new WebPlatform(JS);
-        _render = new WebGLRender(JS);
+        _render = new WebGLGraphicsDriver(JS);
 
         // Initialize platform first (creates canvas events)
         await _platform.InitAsync(new PlatformConfig

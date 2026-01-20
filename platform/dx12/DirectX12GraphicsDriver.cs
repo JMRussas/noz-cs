@@ -55,14 +55,12 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
     private const int MaxTextures = 1024;
     private const int MaxShaders = 64;
     private const int MaxFences = 16;
-    private const int MaxTextureArrays = 32;
     private const int MaxMeshes = 32;
 
     private int _nextBufferId = 1;
     private int _nextTextureId = 2; // 1 is reserved for white texture
     private int _nextShaderId = 1;
     private int _nextFenceId = 1;
-    private int _nextTextureArrayId = 1;
     private int _nextMeshId = 1;
 
     // Resource arrays
@@ -70,7 +68,6 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
     private readonly TextureInfo[] _textures = new TextureInfo[MaxTextures];
     private readonly ShaderInfo[] _shaders = new ShaderInfo[MaxShaders];
     private readonly FenceInfo[] _fences = new FenceInfo[MaxFences];
-    private readonly TextureArrayInfo[] _textureArrays = new TextureArrayInfo[MaxTextureArrays];
     private readonly MeshInfo[] _meshes = new MeshInfo[MaxMeshes];
 
     // Current state
@@ -112,18 +109,10 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
         public ComPtr<ID3D12Resource> Resource;
         public int Width;
         public int Height;
-        public int DescriptorIndex;
-        public TextureFormat Format;
-    }
-
-    private struct TextureArrayInfo
-    {
-        public ComPtr<ID3D12Resource> Resource;
-        public int Width;
-        public int Height;
         public int Layers;
         public int DescriptorIndex;
         public TextureFormat Format;
+        public bool IsArray;
     }
 
     private struct MeshInfo
@@ -173,17 +162,19 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
         _hwnd = config.Platform.WindowHandle;
 
         if (_hwnd == nint.Zero)
-            throw new Exception("DirectX12RenderDriver requires a valid WindowHandle from platform");
+            throw new Exception("DirectX12GraphicsDriver requires a valid WindowHandle from platform");
 
         var windowSize = config.Platform.WindowSize;
         var width = (int)windowSize.X;
         var height = (int)windowSize.Y;
 
         if (width <= 0 || height <= 0)
-            throw new Exception("DirectX12RenderDriver requires valid WindowSize from platform");
+            throw new Exception("DirectX12GraphicsDriver  requires valid WindowSize from platform");
 
         _d3d12 = D3D12.GetApi();
-        _dxgi = DXGI.GetApi();
+#pragma warning disable CS0618 // DXGI.GetApi is obsolete but we manage the swap chain ourselves
+        _dxgi = DXGI.GetApi(DXSwapchainProvider.Win32);
+#pragma warning restore CS0618
 
         CreateDevice();
         CreateCommandQueue();
@@ -216,9 +207,6 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
 
         for (int i = 0; i < MaxTextures; i++)
             _textures[i].Resource.Dispose();
-
-        for (int i = 0; i < MaxTextureArrays; i++)
-            _textureArrays[i].Resource.Dispose();
 
         for (int i = 0; i < MaxShaders; i++)
         {
@@ -370,6 +358,9 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
 
     public void SetScissor(int x, int y, int width, int height)
     {
+        if (_scissorEnabled)
+            return;
+
         _scissorEnabled = true;
         _currentScissor = new Box2D<int>(x, y, x + width, y + height);
         fixed (Box2D<int>* pScissor = &_currentScissor)
@@ -378,6 +369,9 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
 
     public void DisableScissor()
     {
+        if (!_scissorEnabled)
+            return;
+
         _scissorEnabled = false;
         // Set scissor to viewport size
         var rect = new Box2D<int>(
@@ -537,7 +531,7 @@ public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
         var cbvSrvUavHeapDesc = new DescriptorHeapDesc
         {
             Type = DescriptorHeapType.CbvSrvUav,
-            NumDescriptors = MaxTextures + MaxTextureArrays + MaxBuffers,
+            NumDescriptors = MaxTextures + MaxBuffers,
             Flags = DescriptorHeapFlags.ShaderVisible,
             NodeMask = 0
         };

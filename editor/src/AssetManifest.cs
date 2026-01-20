@@ -130,7 +130,7 @@ public static class AssetManifest
 
             writer.WriteLine();
             writer.WriteLine("        // Create texture array from all atlases");
-            writer.WriteLine($"        AtlasArray = Texture.CreateArray({string.Join(", ", atlasNames)});");
+            writer.WriteLine($"        AtlasArray = Texture.CreateArray(\"SpriteAtlas\",{string.Join(", ", atlasNames)});");
             writer.WriteLine("        Graphics.SpriteAtlas = AtlasArray;");
         }
 

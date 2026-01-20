@@ -19,22 +19,28 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
     private const int MaxTextures = 1024;
     private const int MaxShaders = 64;
     private const int MaxFences = 16;
-    private const int MaxTextureArrays = 32;
     private const int MaxMeshes = 32;
 
     private int _nextBufferId = 1;
     private int _nextTextureId = 2; // 1 is reserved for white texture
     private int _nextShaderId = 1;
     private int _nextFenceId = 1;
-    private int _nextTextureArrayId = 1;
     private int _nextMeshId = 1;
     private uint _boundShader = 0;
 
+    private struct TextureInfo
+    {
+        public uint GlTexture;
+        public int Width;
+        public int Height;
+        public int Layers;
+        public bool IsArray;
+    }
+
     private readonly uint[] _buffers = new uint[MaxBuffers];
-    private readonly uint[] _textures = new uint[MaxTextures];
+    private readonly TextureInfo[] _textures = new TextureInfo[MaxTextures];
     private readonly uint[] _shaders = new uint[MaxShaders];
     private readonly nint[] _fences = new nint[MaxFences];
-    private readonly (uint glTexture, int width, int height, int layers)[] _textureArrays = new (uint, int, int, int)[MaxTextureArrays];
     private readonly (uint vao, uint vbo, uint ebo, int stride)[] _meshes = new (uint, uint, uint, int)[MaxMeshes];
 
     // Offscreen render target
@@ -107,8 +113,8 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
                 _gl.DeleteBuffer(_buffers[i]);
 
         for (var i = 0; i < MaxTextures; i++)
-            if (_textures[i] != 0)
-                _gl.DeleteTexture(_textures[i]);
+            if (_textures[i].GlTexture != 0)
+                _gl.DeleteTexture(_textures[i].GlTexture);
 
         for (var i = 0; i < MaxShaders; i++)
             if (_shaders[i] != 0)
@@ -117,10 +123,6 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         for (var i = 0; i < MaxFences; i++)
             if (_fences[i] != 0)
                 _gl.DeleteSync(_fences[i]);
-
-        for (var i = 0; i < MaxTextureArrays; i++)
-            if (_textureArrays[i].glTexture != 0)
-                _gl.DeleteTexture(_textureArrays[i].glTexture);
 
         for (var i = 0; i < MaxMeshes; i++)
         {
@@ -352,16 +354,23 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
 
         var handle = _nextTextureId++;
-        _textures[handle] = glTexture;
+        _textures[handle] = new TextureInfo
+        {
+            GlTexture = glTexture,
+            Width = width,
+            Height = height,
+            Layers = 0,
+            IsArray = false
+        };
         return (nuint)handle;
     }
 
     public void UpdateTexture(nuint handle, int width, int height, ReadOnlySpan<byte> data)
     {
-        var glTexture = _textures[(int)handle];
-        if (glTexture == 0) return;
+        ref var info = ref _textures[(int)handle];
+        if (info.GlTexture == 0) return;
 
-        _gl.BindTexture(TextureTarget.Texture2D, glTexture);
+        _gl.BindTexture(TextureTarget.Texture2D, info.GlTexture);
         fixed (byte* p = data)
         {
             _gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0,
@@ -371,21 +380,24 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
 
     public void DestroyTexture(nuint handle)
     {
-        var glTexture = _textures[(int)handle];
-        if (glTexture != 0)
+        ref var info = ref _textures[(int)handle];
+        if (info.GlTexture != 0)
         {
-            _gl.DeleteTexture(glTexture);
-            _textures[(int)handle] = 0;
+            _gl.DeleteTexture(info.GlTexture);
+            info = default;
         }
     }
 
     public void BindTexture(nuint handle, int slot)
     {
-        var glTexture = _textures[(int)handle];
-        if (glTexture == 0) return;
+        ref var info = ref _textures[(int)handle];
+        if (info.GlTexture == 0) return;
 
         _gl.ActiveTexture(TextureUnit.Texture0 + slot);
-        _gl.BindTexture(TextureTarget.Texture2D, glTexture);
+        if (info.IsArray)
+            _gl.BindTexture(TextureTarget.Texture2DArray, info.GlTexture);
+        else
+            _gl.BindTexture(TextureTarget.Texture2D, info.GlTexture);
     }
 
     // === Texture Array Management ===
@@ -405,16 +417,26 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
 
-        var handle = _nextTextureArrayId++;
-        _textureArrays[handle] = (glTexture, width, height, layers);
+        var handle = _nextTextureId++;
+        _textures[handle] = new TextureInfo
+        {
+            GlTexture = glTexture,
+            Width = width,
+            Height = height,
+            Layers = layers,
+            IsArray = true
+        };
         return (nuint)handle;
     }
 
-    public nuint CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter)
+    public nuint CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter, string? name)
     {
         var layers = layerData.Length;
         var glTexture = _gl.GenTexture();
         _gl.BindTexture(TextureTarget.Texture2DArray, glTexture);
+
+        if (name != null)
+            SetDebugLabel(ObjectIdentifier.Texture, glTexture, name);
 
         var internalFormat = format switch
         {
@@ -459,33 +481,31 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
 
-        var handle = _nextTextureArrayId++;
-        _textureArrays[handle] = (glTexture, width, height, layers);
+        var handle = _nextTextureId++;
+        _textures[handle] = new TextureInfo
+        {
+            GlTexture = glTexture,
+            Width = width,
+            Height = height,
+            Layers = layers,
+            IsArray = true
+        };
         return (nuint)handle;
     }
 
-    public void UpdateTextureArrayLayer(nuint handle, int layer, ReadOnlySpan<byte> data)
+    public void UpdateTextureLayer(nuint handle, int layer, ReadOnlySpan<byte> data)
     {
-        ref var info = ref _textureArrays[(int)handle];
-        if (info.glTexture == 0) return;
+        ref var info = ref _textures[(int)handle];
+        if (info.GlTexture == 0 || !info.IsArray) return;
 
-        _gl.BindTexture(TextureTarget.Texture2DArray, info.glTexture);
+        _gl.BindTexture(TextureTarget.Texture2DArray, info.GlTexture);
         fixed (byte* p = data)
         {
             _gl.TexSubImage3D(TextureTarget.Texture2DArray, 0,
                 0, 0, layer,
-                (uint)info.width, (uint)info.height, 1,
+                (uint)info.Width, (uint)info.Height, 1,
                 PixelFormat.Rgba, PixelType.UnsignedByte, p);
         }
-    }
-
-    public void BindTextureArray(int slot, nuint handle)
-    {
-        ref var info = ref _textureArrays[(int)handle];
-        if (info.glTexture == 0) return;
-
-        _gl.ActiveTexture(TextureUnit.Texture0 + slot);
-        _gl.BindTexture(TextureTarget.Texture2DArray, info.glTexture);
     }
 
     // === Shader Management ===

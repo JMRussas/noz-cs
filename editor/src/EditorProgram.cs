@@ -35,7 +35,7 @@ Application.Init(new ApplicationConfig
     },
     Graphics = new GraphicsConfig
     {
-        //Driver = new DirectX12RenderDriver(),
+        //Driver = new DirectX12GraphicsDriver(),
         Driver = new OpenGLGraphicsDriver(),
         CompositeShader = "composite"
     }

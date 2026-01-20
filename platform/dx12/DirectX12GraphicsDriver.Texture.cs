@@ -91,8 +91,10 @@ public unsafe partial class DirectX12GraphicsDriver
             Resource = resource,
             Width = width,
             Height = height,
+            Layers = 0,
             DescriptorIndex = descriptorIndex,
-            Format = format
+            Format = format,
+            IsArray = false
         };
 
         return (nuint)handle;
@@ -127,6 +129,25 @@ public unsafe partial class DirectX12GraphicsDriver
         texture = default;
     }
 
+    public void UpdateTextureLayer(nuint handle, int layer, ReadOnlySpan<byte> data)
+    {
+        ref var textureInfo = ref _textures[(int)handle];
+        if (textureInfo.Resource.Handle == null) return;
+
+        var bytesPerPixel = GetBytesPerPixel(textureInfo.Format);
+        var dxgiFormat = ToDxgiFormat(textureInfo.Format);
+
+        TransitionResource(textureInfo.Resource,
+            ResourceStates.PixelShaderResource,
+            ResourceStates.CopyDest);
+
+        UploadTextureData(textureInfo.Resource, textureInfo.Width, textureInfo.Height, layer, data, bytesPerPixel, dxgiFormat);
+
+        TransitionResource(textureInfo.Resource,
+            ResourceStates.CopyDest,
+            ResourceStates.PixelShaderResource);
+    }
+
     public void BindTexture(nuint handle, int slot)
     {
         ref var textureInfo = ref _textures[(int)handle];
@@ -145,15 +166,15 @@ public unsafe partial class DirectX12GraphicsDriver
 
     public nuint CreateTextureArray(int width, int height, int layers)
     {
-        return CreateTextureArrayInternal(width, height, layers, null, TextureFormat.RGBA8, TextureFilter.Linear);
+        return CreateTextureArrayInternal(width, height, layers, null, TextureFormat.RGBA8, TextureFilter.Linear, null);
     }
 
-    public nuint CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter)
+    public nuint CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter, string? name=null)
     {
-        return CreateTextureArrayInternal(width, height, layerData.Length, layerData, format, filter);
+        return CreateTextureArrayInternal(width, height, layerData.Length, layerData, format, filter, name);
     }
 
-    private nuint CreateTextureArrayInternal(int width, int height, int layers, byte[][]? layerData, TextureFormat format, TextureFilter filter)
+    private nuint CreateTextureArrayInternal(int width, int height, int layers, byte[][]? layerData, TextureFormat format, TextureFilter filter, string? name)
     {
         var dxgiFormat = ToDxgiFormat(format);
         var bytesPerPixel = GetBytesPerPixel(format);
@@ -212,8 +233,8 @@ public unsafe partial class DirectX12GraphicsDriver
             ResourceStates.PixelShaderResource);
 
         // Create SRV for texture array
-        var handle = _nextTextureArrayId++;
-        var descriptorIndex = MaxBuffers + MaxTextures + handle; // Offset past buffer and texture descriptors
+        var handle = _nextTextureId++;
+        var descriptorIndex = MaxBuffers + handle; // Offset past buffer descriptors
 
         var srvHandle = _cbvSrvUavHeap.GetCPUDescriptorHandleForHeapStart();
         srvHandle.Ptr += (nuint)(descriptorIndex * _cbvSrvUavDescriptorSize);
@@ -238,52 +259,18 @@ public unsafe partial class DirectX12GraphicsDriver
         };
         _device.CreateShaderResourceView(resource, &srvDesc, srvHandle);
 
-        _textureArrays[handle] = new TextureArrayInfo
+        _textures[handle] = new TextureInfo
         {
             Resource = resource,
             Width = width,
             Height = height,
             Layers = layers,
             DescriptorIndex = descriptorIndex,
-            Format = format
+            Format = format,
+            IsArray = true
         };
 
         return (nuint)handle;
-    }
-
-    public void UpdateTextureArrayLayer(nuint handle, int layer, ReadOnlySpan<byte> data)
-    {
-        ref var arrayInfo = ref _textureArrays[(int)handle];
-        if (arrayInfo.Resource.Handle == null) return;
-
-        var bytesPerPixel = GetBytesPerPixel(arrayInfo.Format);
-        var dxgiFormat = ToDxgiFormat(arrayInfo.Format);
-
-        // Transition to copy dest
-        TransitionResource(arrayInfo.Resource,
-            ResourceStates.PixelShaderResource,
-            ResourceStates.CopyDest);
-
-        // Upload layer data
-        UploadTextureData(arrayInfo.Resource, arrayInfo.Width, arrayInfo.Height, layer, data, bytesPerPixel, dxgiFormat);
-
-        // Transition back to shader resource
-        TransitionResource(arrayInfo.Resource,
-            ResourceStates.CopyDest,
-            ResourceStates.PixelShaderResource);
-    }
-
-    public void BindTextureArray(int slot, nuint handle)
-    {
-        ref var arrayInfo = ref _textureArrays[(int)handle];
-        if (arrayInfo.Resource.Handle == null) return;
-
-        // Get GPU handle for the SRV
-        var gpuHandle = _cbvSrvUavHeap.GetGPUDescriptorHandleForHeapStart();
-        gpuHandle.Ptr += (ulong)(arrayInfo.DescriptorIndex * _cbvSrvUavDescriptorSize);
-
-        // Set as root descriptor table
-        _commandList.SetGraphicsRootDescriptorTable((uint)(1 + slot), gpuHandle);
     }
 
     // === Helper Methods ===

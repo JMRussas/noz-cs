@@ -670,7 +670,9 @@ public static partial class UI
         PopElement();
     }
 
-    public static void Image(Sprite? sprite, ImageStyle style = default)
+    public static void Image(Sprite? sprite) => Image(sprite, new ImageStyle());
+
+    public static void Image(Sprite? sprite, in ImageStyle style)
     {
         if (sprite == null) return;
 

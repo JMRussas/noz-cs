@@ -64,13 +64,13 @@ in vec2 v_uv;
 in vec4 v_color;
 flat in int v_atlas;
 
-uniform sampler2D sampler_texture;
+uniform sampler2DArray sampler_texture;
 
 out vec4 f_color;
 
 void main() 
 {
-    f_color = texture(sampler_texture, v_uv) * v_color;
+    f_color = texture(sampler_texture, vec3(v_uv, v_atlas)) * v_color;
 }
 
 //@ END
