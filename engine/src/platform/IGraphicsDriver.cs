@@ -19,16 +19,17 @@ public enum BufferUsage
     Stream      // Data updated every frame
 }
 
-public class RenderDriverConfig
+public class GraphicsDriverConfig
 {
+    public required IPlatform Platform { get; set; }
     public bool VSync { get; set; } = true;
 }
 
-public interface IRenderDriver
+public interface IGraphicsDriver
 {
     string ShaderExtension { get; }
 
-    void Init(RenderDriverConfig config);
+    void Init(GraphicsDriverConfig config);
     void Shutdown();
 
     void BeginFrame();

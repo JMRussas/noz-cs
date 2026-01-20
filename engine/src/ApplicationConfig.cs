@@ -23,7 +23,7 @@ public class ApplicationConfig
     public bool VSync { get; init; } = true;
     public bool Resizable { get; init; } = true;
     public string? IconPath { get; init; }
-    public GraphicsConfig? Render { get; init; }
+    public GraphicsConfig? Graphics { get; init; }
     public UIConfig? UI { get; init; }
     public IApplicationVtable? Vtable { get; init; }
     public IPlatform? Platform { get; init; }

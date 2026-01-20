@@ -20,7 +20,7 @@ public unsafe partial class SDLPlatform : IPlatform
 
     public Vector2 WindowSize => _windowSize;
 
-    internal static SDL_Window* Window => _instance?._window;
+    internal static SDL_Window* Window => _instance != null ? _instance._window : null;
 
     public float DisplayScale => _window != null ? SDL_GetWindowDisplayScale(_window) : 1.0f;
 
@@ -410,6 +410,23 @@ public unsafe partial class SDLPlatform : IPlatform
             return SDL_GetClipboardText();
         }
         return null;
+    }
+
+    public nint WindowHandle
+    {
+        get
+        {
+            if (_window == null)
+                return nint.Zero;
+
+            var props = SDL_GetWindowProperties(_window);
+            return (nint)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nint.Zero);
+        }
+    }
+
+    public nint GetGraphicsProcAddress(string name)
+    {
+        return SDL_GL_GetProcAddress(name);
     }
 }
 

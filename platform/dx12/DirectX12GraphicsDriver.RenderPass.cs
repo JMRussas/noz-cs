@@ -9,7 +9,7 @@ using Silk.NET.Maths;
 
 namespace NoZ.Platform;
 
-public unsafe partial class DirectX12RenderDriver
+public unsafe partial class DirectX12GraphicsDriver
 {
     // Additional offscreen resources
     private ComPtr<ID3D12Resource> _offscreenResolveTarget;

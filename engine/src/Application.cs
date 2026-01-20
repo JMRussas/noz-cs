@@ -27,8 +27,8 @@ public static class Application
         Platform = config.Platform ?? throw new ArgumentNullException(nameof(config.Platform),
             "Platform must be provided. Use SDLPlatform for desktop or WebPlatform for web.");
 
-        if (config.Render == null)
-            throw new ArgumentNullException(nameof(config.Render),
+        if (config.Graphics == null)
+            throw new ArgumentNullException(nameof(config.Graphics),
                 "RenderConfig must be provided");
         
         AudioDriverBackend = config.AudioBackend ?? throw new ArgumentNullException(nameof(config.AudioBackend),
@@ -58,7 +58,7 @@ public static class Application
         Time.Init();
         Input.Init();
         Audio.Init(AudioDriverBackend);
-        Graphics.Init(Config.Render!);
+        Graphics.Init(Config);
 
         // Register asset types and load assets
         RegisterAssetTypes();

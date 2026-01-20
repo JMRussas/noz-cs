@@ -8,7 +8,6 @@ using Silk.NET.Core.Native;
 using Silk.NET.Direct3D12;
 using Silk.NET.DXGI;
 using Silk.NET.Maths;
-using static SDL.SDL3;
 using UnmanagedType = System.Runtime.InteropServices.UnmanagedType;
 using Marshal = System.Runtime.InteropServices.Marshal;
 using DllImportAttribute = System.Runtime.InteropServices.DllImportAttribute;
@@ -16,9 +15,9 @@ using MarshalAsAttribute = System.Runtime.InteropServices.MarshalAsAttribute;
 
 namespace NoZ.Platform;
 
-public unsafe partial class DirectX12RenderDriver : IRenderDriver
+public unsafe partial class DirectX12GraphicsDriver : IGraphicsDriver
 {
-    private RenderDriverConfig _config = null!;
+    private GraphicsDriverConfig _config = null!;
 
     public string ShaderExtension => ".dx12";
 
@@ -168,18 +167,20 @@ public unsafe partial class DirectX12RenderDriver : IRenderDriver
         public override int GetHashCode() => HashCode.Combine(ShaderHandle, BlendMode, VertexStride);
     }
 
-    public void Init(RenderDriverConfig config)
+    public void Init(GraphicsDriverConfig config)
     {
         _config = config;
+        _hwnd = config.Platform.WindowHandle;
 
-        // Get HWND from SDL window
-        var props = SDL_GetWindowProperties(SDLPlatform.Window);
-        _hwnd = (nint)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, nint.Zero);
         if (_hwnd == nint.Zero)
-            throw new Exception("Failed to get HWND from SDL window");
+            throw new Exception("DirectX12RenderDriver requires a valid WindowHandle from platform");
 
-        // Get window size
-        SDL_GetWindowSize(SDLPlatform.Window, out int width, out int height);
+        var windowSize = config.Platform.WindowSize;
+        var width = (int)windowSize.X;
+        var height = (int)windowSize.Y;
+
+        if (width <= 0 || height <= 0)
+            throw new Exception("DirectX12RenderDriver requires valid WindowSize from platform");
 
         _d3d12 = D3D12.GetApi();
         _dxgi = DXGI.GetApi();

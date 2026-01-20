@@ -8,7 +8,7 @@ using Silk.NET.DXGI;
 
 namespace NoZ.Platform;
 
-public unsafe partial class DirectX12RenderDriver
+public unsafe partial class DirectX12GraphicsDriver
 {
     public nuint CreateTexture(int width, int height, ReadOnlySpan<byte> data, TextureFormat format = TextureFormat.RGBA8, TextureFilter filter = TextureFilter.Linear)
     {

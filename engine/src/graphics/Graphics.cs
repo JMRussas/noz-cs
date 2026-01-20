@@ -104,8 +104,9 @@ public static unsafe class Graphics
     private static int _stateStackDepth = 0;
     private static bool _batchStateDirty = true;
     
-    public static GraphicsConfig Config { get; private set; } = null!;
-    public static IRenderDriver Driver { get; private set; } = null!;
+    public static ApplicationConfig Config { get; private set; } = null!;
+    public static GraphicsConfig RenderConfig => Config.Graphics!;
+    public static IGraphicsDriver Driver { get; private set; } = null!;
     public static Camera? Camera { get; private set; }
     public static Texture? SpriteAtlas { get; set; }
     public static ref readonly Matrix3x2 Transform => ref CurrentState.Transform;
@@ -133,28 +134,33 @@ public static unsafe class Graphics
     
     public static Color ClearColor { get; set; } = Color.Black;  
     
-    public static void Init(GraphicsConfig config)
+    public static void Init(ApplicationConfig config)
     {
         Config = config;
 
-        Driver = config.Driver ?? throw new ArgumentNullException(
-            nameof(config.Driver),
+        var renderConfig = config.Graphics ?? throw new ArgumentNullException(
+            nameof(config.Graphics),
+            "Render config must be provided.");
+
+        Driver = renderConfig.Driver ?? throw new ArgumentNullException(
+            nameof(renderConfig.Driver),
             "RenderBackend must be provided. Use OpenGLRender for desktop or WebGLRender for web.");
-        
-        _maxDrawCommands = Config.MaxDrawCommands;
-        _maxBatches = Config.MaxBatches;
+
+        _maxDrawCommands = RenderConfig.MaxDrawCommands;
+        _maxBatches = RenderConfig.MaxBatches;
         _sortGroupStack = new ushort[MaxSortGroups];
         _stateStack = new State[MaxStateStack];
         _sortGroupStackDepth = 0;
         _stateStackDepth = 0;
-        
-        Driver.Init(new RenderDriverConfig
+
+        Driver.Init(new GraphicsDriverConfig
         {
-            VSync = Config.Vsync,
+            Platform = config.Platform!,
+            VSync = config.VSync,
         });
 
         Camera = new Camera();
-         
+
          InitBatcher();
          InitState();
     }
@@ -326,7 +332,7 @@ public static unsafe class Graphics
 
         // Ensure offscreen target matches window size
         var size = Application.WindowSize;
-        Driver.ResizeOffscreenTarget((int)size.X, (int)size.Y, Config.MsaaSamples);
+        Driver.ResizeOffscreenTarget((int)size.X, (int)size.Y, RenderConfig.MsaaSamples);
 
         _inUIPass = false;
         _inScenePass = true;
@@ -370,11 +376,11 @@ public static unsafe class Graphics
 
     internal static void ResolveAssets()
     {
-        _compositeShader = Asset.Get<Shader>(AssetType.Shader, Config.CompositeShader)
-            ?? throw new ArgumentNullException(nameof(Config.CompositeShader), "Composite shader not found");
+        _compositeShader = Asset.Get<Shader>(AssetType.Shader, RenderConfig.CompositeShader)
+            ?? throw new ArgumentNullException(nameof(RenderConfig.CompositeShader), "Composite shader not found");
 
-        _spriteShader = Asset.Get<Shader>(AssetType.Shader, Config.SpriteShader)
-            ?? throw new ArgumentNullException(nameof(Config.SpriteShader), "Sprite shader not found");
+        _spriteShader = Asset.Get<Shader>(AssetType.Shader, RenderConfig.SpriteShader)
+            ?? throw new ArgumentNullException(nameof(RenderConfig.SpriteShader), "Sprite shader not found");
     }
 
     public static void Clear(Color color)

@@ -17,6 +17,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\engine\NoZ.csproj" />
+    <ProjectReference Include="..\platform\dx12\NoZ.DX12.csproj" />
+    <ProjectReference Include="..\platform\opengl\NoZ.OpenGL.csproj" />
     <ProjectReference Include="..\platform\sdl\NoZ.SDL.csproj" />
   </ItemGroup>
 

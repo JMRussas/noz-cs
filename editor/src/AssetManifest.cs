@@ -61,21 +61,47 @@ public static class AssetManifest
         }
         writer.WriteLine("    }");
 
-        // Static fields grouped by type
+        // Static classes grouped by type, each with Load() and Unload() methods
         foreach (var group in documentsByType)
         {
             var typeName = group.Key.ToString();
             var pluralName = Pluralize(typeName);
             var runtimeType = Asset.GetDef(group.Key)?.RuntimeType.Name ?? "Asset";
+            var orderedDocs = group.OrderBy(d => d.Name).ToList();
 
             writer.WriteLine();
             writer.WriteLine($"    public static class {pluralName}");
             writer.WriteLine("    {");
-            foreach (var doc in group.OrderBy(d => d.Name))
+
+            // Properties with private setters
+            foreach (var doc in orderedDocs)
             {
                 var fieldName = ToPascalCase(doc.Name);
-                writer.WriteLine($"        public static readonly {runtimeType} {fieldName} = {{ get; private set; }} = null!;");
+                writer.WriteLine($"        public static {runtimeType} {fieldName} {{ get; private set; }} = null!;");
             }
+
+            // Load method
+            writer.WriteLine();
+            writer.WriteLine("        public static void Load()");
+            writer.WriteLine("        {");
+            foreach (var doc in orderedDocs)
+            {
+                var fieldName = ToPascalCase(doc.Name);
+                writer.WriteLine($"            {fieldName} = ({runtimeType})Asset.Load(AssetType.{group.Key}, Names.{fieldName})!;");
+            }
+            writer.WriteLine("        }");
+
+            // Unload method
+            writer.WriteLine();
+            writer.WriteLine("        public static void Unload()");
+            writer.WriteLine("        {");
+            foreach (var doc in orderedDocs)
+            {
+                var fieldName = ToPascalCase(doc.Name);
+                writer.WriteLine($"            {fieldName}?.Dispose();");
+            }
+            writer.WriteLine("        }");
+
             writer.WriteLine("    }");
         }
 
@@ -92,14 +118,8 @@ public static class AssetManifest
         writer.WriteLine("    {");
         foreach (var group in documentsByType)
         {
-            var typeName = group.Key.ToString();
-            var pluralName = Pluralize(typeName);
-            var runtimeType = Asset.GetDef(group.Key)?.RuntimeType.Name ?? "Asset";
-            foreach (var doc in group.OrderBy(d => d.Name))
-            {
-                var fieldName = ToPascalCase(doc.Name);
-                writer.WriteLine($"        {pluralName}.{fieldName} = ({runtimeType}?)Asset.Load(AssetType.{group.Key}, Names.{fieldName});");
-            }
+            var pluralName = Pluralize(group.Key.ToString());
+            writer.WriteLine($"        {pluralName}.Load();");
         }
 
         // Create texture array from atlases
@@ -138,13 +158,8 @@ public static class AssetManifest
 
         foreach (var group in documentsByType)
         {
-            var typeName = group.Key.ToString();
-            var pluralName = Pluralize(typeName);
-            foreach (var doc in group.OrderBy(d => d.Name))
-            {
-                var fieldName = ToPascalCase(doc.Name);
-                writer.WriteLine($"        {pluralName}.{fieldName}?.Dispose();");
-            }
+            var pluralName = Pluralize(group.Key.ToString());
+            writer.WriteLine($"        {pluralName}.Unload();");
         }
         writer.WriteLine("    }");
 

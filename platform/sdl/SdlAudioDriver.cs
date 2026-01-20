@@ -8,7 +8,7 @@ using static SDL.SDL3;
 
 namespace NoZ.Platform;
 
-public unsafe class SdlAudioDriver : IAudioDriver
+public unsafe class SDLAudioDriver : IAudioDriver
 {
     private const int MaxSources = 32;
     private const int SampleRate = 44100;
@@ -31,7 +31,7 @@ public unsafe class SdlAudioDriver : IAudioDriver
     private readonly object _lock = new();
     private readonly float[] _mixBuffer = new float[BufferSamples * Channels];
 
-    private static SdlAudioDriver? _instance;
+    private static SDLAudioDriver? _instance;
 
     public float MasterVolume
     {

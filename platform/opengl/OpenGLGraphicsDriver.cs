@@ -4,13 +4,12 @@
 
 using System.Numerics;
 using Silk.NET.OpenGL;
-using static SDL.SDL3;
 
 namespace NoZ.Platform;
 
-public unsafe class OpenGlRenderDriver : IRenderDriver
+public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
 {
-    private RenderDriverConfig _config = null!;
+    private GraphicsDriverConfig _config = null!;
     private GL _gl = null!;
 
     public string ShaderExtension => ""; // todo: handle gles ".glsl";
@@ -53,11 +52,11 @@ public unsafe class OpenGlRenderDriver : IRenderDriver
     private uint _fullscreenVao;
     private uint _fullscreenVbo;
 
-    public void Init(RenderDriverConfig config)
+    public void Init(GraphicsDriverConfig config)
     {
         _config = config;
 
-        _gl = GL.GetApi(name => SDL_GL_GetProcAddress(name));
+        _gl = GL.GetApi(config.Platform.GetGraphicsProcAddress);
         _gl.Enable(EnableCap.Blend);
         _gl.BlendFunc(BlendingFactor.SrcAlpha, BlendingFactor.OneMinusSrcAlpha);
         _gl.Enable(EnableCap.Multisample);

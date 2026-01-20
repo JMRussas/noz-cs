@@ -13,5 +13,5 @@ public class GraphicsConfig {
     public int MaxBatches { get; init; } = 4096;
     public string CompositeShader { get; init; } = "composite";
     public string SpriteShader { get; init; } = "sprite";
-    public required IRenderDriver Driver { get; init; }
+    public required IGraphicsDriver Driver { get; init; }
 }

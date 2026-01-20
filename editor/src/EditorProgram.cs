@@ -26,16 +26,17 @@ Application.Init(new ApplicationConfig
     Height = 900,
     IconPath = "res/windows/nozed.png",
     Platform = new SDLPlatform(),
-    AudioBackend = new SdlAudioDriver(),
+    AudioBackend = new SDLAudioDriver(),
     Vtable = new EditorVtable(),
 
     UI = new UIConfig()
     {
         DefaultFont = EditorAssets.Names.Seguisb
     },
-    Render = new GraphicsConfig
+    Graphics = new GraphicsConfig
     {
-        Driver = new OpenGlRenderDriver(),
+        //Driver = new DirectX12RenderDriver(),
+        Driver = new OpenGLGraphicsDriver(),
         CompositeShader = "composite"
     }
 });

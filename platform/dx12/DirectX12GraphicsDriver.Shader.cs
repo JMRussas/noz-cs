@@ -12,7 +12,7 @@ using Silk.NET.DXGI;
 
 namespace NoZ.Platform;
 
-public unsafe partial class DirectX12RenderDriver
+public unsafe partial class DirectX12GraphicsDriver
 {
     private D3DCompiler _d3dCompiler = null!;
     private bool _d3dCompilerInitialized;

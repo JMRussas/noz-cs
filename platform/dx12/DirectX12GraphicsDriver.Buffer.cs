@@ -8,7 +8,7 @@ using Silk.NET.DXGI;
 
 namespace NoZ.Platform;
 
-public unsafe partial class DirectX12RenderDriver
+public unsafe partial class DirectX12GraphicsDriver
 {
     public nuint CreateUniformBuffer(int sizeInBytes, BufferUsage usage, string name = "")
     {
