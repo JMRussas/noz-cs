@@ -13,7 +13,7 @@ public static class Grid
     
     public static void Draw(Camera camera)
     {
-        var dpi = (float)EditorApplication.Config!.AtlasDpi;
+        var dpi = (float)EditorApplication.Config!.SpriteDpi;
         var pixelSize = 1.0f / dpi;
         var bounds = camera.WorldBounds;
         var worldWidth = bounds.Width;
@@ -185,7 +185,7 @@ public static class Grid
 
     public static Vector2 SnapToPixelGrid(Vector2 position)
     {
-        var spacing = 1f / (float)EditorApplication.Config!.AtlasDpi;
+        var spacing = 1f / (float)EditorApplication.Config!.SpriteDpi;
         return new Vector2(
             MathF.Round(position.X / spacing) * spacing,
             MathF.Round(position.Y / spacing) * spacing

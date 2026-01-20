@@ -120,32 +120,30 @@ public class SpriteEditor : DocumentEditor
 
         var shape = Document.GetFrame(_currentFrame).Shape;
 
-        Graphics.PushState();
-        Graphics.SetTransform(Document.Transform);
-        DrawRaster(shape);
-        Graphics.SetLayer(EditorLayer.Gizmo);
-
-        if (_mode == SpriteEditorMode.Path)
+        using (Graphics.PushState())
         {
-            DrawSelectedPathsOutline(shape);
-            DrawSelectedPathsBounds(shape);
-        }
-        else
-        {
-            DrawSegmentsForFocusedPaths(shape);
-            DrawAnchorsForFocusedPaths(shape);
-        }
+            Graphics.SetTransform(Document.Transform);
+            DrawRaster(shape);
+            Graphics.SetLayer(EditorLayer.Gizmo);
 
-        Graphics.PopState();
+            if (_mode == SpriteEditorMode.Path)
+            {
+                DrawSelectedPathsOutline(shape);
+                DrawSelectedPathsBounds(shape);
+            }
+            else
+            {
+                DrawSegmentsForFocusedPaths(shape);
+                DrawAnchorsForFocusedPaths(shape);
+            }
+        }
     }
     
     private void UpdateRaster()
     {
-        var dpi = EditorApplication.Config?.AtlasDpi ?? 64f;
         var shape = Document.GetFrame(_currentFrame).Shape;
-
         shape.UpdateSamples();
-        shape.UpdateBounds(dpi);
+        shape.UpdateBounds();
 
         var rb = shape.RasterBounds;
         if (rb.Width <= 0 || rb.Height <= 0)
@@ -158,9 +156,7 @@ public class SpriteEditor : DocumentEditor
 
         var palette = PaletteManager.GetPalette(Document.Palette);
         if (palette != null)
-        {
-            shape.Rasterize(_pixelData, palette.Colors, new Vector2Int(-rb.X, -rb.Y), dpi);
-        }
+            shape.Rasterize(_pixelData, palette.Colors, new Vector2Int(-rb.X, -rb.Y));
 
         Graphics.Driver.UpdateTexture(
             _rasterTexture!.Handle,
@@ -909,7 +905,7 @@ public class SpriteEditor : DocumentEditor
         if (rb.Width <= 0 || rb.Height <= 0)
             return;
 
-        var dpi = EditorApplication.Config?.AtlasDpi ?? 64f;
+        var dpi = EditorApplication.Config.SpriteDpi;
         var invDpi = 1f / dpi;
         var quadX = rb.X * invDpi;
         var quadY = rb.Y * invDpi;
@@ -919,12 +915,13 @@ public class SpriteEditor : DocumentEditor
         var u1 = rb.Width / texSize;
         var v1 = rb.Height / texSize;
 
-        Graphics.PushState();
-        Graphics.SetShader(EditorAssets.Shaders.Texture!);
-        Graphics.SetTexture(_rasterTexture);
-        Graphics.SetColor(Color.White);
-        Graphics.Draw(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
-        Graphics.PopState();
+        using (Graphics.PushState())
+        {
+            Graphics.SetShader(EditorAssets.Shaders.Texture!);
+            Graphics.SetTexture(_rasterTexture);
+            Graphics.SetColor(Color.White);
+            Graphics.Draw(quadX, quadY, quadW, quadH, 0, 0, u1, v1);
+        }
     }
 
     private static void DrawSegment(Shape shape, ushort pathIndex, ushort segmentIndex, float width, ushort order = 0)

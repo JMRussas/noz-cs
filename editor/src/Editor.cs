@@ -22,7 +22,7 @@ internal class EditorVtable : IApplicationVtable
 
 public static class EditorApplication
 {
-    public static EditorConfig? Config { get; private set; } = null!;
+    public static EditorConfig Config { get; private set; } = null!;
 
     public static void Init(string? projectPath, bool clean)
     {
@@ -38,8 +38,8 @@ public static class EditorApplication
         FontDocument.RegisterDef();
 
         Config = string.IsNullOrEmpty(projectPath)
-            ? EditorConfig.FindAndLoad()
-            : EditorConfig.Load(projectPath);
+            ? EditorConfig.FindAndLoad()!
+            : EditorConfig.Load(projectPath)!;
 
         if (Config == null)
         {
@@ -58,12 +58,12 @@ public static class EditorApplication
             return;
 
         DocumentManager.PostLoad();
+        PaletteManager.Init(Config);
         AtlasManager.Init();
         EditorStyle.Init();
         CommandPalette.Init();
         ContextMenu.Init();
         Workspace.Init();
-        PaletteManager.Init(Config);
         UserSettings.Load();
     }
 

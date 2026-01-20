@@ -25,10 +25,12 @@ public class SpriteDocument : Document
     public ushort FrameCount;
     public byte Palette;
     public float Depth;
-    public Vector2Int Size;
+    public RectInt RasterBounds { get; private set; }
 
     internal AtlasDocument? Atlas;
-    internal int AtlasRect = 0;
+    internal Rect AtlasRect;
+    internal RectInt AtlasRect2;
+    internal int AtlasIndex;
 
     public SpriteDocument()
     {
@@ -94,12 +96,6 @@ public class SpriteDocument : Document
                 break;
             }
         }
-
-        for (ushort fi = 0; fi < FrameCount; fi++)
-        {
-            Frames[fi].Shape.UpdateSamples();
-            Frames[fi].Shape.UpdateBounds();
-        }
     }
 
     private static void ParsePath(SpriteFrame f, ref Tokenizer tk)
@@ -163,6 +159,18 @@ public class SpriteDocument : Document
             bounds = Rect.FromMinMax(new Vector2(minX, minY), new Vector2(maxX, maxY));
         }
         Bounds = bounds;
+
+        RasterBounds = Frames[0].Shape.RasterBounds;
+
+        for (ushort fi = 0; fi < FrameCount; fi++)
+        {
+            Frames[fi].Shape.UpdateSamples();
+            Frames[fi].Shape.UpdateBounds();
+            RasterBounds = RasterBounds.Union(Frames[fi].Shape.RasterBounds);
+        }
+
+
+        Bounds = RasterBounds.ToRect().Scale(1.0f / EditorApplication.Config.SpriteDpi);
     }
 
     public override void Save(string path)
@@ -233,13 +241,19 @@ public class SpriteDocument : Document
 
         using (Graphics.PushState())
         {
-            Graphics.SetTexture(Workspace.WhiteTexture);
-            Graphics.SetColor(new Color(200 / 255f, 200 / 255f, 200 / 255f, 1f));
-            Graphics.Draw(
-                Position.X + Bounds.X,
-                Position.Y + Bounds.Y,
-                size.X, size.Y
-            );
+            if (Atlas != null)
+            {
+                ref var frame0 = ref Frames[0];
+                Graphics.SetTexture(Atlas.Texture);
+                Graphics.SetColor(Color.White);
+                Graphics.Draw(frame0.Shape.RasterBounds.ToRect().Scale(1.0f / EditorApplication.Config.SpriteDpi), AtlasRect);
+            }
+            else
+            {
+                Graphics.SetTexture(Workspace.WhiteTexture);
+                Graphics.SetColor(new Color(200 / 255f, 200 / 255f, 200 / 255f, 1f));
+                Graphics.Draw(Bounds);
+            }
         }
     }
 
@@ -266,10 +280,17 @@ public class SpriteDocument : Document
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath) ?? "");
 
         using var writer = new BinaryWriter(File.Create(outputPath));
+        writer.WriteAssetHeader(Constants.AssetSignature, AssetType.Sprite, Sprite.Version, 0); 
+        writer.Write(FrameCount);
 
-        writer.Write(Constants.AssetSignature);
-        writer.Write((byte)AssetType.Sprite);
-        writer.Write((ushort)Sprite.Version);
-        writer.Write((ushort)0);
+        ref readonly var frame0 = ref Frames[0];
+        writer.Write((ushort)RasterBounds.Left);
+        writer.Write((ushort)RasterBounds.Top);
+        writer.Write((ushort)RasterBounds.Right);
+        writer.Write((ushort)RasterBounds.Bottom);
+        writer.Write(AtlasRect.Left);
+        writer.Write(AtlasRect.Top);
+        writer.Write(AtlasRect.Bottom);
+        writer.Write(AtlasRect.Right);
     }
 }

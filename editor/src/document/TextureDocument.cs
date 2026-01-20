@@ -67,14 +67,7 @@ public class TextureDocument : Document
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetTexture(Texture);
             Graphics.SetColor(Color.White);
-
-            var size = Bounds.Size;
-            Graphics.Draw(
-                Position.X - size.X * 0.5f,
-                Position.Y - size.Y * 0.5f,
-                size.X, size.Y,
-                0, 0, 1, 1
-            );
+            Graphics.Draw(Bounds);
         }
     }
 

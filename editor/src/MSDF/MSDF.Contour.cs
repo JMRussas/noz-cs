@@ -2,16 +2,13 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System;
-using System.Linq;
-
 namespace NoZ.Editor
 {
     partial class MSDF
     {
         private class Contour
         {
-            public Edge[]? edges = null!;
+            public Edge[] edges = null!;
 
             public void Bounds(ref double l, ref double b, ref double r, ref double t)
             {

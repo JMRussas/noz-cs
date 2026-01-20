@@ -15,7 +15,7 @@ public class EditorConfig
     public int AtlasSize { get; }
     public int AtlasPadding { get; }
     public string AtlasPrefix { get; }
-    public int AtlasDpi { get; }
+    public int SpriteDpi { get; }
     public bool AtlasAntialias { get; }
     public string AtlasFilter { get; }
     public int FrameRate { get; }
@@ -39,7 +39,7 @@ public class EditorConfig
 
         AtlasPadding = props.GetInt("atlas", "padding", 1);
         AtlasPrefix = props.GetString("atlas", "prefix", "atlas");
-        AtlasDpi = props.GetInt("atlas", "dpi", 64);
+        SpriteDpi = props.GetInt("atlas", "dpi", 64);
         AtlasAntialias = props.GetBool("atlas", "antialias", false);
         AtlasFilter = props.GetString("atlas", "filter", "point");
 

@@ -32,10 +32,10 @@ public static class Workspace
             new Command { Name = "Command Palette", ShortName = "palette", Handler = OpenCommandPalette, Key = InputCode.KeyP, Ctrl = true, Shift = true },
             new Command { Name = "Toggle Edit Mode", ShortName = "edit", Handler = ToggleEdit, Key = InputCode.KeyTab },
             new Command { Name = "Toggle Grid", ShortName = "grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Ctrl = true },
+            new Command { Name = "Frame Selected", ShortName = "frame", Handler = FrameSelected, Key = InputCode.KeyF },
         ]);
 
         CommandManager.RegisterWorkspace([
-            new Command { Name = "Frame Selected", ShortName = "frame", Handler = FrameSelected, Key = InputCode.KeyF },
             new Command { Name = "Move Selected", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
             new Command { Name = "Toggle Names", ShortName = "names", Handler = ToggleNames, Key = InputCode.KeyN, Alt = true },
             new Command { Name = "Rebuild All", ShortName = "build", Handler = RebuildAll },
@@ -233,7 +233,7 @@ public static class Workspace
             if (!doc.Loaded || !doc.PostLoaded)
                 continue;
 
-            var docBounds = doc.Bounds.Offset(doc.Position);
+            var docBounds = doc.Bounds.Translate(doc.Position);
             if (bounds.Intersects(docBounds))
                 SetSelected(doc, true);
         }
@@ -291,19 +291,14 @@ public static class Workspace
             if (doc.IsEditing || doc.IsClipped) continue;
 
             if (doc.IsSelected)
-            {
-                using (Graphics.PushState())
-                {
-                    Graphics.SetTexture(WhiteTexture);
-                    Graphics.SetLayer(EditorLayer.Selection);
-                    Graphics.SetTransform(doc.Transform);
-                    Graphics.SetColor(EditorStyle.SelectionColor);
-                    Gizmos.DrawRect(doc.Bounds, EditorStyle.Workspace.BoundsLineWidth);
-                }
-            }
+                doc.DrawBounds(EditorStyle.SelectionColor);
 
+            Graphics.SetTransform(doc.Transform);
             doc.Draw();
         }
+
+        if (ActiveEditor != null)
+            ActiveEditor.Document.DrawBounds(EditorStyle.Workspace.GridColor);
 
         Graphics.PopState();
     }
@@ -325,7 +320,7 @@ public static class Workspace
             if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped)
                 continue;
 
-            var bounds = doc.Bounds.Offset(doc.Position);
+            var bounds = doc.Bounds.Translate(doc.Position);
             var textSize = TextRender.Measure(doc.Name, font, fontSize);
             var textX = bounds.Center.X - textSize.X * 0.5f;
             var textY = bounds.Bottom + padding;
@@ -549,14 +544,19 @@ public static class Workspace
 
     public static void FrameSelected()
     {
-        if (SelectedCount == 0)
+        if (ActiveEditor != null)
+        {
+            FrameRect(ActiveEditor.Document.Bounds.Translate(ActiveEditor.Document.Position));
             return;
+        }
+
+        if (SelectedCount == 0) return;
 
         Rect? bounds = null;
         foreach (var doc in DocumentManager.Documents)
         {
             if (!doc.IsSelected) continue;
-            var docBounds = doc.Bounds.Offset(doc.Position);
+            var docBounds = doc.Bounds.Translate(doc.Position);
             bounds = bounds == null ? docBounds : Rect.Union(bounds.Value, docBounds);
         }
 
@@ -573,7 +573,7 @@ public static class Workspace
             if (!doc.Loaded || !doc.PostLoaded)
                 continue;
 
-            if (!doc.Bounds.Offset(doc.Position).Contains(point))
+            if (!doc.Bounds.Translate(doc.Position).Contains(point))
                 continue;
 
             firstHit ??= doc;

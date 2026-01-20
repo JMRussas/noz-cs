@@ -91,11 +91,13 @@ public struct Rect(float x, float y, float width, float height)
     }
 
     public readonly Rect Expand(float amount) =>new(X - amount, Y - amount, Width + amount * 2, Height + amount * 2);
-    public readonly Rect Translate(Vector2 offset) => new Rect(X + offset.X, Y + offset.Y, Width, Height);
-    public readonly Rect Offset(Vector2 offset) => Translate(offset);
-    public readonly Rect Scale(float scale) => new(X * scale, Y * scale, Width * scale, Height * scale);
+    public readonly Rect Translate(in Vector2 offset) => new Rect(X + offset.X, Y + offset.Y, Width, Height);
+    public readonly Rect Scale(float scale) =>
+        new(X * scale, Y * scale, Width * scale, Height * scale);
 
     public static Rect FromMinMax(Vector2 min, Vector2 max) => new(min.X, min.Y, max.X - min.X, max.Y - min.Y);
+    public static Rect FromMinMax(float minX, float minY, float maxX, float maxY) =>
+        new(minX, minY, maxX - minX, maxY - minY);
     public static Rect FromCenterSize(Vector2 center, Vector2 size) => new(center.X - size.X * 0.5f, center.Y - size.Y * 0.5f, size.X, size.Y);
 
     public static Rect Lerp(Rect a, Rect b, float t)

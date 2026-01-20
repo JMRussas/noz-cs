@@ -19,15 +19,18 @@ public struct RectInt(int x, int y, int width, int height)
     public int Width = width;
     public int Height = height;
 
-    // Edges
-    public int Left => X;
-    public int Right => X + Width;
-    public int Top => Y;
-    public int Bottom => Y + Height;
+    public readonly int Left => X;
+    public readonly int Right => X + Width;
+    public readonly int Top => Y;
+    public readonly int Bottom => Y + Height;
 
-    // Computed properties
-    public Vector2Int Position => new(X, Y);
-    public Vector2Int Size => new(Width, Height);
+    public readonly Vector2Int Position => new(X, Y);
+    public readonly Vector2Int Size => new(Width, Height);
+
+    public RectInt(in Vector2Int position, in Vector2Int size) : this(position.X, position.Y, size.X, size.Y)
+    {
+    }
+
 
     /// <summary>
     /// Check if a point is inside the rectangle.
@@ -58,10 +61,7 @@ public struct RectInt(int x, int y, int width, int height)
         return new RectInt(X - amount, Y - amount, Width + amount * 2, Height + amount * 2);
     }
 
-    /// <summary>
-    /// Get the union of two rectangles.
-    /// </summary>
-    public static RectInt Union(RectInt a, RectInt b)
+    public static RectInt Union(in RectInt a, in RectInt b)
     {
         int x1 = Math.Min(a.X, b.X);
         int y1 = Math.Min(a.Y, b.Y);
@@ -69,6 +69,8 @@ public struct RectInt(int x, int y, int width, int height)
         int y2 = Math.Max(a.Y + a.Height, b.Y + b.Height);
         return new RectInt(x1, y1, x2 - x1, y2 - y1);
     }
+
+    public readonly RectInt Union (in RectInt r) => Union(this, r);
 
     /// <summary>
     /// Convert to floating-point rectangle.
@@ -86,5 +88,10 @@ public struct RectInt(int x, int y, int width, int height)
     public static bool operator ==(RectInt left, RectInt right) => left.Equals(right);
     public static bool operator !=(RectInt left, RectInt right) => !left.Equals(right);
 
-    public override string ToString() => $"RectInt({X}, {Y}, {Width}, {Height})";
+    public override string ToString() => $"<{X}, {Y}, {Width}, {Height}>";
+
+    public static RectInt FromMinMax(in Vector2Int min, in Vector2Int max) => new(min.X, min.Y, max.X - min.X, max.Y - min.Y);
+    public static RectInt FromMinMax(int minX, int minY, int maxX, int maxY) =>
+        new(minX, minY, maxX - minX, maxY - minY);
+
 }

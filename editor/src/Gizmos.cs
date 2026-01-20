@@ -20,12 +20,21 @@ public static class Gizmos
         DrawRect(doc.Bounds, width);
     }
 
-    public static void DrawRect(Rect rect, float width = 1.0f, ushort order=0)
+    public static void DrawRect(Rect rect, float width = 1.0f, ushort order=0, bool outside=false)
     {
         var topLeft = new Vector2(rect.Left, rect.Top);
         var topRight = new Vector2(rect.Right, rect.Top);
         var bottomLeft = new Vector2(rect.Left, rect.Bottom);
         var bottomRight = new Vector2(rect.Right, rect.Bottom);
+
+        if (outside)
+        {
+            var scaledWidth = width * ZoomRefScale;
+            topLeft += new Vector2(-scaledWidth, -scaledWidth);
+            topRight += new Vector2(scaledWidth, -scaledWidth);
+            bottomLeft += new Vector2(-scaledWidth, scaledWidth);
+            bottomRight += new Vector2(scaledWidth, scaledWidth);
+        }
 
         DrawLine(topLeft, topRight, width, extendEnds: true, order: order);
         DrawLine(topRight, bottomRight, width, extendEnds: true, order: order);

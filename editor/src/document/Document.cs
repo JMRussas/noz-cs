@@ -51,4 +51,16 @@ public abstract class Document : IDisposable
     }
 
     public virtual void Dispose () { }
+
+    public void DrawBounds(Color color)
+    {
+        using (Graphics.PushState())
+        {
+            Graphics.SetTransform(Transform);
+            Graphics.SetTexture(Workspace.WhiteTexture);
+            Graphics.SetLayer(EditorLayer.Selection);
+            Graphics.SetColor(color);
+            Gizmos.DrawRect(Bounds, EditorStyle.Workspace.BoundsLineWidth, outside: true);
+        }
+    }
 }

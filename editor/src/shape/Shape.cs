@@ -174,7 +174,7 @@ public sealed unsafe class Shape : IDisposable
         }
     }
 
-    public void UpdateBounds(float dpi = 1f)
+    public void UpdateBounds()
     {
         if (AnchorCount == 0)
         {
@@ -183,6 +183,7 @@ public sealed unsafe class Shape : IDisposable
             return;
         }
 
+        var dpi = EditorApplication.Config.SpriteDpi;
         var min = new Vector2(float.MaxValue, float.MaxValue);
         var max = new Vector2(float.MinValue, float.MinValue);
 
@@ -1226,12 +1227,13 @@ public sealed unsafe class Shape : IDisposable
         return _samples.Slice(anchorIndex * MaxSegmentSamples, MaxSegmentSamples);
     }
 
-    public void Rasterize(PixelData<Color32> pixels, Color[] palette, Vector2Int offset, float dpi = 1f)
+    public void Rasterize(PixelData<Color32> pixels, Color[] palette, Vector2Int offset)
     {
         if (PathCount == 0) return;
 
         const int maxPolyVerts = 256;
         Span<Vector2> polyVerts = stackalloc Vector2[maxPolyVerts];
+        var dpi = EditorApplication.Config.SpriteDpi;
 
         for (ushort pIdx = 0; pIdx < PathCount; pIdx++)
         {

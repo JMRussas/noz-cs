@@ -421,8 +421,11 @@ public static unsafe class Graphics
     #region Draw
 
     public static void Draw(in Rect rect, ushort order = 0) =>
-        Draw(rect.X, rect.Y, rect.Width, rect.Height);
-        
+        Draw(rect.X, rect.Y, rect.Width, rect.Height, order: order);
+
+    public static void Draw(in Rect rect, in Rect uv, ushort order = 0) =>
+        Draw(rect.X, rect.Y, rect.Width, rect.Height, uv.Left, uv.Top, uv.Right, uv.Bottom, order:order);
+
     public static void Draw(float x, float y, float width, float height, ushort order = 0)
     {
         var p0 = new Vector2(x, y);

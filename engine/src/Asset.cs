@@ -110,3 +110,14 @@ public class Asset : IDisposable {
     {
     }
 }
+
+public static class AssetExtensions
+{
+    public static void WriteAssetHeader(this BinaryWriter writer, uint signature, AssetType type, ushort version, ushort flags)
+    {
+        writer.Write(signature);
+        writer.Write((byte)type);
+        writer.Write(version);
+        writer.Write(flags);
+    }
+}

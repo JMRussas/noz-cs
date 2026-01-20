@@ -23,6 +23,9 @@ namespace NoZ.Editor
         private Texture _texture = null!;
         private PixelData<Color32> _image = null!;
         private RectPacker _packer = null!;
+        
+        public int Index { get; private set; }  
+        public Texture Texture => _texture;
 
         public static void RegisterDef()
         {
@@ -103,14 +106,28 @@ namespace NoZ.Editor
                 TextureFilter.Nearest,
                 Name);
 
-            UpdateBounds();
             ResolveSprites();
 
             base.PostLoad();
         }
 
-        public void UpdateBounds()
+        public Rect ToUV(RectInt rect)
         {
+            var tw = (float)_texture.Width;
+            var th = (float)_texture.Height;
+            var u = rect.Left / tw;
+            var v = rect.Top / th;
+            var s = rect.Right / tw;
+            var t = rect.Bottom / th;
+            var hpu = 0.1f / tw;
+            var hpv = 0.1f / th;
+
+            //u += hpu;
+            //v += hpv;
+            //s -= hpu;
+            //t -= hpv;
+
+            return Rect.FromMinMax(u, v, s, t);
         }
 
         private void ResolveSprites()
@@ -121,18 +138,25 @@ namespace NoZ.Editor
                 ref var rect = ref span[i];
                 rect.Sprite = DocumentManager.Find(AssetType.Sprite, rect.Name) as SpriteDocument;
                 if (rect.Sprite == null) continue;
+                
+                ref var frame0 = ref rect.Sprite.Frames[0];
+                if (frame0.Shape.RasterBounds.Size != rect.Rect.Size)
+                {
+                    rect.Sprite = null;
+                    continue;
+                }
+                    
                 rect.Sprite.Atlas = this;
-                rect.Sprite.AtlasRect = i;
+                rect.Sprite.AtlasRect = ToUV(rect.Rect);
+                rect.Sprite.AtlasRect2 = rect.Rect;
             }
-
-            _rects.RemoveAll(r => r.Sprite == null);
         }
 
         public override void Dispose()
         {
             _texture?.Dispose();
             _image?.Dispose();
-            _texture = null;
+            _texture = null!;
             _image = null!;
             _rects.Clear();
             base.Dispose();
@@ -142,32 +166,39 @@ namespace NoZ.Editor
         {
             // Try to reclaim an empty rect
             var rects = CollectionsMarshal.AsSpan(_rects);
+            var size = sprite.RasterBounds.Size;
             for (int i = 0; i < _rects.Count; i++)
             {
                 ref var rect = ref rects[i]; 
                 if (rect.Sprite != null) continue;
-                if (sprite.Size.X > rect.Rect.Width || sprite.Size.Y > rect.Rect.Height) continue;
+                if (size.X > rect.Rect.Width || size.Y > rect.Rect.Height) continue;
 
                 rect.Name = sprite.Name;
                 rect.Sprite = sprite;
                 rect.FrameCount = sprite.FrameCount;
+
+                sprite.Atlas = this;
+                sprite.AtlasRect = ToUV(new RectInt(rect.Rect.Position, size));
+
                 return true;
             }
 
             // Pack a new one
-            var rectIndex = _packer.Insert(sprite.Size, out var packedRect);
-            if (rectIndex == -1) return false;
+            var rectIndex = _packer.Insert(size, out var packedRect);
+            if (rectIndex == -1)
+                return false;
             Debug.Assert(rectIndex == _rects.Count);
             _rects.Add(new SpriteRect
             {
                 Name = sprite.Name,
                 Sprite = sprite,
                 Rect = packedRect,
-                FrameCount = sprite.FrameCount
+                FrameCount = sprite.FrameCount,
+                Dirty = true
             });
 
             sprite.Atlas = this;
-            sprite.AtlasRect = rectIndex;
+            sprite.AtlasRect = ToUV(packedRect);
 
             return true;
         }
@@ -188,7 +219,10 @@ namespace NoZ.Editor
                 for (int frameIndex = 0; frameIndex < rect.FrameCount; frameIndex++)
                 {
                     var frame = rect.Sprite.GetFrame((ushort)frameIndex);
-                    frame.Shape.Rasterize(_image, palette.Colors, rect.Rect.Position, _dpi);
+                    frame.Shape.Rasterize(
+                        _image,
+                        palette.Colors,
+                        rect.Rect.Position - frame.Shape.RasterBounds.Position);
                 }
             }
 
@@ -199,16 +233,12 @@ namespace NoZ.Editor
         {
             base.Draw();
 
-            Graphics.SetTexture(_texture);
-            Graphics.SetColor(Color.White);
-
-            var size = Bounds.Size;
-            Graphics.Draw(
-                Position.X - size.X * 0.5f,
-                Position.Y - size.Y * 0.5f,
-                size.X, size.Y,
-                0, 0, 1, 1
-            );
+            using (Graphics.PushState())
+            {
+                Graphics.SetTexture(_texture);
+                Graphics.SetColor(Color.White);
+                Graphics.Draw(Bounds);
+            }
         }
     }
 }
