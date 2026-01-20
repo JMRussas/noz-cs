@@ -104,9 +104,7 @@ namespace NoZ.Editor
                 TextureFormat.RGBA8,
                 TextureFilter.Nearest,
                 Name);
-
-            ResolveSprites();
-
+            
             base.PostLoad();
         }
 
@@ -127,19 +125,22 @@ namespace NoZ.Editor
             return Rect.FromMinMax(u, v, s, t);
         }
 
-        private void ResolveSprites()
+        internal void ResolveSprites()
         {
             var span = CollectionsMarshal.AsSpan(_rects);
             for (int i = 0; i < span.Length; i++)
             {
                 ref var rect = ref span[i];
-                if (rect.Sprite != null) continue;
+                if (rect.Sprite != null)
+                    continue;
 
                 rect.Sprite = DocumentManager.Find(AssetType.Sprite, rect.Name) as SpriteDocument;
-                if (rect.Sprite == null) continue;
+                if (rect.Sprite == null)
+                    continue;
                 
                 ref var frame0 = ref rect.Sprite.Frames[0];
-                if (frame0.Shape.RasterBounds.Size != rect.Rect.Size)
+                if (frame0.Shape.RasterBounds.Size.X > rect.Rect.Size.X ||
+                    frame0.Shape.RasterBounds.Size.Y > rect.Rect.Size.Y )
                 {
                     rect.Sprite = null;
                     continue;

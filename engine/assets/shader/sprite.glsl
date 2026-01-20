@@ -4,7 +4,7 @@
 
 #version 450
 
-//@ VERTEX
+#ifdef VERTEX_PROGRAM
 
 layout(location = 0) in vec2 in_position;
 layout(location = 1) in vec2 in_uv;
@@ -17,31 +17,31 @@ layout(location = 7) in float in_frame_width;
 layout(location = 8) in float in_frame_rate;
 layout(location = 9) in float in_frame_time;
 
-uniform mat4 u_projection;
-uniform float u_time;
-
-layout(std140, binding = 0) uniform BoneBlock {
-    vec4 u_bones[128];  // 64 bones * 2 vec4s (padded to 8 floats per bone)
+layout(std140, binding = 0) uniform Globals {
+    mat4 u_projection;
+    float u_time;
 };
 
-out vec2 v_uv;
-out vec4 v_color;
-flat out int v_atlas;
+layout(binding = 1) uniform sampler2D u_bones;
+
+layout(location = 0) out vec2 v_uv;
+layout(location = 1) out vec4 v_color;
+layout(location = 2) flat out int v_atlas;
 
 void main()
 {
-    // Get bone transform (2 vec4s per bone, row-major: [M11,M12,M31,pad], [M21,M22,M32,pad])
-    int boneIdx = in_bone * 2;
-    vec4 row0 = u_bones[boneIdx];     // M11, M12, M31, (unused)
-    vec4 row1 = u_bones[boneIdx + 1]; // M21, M22, M32, (unused)
+    // in_bone is flat index, each row holds 64 bones (128 texels)
+    int row = in_bone / 64;
+    int localBone = in_bone % 64;
+    int texelX = localBone * 2;
+    vec4 row0 = texelFetch(u_bones, ivec2(texelX, row), 0);
+    vec4 row1 = texelFetch(u_bones, ivec2(texelX + 1, row), 0);
 
-    // Apply bone transform: pos' = M * pos (2D affine)
     vec2 skinnedPos = vec2(
         row0.x * in_position.x + row0.y * in_position.y + row0.z,
         row1.x * in_position.x + row1.y * in_position.y + row1.z
     );
 
-    // Animation: offset UV.x based on current frame
     vec2 uv = in_uv;
     if (in_frame_count > 1) {
         float animTime = u_time - in_frame_time;
@@ -56,23 +56,21 @@ void main()
     v_atlas = in_atlas;
 }
 
-//@ END
+#endif
 
-//@ FRAGMENT
+#ifdef FRAGMENT_PROGRAM
 
-in vec2 v_uv;
-in vec4 v_color;
-flat in int v_atlas;
+layout(location = 0) in vec2 v_uv;
+layout(location = 1) in vec4 v_color;
+layout(location = 2) flat in int v_atlas;
 
-uniform sampler2DArray sampler_texture;
+layout(binding = 0) uniform sampler2DArray sampler_texture;
 
-out vec4 f_color;
+layout(location = 0) out vec4 f_color;
 
-void main() 
+void main()
 {
     f_color = texture(sampler_texture, vec3(v_uv, v_atlas)) * v_color;
 }
 
-//@ END
-
-
+#endif

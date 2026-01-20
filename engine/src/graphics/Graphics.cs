@@ -25,20 +25,11 @@ public static unsafe class Graphics
     private const int LayerShift = 48;
     private const long SortKeyMergeMask = 0x7FFFFFFFFFFF0000;
 
-    private enum UniformType : byte { Float, Vec2, Vec4, Matrix4x4 }
 
     public struct AutoState(bool pop) : IDisposable
     {
         private bool _pop = pop;
         readonly void IDisposable.Dispose() { if (_pop) PopState(); }
-    }
-
-    private struct UniformEntry
-    {
-        public UniformType Type;
-        public string Name;
-        public Vector4 Value;
-        public Matrix4x4 MatrixValue;
     }
 
     private struct BatchState()
@@ -89,8 +80,10 @@ public static unsafe class Graphics
         public nuint Mesh;
     }
 
-    private const int MaxBones = 64;
-    private static int _boneCount;
+    private const int MaxBonesPerEntity = 64;
+    private const int MaxBoneRows = 1024;
+    private const int BoneTextureWidth = 128; // 64 bones * 2 texels per bone
+    private static int _boneRow;
     private static float _time;
     private static Shader? _compositeShader;
     private static Shader? _spriteShader;
@@ -119,8 +112,12 @@ public static unsafe class Graphics
     
     #region Batching
     private static nuint _mesh;
-    private static nuint _boneUbo;
-    private const int BoneUboBindingPoint = 0;
+    private static nuint _globalsUbo;
+    private static nuint _boneTexture;
+    private const int GlobalsUboBindingPoint = 0;
+    private const int BoneTextureSlot = 1;
+    private static Matrix4x4 _projection;
+    private static NativeArray<float> _boneData;
     private static int _maxDrawCommands;
     private static int _maxBatches;
     private static NativeArray<MeshVertex> _vertices;
@@ -130,8 +127,6 @@ public static unsafe class Graphics
     private static NativeArray<Batch> _batches;
     private static NativeArray<BatchState> _batchStates;
     private static ushort _currentBatchState;
-
-    private static Dictionary<string, UniformEntry> _uniforms = null!;
     #endregion
     
     public static Color ClearColor { get; set; } = Color.Black;  
@@ -172,7 +167,7 @@ public static unsafe class Graphics
 
     private static void InitState()
     {
-        _bones = new Matrix3x2[MaxBones];
+        _bones = new Matrix3x2[MaxBonesPerEntity];
         ResetState();
     }
 
@@ -197,9 +192,7 @@ public static unsafe class Graphics
 
         CurrentState.Mesh = _mesh;
 
-        _uniforms.Clear();
-        _boneCount = 1;
-        _bones[0] = Matrix3x2.Identity;
+        _boneRow = 1; // Row 0 is identity, start from row 1
 
         CurrentState.ViewportX = -1;
         CurrentState.ViewportY = -1;
@@ -217,7 +210,6 @@ public static unsafe class Graphics
         _commands = new NativeArray<DrawCommand>(_maxDrawCommands);
         _batches = new NativeArray<Batch>(_maxBatches);
         _batchStates = new NativeArray<BatchState>(_maxBatches);
-        _uniforms = new Dictionary<string, UniformEntry>();
 
         _mesh = Driver.CreateMesh<MeshVertex>(
             MaxVertices,
@@ -226,8 +218,17 @@ public static unsafe class Graphics
             "Render.Main"
         );
 
-        // Create bone UBO: 64 bones * 2 vec4s per bone (std140 padded) * 16 bytes per vec4
-        _boneUbo = Driver.CreateUniformBuffer(MaxBones * 2 * 16, BufferUsage.Dynamic, "Render.BoneUBO");
+        _globalsUbo = Driver.CreateUniformBuffer(80, BufferUsage.Dynamic, "Globals");
+
+        var boneDataLength = BoneTextureWidth * MaxBoneRows * 4;
+        _boneData = new NativeArray<float>(boneDataLength, boneDataLength);
+        _boneData[0] = 1; _boneData[1] = 0; _boneData[2] = 0; _boneData[3] = 0;
+        _boneData[4] = 0; _boneData[5] = 1; _boneData[6] = 0; _boneData[7] = 0;
+        _boneTexture = Driver.CreateTexture(
+            BoneTextureWidth, MaxBoneRows,
+            ReadOnlySpan<byte>.Empty,
+            TextureFormat.RGBA32F,
+            TextureFilter.Nearest);
     }
 
     public static void Shutdown()
@@ -238,12 +239,13 @@ public static unsafe class Graphics
         _indices.Dispose();
 
         Driver.DestroyMesh(_mesh);
-        Driver.DestroyBuffer(_boneUbo);
+        Driver.DestroyBuffer(_globalsUbo);
+        Driver.DestroyTexture(_boneTexture);
 
         Driver.Shutdown();
 
         _mesh = 0;
-        _boneUbo = 0;
+        _boneTexture = 0;
     }
 
     public static bool IsScissor => CurrentState.ScissorEnabled;
@@ -272,30 +274,6 @@ public static unsafe class Graphics
         _batchStateDirty = true;
     }
 
-    public static void SetUniformFloat(string name, float value)
-    {
-        _uniforms[name] = new UniformEntry { Type = UniformType.Float, Name = name, Value = new Vector4(value, 0, 0, 0) };
-        _batchStateDirty = true;
-    }
-
-    public static void SetUniformVec2(string name, Vector2 value)
-    {
-        _uniforms[name] = new UniformEntry { Type = UniformType.Vec2, Name = name, Value = new Vector4(value.X, value.Y, 0, 0) };
-        _batchStateDirty = true;
-    }
-
-    public static void SetUniformVec4(string name, Vector4 value)
-    {
-        _uniforms[name] = new UniformEntry { Type = UniformType.Vec4, Name = name, Value = value };
-        _batchStateDirty = true;
-    }
-
-    public static void SetUniformMatrix4x4(string name, Matrix4x4 value)
-    {
-        _uniforms[name] = new UniformEntry { Type = UniformType.Matrix4x4, Name = name, MatrixValue = value };
-        _batchStateDirty = true;
-    }
-
     public static void SetColor(Color color)
     {
         CurrentState.Color = color;
@@ -315,15 +293,12 @@ public static unsafe class Graphics
             SetViewport((int)viewport.X, (int)viewport.Y, (int)viewport.Width, (int)viewport.Height);
 
         var view = camera.ViewMatrix;
-        var projection = new Matrix4x4(
+        _projection = new Matrix4x4(
             view.M11, view.M12, 0, view.M31,
             view.M21, view.M22, 0, view.M32,
             0, 0, 1, 0,
             0, 0, 0, 1
         );
-
-        SetUniformMatrix4x4("u_projection", projection);
-        SetUniformFloat("u_time", _time);
     }
 
     internal static void BeginFrame()
@@ -553,47 +528,54 @@ public static unsafe class Graphics
         _batchStateDirty = true;
     }
     
-    public const int MaxBoneTransforms = MaxBones;
+    public const int MaxBoneTransforms = MaxBonesPerEntity;
 
     public static void SetBones(ReadOnlySpan<Matrix3x2> transforms)
     {
-        Debug.Assert(_boneCount + transforms.Length <= MaxBones);
-        CurrentState.BoneIndex = (ushort)_boneCount;
-        fixed (Matrix3x2* dst = &_bones[_boneCount])
-        fixed (Matrix3x2* src = transforms)
+        Debug.Assert(transforms.Length <= MaxBonesPerEntity);
+        Debug.Assert(_boneRow < MaxBoneRows);
+
+        // BoneIndex is flat index: row * 64, so vertex bone index + BoneIndex = flat index
+        CurrentState.BoneIndex = (ushort)(_boneRow * MaxBonesPerEntity);
+
+        // Write transforms to the current row in _boneData
+        // Each bone is 2 texels (8 floats): [M11,M12,M31,0], [M21,M22,M32,0]
+        var rowOffset = _boneRow * BoneTextureWidth * 4;
+        for (var i = 0; i < transforms.Length; i++)
         {
-            Unsafe.CopyBlock(dst, src, (uint)(transforms.Length * sizeof(Matrix3x2)));
+            ref readonly var m = ref transforms[i];
+            var texelOffset = rowOffset + i * 8;
+            // Texel 0: M11, M12, M31, 0
+            _boneData[texelOffset + 0] = m.M11;
+            _boneData[texelOffset + 1] = m.M12;
+            _boneData[texelOffset + 2] = m.M31;
+            _boneData[texelOffset + 3] = 0;
+            // Texel 1: M21, M22, M32, 0
+            _boneData[texelOffset + 4] = m.M21;
+            _boneData[texelOffset + 5] = m.M22;
+            _boneData[texelOffset + 6] = m.M32;
+            _boneData[texelOffset + 7] = 0;
         }
-        _boneCount += transforms.Length;
+
+        _boneRow++;
     }
 
     private static void UploadBones()
     {
-        // std140 layout requires vec4 alignment, so we pad each Matrix3x2 row to vec4
-        // Matrix3x2: M11,M12,M21,M22,M31,M32 -> two vec4s: [M11,M12,M31,0], [M21,M22,M32,0]
-        var size = MaxBones * 2 * 16;
-        var data = stackalloc float[MaxBones * 8];
-        fixed (Matrix3x2* src = _bones)
-        {
-            var srcPtr = (float*)src;
-            var dstPtr = data;
-            for (var i = 0; i < MaxBones; i++)
-            {
-                // Row 0: M11, M12, M31, pad
-                dstPtr[0] = srcPtr[0]; // M11
-                dstPtr[1] = srcPtr[1]; // M12
-                dstPtr[2] = srcPtr[4]; // M31
-                dstPtr[3] = 0;
-                // Row 1: M21, M22, M32, pad
-                dstPtr[4] = srcPtr[2]; // M21
-                dstPtr[5] = srcPtr[3]; // M22
-                dstPtr[6] = srcPtr[5]; // M32
-                dstPtr[7] = 0;
-                srcPtr += 6;
-                dstPtr += 8;
-            }
-        }
-        Driver.UpdateUniformBuffer(_boneUbo, 0, new ReadOnlySpan<byte>(data, size));
+        Driver.UpdateTexture(_boneTexture, BoneTextureWidth, MaxBoneRows, _boneData.AsByteSpan());
+    }
+
+    private static void UploadGlobals()
+    {
+        // Globals UBO layout (std140):
+        // offset 0: mat4 u_projection (64 bytes, column-major)
+        // offset 64: float u_time (4 bytes, padded to 16)
+        // Total: 80 bytes
+        var data = stackalloc byte[80];
+        var transposed = Matrix4x4.Transpose(_projection);
+        Buffer.MemoryCopy(&transposed, data, 64, 64);
+        *(float*)(data + 64) = _time;
+        Driver.UpdateUniformBuffer(_globalsUbo, 0, new ReadOnlySpan<byte>(data, 80));
     }
 
     public static void SetTransform(in Matrix3x2 transform)
@@ -753,29 +735,6 @@ public static unsafe class Graphics
         batch.State = batchState;
     }
 
-    private static void ApplyUniforms()
-    {
-        foreach (var kvp in _uniforms)
-        {
-            var u = kvp.Value;
-            switch (u.Type)
-            {
-                case UniformType.Float:
-                    Driver.SetUniformFloat(u.Name, u.Value.X);
-                    break;
-                case UniformType.Vec2:
-                    Driver.SetUniformVec2(u.Name, new Vector2(u.Value.X, u.Value.Y));
-                    break;
-                case UniformType.Vec4:
-                    Driver.SetUniformVec4(u.Name, u.Value);
-                    break;
-                case UniformType.Matrix4x4:
-                    Driver.SetUniformMatrix4x4(u.Name, u.MatrixValue);
-                    break;
-            }
-        }
-    }
-
     public static void SetMesh(nuint vertexArray)
     {
         if (CurrentState.Mesh == vertexArray) return;
@@ -909,8 +868,11 @@ public static unsafe class Graphics
             lastMesh = _mesh;
         }
 
+        UploadGlobals();
+        Driver.BindUniformBuffer(_globalsUbo, GlobalsUboBindingPoint);
+
         UploadBones();
-        Driver.BindUniformBuffer(_boneUbo, BoneUboBindingPoint);
+        Driver.BindTexture(_boneTexture, BoneTextureSlot);
 
         LogRender($"ExecuteBatches: Batches={_batches.Length} BatchStates={_batchStates.Length} Commands={_commands.Length} Vertices={_vertices.Length} Indices={_indices.Length}");
         
@@ -993,8 +955,6 @@ public static unsafe class Graphics
                 Driver.BindMesh(batchState.Mesh);
                 LogRender($"    BindMesh: Handle=0x{batchState.Mesh:X}");
             }
-            
-            ApplyUniforms();
 
             LogRender($"    DrawElements: IndexCount={batch.IndexCount} IndexOffset={batch.IndexOffset}");
             Driver.DrawElements(batch.IndexOffset, batch.IndexCount, 0);

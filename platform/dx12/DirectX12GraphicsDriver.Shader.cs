@@ -91,54 +91,6 @@ public unsafe partial class DirectX12GraphicsDriver
         _commandList.SetGraphicsRootSignature(shader.RootSignature);
     }
 
-    public void SetUniformMatrix4x4(string name, in Matrix4x4 value)
-    {
-        // In DX12, we use root constants or CBVs
-        // For simplicity, use root constants for projection matrix (64 bytes = 16 floats)
-        // DX12 uses row-major by default (same as .NET Matrix4x4), no transpose needed
-
-        Span<float> data = stackalloc float[16];
-        data[0] = value.M11; data[1] = value.M12; data[2] = value.M13; data[3] = value.M14;
-        data[4] = value.M21; data[5] = value.M22; data[6] = value.M23; data[7] = value.M24;
-        data[8] = value.M31; data[9] = value.M32; data[10] = value.M33; data[11] = value.M34;
-        data[12] = value.M41; data[13] = value.M42; data[14] = value.M43; data[15] = value.M44;
-
-        // Set as root constants at parameter 0
-        fixed (float* pData = data)
-        {
-            _commandList.SetGraphicsRoot32BitConstants(0, 16, pData, 0);
-        }
-    }
-
-    public void SetUniformInt(string name, int value)
-    {
-        // Store at offset 16 (after matrix) in root constants
-        _commandList.SetGraphicsRoot32BitConstant(0, (uint)value, 16);
-    }
-
-    public void SetUniformFloat(string name, float value)
-    {
-        // Store at offset 17 in root constants
-        uint bits = BitConverter.SingleToUInt32Bits(value);
-        _commandList.SetGraphicsRoot32BitConstant(0, bits, 17);
-    }
-
-    public void SetUniformVec2(string name, Vector2 value)
-    {
-        // Store at offset 18-19 in root constants
-        _commandList.SetGraphicsRoot32BitConstant(0, BitConverter.SingleToUInt32Bits(value.X), 18);
-        _commandList.SetGraphicsRoot32BitConstant(0, BitConverter.SingleToUInt32Bits(value.Y), 19);
-    }
-
-    public void SetUniformVec4(string name, Vector4 value)
-    {
-        // Store at offset 20-23 in root constants
-        _commandList.SetGraphicsRoot32BitConstant(0, BitConverter.SingleToUInt32Bits(value.X), 20);
-        _commandList.SetGraphicsRoot32BitConstant(0, BitConverter.SingleToUInt32Bits(value.Y), 21);
-        _commandList.SetGraphicsRoot32BitConstant(0, BitConverter.SingleToUInt32Bits(value.Z), 22);
-        _commandList.SetGraphicsRoot32BitConstant(0, BitConverter.SingleToUInt32Bits(value.W), 23);
-    }
-
     public void SetBlendMode(BlendMode mode)
     {
         _currentBlendMode = mode;

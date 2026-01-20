@@ -62,11 +62,6 @@ public interface IGraphicsDriver
     nuint CreateShader(string name, string vertexSource, string fragmentSource);
     void DestroyShader(nuint handle);
     void BindShader(nuint handle);
-    void SetUniformMatrix4x4(string name, in Matrix4x4 value);
-    void SetUniformInt(string name, int value);
-    void SetUniformFloat(string name, float value);
-    void SetUniformVec2(string name, Vector2 value);
-    void SetUniformVec4(string name, Vector4 value);
 
     void SetBlendMode(BlendMode mode);
 

@@ -1,5 +1,5 @@
 @using Microsoft.JSInterop
-@using StickCraft
+@using NoZ
 @using NoZ.Platform
 @using NoZ.Platform.Web
 @inject IJSRuntime JS
@@ -16,7 +16,7 @@
     private int _width;
     private int _height;
     private WebPlatform? _platform;
-    private WebGLGraphicsDriver? _render;
+    private WebGLGraphicsDriver? _driver;
     private IJSObjectReference? _gameLoop;
     private DotNetObjectReference<Game>? _dotNetRef;
     private bool _initialized;
@@ -40,7 +40,7 @@
     {
         // Create platform and render backend
         _platform = new WebPlatform(JS);
-        _render = new WebGLGraphicsDriver(JS);
+        _driver = new WebGLGraphicsDriver(JS);
 
         // Initialize platform first (creates canvas events)
         await _platform.InitAsync(new PlatformConfig
@@ -59,13 +59,11 @@
         Input.Init();
 
         // Initialize render backend
-        await _render.InitAsync(new RenderBackendConfig
+        await _driver.InitAsync(new GraphicsDriverConfig
         {
+            Platform = _platform,
             VSync = true
         });
-
-        // Initialize Render static class with backend
-        Render.Init(null, _render);
 
         // Call user initialization
         if (OnInitialize != null)
@@ -93,14 +91,8 @@
         // Update input state
         Input.Update();
 
-        // Begin frame
-        Render.BeginFrame();
-
         // Call user update
         OnUpdate?.Invoke();
-
-        // End frame
-        Render.EndFrame();
     }
 
     public async ValueTask DisposeAsync()
@@ -119,8 +111,7 @@
             _platform.Shutdown();
         }
 
-        _render?.Shutdown();
+        _driver?.Shutdown();
         Input.Shutdown();
-        Render.Shutdown();
     }
 }

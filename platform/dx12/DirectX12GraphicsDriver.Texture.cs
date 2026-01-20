@@ -374,6 +374,7 @@ public unsafe partial class DirectX12GraphicsDriver
         TextureFormat.RG8 => Format.FormatR8G8Unorm,
         TextureFormat.RGB8 => Format.FormatR8G8B8A8Unorm, // No RGB8 in D3D12, use RGBA8
         TextureFormat.RGBA8 => Format.FormatR8G8B8A8Unorm,
+        TextureFormat.RGBA32F => Format.FormatR32G32B32A32Float,
         _ => Format.FormatR8G8B8A8Unorm
     };
 
@@ -383,6 +384,7 @@ public unsafe partial class DirectX12GraphicsDriver
         TextureFormat.RG8 => 2,
         TextureFormat.RGB8 => 4, // Expanded to RGBA
         TextureFormat.RGBA8 => 4,
+        TextureFormat.RGBA32F => 16, // 4 floats * 4 bytes
         _ => 4
     };
 

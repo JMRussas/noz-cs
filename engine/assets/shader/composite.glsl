@@ -5,32 +5,32 @@
 
 #version 450
 
-//@ VERTEX
+#ifdef VERTEX_PROGRAM
 
 layout(location = 0) in vec2 in_position;
 layout(location = 1) in vec2 in_uv;
 
-out vec2 v_uv;
+layout(location = 0) out vec2 v_uv;
 
-void main() 
+void main()
 {
     gl_Position = vec4(in_position, 0.0, 1.0);
     v_uv = vec2(in_uv.x, 1.0 - in_uv.y);
 }
 
-//@ END
+#endif
 
-//@ FRAGMENT
+#ifdef FRAGMENT_PROGRAM
 
-in vec2 v_uv;
+layout(location = 0) in vec2 v_uv;
 
-uniform sampler2D sampler_texture;
+layout(binding = 0) uniform sampler2D sampler_texture;
 
-out vec4 f_color;
+layout(location = 0) out vec4 f_color;
 
-void main() 
+void main()
 {
     f_color = texture(sampler_texture, v_uv);
 }
 
-//@ END
+#endif

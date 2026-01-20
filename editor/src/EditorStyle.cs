@@ -328,6 +328,34 @@ public static class EditorStyle
         };
     }
 
+    public static class Notifications
+    {
+        public readonly static ContainerStyle Root = new()
+        { 
+            Spacing = 8.0f,
+            AlignX = Align.Max,
+            AlignY = Align.Max,
+            Width = 300.0f,
+            Height = Size.Fit,
+            Margin = EdgeInsets.All(EditorStyle.Workspace.Padding)
+        };
+
+        public readonly static ContainerStyle Notification = new()
+        {
+            Height = Popup.Item.Height,
+            Padding = EdgeInsets.All(Overlay.Padding),
+            Color = Overlay.FillColor,
+            Border = new BorderStyle { Radius = Overlay.BorderRadius }
+        };
+
+        public readonly static LabelStyle NotificationText = new()
+        {
+            FontSize = Overlay.TextSize,
+            AlignX = Align.Min,
+            AlignY = Align.Center
+        };
+    }
+
     // Color Picker
     public const float ColorPickerBorderWidth = 2.5f;
     public const float ColorPickerColorSize = 26f;

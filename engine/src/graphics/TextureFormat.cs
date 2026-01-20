@@ -10,6 +10,7 @@ public enum TextureFormat : byte
     RGB8 = 1,
     R8 = 2,
     RG8 = 3,
+    RGBA32F = 4,
 }
 
 public enum TextureFilter : byte

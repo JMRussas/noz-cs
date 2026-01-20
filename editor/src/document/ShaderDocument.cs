@@ -83,27 +83,19 @@ public class ShaderDocument : Document
 
     private static string ExtractStage(string source, string stage)
     {
-        var vertexPattern = new Regex(@"//@ VERTEX\s*\n([\s\S]*?)//@ END");
-        var fragmentPattern = new Regex(@"//@ FRAGMENT\s*\n([\s\S]*?)//@ END");
+        // Extract #version directive if present
+        var versionMatch = Regex.Match(source, @"#version\s+\d+[^\n]*\n?");
+        var version = versionMatch.Success ? versionMatch.Value : "";
 
-        var result = source;
+        // Remove the #version from source (we'll add it back at the start)
+        var sourceWithoutVersion = versionMatch.Success
+            ? source.Remove(versionMatch.Index, versionMatch.Length)
+            : source;
 
-        if (stage == "VERTEX")
-        {
-            var match = vertexPattern.Match(result);
-            if (match.Success)
-                result = match.Groups[1].Value;
-            result = fragmentPattern.Replace(result, "");
-        }
-        else if (stage == "FRAGMENT")
-        {
-            var match = fragmentPattern.Match(result);
-            if (match.Success)
-                result = match.Groups[1].Value;
-            result = vertexPattern.Replace(result, "");
-        }
+        // Build the stage-specific source by defining the appropriate macro
+        var define = stage == "VERTEX" ? "#define VERTEX_PROGRAM\n" : "#define FRAGMENT_PROGRAM\n";
 
-        return result.Trim();
+        return version + define + sourceWithoutVersion;
     }
 
     private static string ProcessIncludes(string source, string baseDir)
@@ -259,10 +251,21 @@ public class ShaderDocument : Document
         writer.Write((byte)flags);
     }
 
-    private static void WriteHlsl(string path, string vertexSource, string fragmentSource, ShaderFlags flags)
+    private void WriteHlsl(string path, string vertexSource, string fragmentSource, ShaderFlags flags)
     {
-        var hlslVertex = HlslConverter.ConvertVertex(vertexSource);
-        var hlslFragment = HlslConverter.ConvertFragment(fragmentSource);
+        var (hlslVertex, vertexError) = ShaderCompiler.CompileGlslToHlsl(vertexSource, ShaderStage.Vertex, Name + ".vert");
+        if (hlslVertex == null)
+        {
+            Log.Error($"Failed to compile vertex shader to HLSL: {vertexError}");
+            return;
+        }
+
+        var (hlslFragment, fragmentError) = ShaderCompiler.CompileGlslToHlsl(fragmentSource, ShaderStage.Fragment, Name + ".frag");
+        if (hlslFragment == null)
+        {
+            Log.Error($"Failed to compile fragment shader to HLSL: {fragmentError}");
+            return;
+        }
 
         using var writer = new BinaryWriter(File.Create(path));
         writer.WriteAssetHeader(AssetType.Shader, Shader.Version);

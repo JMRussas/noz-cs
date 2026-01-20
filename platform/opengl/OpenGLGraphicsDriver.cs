@@ -35,6 +35,7 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         public int Height;
         public int Layers;
         public bool IsArray;
+        public TextureFormat Format;
     }
 
     private readonly uint[] _buffers = new uint[MaxBuffers];
@@ -328,18 +329,19 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         var glTexture = _gl.GenTexture();
         _gl.BindTexture(TextureTarget.Texture2D, glTexture);
 
-        var (internalFormat, pixelFormat) = format switch
+        var (internalFormat, pixelFormat, pixelType) = format switch
         {
-            TextureFormat.R8 => (InternalFormat.R8, PixelFormat.Red),
-            TextureFormat.RG8 => (InternalFormat.RG8, PixelFormat.RG),
-            TextureFormat.RGB8 => (InternalFormat.Rgb8, PixelFormat.Rgb),
-            _ => (InternalFormat.Rgba8, PixelFormat.Rgba)
+            TextureFormat.R8 => (InternalFormat.R8, PixelFormat.Red, PixelType.UnsignedByte),
+            TextureFormat.RG8 => (InternalFormat.RG8, PixelFormat.RG, PixelType.UnsignedByte),
+            TextureFormat.RGB8 => (InternalFormat.Rgb8, PixelFormat.Rgb, PixelType.UnsignedByte),
+            TextureFormat.RGBA32F => (InternalFormat.Rgba32f, PixelFormat.Rgba, PixelType.Float),
+            _ => (InternalFormat.Rgba8, PixelFormat.Rgba, PixelType.UnsignedByte)
         };
 
         fixed (byte* p = data)
         {
             _gl.TexImage2D(TextureTarget.Texture2D, 0, internalFormat,
-                (uint)width, (uint)height, 0, pixelFormat, PixelType.UnsignedByte, p);
+                (uint)width, (uint)height, 0, pixelFormat, pixelType, p);
         }
 
         _gl.TexParameter(
@@ -360,7 +362,8 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
             Width = width,
             Height = height,
             Layers = 0,
-            IsArray = false
+            IsArray = false,
+            Format = format
         };
         return (nuint)handle;
     }
@@ -370,11 +373,20 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         ref var info = ref _textures[(int)handle];
         if (info.GlTexture == 0) return;
 
+        var (pixelFormat, pixelType) = info.Format switch
+        {
+            TextureFormat.R8 => (PixelFormat.Red, PixelType.UnsignedByte),
+            TextureFormat.RG8 => (PixelFormat.RG, PixelType.UnsignedByte),
+            TextureFormat.RGB8 => (PixelFormat.Rgb, PixelType.UnsignedByte),
+            TextureFormat.RGBA32F => (PixelFormat.Rgba, PixelType.Float),
+            _ => (PixelFormat.Rgba, PixelType.UnsignedByte)
+        };
+
         _gl.BindTexture(TextureTarget.Texture2D, info.GlTexture);
         fixed (byte* p = data)
         {
             _gl.TexSubImage2D(TextureTarget.Texture2D, 0, 0, 0,
-                (uint)width, (uint)height, PixelFormat.Rgba, PixelType.UnsignedByte, p);
+                (uint)width, (uint)height, pixelFormat, pixelType, p);
         }
     }
 
@@ -542,74 +554,6 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
 
         _boundShader = program;
         _gl.UseProgram(program);
-    }
-
-    private static bool _setUniformMatrixWarning = false;
-    private static bool _getUniformLocationWarning = false;
-    
-    public void SetUniformMatrix4x4(string name, in Matrix4x4 value)
-    {
-        if (_boundShader == 0)
-        {
-            if (_setUniformMatrixWarning) return;
-            Console.WriteLine($"[WARN] SetUniformMatrix4x4: No shader bound");
-            _setUniformMatrixWarning = true;
-            return;
-        }
-
-        var location = _gl.GetUniformLocation(_boundShader, name);
-        if (location < 0)
-        {
-            if (_getUniformLocationWarning) return;
-            Console.WriteLine($"[WARN] SetUniformMatrix4x4: Uniform '{name}' not found in shader {_boundShader}");
-            _getUniformLocationWarning = true;
-            return;
-        }
-
-        // Matrix4x4 is row-major in .NET, OpenGL expects column-major
-        // We need to transpose
-        Span<float> data = stackalloc float[16];
-        data[0] = value.M11; data[1] = value.M21; data[2] = value.M31; data[3] = value.M41;
-        data[4] = value.M12; data[5] = value.M22; data[6] = value.M32; data[7] = value.M42;
-        data[8] = value.M13; data[9] = value.M23; data[10] = value.M33; data[11] = value.M43;
-        data[12] = value.M14; data[13] = value.M24; data[14] = value.M34; data[15] = value.M44;
-
-        fixed (float* p = data)
-        {
-            _gl.UniformMatrix4(location, 1, false, p);
-        }
-    }
-
-    public void SetUniformInt(string name, int value)
-    {
-        if (_boundShader == 0) return;
-        var location = _gl.GetUniformLocation(_boundShader, name);
-        if (location >= 0)
-            _gl.Uniform1(location, value);
-    }
-
-    public void SetUniformFloat(string name, float value)
-    {
-        if (_boundShader == 0) return;
-        var location = _gl.GetUniformLocation(_boundShader, name);
-        if (location >= 0)
-            _gl.Uniform1(location, value);
-    }
-
-    public void SetUniformVec2(string name, Vector2 value)
-    {
-        if (_boundShader == 0) return;
-        var location = _gl.GetUniformLocation(_boundShader, name);
-        if (location >= 0)
-            _gl.Uniform2(location, value.X, value.Y);
-    }
-
-    public void SetUniformVec4(string name, Vector4 value)
-    {
-        if (_boundShader == 0) return;
-        var location = _gl.GetUniformLocation(_boundShader, name);
-        if (location >= 0)
-            _gl.Uniform4(location, value.X, value.Y, value.Z, value.W);
     }
 
     // === State Management ===

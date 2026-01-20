@@ -33,6 +33,7 @@ public static class AtlasManager
             if (doc is AtlasDocument atlas)
             {
                 atlas.Index = _atlases.Count;
+                atlas.ResolveSprites();
                 _atlases.Add(atlas);
             }
             else if (doc is SpriteDocument sprite)

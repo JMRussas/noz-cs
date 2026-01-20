@@ -33,11 +33,14 @@ namespace NoZ.Editor
             PixelData<byte> output,
             Vector2Int outputPosition,
             Vector2Int outputSize,
-            Shape shape,
+            Shape? shape,
             double range,
             Vector2Double scale,
             Vector2Double translate)
         {
+            if (shape == null)
+                return;
+
             int contourCount = shape.contours.Length;
             int w = outputSize.X;
             int h = outputSize.Y;

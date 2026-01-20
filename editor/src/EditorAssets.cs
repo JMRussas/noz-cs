@@ -17,7 +17,6 @@ public static class EditorAssets
         public const string Text = "text";
         public const string Texture = "texture";
         public const string Ui = "ui";
-        public const string UiImage = "ui_image";
         public const string AssetIconAtlas = "asset_icon_atlas";
         public const string AssetIconBin = "asset_icon_bin";
         public const string AssetIconEvent = "asset_icon_event";
@@ -85,7 +84,6 @@ public static class EditorAssets
         public static Shader Text { get; private set; } = null!;
         public static Shader Texture { get; private set; } = null!;
         public static Shader Ui { get; private set; } = null!;
-        public static Shader UiImage { get; private set; } = null!;
 
         public static void Load()
         {
@@ -94,7 +92,6 @@ public static class EditorAssets
             Text = (Shader)Asset.Load(AssetType.Shader, Names.Text)!;
             Texture = (Shader)Asset.Load(AssetType.Shader, Names.Texture)!;
             Ui = (Shader)Asset.Load(AssetType.Shader, Names.Ui)!;
-            UiImage = (Shader)Asset.Load(AssetType.Shader, Names.UiImage)!;
         }
 
         public static void Unload()
@@ -104,7 +101,6 @@ public static class EditorAssets
             Text?.Dispose();
             Texture?.Dispose();
             Ui?.Dispose();
-            UiImage?.Dispose();
         }
     }
 

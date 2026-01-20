@@ -2,7 +2,6 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System.Numerics;
 using System.Runtime.InteropServices;
 using Microsoft.JSInterop;
 
@@ -232,40 +231,6 @@ public class WebGLGraphicsDriver : IGraphicsDriver
     public void BindShader(nuint handle)
     {
         _module?.InvokeVoidAsync("bindShader", (uint)handle);
-    }
-
-    public void SetUniformMatrix4x4(string name, in Matrix4x4 value)
-    {
-        if (_module == null) return;
-
-        float[] data =
-        [
-            value.M11, value.M21, value.M31, value.M41,
-            value.M12, value.M22, value.M32, value.M42,
-            value.M13, value.M23, value.M33, value.M43,
-            value.M14, value.M24, value.M34, value.M44
-        ];
-        _module.InvokeVoidAsync("setUniformMatrix4x4", name, data);
-    }
-
-    public void SetUniformInt(string name, int value)
-    {
-        _module?.InvokeVoidAsync("setUniformInt", name, value);
-    }
-
-    public void SetUniformFloat(string name, float value)
-    {
-        _module?.InvokeVoidAsync("setUniformFloat", name, value);
-    }
-
-    public void SetUniformVec2(string name, Vector2 value)
-    {
-        _module?.InvokeVoidAsync("setUniformVec2", name, value.X, value.Y);
-    }
-
-    public void SetUniformVec4(string name, Vector4 value)
-    {
-        _module?.InvokeVoidAsync("setUniformVec4", name, value.X, value.Y, value.Z, value.W);
     }
 
     // === State Management ===

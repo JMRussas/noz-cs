@@ -16,10 +16,7 @@ public static class Notifications
 {
     private const int MaxNotifications = 8;
     private const float NotificationDuration = 3.0f;
-    private const float NotificationSpacing = 8.0f;
-    private const float NotificationWidth = 300.0f;
-    private const float NotificationHeight = 40.0f;
-
+    
     private struct Notification
     {
         public string Text;
@@ -102,39 +99,19 @@ public static class Notifications
             return;
 
         using (UI.BeginCanvas())
-        using (UI.BeginColumn(new ContainerStyle {
-            Spacing = NotificationSpacing,
-            AlignX = Align.Max,
-            AlignY = Align.Max,
-            Width = NotificationWidth,
-            Height = Size.Fit,
-            Margin = EdgeInsets.All(EditorStyle.Workspace.Padding)}))
+        using (UI.BeginColumn(EditorStyle.Notifications.Root))
         {
             for (var i = 0; i < _count; i++)
             {
                 var index = (_head + i) % MaxNotifications;
                 ref var n = ref _notifications[index];
 
-                var textColor = n.Type == NotificationType.Error
+                var color = n.Type == NotificationType.Error
                     ? EditorStyle.ErrorColor
                     : EditorStyle.Overlay.AccentTextColor;
 
-                using (UI.BeginContainer(new ContainerStyle
-                {
-                    Height = NotificationHeight,
-                    Padding = EdgeInsets.All(EditorStyle.Overlay.Padding),
-                    Color = EditorStyle.Overlay.FillColor,
-                    Border = new BorderStyle { Radius = EditorStyle.Overlay.BorderRadius }
-                }))
-                {
-                    UI.Label(n.Text, new LabelStyle
-                    {
-                        FontSize = EditorStyle.Overlay.TextSize,
-                        Color = textColor,
-                        AlignX = Align.Min,
-                        AlignY = Align.Center
-                    });
-                }
+                using (UI.BeginContainer(EditorStyle.Notifications.Notification))
+                    UI.Label(n.Text, EditorStyle.Notifications.NotificationText with { Color = color });
             }
         }
     }

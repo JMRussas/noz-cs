@@ -77,7 +77,7 @@ public struct MeshVertex(float x, float y, float u, float v, Color color, int at
                 1,
                 VertexAttribType.Float,
                 (int)Marshal.OffsetOf<MeshVertex>(nameof(FrameWidth))),
-            
+
             new VertexAttribute(
                 8,
                 1,

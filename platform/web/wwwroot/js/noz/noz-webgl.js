@@ -82,6 +82,115 @@ export function setViewport(x, y, width, height) {
     gl.viewport(x, y, width, height);
 }
 
+export function setScissor(x, y, width, height) {
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(x, y, width, height);
+}
+
+export function disableScissor() {
+    gl.disable(gl.SCISSOR_TEST);
+}
+
+// === Mesh Management ===
+
+let nextMeshId = 1;
+const meshes = new Map(); // id -> { vao, vbo, ebo, stride }
+
+export function createMesh(maxVertices, maxIndices, stride, usage) {
+    const vao = gl.createVertexArray();
+    const vbo = gl.createBuffer();
+    const ebo = gl.createBuffer();
+
+    gl.bindVertexArray(vao);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, maxVertices * stride, toGLUsage(usage));
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ebo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, maxIndices * 2, toGLUsage(usage));
+
+    // Setup vertex attributes for MeshVertex layout (64 bytes total)
+    // in_position: vec2 at offset 0
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 2, gl.FLOAT, false, stride, 0);
+
+    // in_uv: vec2 at offset 8
+    gl.enableVertexAttribArray(1);
+    gl.vertexAttribPointer(1, 2, gl.FLOAT, false, stride, 8);
+
+    // in_normal: vec2 at offset 16
+    gl.enableVertexAttribArray(2);
+    gl.vertexAttribPointer(2, 2, gl.FLOAT, false, stride, 16);
+
+    // in_color: vec4 at offset 24
+    gl.enableVertexAttribArray(3);
+    gl.vertexAttribPointer(3, 4, gl.FLOAT, false, stride, 24);
+
+    // in_bone: int at offset 40
+    gl.enableVertexAttribArray(4);
+    gl.vertexAttribIPointer(4, 1, gl.INT, stride, 40);
+
+    // in_atlas: int at offset 44
+    gl.enableVertexAttribArray(5);
+    gl.vertexAttribIPointer(5, 1, gl.INT, stride, 44);
+
+    // in_frame_count: int at offset 48
+    gl.enableVertexAttribArray(6);
+    gl.vertexAttribIPointer(6, 1, gl.INT, stride, 48);
+
+    // in_frame_width: float at offset 52
+    gl.enableVertexAttribArray(7);
+    gl.vertexAttribPointer(7, 1, gl.FLOAT, false, stride, 52);
+
+    // in_frame_rate: float at offset 56
+    gl.enableVertexAttribArray(8);
+    gl.vertexAttribPointer(8, 1, gl.FLOAT, false, stride, 56);
+
+    // in_frame_time: float at offset 60
+    gl.enableVertexAttribArray(9);
+    gl.vertexAttribPointer(9, 1, gl.FLOAT, false, stride, 60);
+
+    gl.bindVertexArray(null);
+
+    const id = nextMeshId++;
+    meshes.set(id, { vao, vbo, ebo, stride });
+    return id;
+}
+
+export function destroyMesh(id) {
+    const mesh = meshes.get(id);
+    if (mesh) {
+        gl.deleteVertexArray(mesh.vao);
+        gl.deleteBuffer(mesh.vbo);
+        gl.deleteBuffer(mesh.ebo);
+        meshes.delete(id);
+    }
+}
+
+export function bindMesh(id) {
+    const mesh = meshes.get(id);
+    if (!mesh) return;
+
+    gl.bindVertexArray(mesh.vao);
+}
+
+export function updateMesh(id, vertexData, indexData) {
+    const mesh = meshes.get(id);
+    if (!mesh) return;
+
+    gl.bindVertexArray(mesh.vao);
+
+    if (vertexData && vertexData.length > 0) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, mesh.vbo);
+        gl.bufferSubData(gl.ARRAY_BUFFER, 0, new Uint8Array(vertexData));
+    }
+
+    if (indexData && indexData.length > 0) {
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, mesh.ebo);
+        gl.bufferSubData(gl.ELEMENT_ARRAY_BUFFER, 0, new Uint8Array(indexData));
+    }
+}
+
 // === Buffer Management ===
 
 export function createVertexBuffer(sizeInBytes, usage) {
@@ -191,19 +300,108 @@ export function bindIndexBuffer(id) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buf.glBuffer);
 }
 
+// === Uniform Buffer Management ===
+
+const uniformBuffers = new Map(); // id -> WebGLBuffer
+
+export function createUniformBuffer(sizeInBytes, usage) {
+    const glBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.UNIFORM_BUFFER, glBuffer);
+    gl.bufferData(gl.UNIFORM_BUFFER, sizeInBytes, toGLUsage(usage));
+
+    const id = nextBufferId++;
+    uniformBuffers.set(id, glBuffer);
+    return id;
+}
+
+export function updateUniformBuffer(id, offsetBytes, data) {
+    const glBuffer = uniformBuffers.get(id);
+    if (!glBuffer) return;
+
+    gl.bindBuffer(gl.UNIFORM_BUFFER, glBuffer);
+    gl.bufferSubData(gl.UNIFORM_BUFFER, offsetBytes, new Uint8Array(data));
+}
+
+export function bindUniformBuffer(id, slot) {
+    const glBuffer = uniformBuffers.get(id);
+    if (!glBuffer) return;
+
+    gl.bindBufferBase(gl.UNIFORM_BUFFER, slot, glBuffer);
+}
+
 // === Texture Management ===
 
-export function createTexture(width, height, data) {
+// TextureFormat enum values (must match C# TextureFormat)
+const TextureFormat = {
+    RGBA8: 0,
+    RGB8: 1,
+    R8: 2,
+    RG8: 3,
+    RGBA32F: 4
+};
+
+// TextureFilter enum values
+const TextureFilter = {
+    Nearest: 0,
+    Linear: 1
+};
+
+// Store texture info for UpdateTexture
+const textureInfo = new Map(); // id -> { format, width, height }
+
+export function createTexture(width, height, data, format = TextureFormat.RGBA8, filter = TextureFilter.Linear) {
     const texture = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, texture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    let internalFormat, pixelFormat, pixelType, typedData;
+
+    switch (format) {
+        case TextureFormat.R8:
+            internalFormat = gl.R8;
+            pixelFormat = gl.RED;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = data && data.length > 0 ? new Uint8Array(data) : null;
+            break;
+        case TextureFormat.RG8:
+            internalFormat = gl.RG8;
+            pixelFormat = gl.RG;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = data && data.length > 0 ? new Uint8Array(data) : null;
+            break;
+        case TextureFormat.RGB8:
+            internalFormat = gl.RGB8;
+            pixelFormat = gl.RGB;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = data && data.length > 0 ? new Uint8Array(data) : null;
+            break;
+        case TextureFormat.RGBA32F:
+            internalFormat = gl.RGBA32F;
+            pixelFormat = gl.RGBA;
+            pixelType = gl.FLOAT;
+            // Data comes as byte array, need to convert to Float32Array
+            typedData = data && data.length > 0 ? new Float32Array(new Uint8Array(data).buffer) : null;
+            break;
+        case TextureFormat.RGBA8:
+        default:
+            internalFormat = gl.RGBA8;
+            pixelFormat = gl.RGBA;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = data && data.length > 0 ? new Uint8Array(data) : null;
+            break;
+    }
+
+    gl.texImage2D(gl.TEXTURE_2D, 0, internalFormat, width, height, 0, pixelFormat, pixelType, typedData);
+
+    const minFilter = filter === TextureFilter.Nearest ? gl.NEAREST : gl.LINEAR;
+    const magFilter = filter === TextureFilter.Nearest ? gl.NEAREST : gl.LINEAR;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, minFilter);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, magFilter);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
     const id = nextTextureId++;
     textures.set(id, texture);
+    textureInfo.set(id, { format, width, height });
     return id;
 }
 
@@ -297,140 +495,6 @@ export function bindShader(id) {
     gl.useProgram(shader.program);
 }
 
-export function setUniformMatrix4x4(name, values) {
-    if (!boundShader) return;
-
-    // Find the shader that's bound
-    let shader = null;
-    for (const [, s] of shaders) {
-        if (s.program === boundShader) {
-            shader = s;
-            break;
-        }
-    }
-    if (!shader) return;
-
-    // Cache uniform location
-    let location = shader.uniformLocations.get(name);
-    if (location === undefined) {
-        location = gl.getUniformLocation(shader.program, name);
-        shader.uniformLocations.set(name, location);
-    }
-    if (location === null) return;
-
-    gl.uniformMatrix4fv(location, false, values);
-}
-
-export function setUniformInt(name, value) {
-    if (!boundShader) return;
-
-    let shader = null;
-    for (const [, s] of shaders) {
-        if (s.program === boundShader) {
-            shader = s;
-            break;
-        }
-    }
-    if (!shader) return;
-
-    let location = shader.uniformLocations.get(name);
-    if (location === undefined) {
-        location = gl.getUniformLocation(shader.program, name);
-        shader.uniformLocations.set(name, location);
-    }
-    if (location === null) return;
-
-    gl.uniform1i(location, value);
-}
-
-export function setUniformFloat(name, value) {
-    if (!boundShader) return;
-
-    let shader = null;
-    for (const [, s] of shaders) {
-        if (s.program === boundShader) {
-            shader = s;
-            break;
-        }
-    }
-    if (!shader) return;
-
-    let location = shader.uniformLocations.get(name);
-    if (location === undefined) {
-        location = gl.getUniformLocation(shader.program, name);
-        shader.uniformLocations.set(name, location);
-    }
-    if (location === null) return;
-
-    gl.uniform1f(location, value);
-}
-
-export function setUniformVec2(name, x, y) {
-    if (!boundShader) return;
-
-    let shader = null;
-    for (const [, s] of shaders) {
-        if (s.program === boundShader) {
-            shader = s;
-            break;
-        }
-    }
-    if (!shader) return;
-
-    let location = shader.uniformLocations.get(name);
-    if (location === undefined) {
-        location = gl.getUniformLocation(shader.program, name);
-        shader.uniformLocations.set(name, location);
-    }
-    if (location === null) return;
-
-    gl.uniform2f(location, x, y);
-}
-
-export function setUniformVec4(name, x, y, z, w) {
-    if (!boundShader) return;
-
-    let shader = null;
-    for (const [, s] of shaders) {
-        if (s.program === boundShader) {
-            shader = s;
-            break;
-        }
-    }
-    if (!shader) return;
-
-    let location = shader.uniformLocations.get(name);
-    if (location === undefined) {
-        location = gl.getUniformLocation(shader.program, name);
-        shader.uniformLocations.set(name, location);
-    }
-    if (location === null) return;
-
-    gl.uniform4f(location, x, y, z, w);
-}
-
-export function setBoneTransforms(data) {
-    if (!boundShader) return;
-
-    let shader = null;
-    for (const [, s] of shaders) {
-        if (s.program === boundShader) {
-            shader = s;
-            break;
-        }
-    }
-    if (!shader) return;
-
-    let location = shader.uniformLocations.get('u_bones');
-    if (location === undefined) {
-        location = gl.getUniformLocation(shader.program, 'u_bones');
-        shader.uniformLocations.set('u_bones', location);
-    }
-    if (location === null) return;
-
-    gl.uniform3fv(location, data);
-}
-
 // === Texture Array Management ===
 
 let textureArrays = new Map(); // id -> { texture, width, height, layers }
@@ -469,8 +533,43 @@ export function updateTexture(id, width, height, data) {
     const tex = textures.get(id);
     if (!tex) return;
 
+    const info = textureInfo.get(id);
+    const format = info ? info.format : TextureFormat.RGBA8;
+
+    let pixelFormat, pixelType, typedData;
+
+    switch (format) {
+        case TextureFormat.R8:
+            pixelFormat = gl.RED;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = new Uint8Array(data);
+            break;
+        case TextureFormat.RG8:
+            pixelFormat = gl.RG;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = new Uint8Array(data);
+            break;
+        case TextureFormat.RGB8:
+            pixelFormat = gl.RGB;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = new Uint8Array(data);
+            break;
+        case TextureFormat.RGBA32F:
+            pixelFormat = gl.RGBA;
+            pixelType = gl.FLOAT;
+            // Data comes as byte array, convert to Float32Array
+            typedData = new Float32Array(new Uint8Array(data).buffer);
+            break;
+        case TextureFormat.RGBA8:
+        default:
+            pixelFormat = gl.RGBA;
+            pixelType = gl.UNSIGNED_BYTE;
+            typedData = new Uint8Array(data);
+            break;
+    }
+
     gl.bindTexture(gl.TEXTURE_2D, tex);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width, height, pixelFormat, pixelType, typedData);
 }
 
 // === State Management ===
@@ -501,8 +600,9 @@ export function setBlendMode(mode) {
 
 // === Drawing ===
 
-export function drawIndexedRange(firstIndex, indexCount, baseVertex = 0) {
+export function drawElements(firstIndex, indexCount, baseVertex = 0) {
     // Note: WebGL2 doesn't have native drawElementsBaseVertex - indices are adjusted on CPU if needed
+    void baseVertex; // unused, indices adjusted on CPU
     gl.drawElements(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, firstIndex * 2);
 }
 

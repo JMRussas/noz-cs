@@ -47,6 +47,7 @@ public static class EditorApplication
             return;
         }
 
+        ShaderCompiler.Initialize();
         DocumentManager.Init(Config.SourcePaths, Config.OutputPath);
         PaletteManager.Init(Config);
         AtlasManager.Init();
@@ -83,6 +84,7 @@ public static class EditorApplication
         PaletteManager.Shutdown();
         Importer.Shutdown();
         DocumentManager.Shutdown();
+        ShaderCompiler.Shutdown();
         UserSettings.Save();
         Config = null!;
     }
