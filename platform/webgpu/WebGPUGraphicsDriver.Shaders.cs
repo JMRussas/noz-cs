@@ -13,22 +13,45 @@ public unsafe partial class WebGPUGraphicsDriver
 {
     public nuint CreateShader(string name, string vertexSource, string fragmentSource)
     {
-        // Create vertex shader module
+        // Legacy path: Parse WGSL to detect bindings (used when no metadata available)
         var vertexModule = CreateShaderModule(vertexSource, $"{name}_vertex");
-
-        // Create fragment shader module
         var fragmentModule = CreateShaderModule(fragmentSource, $"{name}_fragment");
 
         // Detect shader type from both vertex and fragment source to create appropriate bind group layout
         int bindingCount;
         var bindGroupLayout = CreateBindGroupLayoutForShader(vertexSource + fragmentSource, out bindingCount);
 
-        // Create pipeline layout
+        var pipelineLayout = CreatePipelineLayout(bindGroupLayout);
+        var handle = (nuint)_nextShaderId++;
+
+        Log.Debug($"CreateShader (legacy): name={name}, bindingCount={bindingCount}");
+
+        _shaders[(int)handle] = new ShaderInfo
+        {
+            VertexModule = vertexModule,
+            FragmentModule = fragmentModule,
+            BindGroupLayout0 = bindGroupLayout,
+            PipelineLayout = pipelineLayout,
+            PsoCache = new Dictionary<PsoKey, nint>(),
+            BindGroupEntryCount = bindingCount
+        };
+
+        return handle;
+    }
+
+    internal nuint CreateShaderFromMetadata(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings)
+    {
+        // New path: Use pre-computed metadata from asset pipeline
+        var vertexModule = CreateShaderModule(vertexSource, $"{name}_vertex");
+        var fragmentModule = CreateShaderModule(fragmentSource, $"{name}_fragment");
+
+        // Create bind group layout from metadata instead of parsing
+        var bindGroupLayout = CreateBindGroupLayoutFromMetadata(bindings, out int bindingCount);
         var pipelineLayout = CreatePipelineLayout(bindGroupLayout);
 
         var handle = (nuint)_nextShaderId++;
 
-        Log.Debug($"CreateShader: name={name}, bindingCount={bindingCount}");
+        Log.Debug($"CreateShader (metadata): name={name}, bindingCount={bindingCount}");
 
         _shaders[(int)handle] = new ShaderInfo
         {
@@ -74,9 +97,42 @@ public unsafe partial class WebGPUGraphicsDriver
         Sampler
     }
 
+    private BindGroupLayout* CreateBindGroupLayoutFromMetadata(List<ShaderBinding> bindings, out int bindingCount)
+    {
+        // Use metadata to create bind group layout
+        bindingCount = bindings.Count;
+
+        var entries = stackalloc BindGroupLayoutEntry[bindingCount];
+
+        for (int i = 0; i < bindingCount; i++)
+        {
+            var binding = bindings[i];
+            var bindingType = binding.Type switch
+            {
+                ShaderBindingType.UniformBuffer => BindingType.UniformBuffer,
+                ShaderBindingType.Texture2D => BindingType.Texture2D,
+                ShaderBindingType.Texture2DArray => BindingType.Texture2DArray,
+                ShaderBindingType.Sampler => BindingType.Sampler,
+                _ => throw new NotSupportedException($"Binding type {binding.Type} not supported")
+            };
+
+            entries[i] = CreateBindGroupLayoutEntry(binding.Binding, bindingType);
+
+            Log.Debug($"Binding {binding.Binding}: type={bindingType}, name={binding.Name}");
+        }
+
+        var bindGroupLayoutDesc = new BindGroupLayoutDescriptor
+        {
+            EntryCount = (uint)bindingCount,
+            Entries = entries,
+        };
+
+        return _wgpu.DeviceCreateBindGroupLayout(_device, &bindGroupLayoutDesc);
+    }
+
     private BindGroupLayout* CreateBindGroupLayoutForShader(string shaderSource, out int bindingCount)
     {
-        // Detect what bindings the shader actually uses
+        // Legacy path: Detect what bindings the shader actually uses by parsing
         bool hasBinding1 = shaderSource.Contains("@binding(1)");
         bool hasBinding2 = shaderSource.Contains("@binding(2)");
         bool hasBinding3 = shaderSource.Contains("@binding(3)");
@@ -133,7 +189,7 @@ public unsafe partial class WebGPUGraphicsDriver
             entries[4] = CreateBindGroupLayoutEntry(4, binding4Type);
         }
 
-        Log.Debug($"CreateBindGroupLayout: bindingCount={bindingCount}, b1={binding1Type}, b2={binding2Type}, b3={binding3Type}, b4={binding4Type}");
+        Log.Debug($"CreateBindGroupLayout (legacy): bindingCount={bindingCount}, b1={binding1Type}, b2={binding2Type}, b3={binding3Type}, b4={binding4Type}");
 
         var bindGroupLayoutDesc = new BindGroupLayoutDescriptor
         {

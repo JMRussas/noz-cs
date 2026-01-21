@@ -16,12 +16,30 @@ public enum ShaderFlags : byte
     PremultipliedAlpha = 1 << 5,
 }
 
+public enum ShaderBindingType : byte
+{
+    UniformBuffer = 0,
+    Texture2D = 1,
+    Texture2DArray = 2,
+    Sampler = 3
+}
+
+public struct ShaderBinding
+{
+    public uint Binding;
+    public ShaderBindingType Type;
+    public string Name;
+}
+
 public class Shader : Asset
 {
     internal const byte Version = 2;
 
     public ShaderFlags Flags { get; private set; }
     internal nuint Handle { get; private set; }
+    public List<ShaderBinding> Bindings { get; private set; } = new();
+    public string VertexSource { get; private set; } = "";
+    public string FragmentSource { get; private set; } = "";
 
     private Shader(string name) : base(AssetType.Shader, name)
     {
@@ -39,6 +57,23 @@ public class Shader : Asset
 
         var flags = (ShaderFlags)reader.ReadByte();
 
+        // Read binding metadata if present
+        var bindings = new List<ShaderBinding>();
+        if (stream.Position < stream.Length)
+        {
+            var bindingCount = reader.ReadUInt32();
+            for (uint i = 0; i < bindingCount; i++)
+            {
+                var binding = new ShaderBinding
+                {
+                    Binding = reader.ReadUInt32(),
+                    Type = (ShaderBindingType)reader.ReadByte(),
+                    Name = reader.ReadString()
+                };
+                bindings.Add(binding);
+            }
+        }
+
         // Auto-detect shader types by name
         if (name.Contains("postprocess_ui_composite"))
             flags |= ShaderFlags.UiComposite;
@@ -48,8 +83,34 @@ public class Shader : Asset
         var shader = new Shader(name)
         {
             Flags = flags,
-            Handle = Graphics.Driver.CreateShader(name, vertexSource, fragmentSource)
+            VertexSource = vertexSource,
+            FragmentSource = fragmentSource,
+            Bindings = bindings
         };
+
+        // Use metadata-based shader creation if bindings are available and driver supports it
+        if (bindings.Count > 0)
+        {
+            // Use reflection to check if driver has CreateShaderFromMetadata method (WebGPU driver)
+            var driverType = Graphics.Driver.GetType();
+            var method = driverType.GetMethod("CreateShaderFromMetadata",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+
+            if (method != null)
+            {
+                shader.Handle = (nuint)method.Invoke(Graphics.Driver, new object[] { name, vertexSource, fragmentSource, bindings })!;
+            }
+            else
+            {
+                // Driver doesn't support metadata, use legacy path
+                shader.Handle = Graphics.Driver.CreateShader(name, vertexSource, fragmentSource);
+            }
+        }
+        else
+        {
+            // No bindings metadata, use legacy path
+            shader.Handle = Graphics.Driver.CreateShader(name, vertexSource, fragmentSource);
+        }
 
         return shader;
     }

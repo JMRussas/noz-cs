@@ -107,40 +107,29 @@ public unsafe partial class WebGPUGraphicsDriver
         // Binding 3: Slot 1 texture (bone texture) or uniform buffer (text params)
         if (entryCount >= 4)
         {
-            // Check what type binding 3 is from the shader
-            // For now, assume it's the bone texture (BoundBoneTexture) for sprite shader
-            // Or it could be a uniform buffer for text shader - TODO
-            Console.WriteLine($"[WEBGPU] Binding 3: BoundBoneTexture={_state.BoundBoneTexture}");
             if (_state.BoundBoneTexture != 0)
             {
-                var boneTextureView = _textures[(int)_state.BoundBoneTexture].TextureView;
-                Console.WriteLine($"[WEBGPU]   Bone texture view: {(nint)boneTextureView:X}");
-
                 entries[3] = new BindGroupEntry
                 {
                     Binding = 3,
-                    TextureView = boneTextureView,
+                    TextureView = _textures[(int)_state.BoundBoneTexture].TextureView,
                 };
             }
             else
             {
-                Console.WriteLine("[WEBGPU] WARNING: Binding 3 requested but BoundBoneTexture is 0");
+                Log.Warning("Binding 3 requested but BoundBoneTexture is 0");
             }
         }
 
         // Binding 4: Sampler for binding 3 (bone texture sampler)
         if (entryCount >= 5)
         {
-            Console.WriteLine($"[WEBGPU] Binding 4: BoundBoneTexture={_state.BoundBoneTexture}");
             if (_state.BoundBoneTexture != 0)
             {
-                var boneSampler = _textures[(int)_state.BoundBoneTexture].Sampler;
-                Console.WriteLine($"[WEBGPU]   Bone sampler: {(nint)boneSampler:X}");
-
                 entries[4] = new BindGroupEntry
                 {
                     Binding = 4,
-                    Sampler = boneSampler,
+                    Sampler = _textures[(int)_state.BoundBoneTexture].Sampler,
                 };
             }
         }
@@ -151,15 +140,6 @@ public unsafe partial class WebGPUGraphicsDriver
             _wgpu.BindGroupRelease(_currentBindGroup);
             _currentBindGroup = null;
         }
-
-        Console.WriteLine($"[WEBGPU] Creating bind group with {entryCount} entries...");
-
-        // Debug log all entries
-        for (int i = 0; i < entryCount; i++)
-        {
-            Console.WriteLine($"[WEBGPU]   Entry {i}: Binding={entries[i].Binding}, Buffer={(nint)entries[i].Buffer:X}, TextureView={(nint)entries[i].TextureView:X}, Sampler={(nint)entries[i].Sampler:X}");
-        }
-        Console.Out.Flush();
 
         // Create bind group
         var desc = new BindGroupDescriptor

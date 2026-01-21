@@ -2,6 +2,7 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using Silk.NET.Shaderc;
@@ -22,7 +23,28 @@ public enum ShaderTarget
 {
     Hlsl,
     Msl,
-    Spirv
+    Spirv,
+    Wgsl
+}
+
+public enum BindingType
+{
+    UniformBuffer,
+    Texture2D,
+    Texture2DArray,
+    Sampler
+}
+
+public struct ShaderBinding
+{
+    public uint Binding;
+    public BindingType Type;
+    public string Name;
+}
+
+public class ShaderBindingMetadata
+{
+    public List<ShaderBinding> Bindings { get; set; } = new();
 }
 
 public static class ShaderCompiler
@@ -276,4 +298,262 @@ public static class ShaderCompiler
         var spirv = CompileGlslToSpirv(glslSource, stage, filename, out var error);
         return (spirv, error);
     }
+
+    // SPIR-V reflection currently not working due to API issues - using WGSL parsing instead
+    /*
+    public static unsafe ShaderBindingMetadata? ReflectBindings(byte[] spirvBytes, out string? error)
+    {
+        error = null;
+        if (_spirvCross == null)
+        {
+            error = "SPIRV-Cross not initialized";
+            return null;
+        }
+
+        Context* context = null;
+        var result = _spirvCross.ContextCreate(&context);
+        if (result != Result.Success || context == null)
+        {
+            error = "Failed to create SPIRV-Cross context";
+            return null;
+        }
+
+        try
+        {
+            // Convert bytes to uint array (SPIR-V is uint32 words)
+            var wordCount = spirvBytes.Length / 4;
+            var spirvWords = new uint[wordCount];
+            Buffer.BlockCopy(spirvBytes, 0, spirvWords, 0, spirvBytes.Length);
+
+            ParsedIr* parsedIr = null;
+            fixed (uint* spirvPtr = spirvWords)
+            {
+                result = _spirvCross.ContextParseSpirv(context, spirvPtr, (nuint)wordCount, &parsedIr);
+            }
+
+            if (result != Result.Success || parsedIr == null)
+            {
+                error = GetContextError(context) ?? "Failed to parse SPIR-V";
+                return null;
+            }
+
+            SpvcCompiler* spvcCompiler = null;
+            result = _spirvCross.ContextCreateCompiler(context, Backend.None, parsedIr, CaptureMode.TakeOwnership, &spvcCompiler);
+            if (result != Result.Success || spvcCompiler == null)
+            {
+                error = GetContextError(context) ?? "Failed to create compiler";
+                return null;
+            }
+
+            var metadata = new ShaderBindingMetadata();
+
+            // Get all shader resources
+            Resources* resources = null;
+            result = _spirvCross.CompilerCreateShaderResources(spvcCompiler, &resources);
+            if (result != Result.Success || resources == null)
+            {
+                error = GetContextError(context) ?? "Failed to get shader resources";
+                return null;
+            }
+
+            // Reflect uniform buffers
+            ReflectedResource* uniformBuffers = null;
+            nuint uniformBufferCount = 0;
+            result = _spirvCross.ResourcesGetResourceListForType(resources, ResourceType.UniformBuffer, &uniformBuffers, &uniformBufferCount);
+            if (result == Result.Success && uniformBufferCount > 0)
+            {
+                for (nuint i = 0; i < uniformBufferCount; i++)
+                {
+                    var buffer = uniformBuffers[i];
+                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, buffer.Id, Decoration.Binding);
+                    var namePtr = _spirvCross.CompilerGetName(spvcCompiler, buffer.Id);
+                    var name = namePtr != null ? Marshal.PtrToStringUTF8((nint)namePtr) ?? "unknown" : "unknown";
+
+                    metadata.Bindings.Add(new ShaderBinding
+                    {
+                        Binding = binding,
+                        Type = BindingType.UniformBuffer,
+                        Name = name
+                    });
+                }
+            }
+
+            // Reflect sampled images (textures)
+            ReflectedResource* sampledImages = null;
+            nuint sampledImageCount = 0;
+            result = _spirvCross.ResourcesGetResourceListForType(resources, ResourceType.SampledImage, &sampledImages, &sampledImageCount);
+            if (result == Result.Success && sampledImageCount > 0)
+            {
+                for (nuint i = 0; i < sampledImageCount; i++)
+                {
+                    var image = sampledImages[i];
+                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, image.Id, Decoration.Binding);
+                    var namePtr = _spirvCross.CompilerGetName(spvcCompiler, image.Id);
+                    var name = namePtr != null ? Marshal.PtrToStringUTF8((nint)namePtr) ?? "unknown" : "unknown";
+
+                    // Get the type to determine if it's a 2D texture or 2D array
+                    var typeId = _spirvCross.CompilerGetType(spvcCompiler, image.BaseTypeId);
+                    var type = *typeId;
+                    var isArray = type.Arrayed != 0;
+
+                    metadata.Bindings.Add(new ShaderBinding
+                    {
+                        Binding = binding,
+                        Type = isArray ? BindingType.Texture2DArray : BindingType.Texture2D,
+                        Name = name
+                    });
+                }
+            }
+
+            // Reflect samplers
+            ReflectedResource* samplers = null;
+            nuint samplerCount = 0;
+            result = _spirvCross.ResourcesGetResourceListForType(resources, ResourceType.SeparateSamplers, &samplers, &samplerCount);
+            if (result == Result.Success && samplerCount > 0)
+            {
+                for (nuint i = 0; i < samplerCount; i++)
+                {
+                    var sampler = samplers[i];
+                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, sampler.Id, Decoration.Binding);
+                    var namePtr = _spirvCross.CompilerGetName(spvcCompiler, sampler.Id);
+                    var name = namePtr != null ? Marshal.PtrToStringUTF8((nint)namePtr) ?? "unknown" : "unknown";
+
+                    metadata.Bindings.Add(new ShaderBinding
+                    {
+                        Binding = binding,
+                        Type = BindingType.Sampler,
+                        Name = name
+                    });
+                }
+            }
+
+            // Sort by binding number for consistent ordering
+            metadata.Bindings.Sort((a, b) => a.Binding.CompareTo(b.Binding));
+
+            return metadata;
+        }
+        finally
+        {
+            _spirvCross.ContextDestroy(context);
+        }
+    }
+    */
+
+    // WGSL conversion also not currently used - using manual .wgsl files instead
+    /*
+    public static string? CompileSpirvToWgsl(byte[] spirvBytes, out string? error)
+    {
+        error = null;
+
+        // Write SPIR-V to temporary file
+        var tempSpirvPath = Path.GetTempFileName();
+        var tempWgslPath = Path.GetTempFileName();
+
+        try
+        {
+            File.WriteAllBytes(tempSpirvPath, spirvBytes);
+
+            // Try to find tint executable
+            var tintPath = FindTintExecutable();
+            if (tintPath == null)
+            {
+                error = "Tint executable not found. Please install Google Tint or add it to PATH.";
+                return null;
+            }
+
+            // Call tint to convert SPIR-V to WGSL
+            var startInfo = new ProcessStartInfo
+            {
+                FileName = tintPath,
+                Arguments = $"\"{tempSpirvPath}\" -o \"{tempWgslPath}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = Process.Start(startInfo);
+            if (process == null)
+            {
+                error = "Failed to start Tint process";
+                return null;
+            }
+
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                var stderr = process.StandardError.ReadToEnd();
+                error = $"Tint conversion failed: {stderr}";
+                return null;
+            }
+
+            if (!File.Exists(tempWgslPath))
+            {
+                error = "Tint did not produce output file";
+                return null;
+            }
+
+            return File.ReadAllText(tempWgslPath);
+        }
+        catch (Exception ex)
+        {
+            error = $"Exception during SPIR-V to WGSL conversion: {ex.Message}";
+            return null;
+        }
+        finally
+        {
+            // Clean up temp files
+            if (File.Exists(tempSpirvPath))
+                File.Delete(tempSpirvPath);
+            if (File.Exists(tempWgslPath))
+                File.Delete(tempWgslPath);
+        }
+    }
+
+    private static string? FindTintExecutable()
+    {
+        // Check if tint is in PATH
+        var pathEnv = Environment.GetEnvironmentVariable("PATH");
+        if (pathEnv != null)
+        {
+            var paths = pathEnv.Split(Path.PathSeparator);
+            foreach (var path in paths)
+            {
+                var tintPath = Path.Combine(path, OperatingSystem.IsWindows() ? "tint.exe" : "tint");
+                if (File.Exists(tintPath))
+                    return tintPath;
+            }
+        }
+
+        // Check common installation locations on Windows
+        if (OperatingSystem.IsWindows())
+        {
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var possiblePaths = new[]
+            {
+                Path.Combine(programFiles, "tint", "tint.exe"),
+                Path.Combine(programFiles, "Google", "Tint", "tint.exe"),
+            };
+
+            foreach (var path in possiblePaths)
+            {
+                if (File.Exists(path))
+                    return path;
+            }
+        }
+
+        return null;
+    }
+
+    public static (string? wgsl, string? error) CompileGlslToWgsl(string glslSource, ShaderStage stage, string filename)
+    {
+        var spirv = CompileGlslToSpirv(glslSource, stage, filename, out var error);
+        if (spirv == null)
+            return (null, error);
+
+        var wgsl = CompileSpirvToWgsl(spirv, out error);
+        return (wgsl, error);
+    }
+    */
 }

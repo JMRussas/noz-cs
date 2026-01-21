@@ -285,23 +285,45 @@ public class ShaderDocument : Document
 
     private void WriteWgsl(string path, ShaderFlags flags)
     {
-        // Look for .wgsl file alongside the .glsl file
-        var wgslSourcePath = System.IO.Path.ChangeExtension(Path, ".wgsl");
+        // GLSL-first approach: Parse GLSL for binding metadata, use manual WGSL for now
+        // Future: Auto-generate WGSL from SPIR-V using Tint
 
-        if (!File.Exists(wgslSourcePath))
+        // Read GLSL source to extract binding metadata
+        var glslSource = File.ReadAllText(Path);
+        var bindings = ExtractBindingsFromGlsl(glslSource);
+
+        // Check for manual .wgsl file
+        var wgslSourcePath = System.IO.Path.ChangeExtension(Path, ".wgsl");
+        string wgslSource;
+
+        if (File.Exists(wgslSourcePath))
         {
+            // Use manual WGSL file
+            wgslSource = File.ReadAllText(wgslSourcePath);
+            Log.Info($"Using manual WGSL file for {Name}");
+        }
+        else
+        {
+            // Try to auto-generate WGSL from GLSL via SPIR-V
+            Log.Info($"Attempting to auto-generate WGSL for {Name}");
+
+            var includeDir = System.IO.Path.GetDirectoryName(Path) ?? ".";
+            var vertexSource = ExtractStage(glslSource, "VERTEX");
+            var fragmentSource = ExtractStage(glslSource, "FRAGMENT");
+
+            vertexSource = ProcessIncludes(vertexSource, includeDir);
+            fragmentSource = ProcessIncludes(fragmentSource, includeDir);
+
+            // For now, fall back to error if no manual WGSL exists
+            // TODO: Implement SPIR-V → WGSL conversion
             Log.Warning($"WGSL shader not found at {wgslSourcePath}, skipping WebGPU output");
+            Log.Warning("Auto-generation from GLSL not yet implemented");
             return;
         }
-
-        // Read the WGSL source (already in correct format)
-        var wgslSource = File.ReadAllText(wgslSourcePath);
 
         using var writer = new BinaryWriter(File.Create(path));
         writer.WriteAssetHeader(AssetType.Shader, Shader.Version);
 
-        // For WGSL, we write the entire source as both vertex and fragment
-        // The shader itself defines the entry points (@vertex and @fragment)
         var sourceBytes = Encoding.UTF8.GetBytes(wgslSource);
 
         writer.Write((uint)sourceBytes.Length);
@@ -309,6 +331,97 @@ public class ShaderDocument : Document
         writer.Write((uint)sourceBytes.Length); // Same source for both stages
         writer.Write(sourceBytes);
         writer.Write((byte)flags);
+
+        // Write binding metadata extracted from GLSL
+        writer.Write((uint)bindings.Count);
+        foreach (var binding in bindings)
+        {
+            writer.Write(binding.Binding);
+            writer.Write((byte)binding.Type);
+            writer.Write(binding.Name);
+        }
+    }
+
+    private List<ShaderBinding> ExtractBindingsFromGlsl(string glslSource)
+    {
+        var bindings = new List<ShaderBinding>();
+        var lines = glslSource.Split('\n');
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+
+            // Skip comments and empty lines
+            if (line.StartsWith("//") || line.StartsWith("/*") || string.IsNullOrWhiteSpace(line))
+                continue;
+
+            // Look for layout(binding = N) declarations in GLSL
+            if (line.Contains("layout") && line.Contains("binding"))
+            {
+                // Extract binding number: layout(binding = 0) or layout(set = 0, binding = 1)
+                var bindingStart = line.IndexOf("binding");
+                if (bindingStart >= 0)
+                {
+                    bindingStart = line.IndexOf('=', bindingStart);
+                    if (bindingStart >= 0)
+                    {
+                        bindingStart++;
+                        var bindingEnd = line.IndexOfAny(new[] { ',', ')' }, bindingStart);
+                        if (bindingEnd > bindingStart)
+                        {
+                            var bindingStr = line.Substring(bindingStart, bindingEnd - bindingStart).Trim();
+                            if (uint.TryParse(bindingStr, out var bindingNumber))
+                            {
+                                // Determine type from the declaration
+                                var bindingType = BindingType.UniformBuffer;
+                                var name = "unknown";
+
+                                // Look ahead for the actual declaration
+                                var fullDecl = line;
+                                // If line doesn't end with semicolon, read next lines
+                                while (!fullDecl.Contains(';') && i + 1 < lines.Length)
+                                {
+                                    i++;
+                                    fullDecl += " " + lines[i].Trim();
+                                }
+
+                                // Detect type
+                                if (fullDecl.Contains("sampler2DArray") || fullDecl.Contains("texture2DArray"))
+                                    bindingType = BindingType.Texture2DArray;
+                                else if (fullDecl.Contains("sampler2D") || fullDecl.Contains("texture2D"))
+                                    bindingType = BindingType.Texture2D;
+                                else if (fullDecl.Contains("sampler"))
+                                    bindingType = BindingType.Sampler;
+                                else if (fullDecl.Contains("uniform"))
+                                    bindingType = BindingType.UniformBuffer;
+
+                                // Extract name - look for identifier before semicolon
+                                var semicolonIndex = fullDecl.IndexOf(';');
+                                if (semicolonIndex > 0)
+                                {
+                                    var beforeSemicolon = fullDecl.Substring(0, semicolonIndex).Trim();
+                                    var words = beforeSemicolon.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
+                                    if (words.Length > 0)
+                                        name = words[words.Length - 1].Trim();
+                                }
+
+                                bindings.Add(new ShaderBinding
+                                {
+                                    Binding = bindingNumber,
+                                    Type = bindingType,
+                                    Name = name
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Sort by binding number
+        bindings.Sort((a, b) => a.Binding.CompareTo(b.Binding));
+
+        return bindings;
     }
 
     public override void Draw()
