@@ -266,7 +266,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         {
             Chain = new ChainedStruct
             {
-                SType = SType.SurfaceDescriptorFromCanvasHtmlselector,
+                SType = SType.SurfaceDescriptorFromCanvasHtmlSelector,
             },
             Selector = (byte*)Marshal.StringToHGlobalAnsi("canvas"),
         };
