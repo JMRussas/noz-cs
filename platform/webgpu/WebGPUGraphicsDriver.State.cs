@@ -38,6 +38,11 @@ public unsafe partial class WebGPUGraphicsDriver
         // Update bind group if textures/buffers changed
         UpdateBindGroupIfNeeded();
 
+        // Bind vertex and index buffers
+        ref var mesh = ref _meshes[(int)_state.BoundMesh];
+        _wgpu.RenderPassEncoderSetVertexBuffer(_currentRenderPass, 0, mesh.VertexBuffer, 0, (ulong)(mesh.MaxVertices * mesh.Stride));
+        _wgpu.RenderPassEncoderSetIndexBuffer(_currentRenderPass, mesh.IndexBuffer, IndexFormat.Uint16, 0, (ulong)(mesh.MaxIndices * sizeof(ushort)));
+
         // Draw indexed
         _wgpu.RenderPassEncoderDrawIndexed(
             _currentRenderPass,
@@ -51,101 +56,103 @@ public unsafe partial class WebGPUGraphicsDriver
 
     private void UpdateBindGroupIfNeeded()
     {
-        // Check if bound resources changed
         if (!_state.BindGroupDirty)
             return;
 
         ref var shader = ref _shaders[(int)_state.BoundShader];
-        int entryCount = shader.BindGroupEntryCount;
+        var bindings = shader.Bindings;
 
-        Log.Debug($"UpdateBindGroup: EntryCount={entryCount}, BoundTexture0={_state.BoundTexture0}, BoundBoneTexture={_state.BoundBoneTexture}");
-
-        // Build bind group entries based on what the shader expects
-        var entries = stackalloc BindGroupEntry[entryCount];
-
-        // Binding 0: Globals uniform buffer (always present)
-        if (_state.BoundUniformBuffer0 == 0)
+        if (bindings == null || bindings.Count == 0)
         {
-            Log.Error("BoundUniformBuffer0 is 0!");
+            Log.Error("Shader has no binding metadata!");
+            _state.BindGroupDirty = false;
             return;
         }
 
-        entries[0] = new BindGroupEntry
-        {
-            Binding = 0,
-            Buffer = _buffers[(int)_state.BoundUniformBuffer0].Buffer,
-            Offset = 0,
-            Size = (ulong)_buffers[(int)_state.BoundUniformBuffer0].SizeInBytes,
-        };
+        var entries = stackalloc BindGroupEntry[bindings.Count];
+        int validEntryCount = 0;
 
-        // Binding 1: Slot 0 texture (main atlas/texture) - always BoundTexture0
-        if (entryCount >= 2)
+        for (int i = 0; i < bindings.Count; i++)
         {
-            if (_state.BoundTexture0 == 0)
-            {
-                Log.Error($"Binding 1: BoundTexture0 is 0!");
-                return;
-            }
+            var binding = bindings[i];
 
-            entries[1] = new BindGroupEntry
+            switch (binding.Type)
             {
-                Binding = 1,
-                TextureView = _textures[(int)_state.BoundTexture0].TextureView,
-            };
-        }
-
-        // Binding 2: Sampler for binding 1
-        if (entryCount >= 3)
-        {
-            entries[2] = new BindGroupEntry
-            {
-                Binding = 2,
-                Sampler = _textures[(int)_state.BoundTexture0].Sampler,
-            };
-        }
-
-        // Binding 3: Slot 1 texture (bone texture) or uniform buffer (text params)
-        if (entryCount >= 4)
-        {
-            if (_state.BoundBoneTexture != 0)
-            {
-                entries[3] = new BindGroupEntry
+                case ShaderBindingType.UniformBuffer:
                 {
-                    Binding = 3,
-                    TextureView = _textures[(int)_state.BoundBoneTexture].TextureView,
-                };
-            }
-            else
-            {
-                Log.Warning("Binding 3 requested but BoundBoneTexture is 0");
-            }
-        }
+                    nuint uniformBuffer = GetUniformBufferByName(binding.Name);
+                    if (uniformBuffer == 0)
+                    {
+                        Log.Error($"Uniform '{binding.Name}' not bound!");
+                        _state.BindGroupDirty = false;
+                        return;
+                    }
 
-        // Binding 4: Sampler for binding 3 (bone texture sampler)
-        if (entryCount >= 5)
-        {
-            if (_state.BoundBoneTexture != 0)
-            {
-                entries[4] = new BindGroupEntry
+                    entries[validEntryCount++] = new BindGroupEntry
+                    {
+                        Binding = binding.Binding,
+                        Buffer = _buffers[(int)uniformBuffer].Buffer,
+                        Offset = 0,
+                        Size = (ulong)_buffers[(int)uniformBuffer].SizeInBytes,
+                    };
+                    break;
+                }
+
+                case ShaderBindingType.Texture2D:
+                case ShaderBindingType.Texture2DArray:
                 {
-                    Binding = 4,
-                    Sampler = _textures[(int)_state.BoundBoneTexture].Sampler,
-                };
+                    int textureSlot = GetTextureSlotForBinding(binding.Binding, ref shader);
+                    nuint textureHandle = textureSlot >= 0 ? (nuint)_state.BoundTextures[textureSlot] : 0;
+
+                    if (textureHandle == 0)
+                    {
+                        Log.Error($"Texture slot {textureSlot} (binding {binding.Binding}) not bound!");
+                        _state.BindGroupDirty = false;
+                        return;
+                    }
+
+                    entries[validEntryCount++] = new BindGroupEntry
+                    {
+                        Binding = binding.Binding,
+                        TextureView = _textures[(int)textureHandle].TextureView,
+                    };
+                    break;
+                }
+
+                case ShaderBindingType.Sampler:
+                {
+                    int samplerSlot = GetTextureSlotForBinding(binding.Binding, ref shader);
+                    nuint samplerTextureHandle = samplerSlot >= 0 ? (nuint)_state.BoundTextures[samplerSlot] : 0;
+
+                    if (samplerTextureHandle == 0)
+                    {
+                        Log.Error($"Sampler for slot {samplerSlot} (binding {binding.Binding}) not bound!");
+                        _state.BindGroupDirty = false;
+                        return;
+                    }
+
+                    entries[validEntryCount++] = new BindGroupEntry
+                    {
+                        Binding = binding.Binding,
+                        Sampler = _textures[(int)samplerTextureHandle].Sampler,
+                    };
+                    break;
+                }
             }
         }
 
-        // Release old bind group if exists
         if (_currentBindGroup != null)
         {
-            _wgpu.BindGroupRelease(_currentBindGroup);
+            // Defer release until after render pass ends
+            Log.Debug($"Deferring release of old bind group: {(nint)_currentBindGroup:X}");
+            _bindGroupsToRelease.Add((nint)_currentBindGroup);
             _currentBindGroup = null;
         }
 
-        // Create bind group
         var desc = new BindGroupDescriptor
         {
             Layout = shader.BindGroupLayout0,
-            EntryCount = (uint)entryCount,
+            EntryCount = (uint)validEntryCount,
             Entries = entries,
         };
         _currentBindGroup = _wgpu.DeviceCreateBindGroup(_device, &desc);
@@ -156,14 +163,35 @@ public unsafe partial class WebGPUGraphicsDriver
             return;
         }
 
-        Log.Debug($"Bind group created: {(nint)_currentBindGroup:X}");
+        Log.Debug($"Created bind group: {(nint)_currentBindGroup:X} with {validEntryCount} entries");
 
-        // Bind to render pass
         if (_currentRenderPass != null)
         {
+            Log.Debug($"Binding group to render pass: {(nint)_currentRenderPass:X}");
             _wgpu.RenderPassEncoderSetBindGroup(_currentRenderPass, 0, _currentBindGroup, 0, null);
         }
 
         _state.BindGroupDirty = false;
+    }
+
+    private nuint GetUniformBufferByName(string name)
+    {
+        return name switch
+        {
+            "globals" => (nuint)_state.BoundUniformBuffers[0],
+            "text_params" => (nuint)_state.BoundUniformBuffers[1],
+            _ => 0
+        };
+    }
+
+    private int GetTextureSlotForBinding(uint bindingNumber, ref ShaderInfo shader)
+    {
+        for (int i = 0; i < shader.TextureSlots.Count; i++)
+        {
+            var slot = shader.TextureSlots[i];
+            if (slot.TextureBinding == bindingNumber || slot.SamplerBinding == bindingNumber)
+                return i;
+        }
+        return -1;
     }
 }

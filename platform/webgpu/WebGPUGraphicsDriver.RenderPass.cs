@@ -62,14 +62,11 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_commandEncoder == null)
             throw new InvalidOperationException("Command encoder is null - BeginFrame not called?");
 
-        // TEST: Render directly to surface instead of offscreen target
-        SurfaceTexture surfaceTexture;
-        _wgpu.SurfaceGetCurrentTexture(_surface, &surfaceTexture);
+        if (_currentSurfaceTexture == null)
+            throw new InvalidOperationException("Surface texture is null - BeginFrame not called?");
 
-        if (surfaceTexture.Status != SurfaceGetCurrentTextureStatus.Success)
-            throw new Exception($"Failed to get current surface texture: {surfaceTexture.Status}");
-
-        var surfaceView = _wgpu.TextureCreateView(surfaceTexture.Texture, null);
+        // Create view for current surface texture
+        var surfaceView = _wgpu.TextureCreateView(_currentSurfaceTexture, null);
 
         if (surfaceView == null)
             throw new Exception("Failed to create surface texture view");
@@ -101,7 +98,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
         Log.Info("About to call CommandEncoderBeginRenderPass...");
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, in desc);
-        Log.Info($"RenderPass created: {(nint)_currentRenderPass:X}");
+        Log.Info($"[LIFECYCLE] BeginScenePass: RenderPass created: {(nint)_currentRenderPass:X}");
 
         _inRenderPass = true;
 
@@ -127,11 +124,12 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_currentRenderPass == null)
             throw new InvalidOperationException("EndScenePass called without matching BeginScenePass");
 
-        Log.Info("Ending render pass...");
+        Log.Info($"[LIFECYCLE] EndScenePass: About to end render pass: {(nint)_currentRenderPass:X}");
         _wgpu.RenderPassEncoderEnd(_currentRenderPass);
 
-        Log.Info("Releasing render pass encoder...");
+        Log.Info($"[LIFECYCLE] EndScenePass: Releasing render pass encoder: {(nint)_currentRenderPass:X}");
         _wgpu.RenderPassEncoderRelease(_currentRenderPass);
+        Log.Info($"[LIFECYCLE] EndScenePass: Setting _currentRenderPass to null");
         _currentRenderPass = null;
         _inRenderPass = false;
 
@@ -143,6 +141,17 @@ public unsafe partial class WebGPUGraphicsDriver
             _currentSurfaceView = null;
         }
 
+        // Release deferred bind groups
+        if (_bindGroupsToRelease.Count > 0)
+        {
+            Log.Debug($"Releasing {_bindGroupsToRelease.Count} deferred bind groups");
+            foreach (var bindGroup in _bindGroupsToRelease)
+            {
+                _wgpu.BindGroupRelease((BindGroup*)bindGroup);
+            }
+            _bindGroupsToRelease.Clear();
+        }
+
         Log.Info("EndScenePass completed successfully!");
     }
 
@@ -151,16 +160,14 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_currentRenderPass != null)
             throw new InvalidOperationException("Composite called while in a render pass");
 
-        // Get current surface texture
-        SurfaceTexture surfaceTexture;
-        _wgpu.SurfaceGetCurrentTexture(_surface, &surfaceTexture);
+        if (_currentSurfaceTexture == null)
+            throw new InvalidOperationException("Surface texture is null - BeginFrame not called?");
 
-        if (surfaceTexture.Status != SurfaceGetCurrentTextureStatus.Success)
-        {
-            throw new Exception($"Failed to get current surface texture: {surfaceTexture.Status}");
-        }
+        // Create view for current surface texture
+        var swapChainView = _wgpu.TextureCreateView(_currentSurfaceTexture, null);
 
-        var swapChainView = _wgpu.TextureCreateView(surfaceTexture.Texture, null);
+        if (swapChainView == null)
+            throw new Exception("Failed to create surface texture view for composite");
 
         // Begin render pass to swap chain
         var colorAttachment = new RenderPassColorAttachment
@@ -178,6 +185,7 @@ public unsafe partial class WebGPUGraphicsDriver
         };
 
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, &desc);
+        Log.Info($"[LIFECYCLE] Composite: RenderPass created: {(nint)_currentRenderPass:X}");
 
         // Set viewport to full swap chain
         _wgpu.RenderPassEncoderSetViewport(_currentRenderPass, 0, 0, _surfaceWidth, _surfaceHeight, 0, 1);
@@ -194,9 +202,23 @@ public unsafe partial class WebGPUGraphicsDriver
         // Draw fullscreen quad (will need to be created separately)
         // For now, just end the pass - this will be completed when we add the fullscreen quad mesh
 
+        Log.Info($"[LIFECYCLE] Composite: About to end render pass: {(nint)_currentRenderPass:X}");
         _wgpu.RenderPassEncoderEnd(_currentRenderPass);
+        Log.Info($"[LIFECYCLE] Composite: Releasing render pass: {(nint)_currentRenderPass:X}");
         _wgpu.RenderPassEncoderRelease(_currentRenderPass);
+        Log.Info($"[LIFECYCLE] Composite: Setting _currentRenderPass to null");
         _currentRenderPass = null;
+
+        // Release deferred bind groups
+        if (_bindGroupsToRelease.Count > 0)
+        {
+            Log.Debug($"Releasing {_bindGroupsToRelease.Count} deferred bind groups");
+            foreach (var bindGroup in _bindGroupsToRelease)
+            {
+                _wgpu.BindGroupRelease((BindGroup*)bindGroup);
+            }
+            _bindGroupsToRelease.Clear();
+        }
 
         // Release swap chain view
         _wgpu.TextureViewRelease(swapChainView);
@@ -215,6 +237,10 @@ public unsafe partial class WebGPUGraphicsDriver
             AddressModeU = AddressMode.ClampToEdge,
             AddressModeV = AddressMode.ClampToEdge,
             AddressModeW = AddressMode.ClampToEdge,
+            LodMinClamp = 0.0f,
+            LodMaxClamp = 32.0f,
+            Compare = CompareFunction.Undefined,
+            MaxAnisotropy = 1,
         };
         var sampler = _wgpu.DeviceCreateSampler(_device, &samplerDesc);
 

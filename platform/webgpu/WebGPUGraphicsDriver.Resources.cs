@@ -149,14 +149,17 @@ public unsafe partial class WebGPUGraphicsDriver
 
     public void BindUniformBuffer(nuint buffer, int slot)
     {
-        if (slot == 0 && _state.BoundUniformBuffer0 == buffer)
+        if (slot < 0 || slot >= 4)
+        {
+            Log.Error($"Uniform buffer slot {slot} out of range (0-3)!");
+            return;
+        }
+
+        if (_state.BoundUniformBuffers[slot] == buffer)
             return;
 
-        if (slot == 0)
-        {
-            _state.BoundUniformBuffer0 = buffer;
-            _state.BindGroupDirty = true;
-        }
+        _state.BoundUniformBuffers[slot] = buffer;
+        _state.BindGroupDirty = true;
     }
 
     // Texture Management
@@ -340,21 +343,17 @@ public unsafe partial class WebGPUGraphicsDriver
 
     public void BindTexture(nuint handle, int slot)
     {
-        if (slot == 0 && _state.BoundTexture0 == handle)
+        if (slot < 0 || slot >= 8)
+        {
+            Log.Error($"Texture slot {slot} out of range (0-7)!");
             return;
-        if (slot == 1 && _state.BoundTexture1 == handle)
+        }
+
+        if (_state.BoundTextures[slot] == handle)
             return;
 
-        if (slot == 0)
-        {
-            _state.BoundTexture0 = handle;
-            _state.BindGroupDirty = true;
-        }
-        else if (slot == 1)
-        {
-            _state.BoundTexture1 = handle;
-            _state.BindGroupDirty = true;
-        }
+        _state.BoundTextures[slot] = handle;
+        _state.BindGroupDirty = true;
     }
 
     // Texture Array Management

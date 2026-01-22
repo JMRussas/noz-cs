@@ -21,7 +21,7 @@ public class ShaderDocument : Document
     {
         DocumentManager.RegisterDef(new DocumentDef(
             AssetType.Shader,
-            ".glsl",
+            ".wgsl",
             () => new ShaderDocument()
         ));
     }
@@ -48,28 +48,99 @@ public class ShaderDocument : Document
 
     public override void Import(string outputPath, PropertySet config, PropertySet meta)
     {
-        var source = File.ReadAllText(Path);
-        var includeDir = System.IO.Path.GetDirectoryName(Path) ?? ".";
+        ImportWgsl(outputPath, GetShaderFlags());
+    }
 
-        var vertexSource = ExtractStage(source, "VERTEX");
-        var fragmentSource = ExtractStage(source, "FRAGMENT");
+    private void ImportWgsl(string outputPath, ShaderFlags flags)
+    {
+        var wgslSource = File.ReadAllText(Path);
 
-        vertexSource = ProcessIncludes(vertexSource, includeDir);
-        fragmentSource = ProcessIncludes(fragmentSource, includeDir);
+        // Parse bindings directly from WGSL source
+        var bindings = ParseWgslBindings(wgslSource);
 
-        var flags = GetShaderFlags();
+        // Write WGSL shader asset with metadata
+        using var writer = new BinaryWriter(File.Create(outputPath));
+        writer.WriteAssetHeader(AssetType.Shader, Shader.Version);
 
-        // Write OpenGL 4.3 version
-        WriteGlsl(outputPath, vertexSource, fragmentSource, flags, ConvertToOpenGL);
+        var sourceBytes = Encoding.UTF8.GetBytes(wgslSource);
 
-        // Write OpenGL ES 3.0 version
-        WriteGlsl(outputPath + ".gles", vertexSource, fragmentSource, flags, ConvertToOpenGLES);
+        // WGSL uses same source for both stages (combined vertex+fragment)
+        writer.Write((uint)sourceBytes.Length);
+        writer.Write(sourceBytes);
+        writer.Write((uint)sourceBytes.Length);
+        writer.Write(sourceBytes);
+        writer.Write((byte)flags);
 
-        // Write HLSL version for DX12
-        WriteHlsl(outputPath + ".dx12", vertexSource, fragmentSource, flags);
+        // Write binding metadata
+        writer.Write((uint)bindings.Count);
+        foreach (var binding in bindings)
+        {
+            writer.Write(binding.Binding);
+            writer.Write((byte)binding.Type);
+            writer.Write(binding.Name);
+        }
 
-        // Write WGSL version for WebGPU
-        WriteWgsl(outputPath + ".wgsl", flags);
+        Log.Info($"Imported WGSL shader {Name} with {bindings.Count} bindings");
+    }
+
+    private List<ShaderBinding> ParseWgslBindings(string wgslSource)
+    {
+        var bindings = new List<ShaderBinding>();
+        var bindingDict = new Dictionary<uint, ShaderBinding>();
+
+        // Pattern: @group(N) @binding(M) var<uniform> name: Type;
+        // Pattern: @group(N) @binding(M) var name: texture_2d<f32>;
+        // Pattern: @group(N) @binding(M) var name: texture_2d_array<f32>;
+        // Pattern: @group(N) @binding(M) var name: sampler;
+
+        var bindingPattern = @"@group\s*\(\s*(\d+)\s*\)\s*@binding\s*\(\s*(\d+)\s*\)\s*var(?:<(\w+)>)?\s+(\w+)\s*:\s*([^;]+);";
+        var matches = Regex.Matches(wgslSource, bindingPattern);
+
+        foreach (Match match in matches)
+        {
+            var group = uint.Parse(match.Groups[1].Value);
+            var binding = uint.Parse(match.Groups[2].Value);
+            var storageClass = match.Groups[3].Value; // uniform, storage, etc.
+            var name = match.Groups[4].Value;
+            var type = match.Groups[5].Value.Trim();
+
+            // Determine binding type from WGSL type
+            ShaderBindingType bindingType;
+            if (storageClass == "uniform" || type.Contains("uniform"))
+            {
+                bindingType = ShaderBindingType.UniformBuffer;
+            }
+            else if (type.Contains("texture_2d_array"))
+            {
+                bindingType = ShaderBindingType.Texture2DArray;
+            }
+            else if (type.Contains("texture_2d") || type.Contains("texture_cube"))
+            {
+                bindingType = ShaderBindingType.Texture2D;
+            }
+            else if (type.Contains("sampler"))
+            {
+                bindingType = ShaderBindingType.Sampler;
+            }
+            else
+            {
+                Log.Warning($"Unknown WGSL binding type: {type} for {name}, assuming uniform buffer");
+                bindingType = ShaderBindingType.UniformBuffer;
+            }
+
+            // Only support group 0 for now
+            if (group == 0)
+            {
+                bindingDict[binding] = new ShaderBinding
+                {
+                    Binding = binding,
+                    Type = bindingType,
+                    Name = name
+                };
+            }
+        }
+
+        return bindingDict.Values.OrderBy(b => b.Binding).ToList();
     }
 
     private ShaderFlags GetShaderFlags()
@@ -160,33 +231,6 @@ public class ShaderDocument : Document
         return "#version 430 core\n\n" + result;
     }
 
-    private static string ConvertToOpenGLES(string source)
-    {
-        var result = source;
-
-        // Remove #version directive
-        result = Regex.Replace(result, @"#version\s+\d+[^\n]*\n?", "");
-
-        // Remove set, binding, and location (not supported in GLES 3.0)
-        result = Regex.Replace(result, @",?\s*set\s*=\s*\d+\s*,?", ",");
-        result = Regex.Replace(result, @",?\s*binding\s*=\s*\d+\s*,?", ",");
-        result = Regex.Replace(result, @",?\s*location\s*=\s*\d+\s*,?", ",");
-
-        // Replace row_major with std140
-        result = Regex.Replace(result, @"\brow_major\b", "std140");
-
-        // Remove 'f' suffix from float literals
-        result = Regex.Replace(result, @"(\d+\.\d*|\d*\.\d+|\d+)[fF]\b", "$1");
-
-        // Clean up layout qualifiers
-        result = CleanupLayoutQualifiers(result);
-
-        // Add std140 to uniform blocks
-        result = AddStd140ToUniformBlocks(result);
-
-        // Prepend GLES 3.0 version with precision qualifiers
-        return "#version 300 es\nprecision highp float;\nprecision highp int;\n\n" + result;
-    }
 
     private static string CleanupLayoutQualifiers(string source)
     {
@@ -285,40 +329,90 @@ public class ShaderDocument : Document
 
     private void WriteWgsl(string path, ShaderFlags flags)
     {
-        // GLSL-first approach: Parse GLSL for binding metadata, use manual WGSL for now
-        // Future: Auto-generate WGSL from SPIR-V using Tint
-
-        // Read GLSL source to extract binding metadata
+        // GLSL-first approach: Auto-generate WGSL from SPIR-V and extract binding metadata
         var glslSource = File.ReadAllText(Path);
-        var bindings = ExtractBindingsFromGlsl(glslSource);
+        var includeDir = System.IO.Path.GetDirectoryName(Path) ?? ".";
 
-        // Check for manual .wgsl file
+        var vertexSource = ExtractStage(glslSource, "VERTEX");
+        var fragmentSource = ExtractStage(glslSource, "FRAGMENT");
+
+        vertexSource = ProcessIncludes(vertexSource, includeDir);
+        fragmentSource = ProcessIncludes(fragmentSource, includeDir);
+
+        // Compile GLSL to SPIR-V
+        var vertexSpirv = ShaderCompiler.CompileGlslToSpirv(vertexSource, ShaderStage.Vertex, Name + ".vert", out var vertexError);
+        if (vertexSpirv == null)
+        {
+            Log.Error($"Failed to compile vertex shader to SPIR-V: {vertexError}");
+            return;
+        }
+
+        var fragmentSpirv = ShaderCompiler.CompileGlslToSpirv(fragmentSource, ShaderStage.Fragment, Name + ".frag", out var fragmentError);
+        if (fragmentSpirv == null)
+        {
+            Log.Error($"Failed to compile fragment shader to SPIR-V: {fragmentError}");
+            return;
+        }
+
+        // Reflect bindings from both stages and merge them
+        var vertexMetadata = ShaderCompiler.ReflectBindings(vertexSpirv, out var vertexReflectError);
+        if (vertexMetadata == null)
+        {
+            Log.Error($"Failed to reflect vertex shader bindings: {vertexReflectError}");
+            return;
+        }
+
+        var fragmentMetadata = ShaderCompiler.ReflectBindings(fragmentSpirv, out var fragmentReflectError);
+        if (fragmentMetadata == null)
+        {
+            Log.Error($"Failed to reflect fragment shader bindings: {fragmentReflectError}");
+            return;
+        }
+
+        // Merge bindings from both stages (WebGPU requires global bindings across stages)
+        var bindings = new List<ShaderBinding>();
+        var bindingDict = new Dictionary<uint, ShaderBinding>();
+
+        foreach (var binding in vertexMetadata.Bindings)
+        {
+            bindingDict[binding.Binding] = binding;
+        }
+
+        foreach (var binding in fragmentMetadata.Bindings)
+        {
+            if (!bindingDict.ContainsKey(binding.Binding))
+            {
+                bindingDict[binding.Binding] = binding;
+            }
+        }
+
+        bindings = bindingDict.Values.OrderBy(b => b.Binding).ToList();
+
+        // Check for manual .wgsl file first, fall back to auto-generation
         var wgslSourcePath = System.IO.Path.ChangeExtension(Path, ".wgsl");
-        string wgslSource;
+        string? wgslSource = null;
 
         if (File.Exists(wgslSourcePath))
         {
-            // Use manual WGSL file
             wgslSource = File.ReadAllText(wgslSourcePath);
             Log.Info($"Using manual WGSL file for {Name}");
         }
         else
         {
-            // Try to auto-generate WGSL from GLSL via SPIR-V
-            Log.Info($"Attempting to auto-generate WGSL for {Name}");
+            // Auto-generate WGSL from SPIR-V using Tint
+            Log.Info($"Auto-generating WGSL for {Name} from SPIR-V");
 
-            var includeDir = System.IO.Path.GetDirectoryName(Path) ?? ".";
-            var vertexSource = ExtractStage(glslSource, "VERTEX");
-            var fragmentSource = ExtractStage(glslSource, "FRAGMENT");
-
-            vertexSource = ProcessIncludes(vertexSource, includeDir);
-            fragmentSource = ProcessIncludes(fragmentSource, includeDir);
-
-            // For now, fall back to error if no manual WGSL exists
-            // TODO: Implement SPIR-V → WGSL conversion
-            Log.Warning($"WGSL shader not found at {wgslSourcePath}, skipping WebGPU output");
-            Log.Warning("Auto-generation from GLSL not yet implemented");
-            return;
+            // For WGSL, we need to compile both stages together
+            // Currently Tint expects a single SPIR-V module, so we'll use vertex stage
+            // In the future, we might need a more sophisticated approach
+            wgslSource = ShaderCompiler.CompileSpirvToWgsl(vertexSpirv, out var wgslError);
+            if (wgslSource == null)
+            {
+                Log.Warning($"Failed to auto-generate WGSL: {wgslError}");
+                Log.Warning($"Falling back to manual WGSL file requirement");
+                Log.Warning($"Please create {wgslSourcePath} manually");
+                return;
+            }
         }
 
         using var writer = new BinaryWriter(File.Create(path));
@@ -332,7 +426,7 @@ public class ShaderDocument : Document
         writer.Write(sourceBytes);
         writer.Write((byte)flags);
 
-        // Write binding metadata extracted from GLSL
+        // Write binding metadata extracted from SPIR-V reflection
         writer.Write((uint)bindings.Count);
         foreach (var binding in bindings)
         {
@@ -342,87 +436,6 @@ public class ShaderDocument : Document
         }
     }
 
-    private List<ShaderBinding> ExtractBindingsFromGlsl(string glslSource)
-    {
-        var bindings = new List<ShaderBinding>();
-        var lines = glslSource.Split('\n');
-
-        for (int i = 0; i < lines.Length; i++)
-        {
-            var line = lines[i].Trim();
-
-            // Skip comments and empty lines
-            if (line.StartsWith("//") || line.StartsWith("/*") || string.IsNullOrWhiteSpace(line))
-                continue;
-
-            // Look for layout(binding = N) declarations in GLSL
-            if (line.Contains("layout") && line.Contains("binding"))
-            {
-                // Extract binding number: layout(binding = 0) or layout(set = 0, binding = 1)
-                var bindingStart = line.IndexOf("binding");
-                if (bindingStart >= 0)
-                {
-                    bindingStart = line.IndexOf('=', bindingStart);
-                    if (bindingStart >= 0)
-                    {
-                        bindingStart++;
-                        var bindingEnd = line.IndexOfAny(new[] { ',', ')' }, bindingStart);
-                        if (bindingEnd > bindingStart)
-                        {
-                            var bindingStr = line.Substring(bindingStart, bindingEnd - bindingStart).Trim();
-                            if (uint.TryParse(bindingStr, out var bindingNumber))
-                            {
-                                // Determine type from the declaration
-                                var bindingType = BindingType.UniformBuffer;
-                                var name = "unknown";
-
-                                // Look ahead for the actual declaration
-                                var fullDecl = line;
-                                // If line doesn't end with semicolon, read next lines
-                                while (!fullDecl.Contains(';') && i + 1 < lines.Length)
-                                {
-                                    i++;
-                                    fullDecl += " " + lines[i].Trim();
-                                }
-
-                                // Detect type
-                                if (fullDecl.Contains("sampler2DArray") || fullDecl.Contains("texture2DArray"))
-                                    bindingType = BindingType.Texture2DArray;
-                                else if (fullDecl.Contains("sampler2D") || fullDecl.Contains("texture2D"))
-                                    bindingType = BindingType.Texture2D;
-                                else if (fullDecl.Contains("sampler"))
-                                    bindingType = BindingType.Sampler;
-                                else if (fullDecl.Contains("uniform"))
-                                    bindingType = BindingType.UniformBuffer;
-
-                                // Extract name - look for identifier before semicolon
-                                var semicolonIndex = fullDecl.IndexOf(';');
-                                if (semicolonIndex > 0)
-                                {
-                                    var beforeSemicolon = fullDecl.Substring(0, semicolonIndex).Trim();
-                                    var words = beforeSemicolon.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-                                    if (words.Length > 0)
-                                        name = words[words.Length - 1].Trim();
-                                }
-
-                                bindings.Add(new ShaderBinding
-                                {
-                                    Binding = bindingNumber,
-                                    Type = bindingType,
-                                    Name = name
-                                });
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Sort by binding number
-        bindings.Sort((a, b) => a.Binding.CompareTo(b.Binding));
-
-        return bindings;
-    }
 
     public override void Draw()
     {

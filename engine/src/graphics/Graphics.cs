@@ -18,7 +18,7 @@ public static unsafe class Graphics
     private const int MaxStateStack = 16;
     private const int MaxVertices = 65536;
     private const int MaxIndices = 196608;
-    private const int MaxTextures = 2;
+    private const int MaxTextures = 8;
     private const int IndexShift = 0;
     private const int OrderShift = 16;
     private const int GroupShift = 32;
@@ -35,8 +35,7 @@ public static unsafe class Graphics
     private struct BatchState()
     {
         public nuint Shader;
-        public nuint Texture0;
-        public nuint Texture1;
+        public fixed ulong Textures[MaxTextures];
         public BlendMode BlendMode;
         public int ViewportX;
         public int ViewportY;
@@ -611,8 +610,6 @@ public static unsafe class Graphics
 
         var shader = CurrentState.Shader?.Handle ?? nuint.Zero;
         var blendMode = CurrentState.BlendMode;
-        var texture0 = (nuint)CurrentState.Textures[0];
-        var texture1 = (nuint)CurrentState.Textures[1];
         var viewportX = CurrentState.ViewportX;
         var viewportY = CurrentState.ViewportY;
         var viewportW = CurrentState.ViewportWidth;
@@ -627,20 +624,31 @@ public static unsafe class Graphics
         for (int i = 0; i < _batchStates.Length; i++)
         {
             ref var existing = ref _batchStates[i];
-            if (existing.Shader == shader &&
-                existing.BlendMode == blendMode &&
-                existing.Texture0 == texture0 &&
-                existing.Texture1 == texture1 &&
-                existing.ViewportX == viewportX &&
-                existing.ViewportY == viewportY &&
-                existing.ViewportW == viewportW &&
-                existing.ViewportH == viewportH &&
-                existing.ScissorEnabled == scissorEnabled &&
-                existing.ScissorX == scissorX &&
-                existing.ScissorY == scissorY &&
-                existing.ScissorWidth == scissorWidth &&
-                existing.ScissorHeight == scissorHeight &&
-                existing.Mesh == vertexArray)
+            if (existing.Shader != shader ||
+                existing.BlendMode != blendMode ||
+                existing.ViewportX != viewportX ||
+                existing.ViewportY != viewportY ||
+                existing.ViewportW != viewportW ||
+                existing.ViewportH != viewportH ||
+                existing.ScissorEnabled != scissorEnabled ||
+                existing.ScissorX != scissorX ||
+                existing.ScissorY != scissorY ||
+                existing.ScissorWidth != scissorWidth ||
+                existing.ScissorHeight != scissorHeight ||
+                existing.Mesh != vertexArray)
+                continue;
+
+            bool texturesMatch = true;
+            for (int t = 0; t < MaxTextures; t++)
+            {
+                if (existing.Textures[t] != CurrentState.Textures[t])
+                {
+                    texturesMatch = false;
+                    break;
+                }
+            }
+
+            if (texturesMatch)
             {
                 _currentBatchState = (ushort)i;
                 return;
@@ -651,8 +659,8 @@ public static unsafe class Graphics
         ref var batchState = ref _batchStates.Add();
         batchState.Shader = shader;
         batchState.BlendMode = blendMode;
-        batchState.Texture0 = texture0;
-        batchState.Texture1 = texture1;
+        for (int t = 0; t < MaxTextures; t++)
+            batchState.Textures[t] = CurrentState.Textures[t];
         batchState.ViewportX = viewportX;
         batchState.ViewportY = viewportY;
         batchState.ViewportW = viewportW;
@@ -664,7 +672,7 @@ public static unsafe class Graphics
         batchState.ScissorHeight = scissorHeight;
         batchState.Mesh = vertexArray;
 
-        LogRender($"AddBatchState: Shader=0x{batchState.Shader:X} Texture0=0x{batchState.Texture0:X} Texture1=0x{batchState.Texture1:X} BlendMode={batchState.BlendMode} Viewport=({batchState.ViewportX},{batchState.ViewportY},{batchState.ViewportW},{batchState.ViewportH}) ScissorEnabled={batchState.ScissorEnabled} Scissor=({batchState.ScissorX},{batchState.ScissorY},{batchState.ScissorWidth},{batchState.ScissorHeight}) Mesh=0x{batchState.Mesh:X}");
+        LogRender($"AddBatchState: Shader=0x{batchState.Shader:X} Texture0=0x{batchState.Textures[0]:X} Texture1=0x{batchState.Textures[1]:X} BlendMode={batchState.BlendMode} Viewport=({batchState.ViewportX},{batchState.ViewportY},{batchState.ViewportW},{batchState.ViewportH}) ScissorEnabled={batchState.ScissorEnabled} Scissor=({batchState.ScissorX},{batchState.ScissorY},{batchState.ScissorWidth},{batchState.ScissorHeight}) Mesh=0x{batchState.Mesh:X}");
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -855,8 +863,9 @@ public static unsafe class Graphics
         var lastViewportH = ushort.MaxValue;
         var lastScissorEnabled = false;
         var lastShader = nuint.Zero;
-        var lastTexture0 = nuint.Zero;
-        var lastTexture1 = nuint.Zero;
+        var lastTextures = stackalloc nuint[MaxTextures];
+        for (int i = 0; i < MaxTextures; i++)
+            lastTextures[i] = nuint.Zero;
         var lastMesh = nuint.Zero;
         var lastBlendMode = BlendMode.None;
 
@@ -927,21 +936,20 @@ public static unsafe class Graphics
                 Driver.BindShader(batchState.Shader);
                 LogRender($"    BindShader: Handle=0x{batchState.Shader:X}");
             }
-            
-            if (lastTexture0 != batchState.Texture0)
+
+            for (int t = 0; t < MaxTextures; t++)
             {
-                lastTexture0 = batchState.Texture0;
-                Driver.BindTexture(batchState.Texture0, 0);
-                LogRender($"    BindTexture: Slot=0 Handle=0x{batchState.Texture0:X}");
+                if (lastTextures[t] != (nuint)batchState.Textures[t])
+                {
+                    lastTextures[t] = (nuint)batchState.Textures[t];
+                    if (batchState.Textures[t] != 0)
+                    {
+                        Driver.BindTexture((nuint)batchState.Textures[t], t);
+                        LogRender($"    BindTexture: Slot={t} Handle=0x{batchState.Textures[t]:X}");
+                    }
+                }
             }
-            
-            if (lastTexture1 != batchState.Texture1)
-            {
-                lastTexture1 = batchState.Texture1;
-                Driver.BindTexture(batchState.Texture1, 1);
-                LogRender($"    BindTexture: Slot=1 Handle=0x{batchState.Texture1:X}");
-            }
-            
+
             if (lastBlendMode != batchState.BlendMode)
             {
                 lastBlendMode = batchState.BlendMode;

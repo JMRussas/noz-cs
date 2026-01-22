@@ -29,6 +29,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     // Command recording
     private CommandEncoder* _commandEncoder;
     private RenderPassEncoder* _currentRenderPass;
+    private WGPUTexture* _currentSurfaceTexture;
     private TextureView* _currentSurfaceView;
     private bool _inRenderPass;
 
@@ -64,8 +65,9 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
 
     // Bind group management
     private BindGroup* _currentBindGroup;
+    private List<nint> _bindGroupsToRelease = new();
 
-    public string ShaderExtension => ".wgsl";
+    public string ShaderExtension => "";
 
     private struct CachedState
     {
@@ -73,10 +75,8 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public BlendMode BlendMode;
         public nuint BoundMesh;
         public int VertexStride;
-        public nuint BoundTexture0;
-        public nuint BoundTexture1;
-        public nuint BoundUniformBuffer0;
-        public nuint BoundBoneTexture;
+        public fixed ulong BoundTextures[8];
+        public fixed ulong BoundUniformBuffers[4];
         public bool PipelineDirty;
         public bool BindGroupDirty;
         public int ViewportX, ViewportY, ViewportW, ViewportH;
@@ -113,6 +113,12 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public bool IsArray;
     }
 
+    private struct TextureSlotInfo
+    {
+        public uint TextureBinding;
+        public uint SamplerBinding;
+    }
+
     private struct ShaderInfo
     {
         public ShaderModule* VertexModule;
@@ -121,6 +127,9 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public PipelineLayout* PipelineLayout;
         public Dictionary<PsoKey, nint> PsoCache; // Dictionary stores nint pointers, converted to/from RenderPipeline*
         public int BindGroupEntryCount; // Number of bindings this shader expects
+        public List<ShaderBinding> Bindings; // Binding metadata from asset pipeline
+        public List<TextureSlotInfo> TextureSlots; // Derived from bindings: texture+sampler pairs
+        public Dictionary<string, uint> UniformBindings; // Uniform name → binding number
     }
 
     private struct PsoKey : IEquatable<PsoKey>
@@ -446,6 +455,16 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         // Validate device
         if (_device == null)
             throw new InvalidOperationException("WebGPU device is null - initialization failed or device lost");
+
+        // Acquire surface texture for this frame
+        SurfaceTexture surfaceTexture;
+        _wgpu.SurfaceGetCurrentTexture(_surface, &surfaceTexture);
+
+        if (surfaceTexture.Status != SurfaceGetCurrentTextureStatus.Success)
+            throw new Exception($"Failed to get current surface texture: {surfaceTexture.Status}");
+
+        _currentSurfaceTexture = surfaceTexture.Texture;
+        Log.Debug($"Acquired surface texture: {(nint)_currentSurfaceTexture:X}");
 
         // Create command encoder for this frame
         var encoderDesc = new CommandEncoderDescriptor();

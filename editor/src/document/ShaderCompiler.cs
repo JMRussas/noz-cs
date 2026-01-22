@@ -27,21 +27,6 @@ public enum ShaderTarget
     Wgsl
 }
 
-public enum BindingType
-{
-    UniformBuffer,
-    Texture2D,
-    Texture2DArray,
-    Sampler
-}
-
-public struct ShaderBinding
-{
-    public uint Binding;
-    public BindingType Type;
-    public string Name;
-}
-
 public class ShaderBindingMetadata
 {
     public List<ShaderBinding> Bindings { get; set; } = new();
@@ -299,8 +284,6 @@ public static class ShaderCompiler
         return (spirv, error);
     }
 
-    // SPIR-V reflection currently not working due to API issues - using WGSL parsing instead
-    /*
     public static unsafe ShaderBindingMetadata? ReflectBindings(byte[] spirvBytes, out string? error)
     {
         error = null;
@@ -365,14 +348,14 @@ public static class ShaderCompiler
                 for (nuint i = 0; i < uniformBufferCount; i++)
                 {
                     var buffer = uniformBuffers[i];
-                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, buffer.Id, Decoration.Binding);
+                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, buffer.Id, Silk.NET.SPIRV.Decoration.Binding);
                     var namePtr = _spirvCross.CompilerGetName(spvcCompiler, buffer.Id);
                     var name = namePtr != null ? Marshal.PtrToStringUTF8((nint)namePtr) ?? "unknown" : "unknown";
 
                     metadata.Bindings.Add(new ShaderBinding
                     {
                         Binding = binding,
-                        Type = BindingType.UniformBuffer,
+                        Type = ShaderBindingType.UniformBuffer,
                         Name = name
                     });
                 }
@@ -387,19 +370,18 @@ public static class ShaderCompiler
                 for (nuint i = 0; i < sampledImageCount; i++)
                 {
                     var image = sampledImages[i];
-                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, image.Id, Decoration.Binding);
+                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, image.Id, Silk.NET.SPIRV.Decoration.Binding);
                     var namePtr = _spirvCross.CompilerGetName(spvcCompiler, image.Id);
                     var name = namePtr != null ? Marshal.PtrToStringUTF8((nint)namePtr) ?? "unknown" : "unknown";
 
                     // Get the type to determine if it's a 2D texture or 2D array
-                    var typeId = _spirvCross.CompilerGetType(spvcCompiler, image.BaseTypeId);
-                    var type = *typeId;
-                    var isArray = type.Arrayed != 0;
+                    var typeHandle = _spirvCross.CompilerGetTypeHandle(spvcCompiler, image.BaseTypeId);
+                    var isArray = _spirvCross.TypeGetImageArrayed(typeHandle) != 0;
 
                     metadata.Bindings.Add(new ShaderBinding
                     {
                         Binding = binding,
-                        Type = isArray ? BindingType.Texture2DArray : BindingType.Texture2D,
+                        Type = isArray ? ShaderBindingType.Texture2DArray : ShaderBindingType.Texture2D,
                         Name = name
                     });
                 }
@@ -414,14 +396,14 @@ public static class ShaderCompiler
                 for (nuint i = 0; i < samplerCount; i++)
                 {
                     var sampler = samplers[i];
-                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, sampler.Id, Decoration.Binding);
+                    var binding = _spirvCross.CompilerGetDecoration(spvcCompiler, sampler.Id, Silk.NET.SPIRV.Decoration.Binding);
                     var namePtr = _spirvCross.CompilerGetName(spvcCompiler, sampler.Id);
                     var name = namePtr != null ? Marshal.PtrToStringUTF8((nint)namePtr) ?? "unknown" : "unknown";
 
                     metadata.Bindings.Add(new ShaderBinding
                     {
                         Binding = binding,
-                        Type = BindingType.Sampler,
+                        Type = ShaderBindingType.Sampler,
                         Name = name
                     });
                 }
@@ -437,10 +419,7 @@ public static class ShaderCompiler
             _spirvCross.ContextDestroy(context);
         }
     }
-    */
 
-    // WGSL conversion also not currently used - using manual .wgsl files instead
-    /*
     public static string? CompileSpirvToWgsl(byte[] spirvBytes, out string? error)
     {
         error = null;
@@ -511,7 +490,7 @@ public static class ShaderCompiler
         }
     }
 
-    private static string? FindTintExecutable()
+    public static string? FindTintExecutable()
     {
         // Check if tint is in PATH
         var pathEnv = Environment.GetEnvironmentVariable("PATH");
@@ -555,5 +534,4 @@ public static class ShaderCompiler
         var wgsl = CompileSpirvToWgsl(spirv, out error);
         return (wgsl, error);
     }
-    */
 }

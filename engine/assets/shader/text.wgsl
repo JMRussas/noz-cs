@@ -17,7 +17,6 @@ struct TextParams {
 @group(0) @binding(0) var<uniform> globals: Globals;
 @group(0) @binding(1) var font_texture: texture_2d<f32>;
 @group(0) @binding(2) var font_sampler: sampler;
-@group(0) @binding(3) var<uniform> text_params: TextParams;
 
 // Vertex input
 struct VertexInput {
@@ -55,13 +54,15 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     var textAlpha = smoothstep(threshold - edgeWidth, threshold + edgeWidth, dist);
 
     var color = input.color;
-    if (text_params.outline_width > 0.0) {
-        let outlineThreshold = threshold - text_params.outline_width;
-        let outlineAlpha = smoothstep(outlineThreshold - edgeWidth, outlineThreshold + edgeWidth, dist);
 
-        color = mix(text_params.outline_color, input.color, textAlpha);
-        textAlpha = outlineAlpha;
-    }
+	
+//    if (text_params.outline_width > 0.0) {
+//        let outlineThreshold = threshold - text_params.outline_width;
+        //let outlineAlpha = smoothstep(outlineThreshold - edgeWidth, outlineThreshold + edgeWidth, dist);
+//
+  //      color = mix(text_params.outline_color, input.color, textAlpha);
+    //    textAlpha = outlineAlpha;
+    //}
 
     return vec4<f32>(color.rgb, color.a * textAlpha);
 }

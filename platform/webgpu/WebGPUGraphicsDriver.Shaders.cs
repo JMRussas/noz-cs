@@ -51,7 +51,41 @@ public unsafe partial class WebGPUGraphicsDriver
 
         var handle = (nuint)_nextShaderId++;
 
-        Log.Debug($"CreateShader (metadata): name={name}, bindingCount={bindingCount}");
+        // Derive texture slots and uniform bindings from metadata
+        var textureSlots = new List<TextureSlotInfo>();
+        var uniformBindings = new Dictionary<string, uint>();
+
+        for (int i = 0; i < bindings.Count; i++)
+        {
+            var binding = bindings[i];
+
+            // Map uniforms by name
+            if (binding.Type == ShaderBindingType.UniformBuffer)
+            {
+                uniformBindings[binding.Name] = binding.Binding;
+            }
+
+            // Find texture + sampler pairs
+            if (binding.Type == ShaderBindingType.Texture2D ||
+                binding.Type == ShaderBindingType.Texture2DArray)
+            {
+                // Look for matching sampler (next binding or named match)
+                uint samplerBinding = binding.Binding + 1;
+
+                // Verify it's actually a sampler
+                if (i + 1 < bindings.Count &&
+                    bindings[i + 1].Type == ShaderBindingType.Sampler)
+                {
+                    textureSlots.Add(new TextureSlotInfo
+                    {
+                        TextureBinding = binding.Binding,
+                        SamplerBinding = samplerBinding
+                    });
+                }
+            }
+        }
+
+        Log.Debug($"CreateShader (metadata): name={name}, bindingCount={bindingCount}, textureSlots={textureSlots.Count}, uniforms={uniformBindings.Count}");
 
         _shaders[(int)handle] = new ShaderInfo
         {
@@ -60,7 +94,10 @@ public unsafe partial class WebGPUGraphicsDriver
             BindGroupLayout0 = bindGroupLayout,
             PipelineLayout = pipelineLayout,
             PsoCache = new Dictionary<PsoKey, nint>(),
-            BindGroupEntryCount = bindingCount
+            BindGroupEntryCount = bindingCount,
+            Bindings = bindings,
+            TextureSlots = textureSlots,
+            UniformBindings = uniformBindings
         };
 
         return handle;
@@ -527,5 +564,6 @@ public unsafe partial class WebGPUGraphicsDriver
 
         _state.BoundShader = handle;
         _state.PipelineDirty = true;
+        _state.BindGroupDirty = true;
     }
 }
