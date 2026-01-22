@@ -28,6 +28,6 @@ public class ApplicationConfig
     public IApplicationVtable? Vtable { get; init; }
     public IPlatform? Platform { get; init; }
     public IAudioDriver? AudioBackend { get; init; }
-    public string AssetPath { get; init; } = "library/";
+    public string? AssetPath { get; init; } = null;
     public string TextShader { get; init; } = "text";
 }

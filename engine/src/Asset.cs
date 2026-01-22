@@ -54,8 +54,6 @@ public class Asset : IDisposable {
         if (useRegistry && asset != null)
             _registry[(type, name)] = asset;
 
-        Log.Info($"Loaded asset: {type}/{name}");
-
         return asset;
     }
 

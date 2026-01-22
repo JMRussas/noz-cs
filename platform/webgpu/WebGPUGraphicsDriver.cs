@@ -3,12 +3,40 @@
 //
 
 using System.Runtime.InteropServices;
+using System.Numerics;
 using Silk.NET.WebGPU;
 using WGPUBuffer = Silk.NET.WebGPU.Buffer;
 using WGPUTexture = Silk.NET.WebGPU.Texture;
 using WGPUTextureFormat = Silk.NET.WebGPU.TextureFormat;
 
 namespace NoZ.Platform.WebGPU;
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct CompositeVertex : IVertex
+{
+    public Vector2 Position;
+    public Vector2 UV;
+
+    public static readonly int SizeInBytes = Marshal.SizeOf(typeof(CompositeVertex));
+
+    public static VertexFormatDescriptor GetFormatDescriptor() => new()
+    {
+        Stride = SizeInBytes,
+        Attributes =
+        [
+            new VertexAttribute(
+                0,
+                2,
+                VertexAttribType.Float,
+                (int)Marshal.OffsetOf<CompositeVertex>(nameof(Position))),
+            new VertexAttribute(
+                1,
+                2,
+                VertexAttribType.Float,
+                (int)Marshal.OffsetOf<CompositeVertex>(nameof(UV)))
+        ]
+    };
+}
 
 public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
 {
@@ -66,6 +94,9 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     // Bind group management
     private BindGroup* _currentBindGroup;
     private List<nint> _bindGroupsToRelease = new();
+
+    // Fullscreen quad for composite
+    private nuint _fullscreenQuadMesh;
 
     public string ShaderExtension => "";
 
@@ -165,30 +196,22 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         if (_instance == null)
             throw new Exception("Failed to create WebGPU instance");
 
-        // Create surface (platform-specific)
         _surface = CreateSurface();
-
-        // Request adapter (async with blocking)
         RequestAdapter();
-
-        // Request device (async with blocking)
         RequestDevice();
 
-        // Get queue
         _queue = _wgpu.DeviceGetQueue(_device);
 
         if (_queue == null)
             throw new Exception("Failed to get device queue");
 
-        Log.Debug($"WebGPU queue obtained: {(nint)_queue:X}");
-
-        // Create swap chain
         CreateSwapChain();
+        CreateFullscreenQuad();
     }
 
     private void RequestAdapter()
     {
-        var tcs = new TaskCompletionSource<nint>(); // Store pointer as nint
+        var tcs = new TaskCompletionSource<nint>();
         var options = new RequestAdapterOptions
         {
             CompatibleSurface = _surface,
@@ -198,22 +221,22 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         PfnRequestAdapterCallback callback = new((status, adapter, message, userdata) =>
         {
             if (status == RequestAdapterStatus.Success)
-            {
                 tcs.SetResult((nint)adapter);
-            }
             else
-            {
-                var msg = Marshal.PtrToStringAnsi((nint)message) ?? "Unknown error";
-                tcs.SetException(new Exception($"Failed to request adapter: {msg}"));
-            }
+                tcs.SetResult(0);
         });
 
         _wgpu.InstanceRequestAdapter(_instance, &options, callback, null);
 
-        if (!tcs.Task.Wait(TimeSpan.FromSeconds(5)))
-            throw new TimeoutException("Adapter request timed out");
+        if (!tcs.Task.Wait(TimeSpan.FromSeconds(5)) || tcs.Task.Result == 0)
+            throw new Exception("Failed to find a compatible WebGPU adapter");
 
         _adapter = (Adapter*)tcs.Task.Result;
+
+        AdapterProperties props;
+        _wgpu.AdapterGetProperties(_adapter, &props);
+        var adapterName = Marshal.PtrToStringAnsi((nint)props.Name) ?? "Unknown";
+        Log.Info($"WebGPU adapter: {adapterName} (backend: {props.BackendType})");
     }
 
     private void RequestDevice()
@@ -251,11 +274,9 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         PfnErrorCallback errorCallback = new((type, message, userdata) =>
         {
             var msg = Marshal.PtrToStringAnsi((nint)message) ?? "Unknown error";
-            Log.Debug($"[WebGPU Error] Type={type}: {msg}");
+            Log.Error($"[WebGPU] {type}: {msg}");
         });
         _wgpu.DeviceSetUncapturedErrorCallback(_device, errorCallback, null);
-
-        Log.Debug($"WebGPU device created successfully: {(nint)_device:X}");
     }
 
     private Surface* CreateSurface()
@@ -347,8 +368,17 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         SurfaceCapabilities caps;
         _wgpu.SurfaceGetCapabilities(_surface, _adapter, &caps);
 
-        // Use first available format (typically BGRA8Unorm or RGBA8Unorm)
+        // Prefer linear format - simpler for 2D, no gamma conversion needed
         _surfaceFormat = caps.Formats[0];
+        for (int i = 0; i < (int)caps.FormatCount; i++)
+        {
+            var fmt = caps.Formats[i];
+            if (fmt == WGPUTextureFormat.Bgra8Unorm || fmt == WGPUTextureFormat.Rgba8Unorm)
+            {
+                _surfaceFormat = fmt;
+                break;
+            }
+        }
         _presentMode = _config.VSync ? PresentMode.Fifo : PresentMode.Immediate;
 
         // Configure surface (replaces swap chain in modern WebGPU)
@@ -464,16 +494,12 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
             throw new Exception($"Failed to get current surface texture: {surfaceTexture.Status}");
 
         _currentSurfaceTexture = surfaceTexture.Texture;
-        Log.Debug($"Acquired surface texture: {(nint)_currentSurfaceTexture:X}");
 
-        // Create command encoder for this frame
         var encoderDesc = new CommandEncoderDescriptor();
         _commandEncoder = _wgpu.DeviceCreateCommandEncoder(_device, ref encoderDesc);
 
         if (_commandEncoder == null)
             throw new Exception("Failed to create command encoder - device may be lost");
-
-        Log.Debug($"Command encoder created: {(nint)_commandEncoder:X}");
 
         // Reset state
         _state = default;
@@ -488,30 +514,15 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
 
     public void EndFrame()
     {
-        Log.Info("EndFrame called");
-
-        // Finish command encoder
-        Log.Info("Finishing command encoder...");
         var commandBufferDesc = new CommandBufferDescriptor();
         var commandBuffer = _wgpu.CommandEncoderFinish(_commandEncoder, &commandBufferDesc);
 
-        Log.Info($"Command buffer created: {(nint)commandBuffer:X}");
-
-        // Submit to queue
-        Log.Info("Submitting to queue...");
         _wgpu.QueueSubmit(_queue, 1, &commandBuffer);
-
-        // Present surface
-        Log.Info("Presenting surface...");
         _wgpu.SurfacePresent(_surface);
 
-        // Cleanup
-        Log.Info("Cleaning up command buffer and encoder...");
         _wgpu.CommandBufferRelease(commandBuffer);
         _wgpu.CommandEncoderRelease(_commandEncoder);
         _commandEncoder = null;
-
-        Log.Info("EndFrame completed successfully!");
     }
 
     public void Clear(Color color)
@@ -562,5 +573,28 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
             _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass,
                 0, 0, (uint)_surfaceWidth, (uint)_surfaceHeight);
         }
+    }
+
+    private void CreateFullscreenQuad()
+    {
+        // Create fullscreen quad mesh (2 triangles covering NDC -1 to 1)
+        _fullscreenQuadMesh = CreateMesh<CompositeVertex>(4, 6, BufferUsage.Static, "fullscreen_quad");
+
+        // Define vertices: position in NDC space, UV coordinates
+        var vertices = new CompositeVertex[4];
+        vertices[0] = new CompositeVertex { Position = new Vector2(-1, -1), UV = new Vector2(0, 0) }; // Bottom-left
+        vertices[1] = new CompositeVertex { Position = new Vector2(1, -1), UV = new Vector2(1, 0) };  // Bottom-right
+        vertices[2] = new CompositeVertex { Position = new Vector2(-1, 1), UV = new Vector2(0, 1) };  // Top-left
+        vertices[3] = new CompositeVertex { Position = new Vector2(1, 1), UV = new Vector2(1, 1) };   // Top-right
+
+        // Define indices for 2 triangles
+        var indices = new ushort[6];
+        indices[0] = 0; indices[1] = 1; indices[2] = 2; // First triangle
+        indices[3] = 2; indices[4] = 1; indices[5] = 3; // Second triangle
+
+        // Upload to GPU
+        UpdateMesh(_fullscreenQuadMesh,
+            MemoryMarshal.AsBytes(vertices.AsSpan()),
+            indices.AsSpan());
     }
 }

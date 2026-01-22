@@ -37,8 +37,9 @@ public static class ShaderCompiler
     private static Shaderc? _shaderc;
     private static Cross? _spirvCross;
 
-    public static void Initialize()
+    public static void Init()
     {
+        Log.Info("ShaderCompiler.Init");
         _shaderc = Shaderc.GetApi();
         _spirvCross = Cross.GetApi();
     }

@@ -37,7 +37,7 @@ public static class Application
         _vtable = config.Vtable ?? throw new ArgumentNullException(nameof(config.Vtable),
             "App must be provided. Implement IApplication in your game.");
 
-        AssetPath = Path.Combine(Directory.GetCurrentDirectory(), config.AssetPath);
+        AssetPath = config.AssetPath ?? Path.Combine(Directory.GetCurrentDirectory(), "library");
 
         // Initialize platform
         Platform.Init(new PlatformConfig

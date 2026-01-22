@@ -24,12 +24,9 @@ public class EditorConfig
     public string[] SourcePaths { get; }
     public IEnumerable<string> Names => _props.GetKeys("names");
 
-    public string ProjectPath => _basePath;
-
-    public EditorConfig(PropertySet props, string basePath)
+    public EditorConfig(PropertySet props)
     {
         _props = props;
-        _basePath = basePath;
 
         OutputPath = ResolvePath(props.GetString("editor", "output_path", "./library"));
         SavePath = ResolvePath(props.GetString("editor", "save_path", "./assets"));
@@ -61,36 +58,19 @@ public class EditorConfig
     {
         if (Path.IsPathRooted(path))
             return path;
-        return Path.GetFullPath(Path.Combine(_basePath, path));
+        return Path.GetFullPath(Path.Combine(EditorApplication.ProjectPath, path));
     }
 
     public static EditorConfig? Load(string path)
     {
-        var basePath = Path.GetFullPath(path);
-        var configPath = Path.Combine(basePath, "editor.cfg");
-
-        Log.Info($"Loading Config: {configPath}");
+        if (!File.Exists(path)) return null;
+              
+        Log.Info($"Loading Config: {path}");
         
-        var props = PropertySet.LoadFile(configPath);
+        var props = PropertySet.LoadFile(path);
         if (props == null)
             return null;
 
-        return new EditorConfig(props, basePath);
-    }
-
-    public static EditorConfig? FindAndLoad(string? startPath = null)
-    {
-        var dir = startPath ?? Directory.GetCurrentDirectory();
-
-        while (!string.IsNullOrEmpty(dir))
-        {
-            var configPath = Path.Combine(dir, "editor.cfg");
-            if (File.Exists(configPath))
-                return Load(configPath);
-
-            dir = Path.GetDirectoryName(dir);
-        }
-
-        return null;
+        return new EditorConfig(props);
     }
 }

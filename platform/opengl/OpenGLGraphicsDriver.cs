@@ -527,7 +527,7 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
 
     // === Shader Management ===
 
-    public nuint CreateShader(string name, string vertexSource, string fragmentSource)
+    public nuint CreateShader(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings)
     {
         var program = CreateShaderProgram(name, vertexSource, fragmentSource);
         var handle = _nextShaderId++;

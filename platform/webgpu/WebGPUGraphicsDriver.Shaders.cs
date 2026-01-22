@@ -11,81 +11,52 @@ namespace NoZ.Platform.WebGPU;
 
 public unsafe partial class WebGPUGraphicsDriver
 {
-    public nuint CreateShader(string name, string vertexSource, string fragmentSource)
+    public nuint CreateShader(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings)
     {
-        // Legacy path: Parse WGSL to detect bindings (used when no metadata available)
         var vertexModule = CreateShaderModule(vertexSource, $"{name}_vertex");
         var fragmentModule = CreateShaderModule(fragmentSource, $"{name}_fragment");
 
-        // Detect shader type from both vertex and fragment source to create appropriate bind group layout
+        BindGroupLayout* bindGroupLayout;
         int bindingCount;
-        var bindGroupLayout = CreateBindGroupLayoutForShader(vertexSource + fragmentSource, out bindingCount);
-
-        var pipelineLayout = CreatePipelineLayout(bindGroupLayout);
-        var handle = (nuint)_nextShaderId++;
-
-        Log.Debug($"CreateShader (legacy): name={name}, bindingCount={bindingCount}");
-
-        _shaders[(int)handle] = new ShaderInfo
-        {
-            VertexModule = vertexModule,
-            FragmentModule = fragmentModule,
-            BindGroupLayout0 = bindGroupLayout,
-            PipelineLayout = pipelineLayout,
-            PsoCache = new Dictionary<PsoKey, nint>(),
-            BindGroupEntryCount = bindingCount
-        };
-
-        return handle;
-    }
-
-    internal nuint CreateShaderFromMetadata(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings)
-    {
-        // New path: Use pre-computed metadata from asset pipeline
-        var vertexModule = CreateShaderModule(vertexSource, $"{name}_vertex");
-        var fragmentModule = CreateShaderModule(fragmentSource, $"{name}_fragment");
-
-        // Create bind group layout from metadata instead of parsing
-        var bindGroupLayout = CreateBindGroupLayoutFromMetadata(bindings, out int bindingCount);
-        var pipelineLayout = CreatePipelineLayout(bindGroupLayout);
-
-        var handle = (nuint)_nextShaderId++;
-
-        // Derive texture slots and uniform bindings from metadata
         var textureSlots = new List<TextureSlotInfo>();
         var uniformBindings = new Dictionary<string, uint>();
 
-        for (int i = 0; i < bindings.Count; i++)
+        if (bindings.Count > 0)
         {
-            var binding = bindings[i];
+            // Use pre-computed metadata from asset pipeline
+            bindGroupLayout = CreateBindGroupLayoutFromMetadata(bindings, out bindingCount);
 
-            // Map uniforms by name
-            if (binding.Type == ShaderBindingType.UniformBuffer)
+            // Derive texture slots and uniform bindings from metadata
+            for (int i = 0; i < bindings.Count; i++)
             {
-                uniformBindings[binding.Name] = binding.Binding;
-            }
+                var binding = bindings[i];
 
-            // Find texture + sampler pairs
-            if (binding.Type == ShaderBindingType.Texture2D ||
-                binding.Type == ShaderBindingType.Texture2DArray)
-            {
-                // Look for matching sampler (next binding or named match)
-                uint samplerBinding = binding.Binding + 1;
+                if (binding.Type == ShaderBindingType.UniformBuffer)
+                    uniformBindings[binding.Name] = binding.Binding;
 
-                // Verify it's actually a sampler
-                if (i + 1 < bindings.Count &&
-                    bindings[i + 1].Type == ShaderBindingType.Sampler)
+                if (binding.Type == ShaderBindingType.Texture2D ||
+                    binding.Type == ShaderBindingType.Texture2DArray)
                 {
-                    textureSlots.Add(new TextureSlotInfo
+                    uint samplerBinding = binding.Binding + 1;
+                    if (i + 1 < bindings.Count && bindings[i + 1].Type == ShaderBindingType.Sampler)
                     {
-                        TextureBinding = binding.Binding,
-                        SamplerBinding = samplerBinding
-                    });
+                        textureSlots.Add(new TextureSlotInfo
+                        {
+                            TextureBinding = binding.Binding,
+                            SamplerBinding = samplerBinding
+                        });
+                    }
                 }
             }
         }
+        else
+        {
+            // Legacy path: Parse WGSL to detect bindings
+            bindGroupLayout = CreateBindGroupLayoutForShader(vertexSource + fragmentSource, out bindingCount);
+        }
 
-        Log.Debug($"CreateShader (metadata): name={name}, bindingCount={bindingCount}, textureSlots={textureSlots.Count}, uniforms={uniformBindings.Count}");
+        var pipelineLayout = CreatePipelineLayout(bindGroupLayout);
+        var handle = (nuint)_nextShaderId++;
 
         _shaders[(int)handle] = new ShaderInfo
         {
@@ -154,8 +125,6 @@ public unsafe partial class WebGPUGraphicsDriver
             };
 
             entries[i] = CreateBindGroupLayoutEntry(binding.Binding, bindingType);
-
-            Log.Debug($"Binding {binding.Binding}: type={bindingType}, name={binding.Name}");
         }
 
         var bindGroupLayoutDesc = new BindGroupLayoutDescriptor
@@ -225,8 +194,6 @@ public unsafe partial class WebGPUGraphicsDriver
         {
             entries[4] = CreateBindGroupLayoutEntry(4, binding4Type);
         }
-
-        Log.Debug($"CreateBindGroupLayout (legacy): bindingCount={bindingCount}, b1={binding1Type}, b2={binding2Type}, b3={binding3Type}, b4={binding4Type}");
 
         var bindGroupLayoutDesc = new BindGroupLayoutDescriptor
         {

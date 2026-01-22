@@ -2,8 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-#define NOZ_RENDER_DEBUG
-#define NOZ_RENDER_DEBUG_VERBOSE
+// #define NOZ_RENDER_DEBUG
+// #define NOZ_RENDER_DEBUG_VERBOSE
 
 using System.Diagnostics;
 using System.Numerics;

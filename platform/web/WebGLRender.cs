@@ -282,7 +282,7 @@ public class WebGLGraphicsDriver : IGraphicsDriver
 
     // === Shader Management ===
 
-    public nuint CreateShader(string name, string vertexSource, string fragmentSource)
+    public nuint CreateShader(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings)
     {
         if (_module == null) return 0;
         var shaderId = _nextShaderId++;

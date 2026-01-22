@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <Content Remove="assets\**\*" />
-    <Content Include="assets\**\*.glsl" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="assets\**\*.wgsl" />
   </ItemGroup>
 
 </Project>

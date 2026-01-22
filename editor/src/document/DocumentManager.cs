@@ -21,6 +21,8 @@ public static class DocumentManager
 
     public static void Init(string[] sourcePaths, string outputPath)
     {
+        Log.Info("DocumentManager.Init");
+
         _sourcePaths.Clear();
         _sourcePaths.AddRange(sourcePaths);
         _outputPath = outputPath;

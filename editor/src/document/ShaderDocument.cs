@@ -54,28 +54,19 @@ public class ShaderDocument : Document
     private void ImportWgsl(string outputPath, ShaderFlags flags)
     {
         var wgslSource = File.ReadAllText(Path);
-
-        // Parse bindings directly from WGSL source
         var bindings = ParseWgslBindings(wgslSource);
 
-        // Write WGSL shader asset with metadata
         using var writer = new BinaryWriter(File.Create(outputPath));
         writer.WriteAssetHeader(AssetType.Shader, Shader.Version);
 
         var sourceBytes = Encoding.UTF8.GetBytes(wgslSource);
-
-        // WGSL uses same source for both stages (combined vertex+fragment)
-        writer.Write((uint)sourceBytes.Length);
-        writer.Write(sourceBytes);
         writer.Write((uint)sourceBytes.Length);
         writer.Write(sourceBytes);
         writer.Write((byte)flags);
-
-        // Write binding metadata
-        writer.Write((uint)bindings.Count);
+        writer.Write((byte)bindings.Count);
         foreach (var binding in bindings)
         {
-            writer.Write(binding.Binding);
+            writer.Write((byte)binding.Binding);
             writer.Write((byte)binding.Type);
             writer.Write(binding.Name);
         }
@@ -149,8 +140,6 @@ public class ShaderDocument : Document
         if (Blend) flags |= ShaderFlags.Blend;
         if (Depth) flags |= ShaderFlags.Depth;
         if (DepthLess) flags |= ShaderFlags.DepthLess;
-        if (Postprocess) flags |= ShaderFlags.Postprocess;
-        if (UiComposite) flags |= ShaderFlags.UiComposite;
         if (PremultipliedAlpha) flags |= ShaderFlags.PremultipliedAlpha;
         return flags;
     }
@@ -422,15 +411,13 @@ public class ShaderDocument : Document
 
         writer.Write((uint)sourceBytes.Length);
         writer.Write(sourceBytes);
-        writer.Write((uint)sourceBytes.Length); // Same source for both stages
-        writer.Write(sourceBytes);
         writer.Write((byte)flags);
 
         // Write binding metadata extracted from SPIR-V reflection
-        writer.Write((uint)bindings.Count);
+        writer.Write((byte)bindings.Count);
         foreach (var binding in bindings)
         {
-            writer.Write(binding.Binding);
+            writer.Write((byte)binding.Binding);
             writer.Write((byte)binding.Type);
             writer.Write(binding.Name);
         }

@@ -2,40 +2,36 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System.Reflection;
 using NoZ;
 using NoZ.Platform;
 using NoZ.Editor;
 using NoZ.Platform.WebGPU;
 
-// Find the editor root by walking up from the executable location
-var initialDir = Directory.GetCurrentDirectory();
-Log.Info($"Initial working directory: {initialDir}");
+// Log.Path = "log.txt";
 
-if (Directory.Exists(Path.Combine(initialDir, "library")))
-{
-    Log.Info($"Editor root: {initialDir}");
-}
-else
+// Find the editor root by walking up from the executable location
+var editorPath = Directory.GetCurrentDirectory();
+if (!Directory.Exists(Path.Combine(editorPath, "library")))
 {
     Log.Info("Searching for editor root...");
-    var exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-    var editorRoot = exeDir;
-    while (editorRoot != null && !Directory.Exists(Path.Combine(editorRoot, "library")))
-        editorRoot = Path.GetDirectoryName(editorRoot);
+    editorPath = Path.GetDirectoryName(editorPath);
+    while (editorPath != null)
+    {
+        Log.Info($"Tying {Path.Combine(editorPath, "library")}");
+        if (Directory.Exists(Path.Combine(editorPath, "library")))
+            break;
 
-    if (editorRoot != null)
-    {
-        Directory.SetCurrentDirectory(editorRoot);
-        Log.Info($"Editor root: {editorRoot}");
+        editorPath = Path.GetDirectoryName(editorPath);
     }
-    else
+
+    if (editorPath == null)
     {
-        Log.Warning($"Could not find editor root (no 'library' folder found above {exeDir})");
+        Log.Error($"Could not find editor root (no 'library' folder found above {editorPath})");
+        return;
     }
 }
 
-string? projectPath = null;
+string projectPath = editorPath;
 var clean = false;
 
 for (var i = 0; i < args.Length; i++)
@@ -46,7 +42,36 @@ for (var i = 0; i < args.Length; i++)
         clean = true;
 }
 
-EditorApplication.Init(projectPath, clean);
+if (projectPath.StartsWith('.'))
+{
+    projectPath = Path.Combine(editorPath, projectPath);
+    projectPath = Path.GetFullPath(projectPath);
+}
+
+if (!File.Exists(Path.Combine(projectPath, "editor.cfg")))
+{
+    Log.Info("Searching for project path...");
+    projectPath = Path.GetDirectoryName(projectPath)!;
+    while (projectPath != null)
+    {
+        Log.Info($"Tying {projectPath}");
+        if (File.Exists(Path.Combine(projectPath, "editor.cfg")))
+            break;
+
+        projectPath = Path.GetDirectoryName(projectPath)!;
+    }
+
+    if (projectPath == null)
+    {
+        Log.Error($"Could not find project path (no 'editor.cfg' folder found above {projectPath})");
+        return;
+    }
+}
+
+Log.Info($"Editor Path: {editorPath}");
+Log.Info($"Project Path: {projectPath}");
+
+EditorApplication.Init(editorPath, projectPath, clean);
 
 Application.Init(new ApplicationConfig
 {
@@ -57,6 +82,7 @@ Application.Init(new ApplicationConfig
     Platform = new SDLPlatform(),
     AudioBackend = new SDLAudioDriver(),
     Vtable = new EditorVtable(),
+    AssetPath = Path.Combine(EditorApplication.EditorPath, "library"),
 
     UI = new UIConfig()
     {
@@ -64,8 +90,6 @@ Application.Init(new ApplicationConfig
     },
     Graphics = new GraphicsConfig
     {
-        //Driver = new DirectX12GraphicsDriver(),
-        //Driver = new OpenGLGraphicsDriver(),
         Driver = new WebGPUGraphicsDriver(),
         CompositeShader = "composite",
         PixelsPerUnit = EditorApplication.Config.PixelsPerUnit

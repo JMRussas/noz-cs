@@ -23,7 +23,7 @@ struct VertexOutput {
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
     output.position = vec4<f32>(input.position, 0.0, 1.0);
-    output.uv = vec2<f32>(input.uv.x, 1.0 - input.uv.y);
+    output.uv = input.uv;
     return output;
 }
 

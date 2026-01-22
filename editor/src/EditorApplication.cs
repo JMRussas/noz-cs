@@ -24,11 +24,19 @@ public static class EditorApplication
 {
     public static EditorConfig Config { get; private set; } = null!;
     public static string OutputPath { get; private set; } = null!;
+    public static string EditorPath { get; private set; } = null!;
+    public static string ProjectPath { get; private set; } = null!;
 
-    public static void Init(string? projectPath, bool clean)
+    public static void Init(string editorPath, string projectPath, bool clean)
     {
+        Log.Info("Initializing Editor Application");
+        EditorPath = editorPath;
+        ProjectPath = projectPath;
+
+        Log.Info("RegisterAssetTypes");
         Application.RegisterAssetTypes();
-        
+
+        Log.Info("Register Document Defs");
         AtlasDocument.RegisterDef();
         TextureDocument.RegisterDef();
         ShaderDocument.RegisterDef();
@@ -36,19 +44,18 @@ public static class EditorApplication
         SpriteDocument.RegisterDef();
         FontDocument.RegisterDef();
 
-        Config = string.IsNullOrEmpty(projectPath)
-            ? EditorConfig.FindAndLoad()!
-            : EditorConfig.Load(projectPath)!;
-
+        Config = EditorConfig.Load(Path.Combine(ProjectPath, "editor.cfg"))!;           
         if (Config == null)
         {
             Log.Warning("editor.cfg not found");
             return;
         }
 
-        OutputPath = System.IO.Path.Combine(EditorApplication.Config.ProjectPath, EditorApplication.Config.OutputPath);
+        OutputPath = System.IO.Path.Combine(ProjectPath, EditorApplication.Config.OutputPath);
 
-        ShaderCompiler.Initialize();
+        Log.Info($"OutputPath: {OutputPath}");
+
+        ShaderCompiler.Init();
         DocumentManager.Init(Config.SourcePaths, Config.OutputPath);
         PaletteManager.Init(Config);
         AtlasManager.Init();

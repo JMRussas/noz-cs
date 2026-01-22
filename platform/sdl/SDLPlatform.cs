@@ -431,14 +431,10 @@ public unsafe partial class SDLPlatform : IPlatform
 
     public Stream? OpenAssetStream(AssetType type, string name, string extension, string? libraryPath = null)
     {
-#if DEBUG
         var typeName = type.ToString().ToLowerInvariant();
         var fileName = string.IsNullOrEmpty(extension) ? name : name + extension;
         var fullPath = Path.Combine(libraryPath ?? Application.AssetPath, typeName, fileName);
         return File.Exists(fullPath) ? File.OpenRead(fullPath) : null;
-#else
-        return null;
-#endif
     }
 }
 

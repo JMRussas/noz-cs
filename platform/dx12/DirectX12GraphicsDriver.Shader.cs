@@ -17,7 +17,7 @@ public unsafe partial class DirectX12GraphicsDriver
     private D3DCompiler _d3dCompiler = null!;
     private bool _d3dCompilerInitialized;
 
-    public nuint CreateShader(string name, string vertexSource, string fragmentSource)
+    public nuint CreateShader(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings)
     {
         if (!_d3dCompilerInitialized)
         {

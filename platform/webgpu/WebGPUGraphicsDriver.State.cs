@@ -143,8 +143,6 @@ public unsafe partial class WebGPUGraphicsDriver
 
         if (_currentBindGroup != null)
         {
-            // Defer release until after render pass ends
-            Log.Debug($"Deferring release of old bind group: {(nint)_currentBindGroup:X}");
             _bindGroupsToRelease.Add((nint)_currentBindGroup);
             _currentBindGroup = null;
         }
@@ -163,13 +161,8 @@ public unsafe partial class WebGPUGraphicsDriver
             return;
         }
 
-        Log.Debug($"Created bind group: {(nint)_currentBindGroup:X} with {validEntryCount} entries");
-
         if (_currentRenderPass != null)
-        {
-            Log.Debug($"Binding group to render pass: {(nint)_currentRenderPass:X}");
             _wgpu.RenderPassEncoderSetBindGroup(_currentRenderPass, 0, _currentBindGroup, 0, null);
-        }
 
         _state.BindGroupDirty = false;
     }

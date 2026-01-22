@@ -59,7 +59,7 @@ public interface IGraphicsDriver
     nuint CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter, string? name=null);
     void UpdateTextureLayer(nuint handle, int layer, ReadOnlySpan<byte> data);
 
-    nuint CreateShader(string name, string vertexSource, string fragmentSource);
+    nuint CreateShader(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings);
     void DestroyShader(nuint handle);
     void BindShader(nuint handle);
 
