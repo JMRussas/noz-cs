@@ -7,10 +7,10 @@ namespace NoZ.Editor;
 public static class EditorLayer
 {
     public const int Grid = 100;
-    public const int Document = 500;
-    public const int PixelGrid = 1000;
-    public const int Gizmo = 1100;
-    public const int Selection = 1200;
-    public const int Names = 1300;
-    public const int Tool = 1400;
+    public const int Document = 200;
+    public const int PixelGrid = 3000;
+    public const int Gizmo = 400;
+    public const int Selection = 500;
+    public const int Names = 600;
+    public const int Tool = 700;
 }

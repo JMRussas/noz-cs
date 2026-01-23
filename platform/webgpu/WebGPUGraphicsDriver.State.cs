@@ -39,6 +39,42 @@ public unsafe partial class WebGPUGraphicsDriver
         _state.BindGroupDirty = true;
     }
 
+    public void SetGlobalsCount(int count)
+    {
+        // Ensure we have enough globals buffers allocated
+        while (_globalsBufferCount < count)
+        {
+            var bufferDesc = new BufferDescriptor
+            {
+                Size = GlobalsBufferSize,
+                Usage = WGPUBufferUsage.Uniform | WGPUBufferUsage.CopyDst,
+                MappedAtCreation = false
+            };
+            _globalsBuffers[_globalsBufferCount] = _wgpu.DeviceCreateBuffer(_device, &bufferDesc);
+            _globalsBufferCount++;
+        }
+    }
+
+    public void SetGlobals(int index, ReadOnlySpan<byte> data)
+    {
+        if (index < 0 || index >= _globalsBufferCount)
+            return;
+
+        fixed (byte* dataPtr = data)
+        {
+            _wgpu.QueueWriteBuffer(_queue, _globalsBuffers[index], 0, dataPtr, (nuint)data.Length);
+        }
+    }
+
+    public void BindGlobals(int index)
+    {
+        if (_currentGlobalsIndex == index)
+            return;
+
+        _currentGlobalsIndex = index;
+        _state.BindGroupDirty = true;
+    }
+
     public void DrawElements(int firstIndex, int indexCount, int baseVertex = 0)
     {
         if (_currentRenderPass == null)
@@ -74,8 +110,12 @@ public unsafe partial class WebGPUGraphicsDriver
         // Apply scissor state right before draw
         if (_state.ScissorEnabled)
         {            
-            _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass,
-                (uint)_state.ScissorX, (uint)(_state.ViewportH - _state.ScissorY - _state.ScissorH), (uint)_state.ScissorW, (uint)_state.ScissorH);
+            _wgpu.RenderPassEncoderSetScissorRect(
+                _currentRenderPass,
+                (uint)_state.Scissor.X,
+                (uint)(_state.Viewport.Height - _state.Scissor.Y - _state.Scissor.Height),
+                (uint)_state.Scissor.Width,
+                (uint)_state.Scissor.Height);
         }
         else
         {
@@ -119,36 +159,54 @@ public unsafe partial class WebGPUGraphicsDriver
             {
                 case ShaderBindingType.UniformBuffer:
                 {
-                    // Get uniform data by name
-                    if (!_uniformData.TryGetValue(binding.Name, out var uniformData))
-                    {
-                        Log.Error($"Uniform '{binding.Name}' not set!");
-                        _state.BindGroupDirty = false;
-                        return;
-                    }
-
-                    // Get or create per-shader buffer for this uniform
                     WGPUBuffer* buffer;
-                    if (!shader.UniformBuffers.TryGetValue(binding.Name, out var bufferPtr) || bufferPtr == 0)
+                    ulong bufferSize;
+
+                    // Use indexed globals buffer for "globals" uniform
+                    if (binding.Name == "globals")
                     {
-                        var bufferDesc = new BufferDescriptor
+                        if (_currentGlobalsIndex < 0 || _currentGlobalsIndex >= _globalsBufferCount)
                         {
-                            Size = (ulong)uniformData.Length,
-                            Usage = WGPUBufferUsage.Uniform | WGPUBufferUsage.CopyDst,
-                            MappedAtCreation = false,
-                        };
-                        buffer = _wgpu.DeviceCreateBuffer(_device, &bufferDesc);
-                        shader.UniformBuffers[binding.Name] = (nint)buffer;
+                            Log.Error($"Globals index {_currentGlobalsIndex} out of range!");
+                            _state.BindGroupDirty = false;
+                            return;
+                        }
+                        buffer = _globalsBuffers[_currentGlobalsIndex];
+                        bufferSize = GlobalsBufferSize;
                     }
                     else
                     {
-                        buffer = (WGPUBuffer*)bufferPtr;
-                    }
+                        // Get uniform data by name for non-globals uniforms
+                        if (!_uniformData.TryGetValue(binding.Name, out var uniformData))
+                        {
+                            Log.Error($"Uniform '{binding.Name}' not set!");
+                            _state.BindGroupDirty = false;
+                            return;
+                        }
 
-                    // Write current uniform data to the shader's buffer
-                    fixed (byte* dataPtr = uniformData)
-                    {
-                        _wgpu.QueueWriteBuffer(_queue, buffer, 0, dataPtr, (nuint)uniformData.Length);
+                        // Get or create per-shader buffer for this uniform
+                        if (!shader.UniformBuffers.TryGetValue(binding.Name, out var bufferPtr) || bufferPtr == 0)
+                        {
+                            var bufferDesc = new BufferDescriptor
+                            {
+                                Size = (ulong)uniformData.Length,
+                                Usage = WGPUBufferUsage.Uniform | WGPUBufferUsage.CopyDst,
+                                MappedAtCreation = false,
+                            };
+                            buffer = _wgpu.DeviceCreateBuffer(_device, &bufferDesc);
+                            shader.UniformBuffers[binding.Name] = (nint)buffer;
+                        }
+                        else
+                        {
+                            buffer = (WGPUBuffer*)bufferPtr;
+                        }
+
+                        // Write current uniform data to the shader's buffer
+                        fixed (byte* dataPtr = uniformData)
+                        {
+                            _wgpu.QueueWriteBuffer(_queue, buffer, 0, dataPtr, (nuint)uniformData.Length);
+                        }
+                        bufferSize = (ulong)uniformData.Length;
                     }
 
                     entries[validEntryCount++] = new BindGroupEntry
@@ -156,7 +214,7 @@ public unsafe partial class WebGPUGraphicsDriver
                         Binding = binding.Binding,
                         Buffer = buffer,
                         Offset = 0,
-                        Size = (ulong)uniformData.Length,
+                        Size = bufferSize,
                     };
                     break;
                 }

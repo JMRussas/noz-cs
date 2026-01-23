@@ -3,6 +3,7 @@
 //
 
 using System.Text;
+using Silk.NET.Core.Native;
 using Silk.NET.WebGPU;
 using WGPUTexture = Silk.NET.WebGPU.Texture;
 using WGPUTextureFormat = Silk.NET.WebGPU.TextureFormat;
@@ -141,7 +142,13 @@ public unsafe partial class WebGPUGraphicsDriver
         };
 
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, in desc);
-        
+
+        // Debug group for RenderDoc
+        fixed (byte* label = "ScenePass\0"u8)
+        {
+            _wgpu.RenderPassEncoderPushDebugGroup(_currentRenderPass, label);
+        }
+
         _wgpu.RenderPassEncoderSetViewport(_currentRenderPass, 0, 0, _surfaceWidth, _surfaceHeight, 0, 1);
         _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass, 0, 0, (uint)_surfaceWidth, (uint)_surfaceHeight);
     }
@@ -151,6 +158,7 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_currentRenderPass == null)
             throw new InvalidOperationException("EndScenePass called without matching BeginScenePass");
 
+        _wgpu.RenderPassEncoderPopDebugGroup(_currentRenderPass);
         _wgpu.RenderPassEncoderEnd(_currentRenderPass);
         _wgpu.RenderPassEncoderRelease(_currentRenderPass);
         _currentRenderPass = null;
@@ -196,6 +204,12 @@ public unsafe partial class WebGPUGraphicsDriver
 
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, &desc);
 
+        // Debug group for RenderDoc
+        fixed (byte* label = "Composite\0"u8)
+        {
+            _wgpu.RenderPassEncoderPushDebugGroup(_currentRenderPass, label);
+        }
+
         _wgpu.RenderPassEncoderSetViewport(_currentRenderPass, 0, 0, _surfaceWidth, _surfaceHeight, 0, 1);
         _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass, 0, 0, (uint)_surfaceWidth, (uint)_surfaceHeight);
 
@@ -204,6 +218,7 @@ public unsafe partial class WebGPUGraphicsDriver
         BindMesh(_fullscreenQuadMesh);
         DrawElements(0, 6, 0);
 
+        _wgpu.RenderPassEncoderPopDebugGroup(_currentRenderPass);
         _wgpu.RenderPassEncoderEnd(_currentRenderPass);
         _wgpu.RenderPassEncoderRelease(_currentRenderPass);
         _currentRenderPass = null;
@@ -315,6 +330,12 @@ public unsafe partial class WebGPUGraphicsDriver
 
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, &desc);
 
+        // Debug group for RenderDoc
+        fixed (byte* label = "UIPass\0"u8)
+        {
+            _wgpu.RenderPassEncoderPushDebugGroup(_currentRenderPass, label);
+        }
+
         _wgpu.RenderPassEncoderSetViewport(_currentRenderPass, 0, 0, _surfaceWidth, _surfaceHeight, 0, 1);
         _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass, 0, 0, (uint)_surfaceWidth, (uint)_surfaceHeight);
 
@@ -331,6 +352,7 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_currentRenderPass == null)
             return;
 
+        _wgpu.RenderPassEncoderPopDebugGroup(_currentRenderPass);
         _wgpu.RenderPassEncoderEnd(_currentRenderPass);
         _wgpu.RenderPassEncoderRelease(_currentRenderPass);
         _currentRenderPass = null;

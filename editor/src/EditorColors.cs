@@ -11,14 +11,6 @@ public class EditorColors
     public Color SelectionColor;
     public Color SelectionTextColor;
 
-    // Workspace
-    public Color OverlayBackgroundColor;
-    public Color OverlayTextColor;
-    public Color OverlayAccentTextColor;
-    public Color OverlayDisabledTextColor;
-    public Color OverlayIconColor;
-    public Color OverlayContentColor;
-
     // Button
     public Color ButtonColor;
     public Color ButtonHoverColor;
@@ -75,10 +67,21 @@ public class EditorColors
         public Color SelectedSegment;
     }
 
+    public struct OverlayColors
+    {
+        public Color Fill;
+        public Color Text;
+        public Color AccentText;
+        public Color DisabledText;
+        public Color Icon;
+        public Color Content;
+    }
+
     public WorkspaceColors Workspace;
     public SpriteEditorColors SpriteEditor;
     public ShapeColors Shape;
     public PopupColors Popup;
+    public OverlayColors Overlay;
 
     private static readonly Color selectionColor = Color.FromRgb(0x0099ff);
     public static EditorColors Dark => new()
@@ -95,12 +98,6 @@ public class EditorColors
         ButtonDisabledTextColor = Color.FromRgb(0x636363),
 
 
-        OverlayBackgroundColor = Color.FromRgb(0x111111),
-        OverlayTextColor = Color.FromRgb(0x979797),
-        OverlayAccentTextColor = Color.FromRgb(0xd2d2d2),
-        OverlayDisabledTextColor = Color.FromRgb(0x4a4a4a),
-        OverlayIconColor = Color.FromRgb(0x585858),
-        OverlayContentColor = Color.FromRgb(0x2a2a2a),
         ContextMenuSeparatorColor = Color.FromRgb(0x2a2a2a),
         ContextMenuTitleColor = Color.FromRgb(0x636363),
 
@@ -127,9 +124,9 @@ public class EditorColors
 
         Popup = new()
         {
-            Fill = Color.FromRgb(0x2b2b2b),
-            Text = Color.FromRgb(0xFFFFFF),
-            Spacer = Color.FromRgb(0x363636),
+            Fill = Color.FromRgb(0x181818),
+            Text = Color.FromRgb(0xdbdbdb),
+            Spacer = Color.FromRgb(0x2f2f2f),
         },
 
         Shape = new ()
@@ -138,6 +135,16 @@ public class EditorColors
             SelectedAnchor = Color.FromRgb(0xff7900),
             Segment = Color.FromRgb(0x1d1d1d),
             SelectedSegment = Color.FromRgb(0xfd970e)
+        },
+
+        Overlay = new()
+        {
+            Fill = Color.FromRgb(0x111111),
+            Text = Color.FromRgb(0x979797),
+            AccentText = Color.FromRgb(0xd2d2d2),
+            DisabledText = Color.FromRgb(0x4a4a4a),
+            Icon = Color.FromRgb(0x585858),
+            Content = Color.FromRgb(0x2a2a2a),
         },
 
         SpriteEditor = new()

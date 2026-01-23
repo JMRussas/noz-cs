@@ -116,20 +116,17 @@ namespace NoZ.Editor
             base.PostLoad();
         }
 
-        public Rect ToUV(RectInt rect, Vector2Int size)
+        private static Rect ToUV(in SpriteRect rect)
         {
+            if (rect.Sprite == null)
+                return Rect.Zero;
+
+            var size = rect.Sprite.RasterBounds.Size;
             var ts = (float)EditorApplication.Config.AtlasSize;
-            var u = rect.Left / ts;
-            var v = rect.Top / ts;
-            var s = (rect.Left + size.X) / ts;
-            var t = (rect.Top + size.Y) / ts;
-            var hp = 0.1f / ts;
-
-            //u += hp;
-            //v += hp;
-            //s -= hp;
-            //t -= hp;
-
+            var u = (rect.Rect.Left + 1)/ ts;
+            var v = (rect.Rect.Top + 1) / ts;
+            var s = u + size.X / ts;
+            var t = v + size.Y / ts;
             return Rect.FromMinMax(u, v, s, t);
         }
 
@@ -155,8 +152,7 @@ namespace NoZ.Editor
                 }
                     
                 rect.Sprite.Atlas = this;
-                rect.Sprite.AtlasRect = ToUV(rect.Rect, rect.Sprite.RasterBounds.Size);
-                rect.Sprite.AtlasRect2 = rect.Rect;
+                rect.Sprite.AtlasUV = ToUV(rect);
             }
         }
 
@@ -186,13 +182,13 @@ namespace NoZ.Editor
                 rect.FrameCount = sprite.FrameCount;
 
                 sprite.Atlas = this;
-                sprite.AtlasRect = ToUV(new RectInt(rect.Rect.Position, size), size);
+                sprite.AtlasUV = ToUV(rect);
 
                 return true;
             }
 
             // Pack a new one
-            var rectIndex = _packer.Insert(size, out var packedRect);
+            var rectIndex = _packer.Insert(size + Vector2Int.One * 2, out var packedRect);
             if (rectIndex == -1)
                 return false;
             Debug.Assert(rectIndex == _rects.Count);
@@ -206,7 +202,7 @@ namespace NoZ.Editor
             });
 
             sprite.Atlas = this;
-            sprite.AtlasRect = ToUV(packedRect, sprite.RasterBounds.Size);
+            sprite.AtlasUV = ToUV(_rects[^1]);
 
             return true;
         }
@@ -230,7 +226,7 @@ namespace NoZ.Editor
                     frame.Shape.Rasterize(
                         _image,
                         palette.Colors,
-                        rect.Rect.Position - frame.Shape.RasterBounds.Position);
+                        rect.Rect.Position + Vector2Int.One - frame.Shape.RasterBounds.Position);
                 }
             }
 

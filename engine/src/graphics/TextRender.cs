@@ -100,6 +100,7 @@ internal static class TextRender
         if (atlasTexture == null)
             return;
 
+        using var _ = Graphics.PushState();
         Graphics.SetShader(_textShader);
         Graphics.SetTexture(atlasTexture);
         Graphics.SetMesh(_mesh);

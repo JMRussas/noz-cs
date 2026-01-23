@@ -34,7 +34,6 @@ public class Shader : Asset
     internal const byte Version = 2;
 
     public ShaderFlags Flags { get; private set; }
-    internal nuint Handle { get; private set; }
     public List<ShaderBinding> Bindings { get; private set; } = new();
     public string Source { get; private set; } = "";
 

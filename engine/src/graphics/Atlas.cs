@@ -16,8 +16,6 @@ public class Atlas : Asset
     public byte[] Data { get; private init; } = [];
     public int Index { get; internal set; }
 
-    internal nuint Handle { get; private set; }
-
     private Atlas(string name) : base(AssetType.Atlas, name)
     {
     }

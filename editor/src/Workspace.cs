@@ -280,30 +280,29 @@ public static class Workspace
 
     private static void DrawNames()
     {
-        var font = EditorAssets.Fonts.Seguisb;
-
-        Graphics.PushState();
-        Graphics.SetLayer(EditorLayer.Names);
-        Graphics.SetColor(EditorStyle.TextColor);
-
-        var scale = 1f / _zoom;
-        var fontSize = EditorStyle.Workspace.NameSize * scale;
-        var padding = EditorStyle.Workspace.NamePadding * scale;
-
-        foreach (var doc in DocumentManager.Documents)
+        using (Graphics.PushState())
         {
-            if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped)
-                continue;
+            var font = EditorAssets.Fonts.Seguisb;
+            Graphics.SetLayer(EditorLayer.Names);
+            Graphics.SetColor(EditorStyle.TextColor);
 
-            var bounds = doc.Bounds.Translate(doc.Position);
-            var textSize = TextRender.Measure(doc.Name, font, fontSize);
-            var textX = bounds.Center.X - textSize.X * 0.5f;
-            var textY = bounds.Bottom + padding;
-            Graphics.SetTransform(Matrix3x2.CreateTranslation(textX, textY));
-            TextRender.Draw(doc.Name, font, fontSize);
+            var scale = 1f / _zoom;
+            var fontSize = EditorStyle.Workspace.NameSize * scale;
+            var padding = EditorStyle.Workspace.NamePadding * scale;
+
+            foreach (var doc in DocumentManager.Documents)
+            {
+                if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped)
+                    continue;
+
+                var bounds = doc.Bounds.Translate(doc.Position);
+                var textSize = TextRender.Measure(doc.Name, font, fontSize);
+                var textX = bounds.Center.X - textSize.X * 0.5f;
+                var textY = bounds.Bottom + padding;
+                Graphics.SetTransform(Matrix3x2.CreateTranslation(textX, textY));
+                TextRender.Draw(doc.Name, font, fontSize);
+            }
         }
-
-        Graphics.PopState();
     }
 
     private static void BeginMoveTool()

@@ -36,9 +36,9 @@ public interface IGraphicsDriver
     void EndFrame();
 
     void Clear(Color color);
-    void SetViewport(int x, int y, int width, int height);
-    void SetScissor(int x, int y, int width, int height);
-    void DisableScissor();
+    void SetViewport(in RectInt viewport);
+    void SetScissor(in RectInt scissor);
+    void ClearScissor();
 
     nuint CreateMesh<T>(int maxVertices, int maxIndices, BufferUsage usage, string name = "") where T : IVertex;
     void DestroyMesh(nuint handle);
@@ -66,6 +66,10 @@ public interface IGraphicsDriver
     void SetBlendMode(BlendMode mode);
     void SetTextureFilter(TextureFilter filter);
     void SetUniform(string name, ReadOnlySpan<byte> data);
+
+    void SetGlobalsCount(int count);
+    void SetGlobals(int index, ReadOnlySpan<byte> data);
+    void BindGlobals(int index);
 
     void DrawElements(int firstIndex, int indexCount, int baseVertex = 0);
 

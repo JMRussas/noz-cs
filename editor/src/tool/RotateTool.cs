@@ -6,26 +6,22 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-public class RotateTool : Tool
+public class RotateTool(
+    in Vector2 pivotWorld,
+    in Vector2 pivotLocal,
+    in Matrix3x2 invTransform,
+    Action<float> update,
+    Action<float> commit,
+    Action cancel) : Tool
 {
-    private readonly Vector2 _pivotWorld;
-    private readonly Vector2 _pivotLocal;
-    private readonly Matrix3x2 _invTransform;
-    private readonly Action<float> _update;
-    private readonly Action<float> _commit;
-    private readonly Action _cancel;
+    private readonly Vector2 _pivotWorld = pivotWorld;
+    private readonly Vector2 _pivotLocal = pivotLocal;
+    private readonly Matrix3x2 _invTransform = invTransform;
+    private readonly Action<float> _update = update;
+    private readonly Action<float> _commit = commit;
+    private readonly Action _cancel = cancel;
 
     private float _startAngle;
-
-    public RotateTool(Vector2 pivotWorld, Vector2 pivotLocal, Matrix3x2 invTransform, Action<float> update, Action<float> commit, Action cancel)
-    {
-        _pivotWorld = pivotWorld;
-        _pivotLocal = pivotLocal;
-        _invTransform = invTransform;
-        _update = update;
-        _commit = commit;
-        _cancel = cancel;
-    }
 
     public override void Begin()
     {
@@ -43,15 +39,13 @@ public class RotateTool : Tool
 
         if (Input.WasButtonPressed(InputCode.MouseLeft) || Input.WasButtonPressed(InputCode.KeyEnter))
         {
-            var angle = GetCurrentAngle();
-            _commit(angle);
+            _commit(GetCurrentAngle());
             Input.ConsumeButton(InputCode.MouseLeft);
             Workspace.EndTool();
             return;
         }
 
-        var currentAngle = GetCurrentAngle();
-        _update(currentAngle);
+        _update(GetCurrentAngle());
     }
 
     private float GetAngleFromPivot(Vector2 localPos)
@@ -77,18 +71,14 @@ public class RotateTool : Tool
 
     public override void Draw()
     {
-        Graphics.PushState();
-        Graphics.SetLayer(EditorLayer.Tool);
-
-        // Draw pivot point
-        Graphics.SetColor(EditorStyle.SelectionColor);
-        Gizmos.DrawRect(_pivotWorld, EditorStyle.Shape.AnchorSize * 1.5f, order: 10);
-
-        // Draw line from pivot to mouse
-        Graphics.SetColor(EditorStyle.SelectionColor.WithAlpha(0.7f));
-        Gizmos.DrawLine(_pivotWorld, Workspace.MouseWorldPosition, EditorStyle.Shape.SegmentWidth * 2, order: 9);
-
-        Graphics.PopState();
+        using (Gizmos.PushState(EditorLayer.Tool))
+        {
+            Graphics.SetTransform(Matrix3x2.Identity);
+            Graphics.SetColor(EditorStyle.SelectionColor);
+            Gizmos.DrawRect(_pivotWorld, EditorStyle.Shape.AnchorSize * 1.5f, order: 10);
+            Graphics.SetColor(EditorStyle.SelectionColor.WithAlpha(0.7f));
+            Gizmos.DrawLine(_pivotWorld, Workspace.MouseWorldPosition, EditorStyle.Shape.SegmentWidth * 2, order: 9);
+        }
     }
 
     public override void Cancel()

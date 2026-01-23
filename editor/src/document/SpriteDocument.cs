@@ -28,9 +28,7 @@ public class SpriteDocument : Document
     public RectInt RasterBounds { get; private set; }
 
     internal AtlasDocument? Atlas;
-    internal Rect AtlasRect;
-    internal RectInt AtlasRect2;
-    internal int AtlasIndex;
+    internal Rect AtlasUV;
 
     public SpriteDocument()
     {
@@ -132,7 +130,6 @@ public class SpriteDocument : Document
         }
 
         f.Shape.SetPathFillColor(pathIndex, fillColor);
-        f.Shape.SetPathTransform(pathIndex, position, rotation, scale);
     }
 
     private static void ParseAnchor(Shape shape, ushort pathIndex, ref Tokenizer tk)
@@ -207,17 +204,6 @@ public class SpriteDocument : Document
 
             writer.WriteLine($"p c {path.FillColor}");
 
-            // Save transform if not identity
-            var hasTransform = path.Position != Vector2.Zero ||
-                               MathF.Abs(path.Rotation) > float.Epsilon ||
-                               path.Scale != Vector2.One;
-            if (hasTransform)
-            {
-                writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                    "t {0} {1} {2} {3} {4}",
-                    path.Position.X, path.Position.Y, path.Rotation, path.Scale.X, path.Scale.Y));
-            }
-
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {
                 var anchor = shape.GetAnchor((ushort)(path.AnchorStart + aIdx));
@@ -234,25 +220,18 @@ public class SpriteDocument : Document
     public override void Draw()
     {
         var size = Bounds.Size;
-        if (size.X <= 0 || size.Y <= 0)
+        if (size.X <= 0 || size.Y <= 0 || Atlas == null)
             return;
 
         using (Graphics.PushState())
         {
-            if (Atlas != null)
-            {
-                ref var frame0 = ref Frames[0];
-                Graphics.SetTexture(Atlas.Texture);
-                Graphics.SetShader(EditorAssets.Shaders.Texture);
-                Graphics.SetColor(Color.White);
-                Graphics.Draw(frame0.Shape.RasterBounds.ToRect().Scale(1.0f / EditorApplication.Config.PixelsPerUnit), AtlasRect);
-            }
-            else
-            {
-                Graphics.SetTexture(Workspace.WhiteTexture);
-                Graphics.SetColor(new Color(200 / 255f, 200 / 255f, 200 / 255f, 1f));
-                Graphics.Draw(Bounds);
-            }
+            ref var frame0 = ref Frames[0];
+            Graphics.SetTexture(Atlas.Texture);
+            Graphics.SetShader(EditorAssets.Shaders.Texture);
+            Graphics.SetColor(Color.White);
+            Graphics.Draw(
+                frame0.Shape.RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv),
+                AtlasUV);
         }
     }
 
@@ -286,10 +265,10 @@ public class SpriteDocument : Document
         writer.Write((short)RasterBounds.Top);
         writer.Write((short)RasterBounds.Right);
         writer.Write((short)RasterBounds.Bottom);
-        writer.Write(AtlasRect.Left);
-        writer.Write(AtlasRect.Top);
-        writer.Write(AtlasRect.Right);
-        writer.Write(AtlasRect.Bottom);
+        writer.Write(AtlasUV.Left);
+        writer.Write(AtlasUV.Top);
+        writer.Write(AtlasUV.Right);
+        writer.Write(AtlasUV.Bottom);
         writer.Write((float)EditorApplication.Config.PixelsPerUnit);
         writer.Write((byte)TextureFilter.Point);
     }

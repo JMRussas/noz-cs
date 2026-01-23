@@ -5,7 +5,9 @@
 using System.Runtime.InteropServices;
 using System.Numerics;
 using Silk.NET.Core.Loader;
+using Silk.NET.Core.Native;
 using Silk.NET.WebGPU;
+using Silk.NET.WebGPU.Extensions.Dawn;
 using WGPUBuffer = Silk.NET.WebGPU.Buffer;
 using WGPUTexture = Silk.NET.WebGPU.Texture;
 using WGPUTextureFormat = Silk.NET.WebGPU.TextureFormat;
@@ -105,6 +107,13 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     // Per-name uniform data storage - written to per-shader buffers when bind groups are created
     private readonly Dictionary<string, byte[]> _uniformData = new();
 
+    // Per-batch globals buffer pool
+    private const int MaxGlobalsBuffers = 64;
+    private const int GlobalsBufferSize = 80; // mat4 (64) + float (4) + padding (12) = 80 bytes
+    private WGPUBuffer*[] _globalsBuffers = new WGPUBuffer*[MaxGlobalsBuffers];
+    private int _globalsBufferCount;
+    private int _currentGlobalsIndex = -1;
+
     public string ShaderExtension => "";
 
     private struct CachedState
@@ -117,9 +126,9 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public fixed ulong BoundUniformBuffers[4];
         public bool PipelineDirty;
         public bool BindGroupDirty;
-        public int ViewportX, ViewportY, ViewportW, ViewportH;
+        public RectInt Viewport;
         public bool ScissorEnabled;
-        public int ScissorX, ScissorY, ScissorW, ScissorH;
+        public RectInt Scissor;
         public int CurrentPassSampleCount;
     }
 
@@ -160,6 +169,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
 
     private struct ShaderInfo
     {
+        public string Name;
         public ShaderModule* VertexModule;
         public ShaderModule* FragmentModule;
         public BindGroupLayout* BindGroupLayout0;
@@ -293,9 +303,24 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     private void RequestDevice()
     {
         var tcs = new TaskCompletionSource<nint>(); // Store pointer as nint
+
+        using var labelToggle = SilkMarshal.StringToMemory("use_user_defined_labels_in_backend");
+
+        var enabledToggles = stackalloc byte*[1];
+        enabledToggles[0] = (byte*)labelToggle;
+
+        var togglesDescriptor = stackalloc DawnTogglesDescriptor[1];
+        togglesDescriptor->Chain = new ChainedStruct { SType = (SType)0x0005000A };
+        togglesDescriptor->EnabledToggleCount = 1;
+        togglesDescriptor->EnabledToggles = enabledToggles;
+        togglesDescriptor->DisabledToggleCount = 0;
+        togglesDescriptor->DisabledToggles = null;
+
+        using var deviceLabel = SilkMarshal.StringToMemory("NoZ Device");
         var deviceDesc = new DeviceDescriptor
         {
-            Label = (byte*)Marshal.StringToHGlobalAnsi("NoZ Device"),
+            NextInChain = (ChainedStruct*)togglesDescriptor,
+            Label = (byte*)deviceLabel,
         };
 
         PfnRequestDeviceCallback callback = new((status, device, message, userdata) =>
@@ -606,47 +631,41 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         // Clear is handled in BeginScenePass
     }
 
-    public void SetViewport(int x, int y, int width, int height)
+    public void SetViewport(in RectInt viewport)
     {
-        // Clamp viewport to surface bounds (WebGPU requires viewport within render target)
-        width = Math.Min(width, _surfaceWidth - x);
-        height = Math.Min(height, _surfaceHeight - y);
-        if (width <= 0 || height <= 0)
+        var clampedViewport = viewport;
+        clampedViewport.Width = Math.Min(viewport.Width, _surfaceWidth - viewport.X);
+        clampedViewport.Height = Math.Min(viewport.Height, _surfaceHeight - viewport.Y);
+        if (clampedViewport.Width <= 0 || clampedViewport.Height <= 0)
             return;
 
-        if (_state.ViewportX == x && _state.ViewportY == y &&
-            _state.ViewportW == width && _state.ViewportH == height)
+        if (_state.Viewport == clampedViewport)
             return;
 
-        _state.ViewportX = x;
-        _state.ViewportY = y;
-        _state.ViewportW = width;
-        _state.ViewportH = height;
-
+        _state.Viewport = clampedViewport;
         if (_currentRenderPass != null)
-        {
-            _wgpu.RenderPassEncoderSetViewport(_currentRenderPass,
-                x, y, width, height, 0.0f, 1.0f);
-        }
+            _wgpu.RenderPassEncoderSetViewport(
+                _currentRenderPass,
+                clampedViewport.X,
+                clampedViewport.Y,
+                clampedViewport.Width,
+                clampedViewport.Height, 0.0f, 1.0f);
     }
 
-    public void SetScissor(int x, int y, int width, int height)
+    public void SetScissor(in RectInt scissor)
     {
         _state.ScissorEnabled = true;
-        _state.ScissorX = Math.Max(0, x);
-        _state.ScissorY = Math.Max(0, y);
-        _state.ScissorW = Math.Max(1, width);
-        _state.ScissorH = Math.Max(1, height);
+        _state.Scissor = scissor;
 
         if (_currentRenderPass != null)
         {
             _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass,
-                (uint)_state.ScissorX, (uint)_state.ScissorY,
-                (uint)_state.ScissorW, (uint)_state.ScissorH);
+                (uint)_state.Scissor.X, (uint)_state.Scissor.Y,
+                (uint)_state.Scissor.Width, (uint)_state.Scissor.Height);
         }
     }
 
-    public void DisableScissor()
+    public void ClearScissor()
     {
         _state.ScissorEnabled = false;
 

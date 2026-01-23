@@ -9,6 +9,7 @@ namespace NoZ;
 
 public class Asset : IDisposable {
     internal AssetDef Def { get; }
+    protected internal nuint Handle { get; protected set; }
     public string Name { get; private set; }
     private static readonly AssetDef[] Defs = new AssetDef[Constants.AssetTypeCount];
     private static readonly Dictionary<(AssetType, string), Asset> _registry = new();
@@ -64,6 +65,15 @@ public class Asset : IDisposable {
         
         _registry.TryGetValue((type, name), out var asset);
         return asset as T;
+    }
+
+    public static T? Get<T>(AssetType type, nuint handle) where T : Asset
+    {
+        foreach (var asset in _registry.Values)
+            if (asset.Def.Type == type && asset.Handle == handle)
+                return asset as T;
+
+        return null;
     }
 
     private static Stream? LoadAssetStream(string assetName, AssetType assetType, string? libraryPath = null)

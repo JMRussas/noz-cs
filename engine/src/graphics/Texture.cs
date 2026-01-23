@@ -16,8 +16,6 @@ public class Texture : Asset
     public byte[] Data { get; private init; } = [];
     public bool IsArray { get; private set; }   
 
-    internal nuint Handle { get; private set; }
-
     private Texture(string name, bool isArray) : base(AssetType.Texture, name)
     {
         IsArray = isArray;  

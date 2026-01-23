@@ -241,6 +241,7 @@ public unsafe partial class WebGPUGraphicsDriver
         // Create texture view
         var viewDesc = new TextureViewDescriptor
         {
+            Label = (byte*)(name != null ? Marshal.StringToHGlobalAnsi($"{name}_view") : IntPtr.Zero),
             Format = wgpuFormat,
             Dimension = TextureViewDimension.Dimension2D,
             BaseMipLevel = 0,
@@ -255,6 +256,7 @@ public unsafe partial class WebGPUGraphicsDriver
         var filterMode = MapFilterMode(filter);
         var samplerDesc = new SamplerDescriptor
         {
+            Label = (byte*)(name != null ? Marshal.StringToHGlobalAnsi($"{name}_sampler") : IntPtr.Zero),
             AddressModeU = AddressMode.Repeat,
             AddressModeV = AddressMode.Repeat,
             AddressModeW = AddressMode.Repeat,
@@ -473,6 +475,7 @@ public unsafe partial class WebGPUGraphicsDriver
         // Create texture view
         var viewDesc = new TextureViewDescriptor
         {
+            Label = (byte*)(name != null ? Marshal.StringToHGlobalAnsi($"{name}_view") : IntPtr.Zero),
             Format = wgpuFormat,
             Dimension = TextureViewDimension.Dimension2DArray,
             BaseMipLevel = 0,
@@ -487,6 +490,7 @@ public unsafe partial class WebGPUGraphicsDriver
         var filterMode = MapFilterMode(filter);
         var samplerDesc = new SamplerDescriptor
         {
+            Label = (byte*)(name != null ? Marshal.StringToHGlobalAnsi($"{name}_sampler") : IntPtr.Zero),
             AddressModeU = AddressMode.Repeat,
             AddressModeV = AddressMode.Repeat,
             AddressModeW = AddressMode.Repeat,

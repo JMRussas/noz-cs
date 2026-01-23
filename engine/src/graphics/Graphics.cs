@@ -2,12 +2,13 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-// #define NOZ_RENDER_DEBUG
-// #define NOZ_RENDER_DEBUG_VERBOSE
+// #define NOZ_GRAPHICS_DEBUG
+// #define NOZ_GRAPHICS_DEBUG_VERBOSE
 
 using System.Diagnostics;
 using System.Numerics;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using NoZ.Platform;
 
 namespace NoZ;
@@ -19,11 +20,11 @@ public static unsafe class Graphics
     private const int MaxVertices = 65536;
     private const int MaxIndices = 196608;
     private const int MaxTextures = 8;
-    private const int IndexShift = 0;
-    private const int OrderShift = 16;
-    private const int GroupShift = 32;
-    private const int LayerShift = 52;
-    private const int PassShift = 60;
+    private const int IndexShift = 0;   // bits 0-15 (16 bits)
+    private const int OrderShift = 16;  // bits 16-31 (16 bits)
+    private const int GroupShift = 32;  // bits 32-47 (16 bits)
+    private const int LayerShift = 48;  // bits 48-59 (12 bits, mask to 0xFFF)
+    private const int PassShift = 60;   // bits 60-63 (4 bits)
     private const long SortKeyMergeMask = 0x7FFFFFFFFFFF0000;
 
     public struct AutoState(bool pop) : IDisposable
@@ -38,17 +39,12 @@ public static unsafe class Graphics
         public fixed ulong Textures[MaxTextures];
         public BlendMode BlendMode;
         public TextureFilter TextureFilter;
-        public int ViewportX;
-        public int ViewportY;
-        public int ViewportW;
-        public int ViewportH;
-        public int ScissorX;
-        public int ScissorY;
-        public int ScissorWidth;
-        public int ScissorHeight;
+        public RectInt Viewport;
+        public RectInt Scissor;
         public nuint Mesh;
         public bool ScissorEnabled;
         public byte Pass;
+        public ushort GlobalsIndex;
     }
 
     private struct Batch
@@ -70,16 +66,17 @@ public static unsafe class Graphics
         public ushort BoneIndex;
         public BlendMode BlendMode;
         public TextureFilter TextureFilter;
-        public int ViewportX;
-        public int ViewportY;
-        public int ViewportWidth;
-        public int ViewportHeight;
+        public RectInt Viewport;
         public bool ScissorEnabled;
-        public int ScissorX;
-        public int ScissorY;
-        public int ScissorWidth;
-        public int ScissorHeight;
+        public RectInt Scissor;
         public nuint Mesh;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct GlobalsSnapshot
+    {
+        public Matrix4x4 Projection;
+        public float Time;
     }
 
     private const int MaxBonesPerEntity = 64;
@@ -129,6 +126,7 @@ public static unsafe class Graphics
     private static NativeArray<DrawCommand> _commands;
     private static NativeArray<Batch> _batches;
     private static NativeArray<BatchState> _batchStates;
+    private static NativeArray<GlobalsSnapshot> _globalsSnapshots;
     private static ushort _currentBatchState;
     #endregion
     
@@ -189,20 +187,13 @@ public static unsafe class Graphics
             CurrentState.Textures[i] = 0;
 
         CurrentState.ScissorEnabled = false;
-        CurrentState.ScissorX = 0;
-        CurrentState.ScissorY = 0;
-        CurrentState.ScissorWidth = 0;
-        CurrentState.ScissorHeight = 0;
-
+        CurrentState.Scissor = RectInt.Zero;
+        CurrentState.Viewport = RectInt.Zero;
         CurrentState.Mesh = _mesh;
+
         _currentPass = 0;
+        _boneRow = 1;
 
-        _boneRow = 1; // Row 0 is identity, start from row 1
-
-        CurrentState.ViewportX = -1;
-        CurrentState.ViewportY = -1;
-        CurrentState.ViewportWidth = -1;
-        CurrentState.ViewportHeight = -1;
         var size = Application.WindowSize;
         SetViewport(0, 0, (int)size.X, (int)size.Y);
     }
@@ -215,6 +206,7 @@ public static unsafe class Graphics
         _commands = new NativeArray<DrawCommand>(_maxDrawCommands);
         _batches = new NativeArray<Batch>(_maxBatches);
         _batchStates = new NativeArray<BatchState>(_maxBatches);
+        _globalsSnapshots = new NativeArray<GlobalsSnapshot>(64);
 
         _mesh = Driver.CreateMesh<MeshVertex>(
             MaxVertices,
@@ -231,7 +223,8 @@ public static unsafe class Graphics
             BoneTextureWidth, MaxBoneRows,
             ReadOnlySpan<byte>.Empty,
             TextureFormat.RGBA32F,
-            TextureFilter.Point);
+            TextureFilter.Point,
+            name: "Bones");
     }
 
     public static void Shutdown()
@@ -240,6 +233,7 @@ public static unsafe class Graphics
         _vertices.Dispose();
         _commands.Dispose();
         _indices.Dispose();
+        _globalsSnapshots.Dispose();
 
         Driver.DestroyMesh(_mesh);
         Driver.DestroyTexture(_boneTexture);
@@ -284,6 +278,7 @@ public static unsafe class Graphics
     public static void SetCamera(Camera? camera)
     {
         Camera = camera;
+        _batchStateDirty = true;
         if (camera == null) return;
 
         var viewport = camera.Viewport;
@@ -298,7 +293,6 @@ public static unsafe class Graphics
             0, 0, 0, 1
         );
 
-        // Store to the appropriate projection based on current pass
         if (_currentPass == 0)
             _sceneProjection = projection;
         else
@@ -312,7 +306,7 @@ public static unsafe class Graphics
         if (!Driver.BeginFrame())
             return false;
 
-        Driver.DisableScissor();
+        Driver.ClearScissor();
 
         _time += Time.DeltaTime;
 
@@ -331,11 +325,9 @@ public static unsafe class Graphics
     public static void BeginUI()
     {
         if (_inUIPass) return;
-
-        // Switch to UI pass - driver transitions handled during ExecuteCommands
-        // UI projection will be set via SetCamera(UI.Camera) call
         _currentPass = 1;
         _inUIPass = true;
+        _batchStateDirty = true;
     }
 
     internal static void EndFrame()
@@ -373,31 +365,28 @@ public static unsafe class Graphics
         Driver.Clear(color);
     }
 
-    public static void SetViewport(int x, int y, int width, int height)
+    public static void SetViewport(int x, int y, int width, int height) =>
+        SetViewport(new RectInt(x, y, width, height));
+
+    public static void SetViewport(in RectInt viewport)
     {
-        if (CurrentState.ViewportX == x && CurrentState.ViewportY == y &&
-            CurrentState.ViewportWidth == width && CurrentState.ViewportHeight == height)
+        if (CurrentState.Viewport == viewport)
             return;
 
-        CurrentState.ViewportX = x;
-        CurrentState.ViewportY = y;
-        CurrentState.ViewportWidth = width;
-        CurrentState.ViewportHeight = height;
+        CurrentState.Viewport = viewport;
         _batchStateDirty = true;
     }
 
-    public static void SetScissor(int x, int y, int width, int height)
+    public static void SetScissor(int x, int y, int width, int height) =>
+        SetScissor(new RectInt(x, y, width, height));
+
+    public static void SetScissor(in RectInt scissor)
     {
-        if (CurrentState.ScissorEnabled &&
-            CurrentState.ScissorX == x && CurrentState.ScissorY == y &&
-            CurrentState.ScissorWidth == width && CurrentState.ScissorHeight == height)
+        if (CurrentState.ScissorEnabled && CurrentState.Scissor == scissor)
             return;
 
         CurrentState.ScissorEnabled = true;
-        CurrentState.ScissorX = x;
-        CurrentState.ScissorY = y;
-        CurrentState.ScissorWidth = width;
-        CurrentState.ScissorHeight = height;
+        CurrentState.Scissor = scissor;
         _batchStateDirty = true;
     }
 
@@ -485,6 +474,7 @@ public static unsafe class Graphics
 
     public static void SetLayer(ushort layer)
     {
+        Debug.Assert((layer & 0xFFF) == layer);
         CurrentState.SortLayer = layer;
     }
 
@@ -514,15 +504,9 @@ public static unsafe class Graphics
         var texturesChanged = false;
         for (var i = 0; i < MaxTextures && !texturesChanged; i++)
             texturesChanged = current.Textures[i] != prev.Textures[i];
-        var viewportChanged = current.ViewportX != prev.ViewportX ||
-                              current.ViewportY != prev.ViewportY ||
-                              current.ViewportWidth != prev.ViewportWidth ||
-                              current.ViewportHeight != prev.ViewportHeight;
+        var viewportChanged = current.Viewport != prev.Viewport;
         var scissorChanged = current.ScissorEnabled != prev.ScissorEnabled ||
-                             current.ScissorX != prev.ScissorX ||
-                             current.ScissorY != prev.ScissorY ||
-                             current.ScissorWidth != prev.ScissorWidth ||
-                             current.ScissorHeight != prev.ScissorHeight;
+                             current.Scissor != prev.Scissor;
 
         if (shaderChanged || blendChanged || filterChanged || texturesChanged || viewportChanged || scissorChanged)
             _batchStateDirty = true;
@@ -577,17 +561,28 @@ public static unsafe class Graphics
         Driver.UpdateTexture(_boneTexture, BoneTextureWidth, MaxBoneRows, _boneData.AsByteSpan());
     }
 
-    private static void SetGlobalsUniform()
+    private static void UploadGlobals()
     {
         // Globals UBO layout (std140):
         // offset 0: mat4 u_projection (64 bytes, column-major)
         // offset 64: float u_time (4 bytes, padded to 16)
-        // Total: 80 bytes
+        // Total: 80 bytes per snapshot
+
+        var count = _globalsSnapshots.Length;
+        if (count == 0)
+            return;
+
+        Driver.SetGlobalsCount(count);
+
         var data = stackalloc byte[80];
-        var transposed = Matrix4x4.Transpose(_projection);
-        Buffer.MemoryCopy(&transposed, data, 64, 64);
-        *(float*)(data + 64) = _time;
-        Driver.SetUniform("globals", new ReadOnlySpan<byte>(data, 80));
+        for (int i = 0; i < count; i++)
+        {
+            ref var snapshot = ref _globalsSnapshots[i];
+            var transposed = Matrix4x4.Transpose(snapshot.Projection);
+            Buffer.MemoryCopy(&transposed, data, 64, 64);
+            *(float*)(data + 64) = snapshot.Time;
+            Driver.SetGlobals(i, new ReadOnlySpan<byte>(data, 80));
+        }
     }
 
     public static void SetTransform(in Matrix3x2 transform)
@@ -612,60 +607,52 @@ public static unsafe class Graphics
 
     private static long MakeSortKey(ushort order) =>
         (((long)_currentPass) << PassShift) |
-        (((long)CurrentState.SortLayer) << LayerShift) |
+        (((long)(CurrentState.SortLayer & 0xFFF)) << LayerShift) |
         (((long)CurrentState.SortGroup) << GroupShift) |
         (((long)order) << OrderShift) |
         (((long)_commands.Length) << IndexShift);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ushort GetOrAddGlobals(in Matrix4x4 projection)
+    {
+        // Only compare projection - time is same for all batches in a frame
+        for (int i = 0; i < _globalsSnapshots.Length; i++)
+            if (_globalsSnapshots[i].Projection == projection)
+                return (ushort)i;
+
+        var index = (ushort)_globalsSnapshots.Length;
+        _globalsSnapshots.Add() = new GlobalsSnapshot { Projection = projection, Time = _time };
+        return index;
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AddBatchState()
     {
         _batchStateDirty = false;
 
-        var shader = CurrentState.Shader?.Handle ?? nuint.Zero;
-        var blendMode = CurrentState.BlendMode;
-        var textureFilter = CurrentState.TextureFilter;
-        var viewportX = CurrentState.ViewportX;
-        var viewportY = CurrentState.ViewportY;
-        var viewportW = CurrentState.ViewportWidth;
-        var viewportH = CurrentState.ViewportHeight;
-        var scissorEnabled = CurrentState.ScissorEnabled;
-        var scissorX = CurrentState.ScissorX;
-        var scissorY = CurrentState.ScissorY;
-        var scissorWidth = CurrentState.ScissorWidth;
-        var scissorHeight = CurrentState.ScissorHeight;
-        var vertexArray = CurrentState.Mesh;
+        var currentProjection = _currentPass == 0 ? _sceneProjection : _uiProjection;
 
+        var candidate = new BatchState
+        {
+            Pass = _currentPass,
+            GlobalsIndex = GetOrAddGlobals(currentProjection),
+            Shader = CurrentState.Shader?.Handle ?? nuint.Zero,
+            BlendMode = CurrentState.BlendMode,
+            TextureFilter = CurrentState.TextureFilter,
+            Viewport = CurrentState.Viewport,
+            ScissorEnabled = CurrentState.ScissorEnabled,
+            Scissor = CurrentState.Scissor,
+            Mesh = CurrentState.Mesh
+        };
+
+        for (int t = 0; t < MaxTextures; t++)
+            candidate.Textures[t] = CurrentState.Textures[t];
+
+        var candidateSpan = new ReadOnlySpan<byte>(&candidate, sizeof(BatchState));
         for (int i = 0; i < _batchStates.Length; i++)
         {
-            ref var existing = ref _batchStates[i];
-            if (existing.Pass != _currentPass ||
-                existing.Shader != shader ||
-                existing.BlendMode != blendMode ||
-                existing.TextureFilter != textureFilter ||
-                existing.ViewportX != viewportX ||
-                existing.ViewportY != viewportY ||
-                existing.ViewportW != viewportW ||
-                existing.ViewportH != viewportH ||
-                existing.ScissorEnabled != scissorEnabled ||
-                existing.ScissorX != scissorX ||
-                existing.ScissorY != scissorY ||
-                existing.ScissorWidth != scissorWidth ||
-                existing.ScissorHeight != scissorHeight ||
-                existing.Mesh != vertexArray)
-                continue;
-
-            bool texturesMatch = true;
-            for (int t = 0; t < MaxTextures; t++)
-            {
-                if (existing.Textures[t] != CurrentState.Textures[t])
-                {
-                    texturesMatch = false;
-                    break;
-                }
-            }
-
-            if (texturesMatch)
+            var existingSpan = new ReadOnlySpan<byte>(Unsafe.AsPointer(ref _batchStates[i]), sizeof(BatchState));
+            if (candidateSpan.SequenceEqual(existingSpan))
             {
                 _currentBatchState = (ushort)i;
                 return;
@@ -673,25 +660,19 @@ public static unsafe class Graphics
         }
 
         _currentBatchState = (ushort)_batchStates.Length;
-        ref var batchState = ref _batchStates.Add();
-        batchState.Pass = _currentPass;
-        batchState.Shader = shader;
-        batchState.BlendMode = blendMode;
-        batchState.TextureFilter = textureFilter;
-        for (int t = 0; t < MaxTextures; t++)
-            batchState.Textures[t] = CurrentState.Textures[t];
-        batchState.ViewportX = viewportX;
-        batchState.ViewportY = viewportY;
-        batchState.ViewportW = viewportW;
-        batchState.ViewportH = viewportH;
-        batchState.ScissorEnabled = scissorEnabled;
-        batchState.ScissorX = scissorX;
-        batchState.ScissorY = scissorY;
-        batchState.ScissorWidth = scissorWidth;
-        batchState.ScissorHeight = scissorHeight;
-        batchState.Mesh = vertexArray;
+        _batchStates.Add() = candidate;
 
-        LogRender($"AddBatchState: Pass={batchState.Pass} Shader=0x{batchState.Shader:X} Texture0=0x{batchState.Textures[0]:X} Texture1=0x{batchState.Textures[1]:X} BlendMode={batchState.BlendMode} Viewport=({batchState.ViewportX},{batchState.ViewportY},{batchState.ViewportW},{batchState.ViewportH}) ScissorEnabled={batchState.ScissorEnabled} Scissor=({batchState.ScissorX},{batchState.ScissorY},{batchState.ScissorWidth},{batchState.ScissorHeight}) Mesh=0x{batchState.Mesh:X}");
+        LogGraphics(
+            $"AddBatchState: Pass={candidate.Pass}" +
+            $" Globals={candidate.GlobalsIndex}" +
+            $" Shader=0x{candidate.Shader:X}" +
+            $" ({Asset.Get<Shader>(AssetType.Shader, candidate.Shader)?.Name ?? "???"})" +
+            $" Texture0=0x{candidate.Textures[0]:X}" +
+            $" Texture1=0x{candidate.Textures[1]:X}" +
+            $" BlendMode={candidate.BlendMode}" +
+            $" Viewport=({candidate.Viewport})" +
+            $" Scissor={(candidate.ScissorEnabled?candidate.Scissor.ToString():"None")}" +
+            $" Mesh=0x{candidate.Mesh:X}");
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -788,7 +769,7 @@ public static unsafe class Graphics
                 lastCommand.IndexOffset + lastCommand.IndexCount == indexOffset)
             {
                 lastCommand.IndexCount += (ushort)indexCount;
-                LogRenderVerbose($"DrawElements (MERGE): BatchState={lastCommand.BatchState} Count={lastCommand.IndexCount} Offset={indexOffset} Order={order}");
+                LogGraphicsVerbose($"DrawElements (MERGE): BatchState={lastCommand.BatchState} Count={lastCommand.IndexCount} Offset={indexOffset} Order={order}");
                 return;
             }
 
@@ -801,7 +782,7 @@ public static unsafe class Graphics
         cmd.IndexCount = indexCount;
         cmd.BatchState = _currentBatchState;
 
-        LogRenderVerbose($"DrawElements: BatchState={cmd.BatchState} SortKey={sortKey} Count={indexCount} Offset={indexOffset} Order={order}");
+        LogGraphicsVerbose($"DrawElements: BatchState={cmd.BatchState} SortKey={sortKey} Count={indexCount} Offset={indexOffset} Order={order}");
     }
 
     private static void CreateBatches()
@@ -830,7 +811,7 @@ public static unsafe class Graphics
             ref var cmd = ref _commands[commandIndex];
             ref var cmdState = ref _batchStates[cmd.BatchState];
 
-            LogRenderVerbose($"  Command: Index={commandIndex}  SortKey={cmd.SortKey}  IndexOffset={cmd.IndexOffset} IndexCount={cmd.IndexCount} State={cmd.BatchState}");
+            LogGraphicsVerbose($"  Command: Index={commandIndex}  SortKey={cmd.SortKey}  IndexOffset={cmd.IndexOffset} IndexCount={cmd.IndexCount} State={cmd.BatchState}");
 
             // Always break batch on external vertex arrays.
             if (cmdState.Mesh != _mesh)
@@ -873,18 +854,12 @@ public static unsafe class Graphics
 
         CreateBatches();
 
-        LogRender(
+        LogGraphics(
             $"ExecuteCommands: BatchStates={_batchStates.Length} Commands={_commands.Length} Vertices={_vertices.Length} Indices={_indices.Length}");
 
-        var lastViewportX = ushort.MaxValue;
-        var lastViewportY = ushort.MaxValue;
-        var lastViewportW = ushort.MaxValue;
-        var lastViewportH = ushort.MaxValue;
+        var lastViewport = RectInt.Zero;
         var lastScissorEnabled = false;
-        var lastScissorX = int.MinValue;
-        var lastScissorY = int.MinValue;
-        var lastScissorW = int.MinValue;
-        var lastScissorH = int.MinValue;
+        var lastScissor = RectInt.Zero;
         var lastShader = nuint.Zero;
         var lastTextures = stackalloc nuint[MaxTextures];
         for (int i = 0; i < MaxTextures; i++)
@@ -892,6 +867,7 @@ public static unsafe class Graphics
         var lastMesh = nuint.Zero;
         var lastBlendMode = BlendMode.None;
         var lastTextureFilter = TextureFilter.Point;
+        var lastGlobalsIndex = ushort.MaxValue;
 
         if (_vertices.Length > 0 || _indices.Length > 0)
         {
@@ -904,21 +880,19 @@ public static unsafe class Graphics
 
         Driver.SetTextureFilter(TextureFilter.Point);
 
-        // Set initial projection based on current active pass
-        _projection = _activeDriverPass == 0 ? _sceneProjection : _uiProjection;
-        SetGlobalsUniform();
-
         UploadBones();
         Driver.BindTexture(_boneTexture, BoneTextureSlot);
 
-        LogRender($"ExecuteBatches: Batches={_batches.Length} BatchStates={_batchStates.Length} Commands={_commands.Length} Vertices={_vertices.Length} Indices={_indices.Length}");
+        // Upload all globals snapshots to driver
+        UploadGlobals();
+
+        LogGraphics($"ExecuteBatches: Batches={_batches.Length} BatchStates={_batchStates.Length} Commands={_commands.Length} Vertices={_vertices.Length} Indices={_indices.Length}");
+        LogGraphics($"  BeginPass: Scene");
 
         for (int batchIndex = 0, batchCount = _batches.Length; batchIndex < batchCount; batchIndex++)
         {
             ref var batch = ref _batches[batchIndex];
             ref var batchState = ref _batchStates[batch.State];
-
-            LogRender($"  Batch: Index={batchIndex} IndexOffset={batch.IndexOffset} IndexCount={batch.IndexCount} State={batch.State} Pass={batchState.Pass}");
 
             // Handle pass transitions
             if (batchState.Pass != _activeDriverPass)
@@ -932,73 +906,57 @@ public static unsafe class Graphics
                     Driver.BeginUIPass();
                     _activeDriverPass = 1;
 
-                    // Switch to UI projection
-                    _projection = _uiProjection;
-                    SetGlobalsUniform();
+                    // Reset all tracking state to force rebinding in new render pass
+                    lastScissor = RectInt.Zero;
+                    lastViewport = RectInt.Zero;
+                    lastScissorEnabled = false;
+                    lastShader = nuint.Zero;
+                    lastMesh = nuint.Zero;
+                    lastBlendMode = BlendMode.None;
+                    lastGlobalsIndex = ushort.MaxValue;
+                    lastTextureFilter = TextureFilter.Point;
+                    for (int i = 0; i < MaxTextures; i++)
+                        lastTextures[i] = nuint.Zero;
 
-                    LogRender($"    PassTransition: Scene -> UI");
+                    LogGraphics($"  BeginPass: UI");
                 }
             }
-            
-            if (lastViewportX != batchState.ViewportX ||  
-                lastViewportY != batchState.ViewportY ||
-                lastViewportW != batchState.ViewportW ||
-                lastViewportH != batchState.ViewportH)
-            {
-                lastViewportX = (ushort)batchState.ViewportX;
-                lastViewportY = (ushort)batchState.ViewportY;
-                lastViewportW = (ushort)batchState.ViewportW;
-                lastViewportH = (ushort)batchState.ViewportH;
-                Driver.SetViewport(
-                    batchState.ViewportX,
-                    batchState.ViewportY,
-                    batchState.ViewportW,
-                    batchState.ViewportH);
 
-                LogRender($"    SetViewport: X={batchState.ViewportX} Y={batchState.ViewportY} W={batchState.ViewportW} H={batchState.ViewportH}");
+            LogGraphics($"  Batch: Index={batchIndex} IndexOffset={batch.IndexOffset} IndexCount={batch.IndexCount} State={batch.State} Pass={batchState.Pass}");
+
+            if (lastViewport != batchState.Viewport)
+            {
+                LogGraphics($"    SetViewport: {batchState.Viewport}");
+
+                lastViewport = batchState.Viewport;
+                Driver.SetViewport(batchState.Viewport);
             }
 
-            if (lastScissorEnabled != batchState.ScissorEnabled ||
-                (batchState.ScissorEnabled && (
-                    lastScissorX != batchState.ScissorX ||
-                    lastScissorY != batchState.ScissorY ||
-                    lastScissorW != batchState.ScissorWidth ||
-                    lastScissorH != batchState.ScissorHeight)))
+            if (lastScissorEnabled != batchState.ScissorEnabled || lastScissor != batchState.Scissor)
             {
+                LogGraphics($"    SetScissor: {(batchState.ScissorEnabled ? batchState.Scissor.ToString() : "None")}");
+
                 lastScissorEnabled = batchState.ScissorEnabled;
+                lastScissor = batchState.Scissor;
+
                 if (batchState.ScissorEnabled)
-                {
-                    LogRender($"    SetScissor: X={batchState.ScissorX} Y={batchState.ScissorY} W={batchState.ScissorWidth} H={batchState.ScissorHeight}");
-
-                    lastScissorX = batchState.ScissorX;
-                    lastScissorY = batchState.ScissorY;
-                    lastScissorW = batchState.ScissorWidth;
-                    lastScissorH = batchState.ScissorHeight;
-                    Driver.SetScissor(
-                        batchState.ScissorX,
-                        batchState.ScissorY,
-                        batchState.ScissorWidth,
-                        batchState.ScissorHeight);
-
-                }
+                    Driver.SetScissor(batchState.Scissor);
                 else
-                {
-                    LogRender($"    DisableScissor");
-
-                    lastScissorX = int.MinValue;
-                    lastScissorY = int.MinValue;
-                    lastScissorW = int.MinValue;
-                    lastScissorH = int.MinValue;
-
-                    Driver.DisableScissor();
-                }
+                    Driver.ClearScissor();
             }
 
             if (lastShader != batchState.Shader)
             {
                 lastShader = batchState.Shader;
                 Driver.BindShader(batchState.Shader);
-                LogRender($"    BindShader: Handle=0x{batchState.Shader:X}");
+                LogGraphics($"    BindShader: Handle=0x{batchState.Shader:X} ({Asset.Get<Shader>(AssetType.Shader, batchState.Shader)?.Name ?? "???"})");
+            }
+
+            if (lastGlobalsIndex != batchState.GlobalsIndex)
+            {
+                lastGlobalsIndex = batchState.GlobalsIndex;
+                Driver.BindGlobals(batchState.GlobalsIndex);
+                LogGraphics($"    BindGlobals: Index={batchState.GlobalsIndex}");
             }
 
             for (int t = 0; t < MaxTextures; t++)
@@ -1009,7 +967,7 @@ public static unsafe class Graphics
                     if (batchState.Textures[t] != 0)
                     {
                         Driver.BindTexture((nuint)batchState.Textures[t], t);
-                        LogRender($"    BindTexture: Slot={t} Handle=0x{batchState.Textures[t]:X}");
+                        LogGraphics($"    BindTexture: Slot={t} Handle=0x{batchState.Textures[t]:X} ({Asset.Get<Texture>(AssetType.Texture, (nuint)batchState.Textures[t])?.Name ?? "???"})");
                     }
                 }
             }
@@ -1018,24 +976,24 @@ public static unsafe class Graphics
             {
                 lastBlendMode = batchState.BlendMode;
                 Driver.SetBlendMode(batchState.BlendMode);
-                LogRender($"    SetBlendMode: {batchState.BlendMode}");
+                LogGraphics($"    SetBlendMode: {batchState.BlendMode}");
             }
 
             if (lastTextureFilter != batchState.TextureFilter)
             {
                 lastTextureFilter = batchState.TextureFilter;
                 Driver.SetTextureFilter(batchState.TextureFilter);
-                LogRender($"    SetTextureFilter: {batchState.TextureFilter}");
+                LogGraphics($"    SetTextureFilter: {batchState.TextureFilter}");
             }
 
             if (lastMesh != batchState.Mesh)
             {
                 lastMesh = batchState.Mesh;
                 Driver.BindMesh(batchState.Mesh);
-                LogRender($"    BindMesh: Handle=0x{batchState.Mesh:X}");
+                LogGraphics($"    BindMesh: Handle=0x{batchState.Mesh:X}");
             }
 
-            LogRender($"    DrawElements: IndexCount={batch.IndexCount} IndexOffset={batch.IndexOffset}");
+            LogGraphics($"    DrawElements: IndexCount={batch.IndexCount} IndexOffset={batch.IndexOffset}");
             Driver.DrawElements(batch.IndexOffset, batch.IndexCount, 0);
         }
 
@@ -1048,20 +1006,21 @@ public static unsafe class Graphics
         _indices.Clear();
         _batches.Clear();
         _batchStates.Clear();
+        _globalsSnapshots.Clear();
         
         _batchStateDirty = true;
         _currentBatchState = 0;
     }
 
-    [Conditional("NOZ_RENDER_DEBUG")]
-    private static void LogRender(string msg)
+    [Conditional("NOZ_GRAPHICS_DEBUG")]
+    private static void LogGraphics(string msg)
     {
-        Log.Debug($"[RENDER] {msg}");
+        Log.Debug($"[GRAPHICS] {msg}");
     }
 
-    [Conditional("NOZ_RENDER_DEBUG_VERBOSE")]
-    private static void LogRenderVerbose(string msg)
+    [Conditional("NOZ_GRAPHICS_DEBUG_VERBOSE")]
+    private static void LogGraphicsVerbose(string msg)
     {
-        Log.Debug($"[RENDER] {msg}");
+        Log.Debug($"[GRAPHICS] {msg}");
     }
 }

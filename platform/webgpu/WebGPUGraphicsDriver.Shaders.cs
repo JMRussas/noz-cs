@@ -3,6 +3,7 @@
 //
 
 using System.Runtime.InteropServices;
+using Silk.NET.Core.Native;
 using Silk.NET.WebGPU;
 using NoZ.Platform;
 using WGPUBuffer = Silk.NET.WebGPU.Buffer;
@@ -25,7 +26,7 @@ public unsafe partial class WebGPUGraphicsDriver
         if (bindings.Count > 0)
         {
             // Use pre-computed metadata from asset pipeline
-            bindGroupLayout = CreateBindGroupLayoutFromMetadata(bindings, out bindingCount);
+            bindGroupLayout = CreateBindGroupLayoutFromMetadata(name, bindings, out bindingCount);
 
             // Derive texture slots and uniform bindings from metadata
             for (int i = 0; i < bindings.Count; i++)
@@ -61,6 +62,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
         _shaders[(int)handle] = new ShaderInfo
         {
+            Name = name,
             VertexModule = vertexModule,
             FragmentModule = fragmentModule,
             BindGroupLayout0 = bindGroupLayout,
@@ -78,6 +80,8 @@ public unsafe partial class WebGPUGraphicsDriver
 
     private ShaderModule* CreateShaderModule(string source, string label)
     {
+        using var labelMemory = SilkMarshal.StringToMemory(label);
+
         fixed (byte* sourcePtr = System.Text.Encoding.UTF8.GetBytes(source))
         {
             var wgslDesc = new ShaderModuleWGSLDescriptor
@@ -91,7 +95,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
             var shaderModuleDesc = new ShaderModuleDescriptor
             {
-                Label = (byte*)Marshal.StringToHGlobalAnsi(label),
+                Label = (byte*)labelMemory,
                 NextInChain = (ChainedStruct*)(&wgslDesc),
             };
 
@@ -107,10 +111,11 @@ public unsafe partial class WebGPUGraphicsDriver
         Sampler
     }
 
-    private BindGroupLayout* CreateBindGroupLayoutFromMetadata(List<ShaderBinding> bindings, out int bindingCount)
+    private BindGroupLayout* CreateBindGroupLayoutFromMetadata(string shaderName, List<ShaderBinding> bindings, out int bindingCount)
     {
         // Use metadata to create bind group layout
         bindingCount = bindings.Count;
+        using var labelMemory = SilkMarshal.StringToMemory($"{shaderName}_bindgroup_layout");
 
         var entries = stackalloc BindGroupLayoutEntry[bindingCount];
 
@@ -131,6 +136,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
         var bindGroupLayoutDesc = new BindGroupLayoutDescriptor
         {
+            Label = (byte*)labelMemory,
             EntryCount = (uint)bindingCount,
             Entries = entries,
         };
@@ -324,7 +330,8 @@ public unsafe partial class WebGPUGraphicsDriver
         ref var meshInfo = ref _meshes[(int)_state.BoundMesh];
 
         // Create render pipeline
-        var pipeline = CreateRenderPipeline(shaderInfo, blendMode, meshInfo.Descriptor, key.MsaaSamples);
+        var pipelineName = $"{shaderInfo.Name}_{blendMode}_{meshInfo.Descriptor.Stride}b_{key.MsaaSamples}x";
+        var pipeline = CreateRenderPipeline(shaderInfo, blendMode, meshInfo.Descriptor, key.MsaaSamples, pipelineName);
 
         if (pipeline == null)
         {
@@ -337,8 +344,12 @@ public unsafe partial class WebGPUGraphicsDriver
         return pipeline;
     }
 
-    private RenderPipeline* CreateRenderPipeline(ShaderInfo shaderInfo, BlendMode blendMode, VertexFormatDescriptor vertexDescriptor, int sampleCount)
+    private RenderPipeline* CreateRenderPipeline(ShaderInfo shaderInfo, BlendMode blendMode, VertexFormatDescriptor vertexDescriptor, int sampleCount, string? pipelineName = null)
     {
+        using var vsEntryPoint = SilkMarshal.StringToMemory("vs_main");
+        using var fsEntryPoint = SilkMarshal.StringToMemory("fs_main");
+        using var labelMemory = pipelineName != null ? SilkMarshal.StringToMemory(pipelineName) : default;
+
         // Build vertex attributes from descriptor
         var attributeCount = vertexDescriptor.Attributes.Length;
         var attributes = stackalloc WGPUVertexAttribute[attributeCount];
@@ -360,7 +371,7 @@ public unsafe partial class WebGPUGraphicsDriver
         var vertexState = new VertexState
         {
             Module = shaderInfo.VertexModule,
-            EntryPoint = (byte*)Marshal.StringToHGlobalAnsi("vs_main"),
+            EntryPoint = (byte*)vsEntryPoint,
             BufferCount = 1,
             Buffers = &vertexBufferLayout,
         };
@@ -378,7 +389,7 @@ public unsafe partial class WebGPUGraphicsDriver
         var fragmentState = new FragmentState
         {
             Module = shaderInfo.FragmentModule,
-            EntryPoint = (byte*)Marshal.StringToHGlobalAnsi("fs_main"),
+            EntryPoint = (byte*)fsEntryPoint,
             TargetCount = 1,
             Targets = &colorTargetState,
         };
@@ -402,6 +413,7 @@ public unsafe partial class WebGPUGraphicsDriver
         // Create render pipeline
         var pipelineDesc = new RenderPipelineDescriptor
         {
+            Label = pipelineName != null ? (byte*)labelMemory : null,
             Layout = shaderInfo.PipelineLayout,
             Vertex = vertexState,
             Fragment = &fragmentState,

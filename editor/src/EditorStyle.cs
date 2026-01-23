@@ -13,6 +13,7 @@ public static class EditorStyle
         public const byte CommandPalette = 1;
         public const byte ContextMenu = 2;
         public const byte Confirm = 3;
+        public const byte DocumentEditor = 4;
     }
     #endregion
     
@@ -208,12 +209,18 @@ public static class EditorStyle
         public const float BorderRadius = 16f;
         public const int TextSize = 14;
         public const float ContentBorderRadius = 9f;
-        public static Color FillColor => _colors.OverlayBackgroundColor;
-        public static Color TextColor => _colors.OverlayTextColor;
-        public static Color AccentTextColor => _colors.OverlayAccentTextColor;
-        public static Color DisabledTextColor => _colors.OverlayDisabledTextColor;
-        public static Color IconColor => _colors.OverlayIconColor;
-        public static Color ContentColor => _colors.OverlayContentColor;
+        public static Color FillColor => _colors.Overlay.Fill;
+        public static Color TextColor => _colors.Overlay.Text;
+        public static Color AccentTextColor => _colors.Overlay.AccentText;
+        public static Color DisabledTextColor => _colors.Overlay.DisabledText;
+        public static Color IconColor => _colors.Overlay.Icon;
+        public static Color ContentColor => _colors.Overlay.Content;
+        public static readonly ContainerStyle Root = new()
+        {
+            Color = FillColor,
+            Padding = EdgeInsets.All(16),
+            Border = new BorderStyle { Radius = 16 }
+        };
     }
 
     public static class Shortcut
@@ -367,6 +374,141 @@ public static class EditorStyle
             Height = 32,
             Color = EditorStyle.Control.FillColor,
             Border = new BorderStyle { Radius = 6 }
+        };
+    }
+
+    // DopeSheet (Animation Editor)
+    public static class DopeSheet
+    {
+        public const int MinFrames = 24;
+        public const float FrameWidth = 20f;
+        public const float FrameHeight = 40f;
+        public const float Padding = 8f;
+        public const float BorderWidth = 1f;
+        public const float FrameDotSize = 5f;
+        public const float TickHeight = FrameHeight * 0.4f;
+        public const float ShortTickHeight = TickHeight;
+        public const float ButtonSize = FrameHeight;
+        public const float ButtonMarginY = 6f;
+        public const float ButtonSpacing = 8f;
+
+        public static readonly Color BorderColor = Color.FromGrayscale(10);
+        public static readonly Color FrameColor = Color.FromGrayscale(100);
+        public static readonly Color FrameDotColor = Color.FromGrayscale(20);
+        public static readonly Color SelectedFrameColor = SelectionColor;
+        public static readonly Color EmptyFrameColor = Color.FromGrayscale(45);
+        public static readonly Color TickBackgroundColor = Color.FromGrayscale(52);
+        public static readonly Color TickColor = BorderColor;
+        public static readonly Color TickHoverColor = new Color(1f, 1f, 1f, 0.04f);
+        public static readonly Color ShortTickColor = Color.FromGrayscale(44);
+        public static readonly Color ButtonColor = FrameColor;
+        public static readonly Color ButtonCheckedColor = SelectionColor;
+        public static readonly Color ButtonBorderColor = BorderColor;
+        public static readonly Color EventColor = Color.FromGrayscale(180);
+
+        public static readonly ContainerStyle Root = Overlay.Root with
+        {
+            AlignX = Align.Center,
+            AlignY = Align.Max,
+            Height = Size.Fit,
+            Margin = EdgeInsets.Bottom(20f)
+        };
+
+        public static readonly ContainerStyle Panel = new()
+        {
+            AlignX = Align.Center,
+            AlignY = Align.Min,
+            Padding = EdgeInsets.All(Padding),
+            Color = Overlay.FillColor
+        };
+
+        public static readonly ContainerStyle Frame = new()
+        {
+            Width = FrameWidth,
+            Height = FrameHeight,
+            Color = FrameColor
+        };
+
+        public static readonly ContainerStyle SelectedFrame = Frame with
+        {
+            Color = SelectedFrameColor
+        };
+
+        public static readonly ContainerStyle EmptyFrame = Frame with
+        {
+            Color = EmptyFrameColor
+        };
+
+        public static readonly ContainerStyle Tick = new()
+        {
+            Width = FrameWidth,
+            Height = TickHeight,
+            Color = TickBackgroundColor
+        };
+
+        public static readonly ContainerStyle FrameBorder = new()
+        {
+            Width = BorderWidth,
+            Height = FrameHeight,
+            Color = TickColor
+        };
+
+        public static readonly ContainerStyle TickBorder = new()
+        {
+            Width = BorderWidth,
+            Color = TickColor
+        };
+
+        public static readonly ContainerStyle ShortTick = new()
+        {
+            Width = BorderWidth,
+            Height = ShortTickHeight,
+            AlignY = Align.Max,
+            Color = ShortTickColor
+        };
+
+        public static readonly ContainerStyle HorizontalBorder = new()
+        {
+            Height = BorderWidth,
+            Color = TickColor
+        };
+
+        public static readonly ContainerStyle FrameDot = new()
+        {
+            Width = FrameDotSize,
+            Height = FrameDotSize,
+            AlignX = Align.Center,
+            AlignY = Align.Max,
+            Margin = EdgeInsets.Bottom(5f),
+            Color = FrameDotColor
+        };
+
+        public static readonly ContainerStyle Button = new()
+        {
+            Width = ButtonSize,
+            Height = ButtonSize,
+            Padding = EdgeInsets.All(6f),
+            Color = ButtonColor,
+            Border = new BorderStyle { Width = 1f, Color = ButtonBorderColor }
+        };
+
+        public static readonly ContainerStyle ButtonChecked = Button with
+        {
+            Color = ButtonCheckedColor
+        };
+
+        public static readonly ContainerStyle ButtonRow = new()
+        {
+            Height = ButtonSize,
+            Spacing = ButtonSpacing
+        };
+
+        public static readonly LabelStyle FrameLabel = new()
+        {
+            FontSize = 10f,
+            Color = Control.TextColor,
+            AlignX = Align.Center,
+            AlignY = Align.Center
         };
     }
 
