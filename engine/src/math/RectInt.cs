@@ -53,6 +53,8 @@ public struct RectInt(int x, int y, int width, int height)
         return new RectInt(X * factor, Y * factor, Width * factor, Height * factor);
     }
 
+    public readonly RectInt Translate(in Vector2 t) => new RectInt(X + (int)t.X, Y + (int)t.Y, Width, Height);
+
     /// <summary>
     /// Expand the rectangle by the given amount on all sides.
     /// </summary>

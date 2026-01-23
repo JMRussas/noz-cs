@@ -146,8 +146,11 @@ public static partial class UI
         if (e.Data.Container.Size.Height.IsFixed)
             fit.Y = e.Data.Container.Size.Height.Value;
 
-        fit.X += e.Data.Container.Padding.Horizontal;
-        fit.Y += e.Data.Container.Padding.Vertical;
+        if (e.Data.Container.IsAutoWidth)
+            fit.X = p.ContentRect.Width;
+
+        if (e.Data.Container.IsAutoHeight)
+            fit.Y += e.Data.Container.Padding.Vertical;
 
         if (margins)
         {

@@ -77,19 +77,19 @@ internal class AnimationEditor : DocumentEditor
 
     public override void UpdateUI()
     {
-        var frameCount = Math.Max(Document.GetFrameCountWithHolds(), EditorStyle.DopeSheet.MinFrames);
-        var panelWidth = frameCount * EditorStyle.DopeSheet.FrameWidth + EditorStyle.DopeSheet.Padding * 2 + 1;
+        var frameCount = Math.Max(Document.GetFrameCountWithHolds(), EditorStyle.AnimationEditor.MinFrames);
+        var panelWidth = frameCount * EditorStyle.AnimationEditor.FrameWidth + EditorStyle.AnimationEditor.Padding * 2 + 1;
 
         var isPlaying = _state == AnimationEditorState.Play;
         var currentFrame = Document.CurrentFrame;
 
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
-        using (UI.BeginContainer(EditorStyle.DopeSheet.Root))
-        using (UI.BeginContainer(EditorStyle.DopeSheet.Panel with { Width = panelWidth }))
+        using (UI.BeginContainer(EditorStyle.AnimationEditor.Root))
+        using (UI.BeginContainer(EditorStyle.AnimationEditor.Panel with { Width = panelWidth }))
         using (UI.BeginColumn())
         {
             // Button row
-            using (UI.BeginRow(EditorStyle.DopeSheet.ButtonRow))
+            using (UI.BeginRow(EditorStyle.AnimationEditor.ButtonRow))
             {
                 DopeSheetButton("M", false, MirrorPose);
                 UI.Flex();
@@ -98,7 +98,7 @@ internal class AnimationEditor : DocumentEditor
                 DopeSheetButton("O", _onionSkin, ToggleOnionSkin);
             }
 
-            UI.Container(EditorStyle.DopeSheet.HorizontalBorder);
+            UI.Container(EditorStyle.AnimationEditor.HorizontalBorder);
 
             // Ticks row
             using (UI.BeginRow())
@@ -108,8 +108,8 @@ internal class AnimationEditor : DocumentEditor
                 {
                     var isLastTick = frameIndex == frameCount;
                     var tickStyle = isLastTick
-                        ? EditorStyle.DopeSheet.Tick with { Width = EditorStyle.DopeSheet.BorderWidth }
-                        : EditorStyle.DopeSheet.Tick;
+                        ? EditorStyle.AnimationEditor.Tick with { Width = EditorStyle.AnimationEditor.BorderWidth }
+                        : EditorStyle.AnimationEditor.Tick;
 
                     using (UI.BeginContainer(tickStyle))
                     {
@@ -123,7 +123,7 @@ internal class AnimationEditor : DocumentEditor
                         }
 
                         if (UI.IsHovered())
-                            UI.Container(ContainerStyle.Default with { Color = EditorStyle.DopeSheet.TickHoverColor });
+                            UI.Container(ContainerStyle.Default with { Color = EditorStyle.AnimationEditor.TickHoverColor });
 
                         // Event indicator
                         if (realFrameIndex < Document.FrameCount &&
@@ -132,11 +132,11 @@ internal class AnimationEditor : DocumentEditor
                         {
                             using (UI.BeginContainer(ContainerStyle.Default with { AlignX = Align.Center, AlignY = Align.Center }))
                             {
-                                var eventColor = realFrameIndex == currentFrame ? Color.White : EditorStyle.DopeSheet.EventColor;
+                                var eventColor = realFrameIndex == currentFrame ? Color.White : EditorStyle.AnimationEditor.EventColor;
                                 UI.Container(ContainerStyle.Default with
                                 {
-                                    Width = EditorStyle.DopeSheet.FrameDotSize * 2,
-                                    Height = EditorStyle.DopeSheet.FrameDotSize * 2,
+                                    Width = EditorStyle.AnimationEditor.FrameDotSize * 2,
+                                    Height = EditorStyle.AnimationEditor.FrameDotSize * 2,
                                     Color = eventColor
                                 });
                             }
@@ -147,18 +147,18 @@ internal class AnimationEditor : DocumentEditor
                         // Tick mark
                         if (frameIndex % 4 == 0 || (isPlaying && frameIndex == currentFrame))
                         {
-                            var tickColor = isPlaying && frameIndex == currentFrame ? Color.White : EditorStyle.DopeSheet.TickColor;
-                            UI.Container(EditorStyle.DopeSheet.TickBorder with { Color = tickColor });
+                            var tickColor = isPlaying && frameIndex == currentFrame ? Color.White : EditorStyle.AnimationEditor.TickColor;
+                            UI.Container(EditorStyle.AnimationEditor.TickBorder with { Color = tickColor });
                         }
                         else
                         {
-                            UI.Container(EditorStyle.DopeSheet.ShortTick);
+                            UI.Container(EditorStyle.AnimationEditor.ShortTick);
                         }
                     }
                 }
             }
 
-            UI.Container(EditorStyle.DopeSheet.HorizontalBorder);
+            UI.Container(EditorStyle.AnimationEditor.HorizontalBorder);
 
             // Frames row
             using (UI.BeginRow())
@@ -168,17 +168,17 @@ internal class AnimationEditor : DocumentEditor
                 for (var frameIndex = 0; frameIndex < Document.FrameCount; frameIndex++)
                 {
                     var frame = Document.Frames[frameIndex];
-                    var frameWidth = EditorStyle.DopeSheet.FrameWidth + EditorStyle.DopeSheet.FrameWidth * frame.Hold;
+                    var frameWidth = EditorStyle.AnimationEditor.FrameWidth + EditorStyle.AnimationEditor.FrameWidth * frame.Hold;
                     var isSelected = frameIndex == currentFrame;
 
                     var frameStyle = isSelected
-                        ? EditorStyle.DopeSheet.SelectedFrame with { Width = frameWidth }
-                        : EditorStyle.DopeSheet.Frame with { Width = frameWidth };
+                        ? EditorStyle.AnimationEditor.SelectedFrame with { Width = frameWidth }
+                        : EditorStyle.AnimationEditor.Frame with { Width = frameWidth };
 
                     using (UI.BeginContainer(frameStyle))
                     {
                         if (UI.IsHovered())
-                            UI.Container(ContainerStyle.Default with { Color = EditorStyle.DopeSheet.TickHoverColor });
+                            UI.Container(ContainerStyle.Default with { Color = EditorStyle.AnimationEditor.TickHoverColor });
 
                         if (UI.WasPressed())
                         {
@@ -187,8 +187,8 @@ internal class AnimationEditor : DocumentEditor
                             SetDefaultState();
                         }
 
-                        UI.Container(EditorStyle.DopeSheet.FrameBorder);
-                        UI.Container(EditorStyle.DopeSheet.FrameDot);
+                        UI.Container(EditorStyle.AnimationEditor.FrameBorder);
+                        UI.Container(EditorStyle.AnimationEditor.FrameDot);
                     }
 
                     frameIndexWithHolds += 1 + frame.Hold;
@@ -197,18 +197,18 @@ internal class AnimationEditor : DocumentEditor
                 // Empty frames
                 for (; frameIndexWithHolds < frameCount; frameIndexWithHolds++)
                 {
-                    using (UI.BeginContainer(EditorStyle.DopeSheet.EmptyFrame))
+                    using (UI.BeginContainer(EditorStyle.AnimationEditor.EmptyFrame))
                     {
-                        UI.Container(EditorStyle.DopeSheet.FrameBorder);
+                        UI.Container(EditorStyle.AnimationEditor.FrameBorder);
                     }
                 }
 
                 // Right border
-                UI.Container(EditorStyle.DopeSheet.FrameBorder);
+                UI.Container(EditorStyle.AnimationEditor.FrameBorder);
             }
 
-            UI.Container(EditorStyle.DopeSheet.HorizontalBorder);
-            UI.Spacer(EditorStyle.DopeSheet.ButtonMarginY);
+            UI.Container(EditorStyle.AnimationEditor.HorizontalBorder);
+            UI.Spacer(EditorStyle.AnimationEditor.ButtonMarginY);
 
 
         }
@@ -830,12 +830,12 @@ internal class AnimationEditor : DocumentEditor
 
     private static void DopeSheetButton(string label, bool isChecked, Action onClick)
     {
-        var style = isChecked ? EditorStyle.DopeSheet.ButtonChecked : EditorStyle.DopeSheet.Button;
+        var style = isChecked ? EditorStyle.AnimationEditor.ButtonChecked : EditorStyle.AnimationEditor.Button;
         using (UI.BeginContainer(style))
         {
             if (UI.WasPressed())
                 onClick();
-            UI.Label(label, EditorStyle.DopeSheet.FrameLabel with { AlignX = Align.Center, AlignY = Align.Center });
+            UI.Label(label, EditorStyle.AnimationEditor.FrameLabel with { AlignX = Align.Center, AlignY = Align.Center });
         }
     }
 

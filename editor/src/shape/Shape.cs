@@ -119,9 +119,7 @@ public sealed unsafe partial class Shape : IDisposable
         {
             ref var path = ref _paths[p];
             for (ushort a = 0; a < path.AnchorCount; a++)
-            {
                 UpdateSamples(p, a);
-            }
         }
     }
 

@@ -15,44 +15,6 @@ public sealed partial class Shape
         public static readonly RasterizeOptions Default = new() { AntiAlias = false };
     }
 
-    private static bool LineIntersectsRect(
-        in Vector2 p0,
-        in Vector2 p1,
-        float xMin,
-        float yMin,
-        float xMax,
-        float yMax)
-    {
-        var dx = p1.X - p0.X;
-        var dy = p1.Y - p0.Y;
-
-        var tMin = 0f;
-        var tMax = 1f;
-
-        Span<float> p = [-dx, dx, -dy, dy];
-        Span<float> q = [p0.X - xMin, xMax - p0.X, p0.Y - yMin, yMax - p0.Y];
-
-        for (var i = 0; i < 4; i++)
-        {
-            if (MathF.Abs(p[i]) < 0.0001f)
-            {
-                if (q[i] < 0)
-                    return false;
-            }
-            else
-            {
-                var t = q[i] / p[i];
-                if (p[i] < 0)
-                    tMin = MathF.Max(tMin, t);
-                else
-                    tMax = MathF.Min(tMax, t);
-            }
-        }
-
-        return tMin <= tMax;
-    }
-
-
     public void Rasterize(PixelData<Color32> pixels, Color[] palette, Vector2Int offset)
         => Rasterize(pixels, palette, offset, RasterizeOptions.Default);
 
@@ -62,7 +24,7 @@ public sealed partial class Shape
 
         const int maxPolyVerts = 256;
         Span<Vector2> polyVerts = stackalloc Vector2[maxPolyVerts];
-        var dpi = Graphics.PixelsPerUnit;
+        var dpi = EditorApplication.Config.PixelsPerUnit;
 
         for (ushort pIdx = 0; pIdx < PathCount; pIdx++)
         {
@@ -95,163 +57,95 @@ public sealed partial class Shape
             var fillColor = palette[path.FillColor % palette.Length].ToColor32();
             var rb = RasterBounds;
 
-            if (options.AntiAlias)
-                RasterizePathAA(pixels, polyVerts[..vertexCount], fillColor, offset, rb);
-            else
-                RasterizePathSimple(pixels, polyVerts[..vertexCount], fillColor, offset, rb);
+            RasterizePath(pixels, polyVerts[..vertexCount], fillColor, offset, rb);
         }
     }
 
-    private static void RasterizePathSimple
-        (PixelData<Color32> pixels,
-        Span<Vector2> polyVerts,
-        Color32 fillColor,
-        Vector2Int offset,
-        RectInt rb)
-    {
-        for (var y = 0; y < rb.Height; y++)
-        {
-            var py = offset.Y + rb.Y + y;
-            if (py < 0 || py >= pixels.Height) continue;
-
-            var sampleY = rb.Y + y + 0.5f;
-
-            for (var x = 0; x < rb.Width; x++)
-            {
-                var px = offset.X + rb.X + x;
-                if (px < 0 || px >= pixels.Width) continue;
-
-                var sampleX = rb.X + x + 0.5f;
-                if (IsPointInPolygon(new Vector2(sampleX, sampleY), polyVerts))
-                {
-                    ref var dst = ref pixels[px, py];
-                    if (fillColor.A == 255 || dst.A == 0)
-                    {
-                        dst = fillColor;
-                    }
-                    else if (fillColor.A > 0)
-                    {
-                        dst = Color32.Blend(dst, fillColor);
-                    }
-                }
-            }
-        }
-    }
-
-    private static void RasterizePathAA(
+    private static void RasterizePath(
         PixelData<Color32> pixels,
         Span<Vector2> polyVerts,
         Color32 fillColor,
         Vector2Int offset,
         RectInt rb)
     {
-        const float edgeMarker = -1f;
-        var bufferSize = rb.Width * rb.Height;
+        var vertCount = polyVerts.Length;
 
-        Span<float> coverage = bufferSize <= 4096
-            ? stackalloc float[bufferSize]
-            : new float[bufferSize];
-        coverage.Clear();
-
-        var vertexCount = polyVerts.Length;
-
-        for (var y = 0; y < rb.Height; y++)
-        {
-            var sampleY = rb.Y + y + 0.5f;
-            for (var x = 0; x < rb.Width; x++)
-            {
-                var sampleX = rb.X + x + 0.5f;
-                if (IsPointInPolygon(new Vector2(sampleX, sampleY), polyVerts))
-                    coverage[y * rb.Width + x] = 1f;
-            }
-        }
-
-        for (var i = 0; i < vertexCount; i++)
-        {
-            var p0 = polyVerts[i];
-            var p1 = polyVerts[(i + 1) % vertexCount];
-
-            var minX = (int)MathF.Floor(MathF.Min(p0.X, p1.X));
-            var maxX = (int)MathF.Floor(MathF.Max(p0.X, p1.X));
-            var minY = (int)MathF.Floor(MathF.Min(p0.Y, p1.Y));
-            var maxY = (int)MathF.Floor(MathF.Max(p0.Y, p1.Y));
-
-            for (var py = minY; py <= maxY; py++)
-            {
-                var localY = py - rb.Y;
-                if (localY < 0 || localY >= rb.Height) continue;
-
-                for (var px = minX; px <= maxX; px++)
-                {
-                    var localX = px - rb.X;
-                    if (localX < 0 || localX >= rb.Width) continue;
-
-                    if (LineIntersectsRect(p0, p1, px, py, px + 1, py + 1))
-                        coverage[localY * rb.Width + localX] = edgeMarker;
-                }
-            }
-        }
-
-        const int aaSamples = 4;
-        Span<float> sampleOffsets = [0.125f, 0.375f, 0.625f, 0.875f];
-
-        for (var idx = 0; idx < bufferSize; idx++)
-        {
-            if (coverage[idx] != edgeMarker) continue;
-
-            var localX = idx % rb.Width;
-            var localY = idx / rb.Width;
-            float px = rb.X + localX;
-            float py = rb.Y + localY;
-
-            var insideCount = 0;
-            for (var sy = 0; sy < aaSamples; sy++)
-            {
-                for (var sx = 0; sx < aaSamples; sx++)
-                {
-                    var samplePos = new Vector2(px + sampleOffsets[sx], py + sampleOffsets[sy]);
-                    if (IsPointInPolygon(samplePos, polyVerts))
-                        insideCount++;
-                }
-            }
-
-            coverage[idx] = insideCount / (float)(aaSamples * aaSamples);
-        }
+        // Each edge can generate at most one intersection per scanline
+        // Store X position and direction (+1 upward, -1 downward) for winding rule
+        Span<(float x, int dir)> intersections = vertCount <= 32
+            ? stackalloc (float, int)[vertCount]
+            : new (float, int)[vertCount];
 
         for (var y = 0; y < rb.Height; y++)
         {
             var py = offset.Y + rb.Y + y;
             if (py < 0 || py >= pixels.Height) continue;
 
-            for (var x = 0; x < rb.Width; x++)
+            var scanlineY = rb.Y + y + 0.5f;
+            var intersectionCount = 0;
+
+            for (var i = 0; i < vertCount; i++)
             {
-                var px = offset.X + rb.X + x;
-                if (px < 0 || px >= pixels.Width) continue;
+                var p0 = polyVerts[i];
+                var p1 = polyVerts[(i + 1) % vertCount];
 
-                var cov = coverage[y * rb.Width + x];
-                if (cov <= 0) continue;
-
-                byte finalAlpha;
-                if (cov >= 0.5f)
-                    finalAlpha = fillColor.A;
-                else
-                    finalAlpha = (byte)(cov * fillColor.A);
-
-                if (finalAlpha == 0) continue;
-
-                ref var dst = ref pixels[px, py];
-                if (dst.A == 0)
+                // Edge going upward (p0 below, p1 above)
+                if (p0.Y <= scanlineY && p1.Y > scanlineY)
                 {
-                    dst = new Color32(fillColor.R, fillColor.G, fillColor.B, finalAlpha);
+                    var t = (scanlineY - p0.Y) / (p1.Y - p0.Y);
+                    intersections[intersectionCount++] = (p0.X + t * (p1.X - p0.X), 1);
                 }
-                else if (finalAlpha == 255 && fillColor.A == 255)
+                // Edge going downward (p0 above, p1 below)
+                else if (p1.Y <= scanlineY && p0.Y > scanlineY)
                 {
-                    dst = fillColor;
+                    var t = (scanlineY - p0.Y) / (p1.Y - p0.Y);
+                    intersections[intersectionCount++] = (p0.X + t * (p1.X - p0.X), -1);
                 }
-                else
+            }
+
+            if (intersectionCount == 0) continue;
+
+            // Sort by X coordinate
+            var span = intersections[..intersectionCount];
+            span.Sort((a, b) => a.x.CompareTo(b.x));
+
+            // Fill using non-zero winding rule
+            // Pixel at local x has center at (rb.X + x + 0.5), fill if center is inside polygon
+            var winding = 0;
+            var entryX = 0;
+
+            for (var i = 0; i < intersectionCount; i++)
+            {
+                var wasInside = winding != 0;
+                winding += intersections[i].dir;
+                var isInside = winding != 0;
+
+                if (!wasInside && isInside)
                 {
-                    var srcColor = fillColor.WithAlpha(finalAlpha);
-                    dst = Color32.Blend(dst, srcColor);
+                    // Entering polygon: first pixel where center > intersection
+                    // center = rb.X + x + 0.5 > intersectionX  =>  x > intersectionX - rb.X - 0.5
+                    entryX = (int)MathF.Ceiling(intersections[i].x - rb.X - 0.5f);
+                }
+                else if (wasInside && !isInside)
+                {
+                    // Exiting polygon: last pixel where center < intersection
+                    // center = rb.X + x + 0.5 < intersectionX  =>  x < intersectionX - rb.X - 0.5
+                    var exitX = (int)MathF.Ceiling(intersections[i].x - rb.X - 0.5f) - 1;
+
+                    var xStart = Math.Max(entryX, 0);
+                    var xEnd = Math.Min(exitX, rb.Width - 1);
+
+                    for (var x = xStart; x <= xEnd; x++)
+                    {
+                        var px = offset.X + rb.X + x;
+                        if (px < 0 || px >= pixels.Width) continue;
+
+                        ref var dst = ref pixels[px, py];
+                        if (fillColor.A == 255 || dst.A == 0)
+                            dst = fillColor;
+                        else if (fillColor.A > 0)
+                            dst = Color32.Blend(dst, fillColor);
+                    }
                 }
             }
         }

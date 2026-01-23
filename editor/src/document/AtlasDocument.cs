@@ -7,18 +7,18 @@ using System.Runtime.InteropServices;
 
 namespace NoZ.Editor
 {
+    internal struct AtlasSpriteRect
+    {
+        public string Name;
+        public SpriteDocument? Sprite;
+        public RectInt Rect;
+        public int FrameCount;
+        public bool Dirty;
+    }
+
     internal class AtlasDocument : Document
     {
-        private struct SpriteRect
-        {
-            public string Name;
-            public SpriteDocument? Sprite;
-            public RectInt Rect;
-            public int FrameCount;
-            public bool Dirty;
-        }
-
-        private readonly List<SpriteRect> _rects = new(128);
+        private readonly List<AtlasSpriteRect> _rects = new(128);
         private int _dpi;
         private Texture _texture = null!;
         private PixelData<Color32> _image = null!;
@@ -26,6 +26,8 @@ namespace NoZ.Editor
         
         public int Index { get; internal set; }
         public Texture Texture => _texture;
+        public int RectCount => _rects.Count;
+        public ReadOnlySpan<AtlasSpriteRect> Rects => CollectionsMarshal.AsSpan(_rects);
 
         public static void RegisterDef()
         {
@@ -33,6 +35,7 @@ namespace NoZ.Editor
                 AssetType.Atlas,
                 ".atlas",
                 () => new AtlasDocument(),
+                editorFactory: doc => new AtlasEditor((AtlasDocument)doc),
                 newFile: NewFile
             ));
         }
@@ -74,7 +77,7 @@ namespace NoZ.Editor
                     int frameCount = tk.ExpectInt(1);
 
                     if (!string.IsNullOrEmpty(name))
-                        _rects.Add(new SpriteRect { Name = name, Rect = rect, FrameCount = frameCount, Dirty = true });
+                        _rects.Add(new AtlasSpriteRect { Name = name, Rect = rect, FrameCount = frameCount, Dirty = true });
                 }
                 else
                 {
@@ -84,7 +87,11 @@ namespace NoZ.Editor
 
             _image = new PixelData<Color32>(size.X, size.Y);
             _packer = RectPacker.FromRects(size, _rects.Select(r => r.Rect));
-            Bounds = new Rect(-size.X * 0.5f, -size.Y * 0.5f, size.X, size.Y).Scale(TextureDocument.PixelsPerUnitInv);
+            Bounds = new Rect(
+                -size.X * 0.5f,
+                -size.Y * 0.5f,
+                size.X,
+                size.Y).Scale(TextureDocument.PixelsPerUnitInv);
         }
 
         public override void Load()
@@ -116,7 +123,7 @@ namespace NoZ.Editor
             base.PostLoad();
         }
 
-        private static Rect ToUV(in SpriteRect rect)
+        private static Rect ToUV(in AtlasSpriteRect rect)
         {
             if (rect.Sprite == null)
                 return Rect.Zero;
@@ -192,7 +199,7 @@ namespace NoZ.Editor
             if (rectIndex == -1)
                 return false;
             Debug.Assert(rectIndex == _rects.Count);
-            _rects.Add(new SpriteRect
+            _rects.Add(new AtlasSpriteRect
             {
                 Name = sprite.Name,
                 Sprite = sprite,
@@ -232,6 +239,49 @@ namespace NoZ.Editor
 
             if (_texture != null)
                 _texture.Update(_image.AsByteSpan());
+        }
+
+        public void Rebuild()
+        {
+            // Gather sprite names from existing rects
+            var spriteNames = new List<string>();
+            foreach (var rect in _rects)
+            {
+                if (!string.IsNullOrEmpty(rect.Name))
+                    spriteNames.Add(rect.Name);
+            }
+
+            // Clear sprites from their atlas reference
+            foreach (var rect in _rects)
+            {
+                if (rect.Sprite != null)
+                    rect.Sprite.Atlas = null;
+            }
+
+            // Clear all rects and reset packer
+            _rects.Clear();
+            var atlasSize = EditorApplication.Config!.AtlasSize;
+            _packer = new RectPacker(atlasSize, atlasSize);
+            _image.Clear();
+
+            // Re-add all sprites
+            foreach (var name in spriteNames)
+            {
+                var sprite = DocumentManager.Find(AssetType.Sprite, name) as SpriteDocument;
+                if (sprite == null)
+                {
+                    Log.Warning($"Rebuild: sprite '{name}' not found");
+                    continue;
+                }
+
+                sprite.UpdateBounds();
+                if (!TryAddSprite(sprite))
+                    Log.Warning($"Rebuild: failed to add sprite '{name}'");
+            }
+
+            // Update texture
+            Update();
+            MarkModified();
         }
 
         public override void Draw()

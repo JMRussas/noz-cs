@@ -16,7 +16,12 @@ public static class EditorStyle
         public const byte DocumentEditor = 4;
     }
     #endregion
-    
+
+    // Toggle Button
+    public const float ToggleButtonHeight = ButtonHeight;
+    public const float ToggleButtonPadding = 6f;
+    public const float ToggleButtonBorderRadius = 8f;
+
     private static EditorColors _colors = null!;
 
     public static EditorColors Current => _colors;
@@ -139,11 +144,7 @@ public static class EditorStyle
         public const float GridAlpha = 0.5f;
         public const float GridZeroAlpha = 0.6f;
     }
-
-    public static class SpriteEditor
-    {
-    }
-
+    
     public static class BoxSelect 
     {
         public const float LineWidth = 0.02f;
@@ -202,7 +203,6 @@ public static class EditorStyle
         public const float SegmentWidth = 0.015f;
     }
 
-    // Overlay
     public static class Overlay
     {
         public const float Padding = 12f;
@@ -246,11 +246,6 @@ public static class EditorStyle
         public static readonly LabelStyle Text = Control.Text.WithColor(Control.PlaceholderTextColor);
     }
 
-    // Toggle Button
-    public const float ToggleButtonHeight = ButtonHeight;
-    public const float ToggleButtonPadding = 6f;
-    public const float ToggleButtonBorderRadius = 8f;
-
     public static class ContextMenu
     {
         public const int MinWidth = 100;
@@ -286,12 +281,12 @@ public static class EditorStyle
     {
         public readonly static ContainerStyle Root = new()
         { 
-            Spacing = 8.0f,
             AlignX = Align.Max,
             AlignY = Align.Max,
             Width = 300.0f,
             Height = Size.Fit,
-            Margin = EdgeInsets.All(EditorStyle.Workspace.Padding)
+            Margin = EdgeInsets.BottomRight(EditorStyle.Workspace.Padding),
+            Spacing = 8.0f,
         };
 
         public readonly static ContainerStyle Notification = new()
@@ -377,8 +372,7 @@ public static class EditorStyle
         };
     }
 
-    // DopeSheet (Animation Editor)
-    public static class DopeSheet
+    public static class AnimationEditor
     {
         public const int MinFrames = 24;
         public const float FrameWidth = 20f;
@@ -511,6 +505,56 @@ public static class EditorStyle
             AlignY = Align.Center
         };
     }
+
+    public static class SpriteEditor
+    {
+        public const float ButtonSize = 40f;
+        public const float ButtonSpacing = 8f;
+        public const float ButtonMarginY = 6f;
+
+        public static readonly Color ButtonColor = Color.FromGrayscale(100);
+        public static readonly Color ButtonCheckedColor = SelectionColor;
+        public static readonly Color ButtonBorderColor = Color.FromGrayscale(10);
+
+        public static readonly ContainerStyle Root = Overlay.Root with
+        {
+            AlignX = Align.Center,
+            AlignY = Align.Max,
+            Width = Size.Fit,
+            Height = Size.Fit,
+            Margin = EdgeInsets.Bottom(Workspace.Padding)
+        };
+
+        public static readonly ContainerStyle Button = new()
+        {
+            Width = ButtonSize,
+            Height = ButtonSize,
+            Padding = EdgeInsets.All(6f),
+            Color = ButtonColor,
+            Border = new BorderStyle { Width = 1f, Color = ButtonBorderColor }
+        };
+
+        public static readonly ContainerStyle ButtonChecked = Button with
+        {
+            Color = ButtonCheckedColor
+        };
+
+        public static readonly ContainerStyle ButtonRow = new()
+        {
+            Height = ButtonSize,
+            Spacing = ButtonSpacing
+        };
+
+        public static readonly LabelStyle ButtonLabel = new()
+        {
+            FontSize = 10f,
+            Color = Control.TextColor,
+            AlignX = Align.Center,
+            AlignY = Align.Center
+        };
+    }
+
+
 
     // Color Picker
     public const float ColorPickerBorderWidth = 2.5f;

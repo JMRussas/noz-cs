@@ -105,11 +105,174 @@ public class SpriteEditor : DocumentEditor
             DrawAnchors(shape);
         }
     }
+
+    public override void UpdateUI()
+    {
+        using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
+        using (UI.BeginColumn(EditorStyle.SpriteEditor.Root))
+        {
+            // Button row
+            using (UI.BeginRow(EditorStyle.SpriteEditor.ButtonRow))
+            {
+                ToolbarButton("P", _isPlaying, TogglePlayback);
+                UI.Flex();
+            }
+
+            UI.Spacer(EditorStyle.SpriteEditor.ButtonMarginY);
+
+            ColorPicker();
+        }
+    }
+
+    private static void ToolbarButton(string label, bool isChecked, Action onClick)
+    {
+        var style = isChecked ? EditorStyle.SpriteEditor.ButtonChecked : EditorStyle.SpriteEditor.Button;
+        using (UI.BeginContainer(style))
+        {
+            if (UI.WasPressed())
+                onClick();
+            UI.Label(label, EditorStyle.SpriteEditor.ButtonLabel);
+        }
+    }
+
+    private void ColorPicker()
+    {
+        var palette = PaletteManager.GetPalette(Document.Palette);
+        if (palette == null)
+            return;
+
+        using (UI.BeginContainer(ContainerStyle.Default with
+        {
+            Padding = EdgeInsets.All(4f),
+            Color = EditorStyle.Overlay.ContentColor,
+            Border = new BorderStyle { Radius = EditorStyle.Overlay.ContentBorderRadius }
+        }))
+        using (UI.BeginColumn())
+        {
+            using (UI.BeginRow())
+            {
+                DrawPalette(palette, showSelection: !_isPlaying);
+
+                using (UI.BeginContainer(ContainerStyle.Default with
+                {
+                    AlignX = Align.Max,
+                    AlignY = Align.Max,
+                    Margin = EdgeInsets.All(4f)
+                }))
+                {
+                    OpacityButton();
+                }
+            }
+        }
+    }
+
+    private void DrawPalette(PaletteDef palette, bool showSelection)
+    {
+        using (UI.BeginContainer(ContainerStyle.Default with
+        {
+            Padding = EdgeInsets.All(EditorStyle.ColorPickerBorderWidth)
+        }))
+        using (UI.BeginColumn())
+        {
+            UI.Label(palette.Name, new LabelStyle
+            {
+                FontSize = EditorStyle.Overlay.TextSize,
+                Color = EditorStyle.Overlay.TextColor,
+                AlignX = Align.Min
+            });
+
+            UI.Spacer(2f);
+
+            const int columns = 32;
+            var rowCount = (PaletteDef.ColorCount + columns - 1) / columns;
+
+            for (var row = 0; row < rowCount; row++)
+            {
+                using (UI.BeginRow(ContainerStyle.Default with { Spacing = 0f }))
+                {
+                    for (var col = 0; col < columns; col++)
+                    {
+                        var colorIndex = row * columns + col;
+                        if (colorIndex >= PaletteDef.ColorCount)
+                            break;
+
+                        var isSelected = showSelection && colorIndex == _selectionColor;
+                        DrawColorCell((byte)colorIndex, palette.Colors[colorIndex], isSelected);
+                    }
+                }
+            }
+        }
+    }
+
+    private void DrawColorCell(byte colorIndex, Color color, bool selected)
+    {
+        using (UI.BeginContainer(ContainerStyle.Default with
+        {
+            Width = EditorStyle.ColorPickerColorSize,
+            Height = EditorStyle.ColorPickerColorSize
+        }, id: (byte)(colorIndex + 1)))
+        {
+            if (selected)
+            {
+                UI.Container(ContainerStyle.Default with
+                {
+                    Width = EditorStyle.ColorPickerColorSize + 2,
+                    Height = EditorStyle.ColorPickerColorSize + 2,
+                    AlignX = Align.Center,
+                    AlignY = Align.Center,
+                    Margin = EdgeInsets.All(-2f),
+                    Border = new BorderStyle { Radius = 8f, Width = EditorStyle.ColorPickerSelectionBorderWidth, Color = EditorStyle.SelectionColor }
+                });
+            }
+
+            var displayColor = color.A > 0 ? color : new Color(0f, 0f, 0f, 0.1f);
+            UI.Container(ContainerStyle.Default with
+            {
+                Width = EditorStyle.ColorPickerColorSize - 4,
+                Height = EditorStyle.ColorPickerColorSize - 4,
+                AlignX = Align.Center,
+                AlignY = Align.Center,
+                Color = displayColor,
+                Border = new BorderStyle { Radius = 6f }
+            });
+
+            if (UI.WasPressed())
+                SetSelectionColor(colorIndex);
+        }
+    }
+
+    private void OpacityButton()
+    {
+        var buttonSize = EditorStyle.ColorPickerColorSize * 2;
+        using (UI.BeginContainer(ContainerStyle.Default with
+        {
+            Width = buttonSize,
+            Height = buttonSize,
+            Border = new BorderStyle { Radius = EditorStyle.ButtonBorderRadius }
+        }))
+        {
+            if (UI.IsHovered())
+            {
+                UI.Container(ContainerStyle.Default with
+                {
+                    Color = EditorStyle.Control.SelectedFillColor,
+                    Border = new BorderStyle { Radius = EditorStyle.ButtonBorderRadius }
+                });
+            }
+
+            var opacityAlpha = _selectionOpacity / 10f;
+            UI.Label($"{(int)(_selectionOpacity * 10)}%", new LabelStyle
+            {
+                FontSize = EditorStyle.Overlay.TextSize,
+                Color = EditorStyle.Overlay.TextColor,
+                AlignX = Align.Center,
+                AlignY = Align.Center
+            });
+        }
+    }
     
     private void UpdateRaster()
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
         var shape = Document.GetFrame(_currentFrame).Shape;
         shape.UpdateSamples();
         shape.UpdateBounds();
@@ -121,23 +284,19 @@ public class SpriteEditor : DocumentEditor
             return;
         }
 
-        _pixelData.Clear();
+        var offset = new Vector2Int(-rb.X, -rb.Y) + Vector2Int.One;
+        var size = shape.RasterBounds.Size;
+        _pixelData.Clear(new RectInt(0,0,size.X+2, size.Y + 2));
 
         var palette = PaletteManager.GetPalette(Document.Palette);
         if (palette != null)
-            shape.Rasterize(_pixelData, palette.Colors, new Vector2Int(-rb.X, -rb.Y), options: new Shape.RasterizeOptions
+            shape.Rasterize(_pixelData, palette.Colors, offset, options: new Shape.RasterizeOptions
             {
                 AntiAlias = false
             });
 
-        Graphics.Driver.UpdateTexture(
-            _rasterTexture!.Handle,
-            _pixelData.Width, _pixelData.Height,
-            _pixelData.AsByteSpan());
-
+        _rasterTexture.Update(_pixelData.AsByteSpan(), new RectInt(0, 0, size.X + 2, size.Y +2), _pixelData.Width);
         _rasterDirty = false;
-        
-        Log.Info($"Sprite rasterized in {sw.ElapsedMilliseconds} ms");
     }
 
     public void MarkRasterDirty()
@@ -701,9 +860,13 @@ public class SpriteEditor : DocumentEditor
             rb.Width * invDpi,
             rb.Height * invDpi);
 
-        var texSize = (float)_pixelData.Width;
-        var u1 = rb.Width / texSize;
-        var v1 = rb.Height / texSize;
+        var texSizeInv = 1.0f / (float)_pixelData.Width;
+
+        var uv = new Rect(
+            1.0f * texSizeInv,
+            1.0f * texSizeInv,
+            rb.Width * texSizeInv,
+            rb.Height * texSizeInv);
 
         using (Graphics.PushState())
         {
@@ -711,7 +874,7 @@ public class SpriteEditor : DocumentEditor
             Graphics.SetTransform(Document.Transform);
             Graphics.SetTexture(_rasterTexture);
             Graphics.SetColor(Color.White);
-            Graphics.Draw(quad, new Rect(0, 0, u1, v1));
+            Graphics.Draw(quad, uv);
         }
     }
 
@@ -733,32 +896,30 @@ public class SpriteEditor : DocumentEditor
 
     private void DrawSegments(Shape shape)
     {
-        // default
-        Graphics.PushState();
-        Graphics.SetColor(EditorStyle.Shape.SegmentColor);
-        for (ushort anchorIndex=0; anchorIndex < shape.AnchorCount; anchorIndex++)
+        using (Gizmos.PushState(EditorLayer.Tool))
         {
-            if (!shape.IsSegmentSelected(anchorIndex))
+            Graphics.SetColor(EditorStyle.Shape.SegmentColor);
+            for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
             {
-                var pathIndex = FindPathForAnchor(shape, anchorIndex);
-                if (pathIndex != ushort.MaxValue)
-                    DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
+                if (!shape.IsSegmentSelected(anchorIndex))
+                {
+                    var pathIndex = FindPathForAnchor(shape, anchorIndex);
+                    if (pathIndex != ushort.MaxValue)
+                        DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 1);
+                }
             }
-        }
-        Graphics.PopState();
 
-        // selected
-        Graphics.PushState();
-        for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
-        {
-            if (shape.IsSegmentSelected(anchorIndex))
+            Graphics.SetColor(EditorStyle.Shape.SelectedSegmentColor);
+            for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
             {
-                var pathIndex = FindPathForAnchor(shape, anchorIndex);
-                if (pathIndex != ushort.MaxValue)
-                    DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
+                if (shape.IsSegmentSelected(anchorIndex))
+                {
+                    var pathIndex = FindPathForAnchor(shape, anchorIndex);
+                    if (pathIndex != ushort.MaxValue)
+                        DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentWidth, 2);
+                }
             }
         }
-        Graphics.PopState();
     }
 
     private static void DrawAnchor(Vector2 worldPosition)

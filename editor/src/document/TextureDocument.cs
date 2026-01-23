@@ -9,7 +9,7 @@ namespace NoZ.Editor;
 
 public class TextureDocument : Document
 {
-    public const float PixelsPerUnit = 256.0f;
+    public const float PixelsPerUnit = 512.0f;
     public const float PixelsPerUnitInv = 1.0f / PixelsPerUnit;
 
     public float Scale { get; set; } = 1f;

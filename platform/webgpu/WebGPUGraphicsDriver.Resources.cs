@@ -286,7 +286,7 @@ public unsafe partial class WebGPUGraphicsDriver
         return handle;
     }
 
-    public void UpdateTexture(nuint handle, int width, int height, ReadOnlySpan<byte> data)
+    public void UpdateTexture(nuint handle, in Vector2Int size, ReadOnlySpan<byte> data)
     {
         ref var textureInfo = ref _textures[(int)handle];
 
@@ -303,16 +303,52 @@ public unsafe partial class WebGPUGraphicsDriver
             var layout = new TextureDataLayout
             {
                 Offset = 0,
-                BytesPerRow = (uint)(width * bytesPerPixel),
-                RowsPerImage = (uint)height,
+                BytesPerRow = (uint)(size.X * bytesPerPixel),
+                RowsPerImage = (uint)size.Y,
             };
 
-            var copySize = new Extent3D { Width = (uint)width, Height = (uint)height, DepthOrArrayLayers = 1 };
+            var copySize = new Extent3D { Width = (uint)size.X, Height = (uint)size.Y, DepthOrArrayLayers = 1 };
             var destination = new ImageCopyTexture
             {
                 Texture = textureInfo.Texture,
                 MipLevel = 0,
                 Origin = new Origin3D { X = 0, Y = 0, Z = 0 },
+                Aspect = TextureAspect.All,
+            };
+
+            _wgpu.QueueWriteTexture(_queue, &destination, dataPtr, (nuint)data.Length, &layout, &copySize);
+        }
+    }
+
+    public void UpdateTextureRegion(nuint handle, in RectInt region, ReadOnlySpan<byte> data, int srcWidth = -1)
+    {
+        ref var textureInfo = ref _textures[(int)handle];
+
+        var bytesPerPixel = textureInfo.Format switch
+        {
+            WGPUTextureFormat.Rgba8Unorm => 4,
+            WGPUTextureFormat.R8Unorm => 1,
+            WGPUTextureFormat.Rgba32float => 16,
+            _ => 4,
+        };
+
+        var rowWidth = srcWidth < 0 ? region.Width : srcWidth;
+
+        fixed (byte* dataPtr = data)
+        {
+            var layout = new TextureDataLayout
+            {
+                Offset = 0,
+                BytesPerRow = (uint)(rowWidth * bytesPerPixel),
+                RowsPerImage = (uint)region.Height,
+            };
+
+            var copySize = new Extent3D { Width = (uint)region.Width, Height = (uint)region.Height, DepthOrArrayLayers = 1 };
+            var destination = new ImageCopyTexture
+            {
+                Texture = textureInfo.Texture,
+                MipLevel = 0,
+                Origin = new Origin3D { X = (uint)region.X, Y = (uint)region.Y, Z = 0 },
                 Aspect = TextureAspect.All,
             };
 

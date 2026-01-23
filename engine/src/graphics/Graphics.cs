@@ -558,7 +558,7 @@ public static unsafe class Graphics
 
     private static void UploadBones()
     {
-        Driver.UpdateTexture(_boneTexture, BoneTextureWidth, MaxBoneRows, _boneData.AsByteSpan());
+        Driver.UpdateTextureRegion(_boneTexture, new RectInt(0,0,BoneTextureWidth,_boneRow), _boneData.AsByteSpan(), BoneTextureWidth);
     }
 
     private static void UploadGlobals()

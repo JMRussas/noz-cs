@@ -40,17 +40,18 @@ public readonly struct EdgeInsets(float top, float left, float bottom, float rig
     }
 
     public static EdgeInsets All(float v) => new(v, v, v, v);
-    public static EdgeInsets Top(float v) => new(v, 0, 0, 0);
+    public static EdgeInsets Top(float v) => new(v, v, 0, 0);
     public static EdgeInsets Bottom(float v) => new(0, 0, v, 0);
     public static EdgeInsets Left(float v) => new(0, v, 0, 0);
     public static EdgeInsets Right(float v) => new(0, 0, 0, v);
     public static EdgeInsets TopBottom(float v) => new(v, 0, v, 0);
+    public static EdgeInsets BottomRight(float v) => new(0, 0, v, v);
     public static EdgeInsets LeftRight(float v) => new(0, v, 0, v);
     public static EdgeInsets LeftRight(float l, float r) => new(0, l, 0, r);
-    public static EdgeInsets TopLeft(float t, float l) => new(t, l, 0, 0);
+    public static EdgeInsets TopLeft(float t, float l) => new(t, 0, l, 0);
 
     public static EdgeInsets Symmetric(float vertical, float horizontal) =>
-        new(vertical, horizontal, vertical, horizontal);
+        new(horizontal, horizontal, vertical, vertical);
 
     public static readonly EdgeInsets Zero = new(0, 0, 0, 0);
 

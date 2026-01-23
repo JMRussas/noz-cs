@@ -109,7 +109,14 @@ public class Texture : Asset
     {
         if (Handle == nuint.Zero)
             return;
-        Graphics.Driver.UpdateTexture(Handle, Width, Height, data);
+        Graphics.Driver.UpdateTexture(Handle, new Vector2Int(Width, Height), data);
+    }
+
+    public void Update(ReadOnlySpan<byte> data, in RectInt region, int srcWidth = -1)
+    {
+        if (Handle == nuint.Zero)
+            return;
+        Graphics.Driver.UpdateTextureRegion(Handle, region, data, srcWidth);
     }
 
     internal static void RegisterDef()

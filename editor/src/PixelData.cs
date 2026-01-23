@@ -53,6 +53,13 @@ public sealed unsafe class PixelData<T> : IDisposable where T : unmanaged
 
     public ref T this[int x, int y] => ref _pixels[y * Size.X + x];
 
+    public void Clear(in RectInt rect, T value = default)
+    {
+        for (var y = rect.Y; y < rect.Y + rect.Height; y++ )
+            for (var x = rect.X; x < rect.X + rect.Width; x++)
+                _pixels[y * Size.X + x] = value;
+    }
+
     public void Clear(T value = default)
     {
         var total = Size.X * Size.Y;
