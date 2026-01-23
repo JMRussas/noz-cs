@@ -593,6 +593,16 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         }
     }
 
+    public void SetTextureFilter(TextureFilter filter)
+    {
+        // OpenGL sets filter per-texture, not globally - handled in texture creation/binding
+    }
+
+    public void SetUniform(string name, ReadOnlySpan<byte> data)
+    {
+        // TODO: Implement per-shader uniform buffers for OpenGL
+    }
+
     // === Drawing ===
 
     public void DrawElements(int firstIndex, int indexCount, int baseVertex = 0)

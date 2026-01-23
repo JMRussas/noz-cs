@@ -97,6 +97,16 @@ public unsafe partial class DirectX12GraphicsDriver
         // PSO will be selected/created in DrawElements based on current state
     }
 
+    public void SetTextureFilter(TextureFilter filter)
+    {
+        // DX12 sets filter per-sampler, not globally - handled in sampler creation
+    }
+
+    public void SetUniform(string name, ReadOnlySpan<byte> data)
+    {
+        // TODO: Implement per-shader uniform buffers for DX12
+    }
+
     public void DrawElements(int firstIndex, int indexCount, int baseVertex = 0)
     {
         if (_boundShader == 0 || _boundMesh == 0) return;

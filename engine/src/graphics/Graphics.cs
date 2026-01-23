@@ -111,10 +111,10 @@ public static unsafe class Graphics
     private static ref State CurrentState => ref _stateStack[_stateStackDepth];
     
     #region Batching
-    private static nuint _mesh;
-    private static nuint _globalsUbo;
+    private static nuint _sceneMesh;
+    private static nuint _uiMesh;
+    private static nuint _currentMesh;
     private static nuint _boneTexture;
-    private const int GlobalsUboBindingPoint = 0;
     private const int BoneTextureSlot = 1;
     private static Matrix4x4 _projection;
     private static NativeArray<float> _boneData;
@@ -191,7 +191,8 @@ public static unsafe class Graphics
         CurrentState.ScissorWidth = 0;
         CurrentState.ScissorHeight = 0;
 
-        CurrentState.Mesh = _mesh;
+        _currentMesh = _sceneMesh;
+        CurrentState.Mesh = _currentMesh;
 
         _boneRow = 1; // Row 0 is identity, start from row 1
 
@@ -212,14 +213,21 @@ public static unsafe class Graphics
         _batches = new NativeArray<Batch>(_maxBatches);
         _batchStates = new NativeArray<BatchState>(_maxBatches);
 
-        _mesh = Driver.CreateMesh<MeshVertex>(
+        _sceneMesh = Driver.CreateMesh<MeshVertex>(
             MaxVertices,
             MaxIndices,
             BufferUsage.Dynamic,
-            "Render.Main"
+            "Render.Scene"
         );
 
-        _globalsUbo = Driver.CreateUniformBuffer(80, BufferUsage.Dynamic, "Globals");
+        _uiMesh = Driver.CreateMesh<MeshVertex>(
+            MaxVertices,
+            MaxIndices,
+            BufferUsage.Dynamic,
+            "Render.UI"
+        );
+
+        _currentMesh = _sceneMesh;
 
         var boneDataLength = BoneTextureWidth * MaxBoneRows * 4;
         _boneData = new NativeArray<float>(boneDataLength, boneDataLength);
@@ -239,13 +247,15 @@ public static unsafe class Graphics
         _commands.Dispose();
         _indices.Dispose();
 
-        Driver.DestroyMesh(_mesh);
-        Driver.DestroyBuffer(_globalsUbo);
+        Driver.DestroyMesh(_sceneMesh);
+        Driver.DestroyMesh(_uiMesh);
         Driver.DestroyTexture(_boneTexture);
 
         Driver.Shutdown();
 
-        _mesh = 0;
+        _sceneMesh = 0;
+        _uiMesh = 0;
+        _currentMesh = 0;
         _boneTexture = 0;
     }
 
@@ -339,6 +349,11 @@ public static unsafe class Graphics
             if (_compositeShader != null)
                 Driver.Composite(_compositeShader.Handle);
         }
+
+        // Switch to UI mesh for subsequent draws
+        _currentMesh = _uiMesh;
+        CurrentState.Mesh = _currentMesh;
+        _batchStateDirty = true;
 
         Driver.BeginUIPass();
         _inUIPass = true;
@@ -584,7 +599,7 @@ public static unsafe class Graphics
         Driver.UpdateTexture(_boneTexture, BoneTextureWidth, MaxBoneRows, _boneData.AsByteSpan());
     }
 
-    private static void UploadGlobals()
+    private static void SetGlobalsUniform()
     {
         // Globals UBO layout (std140):
         // offset 0: mat4 u_projection (64 bytes, column-major)
@@ -594,7 +609,7 @@ public static unsafe class Graphics
         var transposed = Matrix4x4.Transpose(_projection);
         Buffer.MemoryCopy(&transposed, data, 64, 64);
         *(float*)(data + 64) = _time;
-        Driver.UpdateUniformBuffer(_globalsUbo, 0, new ReadOnlySpan<byte>(data, 80));
+        Driver.SetUniform("globals", new ReadOnlySpan<byte>(data, 80));
     }
 
     public static void SetTransform(in Matrix3x2 transform)
@@ -715,9 +730,9 @@ public static unsafe class Graphics
             return;
 
         if (_batchStates.Length == 0 ||
-            _batchStates[_currentBatchState].Mesh != _mesh)
+            _batchStates[_currentBatchState].Mesh != _currentMesh)
         {
-            SetMesh(_mesh);
+            SetMesh(_currentMesh);
         }
 
         if (_batchStateDirty)
@@ -814,30 +829,30 @@ public static unsafe class Graphics
 
         if (_commands.Length == 0)
             return;
-        
+
         _batches.Add();
         _sortedIndices.Clear();
 
         ref var firstBatch = ref _batches[0];
         ref var firstState = ref _batchStates[_commands[0].BatchState];
-        firstBatch.IndexOffset = firstState.Mesh != _mesh ? _commands[0].IndexOffset : 0;
+        firstBatch.IndexOffset = firstState.Mesh != _currentMesh ? _commands[0].IndexOffset : 0;
         firstBatch.IndexCount = _commands[0].IndexCount;
         firstBatch.State = _commands[0].BatchState;
 
-        if (firstState.Mesh == _mesh)
+        if (firstState.Mesh == _currentMesh)
             _sortedIndices.AddRange(
                 _indices.AsReadonlySpan(_commands[0].IndexOffset, _commands[0].IndexCount)
             );
-        
+
         for (int commandIndex = 1, commandCount = _commands.Length; commandIndex < commandCount; commandIndex++)
         {
             ref var cmd = ref _commands[commandIndex];
             ref var cmdState = ref _batchStates[cmd.BatchState];
-            
+
             LogRenderVerbose($"  Command: Index={commandIndex}  SortKey={cmd.SortKey}  IndexOffset={cmd.IndexOffset} IndexCount={cmd.IndexCount} State={cmd.BatchState}");
 
             // Always break batch on external vertex arrays.
-            if (cmdState.Mesh != _mesh)
+            if (cmdState.Mesh != _currentMesh)
             {
                 ref var newBatch = ref _batches.Add();
                 newBatch.IndexOffset = cmd.IndexOffset;
@@ -862,7 +877,7 @@ public static unsafe class Graphics
             _sortedIndices.AddRange(
                 _indices.AsReadonlySpan(cmd.IndexOffset, cmd.IndexCount)
             );
-        }   
+        }
     }
     
     private static void ExecuteCommands()
@@ -899,17 +914,17 @@ public static unsafe class Graphics
 
         if (_vertices.Length > 0 || _indices.Length > 0)
         {
-            Driver.BindMesh(_mesh);
-            Driver.UpdateMesh(_mesh, _vertices.AsByteSpan(), _sortedIndices.AsSpan());
+            Driver.BindMesh(_currentMesh);
+            Driver.UpdateMesh(_currentMesh, _vertices.AsByteSpan(), _sortedIndices.AsSpan());
             Driver.SetBlendMode(BlendMode.None);
             Driver.SetTextureFilter(TextureFilter.Linear);
-            lastMesh = _mesh;
+            lastMesh = _currentMesh;
         }
 
         Driver.SetTextureFilter(TextureFilter.Point);
 
-        UploadGlobals();
-        Driver.BindUniformBuffer(_globalsUbo, GlobalsUboBindingPoint);
+        // Set current uniform state - per-shader buffers will be populated when bind groups are created
+        SetGlobalsUniform();
 
         UploadBones();
         Driver.BindTexture(_boneTexture, BoneTextureSlot);

@@ -385,6 +385,7 @@ public class SpriteEditor : DocumentEditor
             return;
 
         SelectPath(_hoveredPath, Input.IsShiftDown());
+        Input.ConsumeButton(InputCode.MouseLeft);
     }
 
     private void HandleDragStart()

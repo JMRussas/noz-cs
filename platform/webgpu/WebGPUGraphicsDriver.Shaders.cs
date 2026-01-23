@@ -5,6 +5,7 @@
 using System.Runtime.InteropServices;
 using Silk.NET.WebGPU;
 using NoZ.Platform;
+using WGPUBuffer = Silk.NET.WebGPU.Buffer;
 using WGPUVertexAttribute = Silk.NET.WebGPU.VertexAttribute;
 
 namespace NoZ.Platform.WebGPU;
@@ -68,7 +69,8 @@ public unsafe partial class WebGPUGraphicsDriver
             BindGroupEntryCount = bindingCount,
             Bindings = bindings,
             TextureSlots = textureSlots,
-            UniformBindings = uniformBindings
+            UniformBindings = uniformBindings,
+            UniformBuffers = new Dictionary<string, nint>()
         };
 
         return handle;
@@ -529,6 +531,17 @@ public unsafe partial class WebGPUGraphicsDriver
             _wgpu.RenderPipelineRelease((RenderPipeline*)pipeline);
         }
         shaderInfo.PsoCache.Clear();
+
+        // Release per-shader uniform buffers
+        if (shaderInfo.UniformBuffers != null)
+        {
+            foreach (var bufferPtr in shaderInfo.UniformBuffers.Values)
+            {
+                if (bufferPtr != 0)
+                    _wgpu.BufferRelease((WGPUBuffer*)bufferPtr);
+            }
+            shaderInfo.UniformBuffers.Clear();
+        }
 
         // Release pipeline layout and bind group layout
         if (shaderInfo.PipelineLayout != null)

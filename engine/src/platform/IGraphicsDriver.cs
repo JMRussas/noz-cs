@@ -65,6 +65,7 @@ public interface IGraphicsDriver
 
     void SetBlendMode(BlendMode mode);
     void SetTextureFilter(TextureFilter filter);
+    void SetUniform(string name, ReadOnlySpan<byte> data);
 
     void DrawElements(int firstIndex, int indexCount, int baseVertex = 0);
 

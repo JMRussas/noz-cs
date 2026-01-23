@@ -103,6 +103,9 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     private Sampler* _linearSampler;
     private Sampler* _nearestSampler;
 
+    // Per-name uniform data storage - written to per-shader buffers when bind groups are created
+    private readonly Dictionary<string, byte[]> _uniformData = new();
+
     public string ShaderExtension => "";
 
     private struct CachedState
@@ -167,6 +170,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public List<ShaderBinding> Bindings; // Binding metadata from asset pipeline
         public List<TextureSlotInfo> TextureSlots; // Derived from bindings: texture+sampler pairs
         public Dictionary<string, uint> UniformBindings; // Uniform name → binding number
+        public Dictionary<string, nint> UniformBuffers; // Per-shader uniform buffers by name (nint -> WGPUBuffer*)
     }
 
     private struct PsoKey : IEquatable<PsoKey>

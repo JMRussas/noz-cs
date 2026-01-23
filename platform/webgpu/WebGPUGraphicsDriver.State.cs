@@ -4,6 +4,8 @@
 
 using Silk.NET.WebGPU;
 using NoZ.Platform;
+using WGPUBuffer = Silk.NET.WebGPU.Buffer;
+using WGPUBufferUsage = Silk.NET.WebGPU.BufferUsage;
 
 namespace NoZ.Platform.WebGPU;
 
@@ -24,6 +26,16 @@ public unsafe partial class WebGPUGraphicsDriver
             return;
 
         _state.TextureFilter = filter;
+        _state.BindGroupDirty = true;
+    }
+
+    public void SetUniform(string name, ReadOnlySpan<byte> data)
+    {
+        // Store uniform data by name - will be written to per-shader buffers when bind groups are created
+        if (!_uniformData.TryGetValue(name, out var existing) || existing.Length != data.Length)
+            _uniformData[name] = new byte[data.Length];
+
+        data.CopyTo(_uniformData[name]);
         _state.BindGroupDirty = true;
     }
 
@@ -107,20 +119,44 @@ public unsafe partial class WebGPUGraphicsDriver
             {
                 case ShaderBindingType.UniformBuffer:
                 {
-                    nuint uniformBuffer = GetUniformBufferByName(binding.Name);
-                    if (uniformBuffer == 0)
+                    // Get uniform data by name
+                    if (!_uniformData.TryGetValue(binding.Name, out var uniformData))
                     {
-                        Log.Error($"Uniform '{binding.Name}' not bound!");
+                        Log.Error($"Uniform '{binding.Name}' not set!");
                         _state.BindGroupDirty = false;
                         return;
+                    }
+
+                    // Get or create per-shader buffer for this uniform
+                    WGPUBuffer* buffer;
+                    if (!shader.UniformBuffers.TryGetValue(binding.Name, out var bufferPtr) || bufferPtr == 0)
+                    {
+                        var bufferDesc = new BufferDescriptor
+                        {
+                            Size = (ulong)uniformData.Length,
+                            Usage = WGPUBufferUsage.Uniform | WGPUBufferUsage.CopyDst,
+                            MappedAtCreation = false,
+                        };
+                        buffer = _wgpu.DeviceCreateBuffer(_device, &bufferDesc);
+                        shader.UniformBuffers[binding.Name] = (nint)buffer;
+                    }
+                    else
+                    {
+                        buffer = (WGPUBuffer*)bufferPtr;
+                    }
+
+                    // Write current uniform data to the shader's buffer
+                    fixed (byte* dataPtr = uniformData)
+                    {
+                        _wgpu.QueueWriteBuffer(_queue, buffer, 0, dataPtr, (nuint)uniformData.Length);
                     }
 
                     entries[validEntryCount++] = new BindGroupEntry
                     {
                         Binding = binding.Binding,
-                        Buffer = _buffers[(int)uniformBuffer].Buffer,
+                        Buffer = buffer,
                         Offset = 0,
-                        Size = (ulong)_buffers[(int)uniformBuffer].SizeInBytes,
+                        Size = (ulong)uniformData.Length,
                     };
                     break;
                 }
@@ -183,16 +219,6 @@ public unsafe partial class WebGPUGraphicsDriver
             _wgpu.RenderPassEncoderSetBindGroup(_currentRenderPass, 0, _currentBindGroup, 0, null);
 
         _state.BindGroupDirty = false;
-    }
-
-    private nuint GetUniformBufferByName(string name)
-    {
-        return name switch
-        {
-            "globals" => (nuint)_state.BoundUniformBuffers[0],
-            "text_params" => (nuint)_state.BoundUniformBuffers[1],
-            _ => 0
-        };
     }
 
     private int GetTextureSlotForBinding(uint bindingNumber, ref ShaderInfo shader)
