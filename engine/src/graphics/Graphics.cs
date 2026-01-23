@@ -90,7 +90,6 @@ public static unsafe class Graphics
     private static Shader? _compositeShader;
     private static Shader? _spriteShader;
     private static bool _inUIPass;
-    private static bool _inScenePass;
     private static GraphicsStats _stats;
     private static ushort[] _sortGroupStack = null!;
     private static State[] _stateStack = null!;
@@ -282,10 +281,6 @@ public static unsafe class Graphics
         CurrentState.Color = color;
     }
 
-    /// <summary>
-    /// Bind a camera for rendering. Pass null to use the default screen-space camera.
-    /// Sets viewport and queues projection uniform for batch execution.
-    /// </summary>
     public static void SetCamera(Camera? camera)
     {
         Camera = camera;
@@ -326,7 +321,6 @@ public static unsafe class Graphics
         Driver.ResizeOffscreenTarget((int)size.X, (int)size.Y, RenderConfig.MsaaSamples);
 
         _inUIPass = false;
-        _inScenePass = true;
         _activeDriverPass = 0;
 
         Driver.BeginScenePass(ClearColor);
@@ -360,7 +354,6 @@ public static unsafe class Graphics
             Driver.EndUIPass();
         }
 
-        _inScenePass = false;
         _inUIPass = false;
 
         Driver.EndFrame();

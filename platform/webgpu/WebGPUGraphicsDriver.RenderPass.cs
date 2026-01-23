@@ -261,7 +261,6 @@ public unsafe partial class WebGPUGraphicsDriver
         };
 
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, &desc);
-        _inRenderPass = true;
 
         _wgpu.RenderPassEncoderSetViewport(_currentRenderPass, 0, 0, _surfaceWidth, _surfaceHeight, 0, 1);
         _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass, 0, 0, (uint)_surfaceWidth, (uint)_surfaceHeight);
@@ -282,7 +281,6 @@ public unsafe partial class WebGPUGraphicsDriver
         _wgpu.RenderPassEncoderEnd(_currentRenderPass);
         _wgpu.RenderPassEncoderRelease(_currentRenderPass);
         _currentRenderPass = null;
-        _inRenderPass = false;
 
         if (_bindGroupsToRelease.Count > 0)
         {

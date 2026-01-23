@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>NoZ.Platform</RootNamespace>
+    <EnableSingleFileAnalysis>false</EnableSingleFileAnalysis>
   </PropertyGroup>
 
   <ItemGroup>

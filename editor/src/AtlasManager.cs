@@ -45,7 +45,7 @@ public static class AtlasManager
 
         if (_atlases.Count == 0)
         {
-            var atlas = DocumentManager.NewDocument(AssetType.Atlas, GetAtlasName(0)) as AtlasDocument;
+            var atlas = DocumentManager.New(AssetType.Atlas, GetAtlasName(0)) as AtlasDocument;
             Debug.Assert(atlas != null);
             atlas.Index = 0;
             _atlases.Add(atlas);

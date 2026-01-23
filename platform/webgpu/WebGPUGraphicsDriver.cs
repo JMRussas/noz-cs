@@ -60,7 +60,6 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     private RenderPassEncoder* _currentRenderPass;
     private WGPUTexture* _currentSurfaceTexture;
     private TextureView* _currentSurfaceView;
-    private bool _inRenderPass;
 
     // Resource tracking
     private const int MaxMeshes = 32;
@@ -114,7 +113,6 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public BlendMode BlendMode;
         public TextureFilter TextureFilter;
         public nuint BoundMesh;
-        public int VertexStride;
         public fixed ulong BoundTextures[8];
         public fixed ulong BoundUniformBuffers[4];
         public bool PipelineDirty;

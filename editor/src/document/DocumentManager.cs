@@ -60,7 +60,7 @@ public static class DocumentManager
         return _defsByExtension.TryGetValue(ext, out var def) ? def : null;
     }
     
-    public static Document? LoadDocument(string path)
+    public static Document? Load(string path)
     {
         string ext = Path.GetExtension(path);
         var def = GetDef(ext);
@@ -87,7 +87,7 @@ public static class DocumentManager
         return doc;
     }
 
-    public static Document? NewDocument(AssetType assetType, string name)
+    public static Document? New(AssetType assetType, string name)
     {
         var def = GetDef(assetType);
         if (def == null || def.NewFile == null)
@@ -114,7 +114,7 @@ public static class DocumentManager
             def.NewFile(writer);
         }
 
-        var doc = LoadDocument(path);
+        var doc = Load(path);
         doc?.LoadMetadata();
         doc?.Load();
         return doc;
@@ -183,7 +183,7 @@ public static class DocumentManager
             Notifications.Add($"saved {count} asset(s)");
     }
 
-    public static void DeleteDocument(Document doc)
+    public static void Delete(Document doc)
     {
         Undo.RemoveDocument(doc);
         Importer.CancelImport(doc);
@@ -227,7 +227,7 @@ public static class DocumentManager
                 if (Find(name) != null)
                     continue;
 
-                LoadDocument(filePath)?.LoadMetadata();
+                Load(filePath)?.LoadMetadata();
             }
         }
     }

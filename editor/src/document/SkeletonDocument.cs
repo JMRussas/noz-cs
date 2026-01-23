@@ -608,7 +608,7 @@ public class SkeletonDocument : Document
 
         File.WriteAllText(fullPath, defaultSkel);
 
-        var doc = DocumentManager.LoadDocument(fullPath) as SkeletonDocument;
+        var doc = DocumentManager.Load(fullPath) as SkeletonDocument;
         doc?.Load();
         return doc;
     }

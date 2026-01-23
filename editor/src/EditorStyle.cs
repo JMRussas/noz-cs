@@ -4,65 +4,6 @@
 
 namespace NoZ.Editor;
 
-public class Style
-{
-    // General
-    public Color BackgroundColor;
-    public Color SelectionColor;
-    public Color SelectionTextColor;
-
-    // Workspace
-    public Color WorkspaceColor;
-    public Color WorkspaceGridColor;
-    public Color OverlayBackgroundColor;
-    public Color OverlayTextColor;
-    public Color OverlayAccentTextColor;
-    public Color OverlayDisabledTextColor;
-    public Color OverlayIconColor;
-    public Color OverlayContentColor;
-
-    // Button
-    public Color ButtonColor;
-    public Color ButtonHoverColor;
-    public Color ButtonTextColor;
-    public Color ButtonCheckedColor;
-    public Color ButtonCheckedTextColor;
-    public Color ButtonDisabledColor;
-    public Color ButtonDisabledTextColor;
-
-    // Context Menu
-    public Color ContextMenuTitleColor;
-    public Color ContextMenuSeparatorColor;
-    
-    // Shape
-    public Color ShapeAnchorColor;
-    public Color ShapeAnchorOutlineColor;
-    public Color ShapeSelectionColor;
-    public Color ShapeHoverColor;
-    public Color ShapeSegmentColor;
-    
-    // Box Select
-    public Color BoxSelectLineColor;
-    public Color BoxSelectFillColor;
-
-    // Control
-    public Color ControlTextColor;
-    public Color ControlFillColor;
-    public Color ControlSelectedFillColor;
-    public Color ControlPlaceholderTextColor;
-    public Color ControlIconColor;
-
-    // List
-    public Color ListItemSelectedFillColor;
-    public Color ListItemSelectedTextColor;
-    public Color ListItemTextColor;
-    public Color ListHeaderTextColor;
-
-    // Popup
-    public Color PopupFillColor;
-    public Color PopupTextColor;
-    public Color PopupSpacerColor;
-}
 
 public static class EditorStyle
 {
@@ -75,9 +16,9 @@ public static class EditorStyle
     }
     #endregion
     
-    private static Style _current = null!;
+    private static EditorColors _colors = null!;
 
-    public static Style Current => _current;
+    public static EditorColors Current => _colors;
 
     // Legacy colors (deprecated but still used)
     public static readonly Color Origin = Color.FromRgb(0xFF9F2C);
@@ -129,7 +70,7 @@ public static class EditorStyle
 
     public static class Popup
     {
-        public static Color FillColor => _current.PopupFillColor;
+        public static Color FillColor => _colors.PopupFillColor;
         public readonly static ContainerStyle Item = new()
         {
             Height = 30.0f
@@ -137,7 +78,7 @@ public static class EditorStyle
         public readonly static ContainerStyle Separator = new() { 
             Height = 1,
             Margin = EdgeInsets.TopBottom(6),
-            Color = _current.PopupSpacerColor
+            Color = _colors.PopupSpacerColor
         };
         public readonly static ContainerStyle RootContainer = new()
         {
@@ -160,11 +101,11 @@ public static class EditorStyle
     {
         public const float TextSize = 13.0f;
         public const float Height = 30.0f;
-        public static Color TextColor => _current.ControlTextColor;
-        public static Color IconColor => _current.ControlIconColor;
-        public static Color FillColor => _current.ControlFillColor;
-        public static Color SelectedFillColor => _current.ControlSelectedFillColor;
-        public static Color PlaceholderTextColor => _current.ControlPlaceholderTextColor;
+        public static Color TextColor => _colors.ControlTextColor;
+        public static Color IconColor => _colors.ControlIconColor;
+        public static Color FillColor => _colors.ControlFillColor;
+        public static Color SelectedFillColor => _colors.ControlSelectedFillColor;
+        public static Color PlaceholderTextColor => _colors.ControlPlaceholderTextColor;
 
         public static readonly LabelStyle Text = new()
         {
@@ -180,29 +121,37 @@ public static class EditorStyle
         public const float ItemHeight = 32f;
         public const float ItemPadding = 8f;
         public const float ItemTextSize = 14.0f;
-        public static Color ItemSelectedFillColor => _current.ListItemSelectedFillColor;
-        public static Color ItemSelectedTextColor => _current.ListItemSelectedTextColor;
-        public static Color ItemTextColor => _current.ListItemTextColor;
-        public static Color HeaderTextColor => _current.ListHeaderTextColor;
+        public static Color ItemSelectedFillColor => _colors.ListItemSelectedFillColor;
+        public static Color ItemSelectedTextColor => _colors.ListItemSelectedTextColor;
+        public static Color ItemTextColor => _colors.ListItemTextColor;
+        public static Color HeaderTextColor => _colors.ListHeaderTextColor;
     }
 
     public static class Workspace
     {
-        public static Color Color => _current.WorkspaceColor;
+        public static Color Color => _colors.WorkspaceColor;
         public const float Padding = 16f;
         public const float BoundsLineWidth = 0.015f;
         public const float NameSize = 0.24f;
         public const float NamePadding = 0.04f;
-        public static Color GridColor => _current.WorkspaceGridColor;
-        public const float GridAlpha = 0.05f;
-        public const float GridZeroAlpha = 0.4f;
+        public static Color GridColor => _colors.WorkspaceGridColor;
+        public const float GridAlpha = 0.5f;
+        public const float GridZeroAlpha = 0.6f;
+    }
+
+    public static class SpriteEditor
+    {
+        public static Color SegmentColor => _colors.SpriteEditor.Segment;
+        public static Color SelectedSegmentColor => _colors.SpriteEditor.SelectedSegment;
+        public static Color AnchorColor => _colors.SpriteEditor.Anchor;
+        public static Color SelectedAnchorColor => _colors.SpriteEditor.SelectedAnchor;
     }
 
     public static class BoxSelect 
     {
         public const float LineWidth = 0.02f;
-        public static Color LineColor => _current.BoxSelectLineColor;
-        public static Color FillColor => _current.BoxSelectFillColor;
+        public static Color LineColor => _colors.BoxSelectLineColor;
+        public static Color FillColor => _colors.BoxSelectFillColor;
     }
 
     public static class CommandPalette
@@ -248,9 +197,9 @@ public static class EditorStyle
 
     public static class Shape
     {
-        public static Color AnchorColor => _current.ShapeAnchorColor;
-        public static Color AnchorOutlineColor => _current.ShapeAnchorOutlineColor;
-        public static Color SegmentColor => _current.ShapeSegmentColor;
+        public static Color AnchorColor => _colors.ShapeAnchorColor;
+        public static Color AnchorOutlineColor => _colors.ShapeAnchorOutlineColor;
+        public static Color SegmentColor => _colors.ShapeSegmentColor;
         public const float AnchorSize = 0.18f;
         public const float AnchorSelectedSize = AnchorSize * 1.3f; 
         public const float SegmentWidth = 0.02f;
@@ -264,12 +213,12 @@ public static class EditorStyle
         public const float BorderRadius = 16f;
         public const int TextSize = 14;
         public const float ContentBorderRadius = 9f;
-        public static Color FillColor => _current.OverlayBackgroundColor;
-        public static Color TextColor => _current.OverlayTextColor;
-        public static Color AccentTextColor => _current.OverlayAccentTextColor;
-        public static Color DisabledTextColor => _current.OverlayDisabledTextColor;
-        public static Color IconColor => _current.OverlayIconColor;
-        public static Color ContentColor => _current.OverlayContentColor;
+        public static Color FillColor => _colors.OverlayBackgroundColor;
+        public static Color TextColor => _colors.OverlayTextColor;
+        public static Color AccentTextColor => _colors.OverlayAccentTextColor;
+        public static Color DisabledTextColor => _colors.OverlayDisabledTextColor;
+        public static Color IconColor => _colors.OverlayIconColor;
+        public static Color ContentColor => _colors.OverlayContentColor;
     }
 
     public static class Shortcut
@@ -306,8 +255,8 @@ public static class EditorStyle
         public const int TextSize = 12;
         public const float SeparatorHeight = 2f;
         public const float SeparatorSpacing = 12f;
-        public static Color TitleColor => _current.ContextMenuTitleColor;
-        public static Color SeparatorColor => _current.ContextMenuSeparatorColor;
+        public static Color TitleColor => _colors.ContextMenuTitleColor;
+        public static Color SeparatorColor => _colors.ContextMenuSeparatorColor;
         public static readonly ContainerStyle Menu = Popup.RootContainer with {
             AlignX = Align.Min,
             AlignY = Align.Min
@@ -437,78 +386,23 @@ public static class EditorStyle
     public const float ColorPickerSelectionBorderWidth = 3f;
 
     // Style accessors
-    public static Color SelectionColor => _current.SelectionColor;
-    public static Color SelectionTextColor => _current.SelectionTextColor;
-    public static Color ButtonColor => _current.ButtonColor;
-    public static Color ButtonHoverColor => _current.ButtonHoverColor;
-    public static Color ButtonTextColor => _current.ButtonTextColor;
-    public static Color ButtonCheckedColor => _current.ButtonCheckedColor;
-    public static Color ButtonCheckedTextColor => _current.ButtonCheckedTextColor;
-    public static Color ButtonDisabledColor => _current.ButtonDisabledColor;
-    public static Color ButtonDisabledTextColor => _current.ButtonDisabledTextColor;
+    public static Color SelectionColor => _colors.SelectionColor;
+    public static Color SelectionTextColor => _colors.SelectionTextColor;
+    public static Color ButtonColor => _colors.ButtonColor;
+    public static Color ButtonHoverColor => _colors.ButtonHoverColor;
+    public static Color ButtonTextColor => _colors.ButtonTextColor;
+    public static Color ButtonCheckedColor => _colors.ButtonCheckedColor;
+    public static Color ButtonCheckedTextColor => _colors.ButtonCheckedTextColor;
+    public static Color ButtonDisabledColor => _colors.ButtonDisabledColor;
+    public static Color ButtonDisabledTextColor => _colors.ButtonDisabledTextColor;
 
     public static void Init()
     {
-        _current = CreateDarkStyle();
+        _colors = EditorColors.Dark;
     }
 
     public static void Shutdown()
     {
-    }
-
-    private static Style CreateDarkStyle()
-    {
-        var selectionColor = Color.FromRgb(0x0099ff);
-
-        return new Style
-        {
-            BackgroundColor = Color.FromRgb(0x383838),
-            SelectionColor = selectionColor,
-            SelectionTextColor = Color.FromRgb(0xf0f0f0),
-            ButtonColor = Color.FromRgb(0x585858),
-            ButtonHoverColor = Color.FromRgb(0x676767),
-            ButtonTextColor = Color.FromRgb(0xe3e3e3),
-            ButtonCheckedColor = Color.FromRgb(0x557496),
-            ButtonCheckedTextColor = Color.FromRgb(0xf0f0f0),
-            ButtonDisabledColor = Color.FromRgb(0x2a2a2a),
-            ButtonDisabledTextColor = Color.FromRgb(0x636363),
-
-            WorkspaceColor = Color.FromRgb(0x1d1d1d),
-            WorkspaceGridColor = new Color(128, 127, 128),
-
-            OverlayBackgroundColor = Color.FromRgb(0x111111),
-            OverlayTextColor = Color.FromRgb(0x979797),
-            OverlayAccentTextColor = Color.FromRgb(0xd2d2d2),
-            OverlayDisabledTextColor = Color.FromRgb(0x4a4a4a),
-            OverlayIconColor = Color.FromRgb(0x585858),
-            OverlayContentColor = Color.FromRgb(0x2a2a2a),
-            ContextMenuSeparatorColor = Color.FromRgb(0x2a2a2a),
-            ContextMenuTitleColor = Color.FromRgb(0x636363),
-
-            ShapeAnchorColor = Color.White,
-            ShapeAnchorOutlineColor = Color.FromRgb(0x0099ff),
-            ShapeSelectionColor = selectionColor,
-            ShapeHoverColor = selectionColor,
-            ShapeSegmentColor = Color.FromRgb(0x111111).WithAlpha(0.5f),
-
-            BoxSelectLineColor = selectionColor,
-            BoxSelectFillColor = selectionColor.WithAlpha(0.15f),
-
-            ControlTextColor = Color.FromRgb(0xeeeeee),
-            ControlIconColor = Color.FromRgb(0x999999),
-            ControlFillColor = Color.FromRgb(0x2b2b2b),
-            ControlSelectedFillColor = Color.FromRgb(0x555555),
-            ControlPlaceholderTextColor = Color.FromRgb(0x666666),
-
-            ListItemSelectedFillColor = Color.FromRgb(0x2b2b2b),
-            ListItemSelectedTextColor = Color.FromRgb(0xf4f4f4),
-            ListItemTextColor = Color.FromRgb(0x999999),
-            ListHeaderTextColor = Color.FromRgb(0x666666),
-
-            PopupFillColor = Color.FromRgb(0x2b2b2b),
-            PopupTextColor = Color.FromRgb(0xFFFFFF),
-            PopupSpacerColor = Color.FromRgb(0x363636)
-        };
     }
 }
 

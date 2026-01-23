@@ -533,7 +533,7 @@ public static class Workspace
             }
 
             foreach (var doc in toDelete)
-                DocumentManager.DeleteDocument(doc);
+                DocumentManager.Delete(doc);
 
             SelectedCount = 0;
             Notifications.Add($"deleted {toDelete.Count} asset(s)");
