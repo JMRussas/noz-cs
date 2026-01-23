@@ -22,7 +22,8 @@ public static unsafe class Graphics
     private const int IndexShift = 0;
     private const int OrderShift = 16;
     private const int GroupShift = 32;
-    private const int LayerShift = 48;
+    private const int LayerShift = 52;
+    private const int PassShift = 60;
     private const long SortKeyMergeMask = 0x7FFFFFFFFFFF0000;
 
     public struct AutoState(bool pop) : IDisposable
@@ -47,6 +48,7 @@ public static unsafe class Graphics
         public int ScissorHeight;
         public nuint Mesh;
         public bool ScissorEnabled;
+        public byte Pass;
     }
 
     private struct Batch
@@ -111,12 +113,14 @@ public static unsafe class Graphics
     private static ref State CurrentState => ref _stateStack[_stateStackDepth];
     
     #region Batching
-    private static nuint _sceneMesh;
-    private static nuint _uiMesh;
-    private static nuint _currentMesh;
+    private static nuint _mesh;
     private static nuint _boneTexture;
     private const int BoneTextureSlot = 1;
+    private static byte _currentPass;
+    private static byte _activeDriverPass;
     private static Matrix4x4 _projection;
+    private static Matrix4x4 _sceneProjection;
+    private static Matrix4x4 _uiProjection;
     private static NativeArray<float> _boneData;
     private static int _maxDrawCommands;
     private static int _maxBatches;
@@ -191,8 +195,8 @@ public static unsafe class Graphics
         CurrentState.ScissorWidth = 0;
         CurrentState.ScissorHeight = 0;
 
-        _currentMesh = _sceneMesh;
-        CurrentState.Mesh = _currentMesh;
+        CurrentState.Mesh = _mesh;
+        _currentPass = 0;
 
         _boneRow = 1; // Row 0 is identity, start from row 1
 
@@ -213,21 +217,12 @@ public static unsafe class Graphics
         _batches = new NativeArray<Batch>(_maxBatches);
         _batchStates = new NativeArray<BatchState>(_maxBatches);
 
-        _sceneMesh = Driver.CreateMesh<MeshVertex>(
+        _mesh = Driver.CreateMesh<MeshVertex>(
             MaxVertices,
             MaxIndices,
             BufferUsage.Dynamic,
-            "Render.Scene"
+            "Graphics.Main"
         );
-
-        _uiMesh = Driver.CreateMesh<MeshVertex>(
-            MaxVertices,
-            MaxIndices,
-            BufferUsage.Dynamic,
-            "Render.UI"
-        );
-
-        _currentMesh = _sceneMesh;
 
         var boneDataLength = BoneTextureWidth * MaxBoneRows * 4;
         _boneData = new NativeArray<float>(boneDataLength, boneDataLength);
@@ -247,15 +242,12 @@ public static unsafe class Graphics
         _commands.Dispose();
         _indices.Dispose();
 
-        Driver.DestroyMesh(_sceneMesh);
-        Driver.DestroyMesh(_uiMesh);
+        Driver.DestroyMesh(_mesh);
         Driver.DestroyTexture(_boneTexture);
 
         Driver.Shutdown();
 
-        _sceneMesh = 0;
-        _uiMesh = 0;
-        _currentMesh = 0;
+        _mesh = 0;
         _boneTexture = 0;
     }
 
@@ -304,12 +296,18 @@ public static unsafe class Graphics
             SetViewport((int)viewport.X, (int)viewport.Y, (int)viewport.Width, (int)viewport.Height);
 
         var view = camera.ViewMatrix;
-        _projection = new Matrix4x4(
+        var projection = new Matrix4x4(
             view.M11, view.M12, 0, view.M31,
             view.M21, view.M22, 0, view.M32,
             0, 0, 1, 0,
             0, 0, 0, 1
         );
+
+        // Store to the appropriate projection based on current pass
+        if (_currentPass == 0)
+            _sceneProjection = projection;
+        else
+            _uiProjection = projection;
     }
 
     internal static bool BeginFrame()
@@ -329,6 +327,7 @@ public static unsafe class Graphics
 
         _inUIPass = false;
         _inScenePass = true;
+        _activeDriverPass = 0;
 
         Driver.BeginScenePass(ClearColor);
 
@@ -339,23 +338,9 @@ public static unsafe class Graphics
     {
         if (_inUIPass) return;
 
-        ExecuteCommands();
-
-        if (_inScenePass)
-        {
-            Driver.EndScenePass();
-            _inScenePass = false;
-
-            if (_compositeShader != null)
-                Driver.Composite(_compositeShader.Handle);
-        }
-
-        // Switch to UI mesh for subsequent draws
-        _currentMesh = _uiMesh;
-        CurrentState.Mesh = _currentMesh;
-        _batchStateDirty = true;
-
-        Driver.BeginUIPass();
+        // Switch to UI pass - driver transitions handled during ExecuteCommands
+        // UI projection will be set via SetCamera(UI.Camera) call
+        _currentPass = 1;
         _inUIPass = true;
     }
 
@@ -363,20 +348,20 @@ public static unsafe class Graphics
     {
         ExecuteCommands();
 
-        if (_inScenePass)
+        // Close whatever pass is currently active
+        if (_activeDriverPass == 0)
         {
             Driver.EndScenePass();
-            _inScenePass = false;
-
             if (_compositeShader != null)
                 Driver.Composite(_compositeShader.Handle);
         }
-
-        if (_inUIPass)
+        else
         {
             Driver.EndUIPass();
-            _inUIPass = false;
         }
+
+        _inScenePass = false;
+        _inUIPass = false;
 
         Driver.EndFrame();
     }
@@ -633,6 +618,7 @@ public static unsafe class Graphics
     }
 
     private static long MakeSortKey(ushort order) =>
+        (((long)_currentPass) << PassShift) |
         (((long)CurrentState.SortLayer) << LayerShift) |
         (((long)CurrentState.SortGroup) << GroupShift) |
         (((long)order) << OrderShift) |
@@ -660,7 +646,8 @@ public static unsafe class Graphics
         for (int i = 0; i < _batchStates.Length; i++)
         {
             ref var existing = ref _batchStates[i];
-            if (existing.Shader != shader ||
+            if (existing.Pass != _currentPass ||
+                existing.Shader != shader ||
                 existing.BlendMode != blendMode ||
                 existing.TextureFilter != textureFilter ||
                 existing.ViewportX != viewportX ||
@@ -694,6 +681,7 @@ public static unsafe class Graphics
 
         _currentBatchState = (ushort)_batchStates.Length;
         ref var batchState = ref _batchStates.Add();
+        batchState.Pass = _currentPass;
         batchState.Shader = shader;
         batchState.BlendMode = blendMode;
         batchState.TextureFilter = textureFilter;
@@ -710,7 +698,7 @@ public static unsafe class Graphics
         batchState.ScissorHeight = scissorHeight;
         batchState.Mesh = vertexArray;
 
-        LogRender($"AddBatchState: Shader=0x{batchState.Shader:X} Texture0=0x{batchState.Textures[0]:X} Texture1=0x{batchState.Textures[1]:X} BlendMode={batchState.BlendMode} Viewport=({batchState.ViewportX},{batchState.ViewportY},{batchState.ViewportW},{batchState.ViewportH}) ScissorEnabled={batchState.ScissorEnabled} Scissor=({batchState.ScissorX},{batchState.ScissorY},{batchState.ScissorWidth},{batchState.ScissorHeight}) Mesh=0x{batchState.Mesh:X}");
+        LogRender($"AddBatchState: Pass={batchState.Pass} Shader=0x{batchState.Shader:X} Texture0=0x{batchState.Textures[0]:X} Texture1=0x{batchState.Textures[1]:X} BlendMode={batchState.BlendMode} Viewport=({batchState.ViewportX},{batchState.ViewportY},{batchState.ViewportW},{batchState.ViewportH}) ScissorEnabled={batchState.ScissorEnabled} Scissor=({batchState.ScissorX},{batchState.ScissorY},{batchState.ScissorWidth},{batchState.ScissorHeight}) Mesh=0x{batchState.Mesh:X}");
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -730,9 +718,9 @@ public static unsafe class Graphics
             return;
 
         if (_batchStates.Length == 0 ||
-            _batchStates[_currentBatchState].Mesh != _currentMesh)
+            _batchStates[_currentBatchState].Mesh != _mesh)
         {
-            SetMesh(_currentMesh);
+            SetMesh(_mesh);
         }
 
         if (_batchStateDirty)
@@ -835,11 +823,11 @@ public static unsafe class Graphics
 
         ref var firstBatch = ref _batches[0];
         ref var firstState = ref _batchStates[_commands[0].BatchState];
-        firstBatch.IndexOffset = firstState.Mesh != _currentMesh ? _commands[0].IndexOffset : 0;
+        firstBatch.IndexOffset = firstState.Mesh != _mesh ? _commands[0].IndexOffset : 0;
         firstBatch.IndexCount = _commands[0].IndexCount;
         firstBatch.State = _commands[0].BatchState;
 
-        if (firstState.Mesh == _currentMesh)
+        if (firstState.Mesh == _mesh)
             _sortedIndices.AddRange(
                 _indices.AsReadonlySpan(_commands[0].IndexOffset, _commands[0].IndexCount)
             );
@@ -852,7 +840,7 @@ public static unsafe class Graphics
             LogRenderVerbose($"  Command: Index={commandIndex}  SortKey={cmd.SortKey}  IndexOffset={cmd.IndexOffset} IndexCount={cmd.IndexCount} State={cmd.BatchState}");
 
             // Always break batch on external vertex arrays.
-            if (cmdState.Mesh != _currentMesh)
+            if (cmdState.Mesh != _mesh)
             {
                 ref var newBatch = ref _batches.Add();
                 newBatch.IndexOffset = cmd.IndexOffset;
@@ -884,10 +872,10 @@ public static unsafe class Graphics
     {
         if (_commands.Length == 0)
             return;
-        
+
         TextRender.Flush();
         UIRender.Flush();
-        
+
         _commands.AsSpan().Sort();
 
         CreateBatches();
@@ -914,29 +902,50 @@ public static unsafe class Graphics
 
         if (_vertices.Length > 0 || _indices.Length > 0)
         {
-            Driver.BindMesh(_currentMesh);
-            Driver.UpdateMesh(_currentMesh, _vertices.AsByteSpan(), _sortedIndices.AsSpan());
+            Driver.BindMesh(_mesh);
+            Driver.UpdateMesh(_mesh, _vertices.AsByteSpan(), _sortedIndices.AsSpan());
             Driver.SetBlendMode(BlendMode.None);
             Driver.SetTextureFilter(TextureFilter.Linear);
-            lastMesh = _currentMesh;
+            lastMesh = _mesh;
         }
 
         Driver.SetTextureFilter(TextureFilter.Point);
 
-        // Set current uniform state - per-shader buffers will be populated when bind groups are created
+        // Set initial projection based on current active pass
+        _projection = _activeDriverPass == 0 ? _sceneProjection : _uiProjection;
         SetGlobalsUniform();
 
         UploadBones();
         Driver.BindTexture(_boneTexture, BoneTextureSlot);
 
         LogRender($"ExecuteBatches: Batches={_batches.Length} BatchStates={_batchStates.Length} Commands={_commands.Length} Vertices={_vertices.Length} Indices={_indices.Length}");
-        
-        for (int batchIndex=0, batchCount=_batches.Length; batchIndex < batchCount; batchIndex++)
+
+        for (int batchIndex = 0, batchCount = _batches.Length; batchIndex < batchCount; batchIndex++)
         {
             ref var batch = ref _batches[batchIndex];
             ref var batchState = ref _batchStates[batch.State];
 
-            LogRender($"  Batch: Index={batchIndex} IndexOffset={batch.IndexOffset} IndexCount={batch.IndexCount} State={batch.State}");
+            LogRender($"  Batch: Index={batchIndex} IndexOffset={batch.IndexOffset} IndexCount={batch.IndexCount} State={batch.State} Pass={batchState.Pass}");
+
+            // Handle pass transitions
+            if (batchState.Pass != _activeDriverPass)
+            {
+                if (_activeDriverPass == 0 && batchState.Pass == 1)
+                {
+                    // Transition from scene to UI
+                    Driver.EndScenePass();
+                    if (_compositeShader != null)
+                        Driver.Composite(_compositeShader.Handle);
+                    Driver.BeginUIPass();
+                    _activeDriverPass = 1;
+
+                    // Switch to UI projection
+                    _projection = _uiProjection;
+                    SetGlobalsUniform();
+
+                    LogRender($"    PassTransition: Scene -> UI");
+                }
+            }
             
             if (lastViewportX != batchState.ViewportX ||  
                 lastViewportY != batchState.ViewportY ||

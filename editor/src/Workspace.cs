@@ -37,6 +37,7 @@ public static class Workspace
 
         CommandManager.RegisterWorkspace([
             new Command { Name = "Move Selected", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
+            new Command { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
             new Command { Name = "Toggle Names", ShortName = "names", Handler = ToggleNames, Key = InputCode.KeyN, Alt = true },
             new Command { Name = "Rebuild All", ShortName = "build", Handler = RebuildAll },
             new Command { Name = "Frame Selected", ShortName = "origin", Handler = FrameOrigin },
@@ -44,14 +45,9 @@ public static class Workspace
         ]);
 
         _workspaceContextMenuItems = [
-            //ContextMenuItem.Item("Frame Selected", FrameSelected, InputCode.KeyF),
-            //ContextMenuItem.Item("Frame Origin", FrameOrigin),
-            //ContextMenuItem.Item("Move", BeginMoveTool, InputCode.KeyG),
-            //ContextMenuItem.Separator(),
-            //ContextMenuItem.Submenu("View"),
-            //    ContextMenuItem.Item("Toggle Grid", ToggleGrid, InputCode.KeyQuote, ctrl: true, level: 1),
-            //    ContextMenuItem.Item("Toggle Names", ToggleNames, InputCode.KeyN, alt: true, level: 1),
-            //ContextMenuItem.Separator(),
+            ContextMenuItem.Item("Move", BeginMoveTool, key: InputCode.KeyG),
+            ContextMenuItem.Item("Delete", DeleteSelected, key: InputCode.KeyX),
+            ContextMenuItem.Separator(),
             ContextMenuItem.Item("Rebuild All", RebuildAll, alt: true, ctrl: true, shift: true, key: InputCode.KeyA),
         ];
     }
@@ -175,7 +171,7 @@ public static class Workspace
     {
         UpdateCamera();
 
-        if (!CommandPalette.IsEnabled && !ContextMenu.IsVisible)
+        if (!CommandPalette.IsEnabled && !ContextMenu.IsVisible && !ConfirmDialog.IsVisible)
         {
             CommandManager.ProcessShortcuts();
 
@@ -519,6 +515,29 @@ public static class Workspace
         foreach (var doc in DocumentManager.Documents)
             if (doc.IsSelected)
                 doc.TogglePlay();
+    }
+
+    private static void DeleteSelected()
+    {
+        if (SelectedCount == 0)
+            return;
+
+        var message = SelectedCount == 1 ? "Delete asset?" : $"Delete {SelectedCount} assets?";
+        ConfirmDialog.Show(message, () =>
+        {
+            var toDelete = new List<Document>();
+            foreach (var doc in DocumentManager.Documents)
+            {
+                if (doc.IsSelected)
+                    toDelete.Add(doc);
+            }
+
+            foreach (var doc in toDelete)
+                DocumentManager.DeleteDocument(doc);
+
+            SelectedCount = 0;
+            Notifications.Add($"deleted {toDelete.Count} asset(s)");
+        });
     }
 
     public static void FrameOrigin()

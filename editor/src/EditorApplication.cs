@@ -71,6 +71,7 @@ public static class EditorApplication
         EditorStyle.Init();
         CommandPalette.Init();
         ContextMenu.Init();
+        ConfirmDialog.Init();
         Notifications.Init();
         Workspace.Init();
         UserSettings.Load();
@@ -85,6 +86,7 @@ public static class EditorApplication
 
         Workspace.Shutdown();
         Notifications.Shutdown();
+        ConfirmDialog.Shutdown();
         ContextMenu.Shutdown();
         CommandPalette.Shutdown();
         EditorStyle.Shutdown();
@@ -98,6 +100,7 @@ public static class EditorApplication
 
     public static void Update()
     {
+        ConfirmDialog.Update();
         CommandPalette.Update();
         ContextMenu.Update();
         Notifications.Update();
@@ -110,5 +113,6 @@ public static class EditorApplication
         Notifications.UpdateUI();
         ContextMenu.UpdateUI();
         CommandPalette.UpdateUI();
+        ConfirmDialog.UpdateUI();
     }
 }

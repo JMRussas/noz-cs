@@ -1,0 +1,101 @@
+//
+//  NoZ - Copyright(c) 2026 NoZ Games, LLC
+//
+
+namespace NoZ.Editor;
+
+public static class ConfirmDialog
+{
+    private const byte YesButtonId = 1;
+    private const byte NoButtonId = 2;
+
+    private static bool _visible;
+    private static string _message = string.Empty;
+    private static Action? _onConfirm;
+
+    public static bool IsVisible => _visible;
+
+    public static void Init()
+    {
+    }
+
+    public static void Shutdown()
+    {
+        _visible = false;
+        _message = string.Empty;
+        _onConfirm = null;
+    }
+
+    public static void Show(string message, Action onConfirm)
+    {
+        _message = message;
+        _onConfirm = onConfirm;
+        _visible = true;
+        UI.SetFocus(NoButtonId, EditorStyle.CanvasId.Confirm);
+    }
+
+    public static void Close()
+    {
+        _visible = false;
+        _message = string.Empty;
+        _onConfirm = null;
+        UI.ClearFocus();
+    }
+
+    public static void Update()
+    {
+        if (!_visible)
+            return;
+
+        if (Input.WasButtonPressed(InputCode.KeyEscape))
+        {
+            Input.ConsumeButton(InputCode.KeyEscape);
+            Close();
+            return;
+        }
+
+        if (Input.WasButtonPressed(InputCode.KeyEnter))
+        {
+            Input.ConsumeButton(InputCode.KeyEnter);
+            var callback = _onConfirm;
+            Close();
+            callback?.Invoke();
+            return;
+        }
+    }
+
+    public static void UpdateUI()
+    {
+        if (!_visible)
+            return;
+
+        Action? executed = null;
+
+        using (UI.BeginCanvas(id: EditorStyle.CanvasId.Confirm))
+        {
+            using (UI.BeginContainer(id: 0))
+                if (UI.WasPressed())
+                    Close();
+
+            using (UI.BeginColumn(EditorStyle.Confirm.Root))
+            {
+                UI.Label(_message, EditorStyle.Confirm.MessageLabel);
+
+                using (UI.BeginRow(EditorStyle.Confirm.ButtonRow))
+                {
+                    if (EditorUI.Button(YesButtonId, "Yes"))
+                        executed = _onConfirm;
+
+                    if (EditorUI.Button(YesButtonId, "No"))
+                        Close();
+                }
+            }
+        }
+
+        if (executed != null)
+        {
+            Close();
+            executed();
+        }
+    }
+}

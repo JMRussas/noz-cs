@@ -50,7 +50,7 @@ public static partial class UI
             LayoutElement(elementIndex, offset, sizeOverride);
 
             float childSize = child.Rect.Size[axis];
-            float childMax = child.Rect.Max[axis] + child.MarginMax[axis];
+            float childMax = child.Rect.Max[axis] + child.MarginMax[axis] + e.Data.Container.Spacing;
             fixedSize += childMax - offset[axis];
             offset[axis] = childMax;
             elementIndex = child.NextSiblingIndex;
@@ -66,8 +66,8 @@ public static partial class UI
                 ref var child = ref GetElement(elementIndex);
                 if (child.Type != ElementType.Flex)
                 {
-                    child.Rect[axis] += flexOffset[axis];
-                    flexOffset[axis] += child.Rect.Size[axis];
+                    child.Rect[axis] = flexOffset[axis];
+                    flexOffset[axis] = child.Rect.Max[axis] + child.MarginMax[axis] + e.Data.Container.Spacing;
                 }
                 else
                 {

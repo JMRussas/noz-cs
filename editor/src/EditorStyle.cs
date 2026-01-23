@@ -71,6 +71,7 @@ public static class EditorStyle
     {
         public const byte CommandPalette = 1;
         public const byte ContextMenu = 2;
+        public const byte Confirm = 3;
     }
     #endregion
     
@@ -158,6 +159,7 @@ public static class EditorStyle
     public static class Control
     {
         public const float TextSize = 13.0f;
+        public const float Height = 30.0f;
         public static Color TextColor => _current.ControlTextColor;
         public static Color IconColor => _current.ControlIconColor;
         public static Color FillColor => _current.ControlFillColor;
@@ -205,9 +207,7 @@ public static class EditorStyle
 
     public static class CommandPalette
     {
-        private const float IconSize = 24.0f;
-
-        public static readonly ContainerStyle RootContainer = Popup.RootContainer with
+        public static readonly ContainerStyle Root = Popup.RootContainer with
         {
             Width = 450.0f,
             MinHeight = 100.0f,
@@ -357,6 +357,76 @@ public static class EditorStyle
             AlignX = Align.Min,
             AlignY = Align.Center
         };
+    }
+
+    public static class Button
+    {
+        public static readonly ContainerStyle Root = new()
+        {
+            Width = Size.Fit,
+            MinWidth = 80.0f,
+            Height = Control.Height
+        };
+
+        public static readonly ContainerStyle Fill = new()
+        {
+            Border = new BorderStyle { Radius = EditorStyle.Overlay.BorderRadius },
+            Padding = EdgeInsets.LeftRight(6)
+        };
+
+        public static readonly ContainerStyle HoverFill = Fill with { Color = Control.SelectedFillColor };
+
+        public static readonly LabelStyle Text = new()
+        {
+            FontSize = EditorStyle.Control.TextSize,
+            Color = EditorStyle.Control.TextColor,
+            AlignX = Align.Center,
+            AlignY = Align.Center
+        };
+    }
+
+    public static class Confirm
+    {
+        public static readonly ContainerStyle Root = new()
+        {
+            AlignX = Align.Center,
+            AlignY = Align.Center,
+            Width = Size.Fit,
+            MinWidth = 300.0f,
+            Height = Size.Fit,
+            //Padding = EdgeInsets.All(16.0f),
+            Color = EditorStyle.Overlay.FillColor,
+            Border = new BorderStyle { Radius = EditorStyle.Overlay.BorderRadius },
+            Spacing = 46
+        };
+
+        public static readonly LabelStyle MessageLabel = new()
+        {
+            FontSize = EditorStyle.Control.TextSize,
+            Color = EditorStyle.Control.TextColor,
+            AlignX = Align.Center,
+            AlignY = Align.Center
+        };
+
+        public static readonly ContainerStyle ButtonRow = new()
+        {
+            AlignX = Align.Center,
+            Width = Size.Fit,
+            Height = Size.Fit,
+            Spacing = 16,
+            Color = Color.Red
+        };
+
+        public static readonly ContainerStyle Button = new()
+        {
+            Width = 80,
+            Height = 32,
+            Color = EditorStyle.Control.FillColor,
+            Border = new BorderStyle { Radius = 6 }
+        };
+
+
+
     }
 
     // Color Picker

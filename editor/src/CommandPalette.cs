@@ -139,18 +139,18 @@ public static class CommandPalette
             return;
 
         using (UI.BeginCanvas(id:EditorStyle.CanvasId.CommandPalette))
-        using (UI.BeginColumn(EditorStyle.CommandPalette.RootContainer))
+        using (UI.BeginColumn(EditorStyle.CommandPalette.Root))
         {
-            using (UI.BeginRow(EditorStyle.Popup.Item))
-            {
-                using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
-                    UI.Image(EditorAssets.Sprites.AssetIconShader);
+            //using (UI.BeginRow(EditorStyle.Popup.Item))
+            //{
+            //    using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
+            //        UI.Image(EditorAssets.Sprites.AssetIconShader);
 
-                using (UI.BeginFlex())
-                    UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId, placeholder: "Search...");
-            }
+            //    using (UI.BeginFlex())
+            //        UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId, placeholder: "Search...");
+            //}
 
-            UI.Container(EditorStyle.Popup.Separator);
+            //UI.Container(EditorStyle.Popup.Separator);
 
             using (UI.BeginFlex())
                 CommandList();
@@ -161,7 +161,7 @@ public static class CommandPalette
     {
         var execute = false;
 
-        using (UI.BeginContainer(new ContainerStyle{Color=Color.Red}))
+        //using (UI.BeginContainer(new ContainerStyle{Color=Color.Red}))
         using (UI.BeginScrollable(offset: 0, id: CommandListId))
         using (UI.BeginColumn(ContainerStyle.Default.WithAlignY(Align.Min)))
         {

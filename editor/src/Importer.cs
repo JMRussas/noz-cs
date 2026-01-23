@@ -154,6 +154,14 @@ public static class Importer
         }
     }
 
+    public static void CancelImport(Document doc)
+    {
+        lock (_lock)
+        {
+            _pendingDocuments.Remove(doc);
+        }
+    }
+
     private static void StartWatching(string path)
     {
         _watcher = new FileSystemWatcher(path)

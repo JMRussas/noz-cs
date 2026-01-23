@@ -53,8 +53,7 @@ public sealed unsafe class Shape : IDisposable
     public enum PathFlags : ushort
     {
         None = 0,
-        Selected = 1 << 0,
-        Focused = 1 << 1,
+        Selected = 1 << 0
     }
 
     public struct Anchor
@@ -80,7 +79,6 @@ public sealed unsafe class Shape : IDisposable
         public Vector2 Scale;
 
         public bool IsSelected => (Flags & PathFlags.Selected) != 0;
-        public bool IsFocused => (Flags & PathFlags.Focused) != 0;
 
         public static Path CreateDefault() => new()
         {
@@ -231,7 +229,7 @@ public sealed unsafe class Shape : IDisposable
         RasterBounds = new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
     }
 
-    public HitResult HitTest(Vector2 point, float anchorRadius = 5f, float segmentRadius = 3f, bool focusedOnly = false)
+    public HitResult HitTest(Vector2 point, float anchorRadius = 5f, float segmentRadius = 3f)
     {
         var result = HitResult.Empty;
         var anchorRadiusSqr = anchorRadius * anchorRadius;
@@ -244,52 +242,48 @@ public sealed unsafe class Shape : IDisposable
         {
             ref var path = ref _paths[p];
             var transform = GetPathTransform(p);
-            var checkAnchorsSegments = !focusedOnly || path.IsFocused;
-
-            if (checkAnchorsSegments)
+                
+            for (ushort a = 0; a < path.AnchorCount; a++)
             {
-                for (ushort a = 0; a < path.AnchorCount; a++)
-                {
-                    var anchorIdx = path.AnchorStart + a;
-                    ref var anchor = ref _anchors[anchorIdx];
+                var anchorIdx = path.AnchorStart + a;
+                ref var anchor = ref _anchors[anchorIdx];
 
-                    var worldPos = Vector2.Transform(anchor.Position, transform);
-                    var distSqr = Vector2.DistanceSquared(point, worldPos);
-                    if (distSqr >= anchorRadiusSqr || distSqr >= result.AnchorDistSqr) continue;
-                    result.AnchorIndex = (ushort)anchorIdx;
-                    result.AnchorDistSqr = distSqr;
+                var worldPos = Vector2.Transform(anchor.Position, transform);
+                var distSqr = Vector2.DistanceSquared(point, worldPos);
+                if (distSqr >= anchorRadiusSqr || distSqr >= result.AnchorDistSqr) continue;
+                result.AnchorIndex = (ushort)anchorIdx;
+                result.AnchorDistSqr = distSqr;
+                result.PathIndex = p;
+            }
+
+            for (ushort a = 0; a < path.AnchorCount; a++)
+            {
+                var a0Idx = (ushort)(path.AnchorStart + a);
+                var a1Idx = (ushort)(path.AnchorStart + ((a + 1) % path.AnchorCount));
+                ref var a0 = ref _anchors[a0Idx];
+                ref var a1 = ref _anchors[a1Idx];
+                var samples = GetSegmentSamples(a0Idx);
+
+                var a0World = Vector2.Transform(a0.Position, transform);
+                var a1World = Vector2.Transform(a1.Position, transform);
+                var sample0World = Vector2.Transform(samples[0], transform);
+
+                var distSqr = PointToSegmentDistSqr(point, a0World, sample0World);
+                for (var s = 0; s < MaxSegmentSamples - 1; s++)
+                {
+                    var sWorld = Vector2.Transform(samples[s], transform);
+                    var sNextWorld = Vector2.Transform(samples[s + 1], transform);
+                    distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, sWorld, sNextWorld));
+                }
+                var lastSampleWorld = Vector2.Transform(samples[MaxSegmentSamples - 1], transform);
+                distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, lastSampleWorld, a1World));
+
+                if (distSqr >= segmentRadiusSqr || distSqr >= result.SegmentDistSqr) continue;
+
+                result.SegmentIndex = a0Idx;
+                result.SegmentDistSqr = distSqr;
+                if (result.PathIndex == ushort.MaxValue)
                     result.PathIndex = p;
-                }
-
-                for (ushort a = 0; a < path.AnchorCount; a++)
-                {
-                    var a0Idx = (ushort)(path.AnchorStart + a);
-                    var a1Idx = (ushort)(path.AnchorStart + ((a + 1) % path.AnchorCount));
-                    ref var a0 = ref _anchors[a0Idx];
-                    ref var a1 = ref _anchors[a1Idx];
-                    var samples = GetSegmentSamples(a0Idx);
-
-                    var a0World = Vector2.Transform(a0.Position, transform);
-                    var a1World = Vector2.Transform(a1.Position, transform);
-                    var sample0World = Vector2.Transform(samples[0], transform);
-
-                    var distSqr = PointToSegmentDistSqr(point, a0World, sample0World);
-                    for (var s = 0; s < MaxSegmentSamples - 1; s++)
-                    {
-                        var sWorld = Vector2.Transform(samples[s], transform);
-                        var sNextWorld = Vector2.Transform(samples[s + 1], transform);
-                        distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, sWorld, sNextWorld));
-                    }
-                    var lastSampleWorld = Vector2.Transform(samples[MaxSegmentSamples - 1], transform);
-                    distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, lastSampleWorld, a1World));
-
-                    if (distSqr >= segmentRadiusSqr || distSqr >= result.SegmentDistSqr) continue;
-
-                    result.SegmentIndex = a0Idx;
-                    result.SegmentDistSqr = distSqr;
-                    if (result.PathIndex == ushort.MaxValue)
-                        result.PathIndex = p;
-                }
             }
 
             // Track point-in-path, keeping the topmost (last/highest index)
@@ -325,12 +319,6 @@ public sealed unsafe class Shape : IDisposable
             _paths[i].Flags &= ~PathFlags.Selected;
     }
 
-    public void ClearPathFocus()
-    {
-        for (var i = 0; i < PathCount; i++)
-            _paths[i].Flags &= ~PathFlags.Focused;
-    }
-
     public void SetPathSelected(ushort pathIndex, bool selected)
     {
         if (pathIndex >= PathCount)
@@ -342,22 +330,8 @@ public sealed unsafe class Shape : IDisposable
             _paths[pathIndex].Flags &= ~PathFlags.Selected;
     }
 
-    public void SetPathFocused(ushort pathIndex, bool focused)
-    {
-        if (pathIndex >= PathCount)
-            return;
-
-        if (focused)
-            _paths[pathIndex].Flags |= PathFlags.Focused;
-        else
-            _paths[pathIndex].Flags &= ~PathFlags.Focused;
-    }
-
     public bool IsPathSelected(ushort pathIndex) =>
         pathIndex < PathCount && _paths[pathIndex].IsSelected;
-
-    public bool IsPathFocused(ushort pathIndex) =>
-        pathIndex < PathCount && _paths[pathIndex].IsFocused;
 
     public bool HasSelectedPaths()
     {
@@ -365,34 +339,6 @@ public sealed unsafe class Shape : IDisposable
             if (_paths[i].IsSelected)
                 return true;
         return false;
-    }
-
-    public bool HasFocusedPaths()
-    {
-        for (ushort i = 0; i < PathCount; i++)
-            if (_paths[i].IsFocused)
-                return true;
-        return false;
-    }
-
-    public void TransferSelectionToFocus()
-    {
-        for (ushort i = 0; i < PathCount; i++)
-        {
-            if (_paths[i].IsSelected)
-                _paths[i].Flags |= PathFlags.Focused;
-            _paths[i].Flags &= ~PathFlags.Selected;
-        }
-    }
-
-    public void TransferFocusToSelection()
-    {
-        for (ushort i = 0; i < PathCount; i++)
-        {
-            if (_paths[i].IsFocused)
-                _paths[i].Flags |= PathFlags.Selected;
-            _paths[i].Flags &= ~PathFlags.Focused;
-        }
     }
 
     public Matrix3x2 GetPathTransform(ushort pathIndex)
@@ -640,13 +586,10 @@ public sealed unsafe class Shape : IDisposable
         }
     }
 
-    public void SelectAnchorsInFocusedPaths(Rect rect)
+    public void SelectAnchors(Rect rect)
     {
         for (ushort p = 0; p < PathCount; p++)
         {
-            if (!_paths[p].IsFocused)
-                continue;
-
             ref var path = ref _paths[p];
             var transform = GetPathTransform(p);
 

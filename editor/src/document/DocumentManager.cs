@@ -183,6 +183,21 @@ public static class DocumentManager
             Notifications.Add($"saved {count} asset(s)");
     }
 
+    public static void DeleteDocument(Document doc)
+    {
+        Undo.RemoveDocument(doc);
+        Importer.CancelImport(doc);
+
+        if (File.Exists(doc.Path))
+            File.Delete(doc.Path);
+
+        var metaPath = doc.Path + ".meta";
+        if (File.Exists(metaPath))
+            File.Delete(metaPath);
+
+        _documents.Remove(doc);
+    }
+
     private static void InitDocuments()
     {
         foreach (var sourcePath in _sourcePaths)

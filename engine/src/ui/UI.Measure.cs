@@ -115,24 +115,28 @@ public static partial class UI
         } 
         else if (e.Type == ElementType.Column)
         {
+            float spacing = 0;
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
                 var childSize = FitElement(in child, in e, margins: true);
                 fit.X = Math.Max(fit.X, childSize.X);
-                fit.Y += childSize.Y;
+                fit.Y += childSize.Y + spacing;
                 elementIndex = child.NextSiblingIndex;
+                spacing = e.Data.Container.Spacing;
             }
         }
         else if (e.Type == ElementType.Row)
         {
+            float spacing = 0;
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
                 var childSize = FitElement(in child, in e, margins: true);
-                fit.X += childSize.X;
+                fit.X += childSize.X + spacing;
                 fit.Y = Math.Max(fit.Y, childSize.Y);
                 elementIndex = child.NextSiblingIndex;
+                spacing = e.Data.Container.Spacing;
             }
         }
 
