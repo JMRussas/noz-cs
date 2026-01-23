@@ -134,7 +134,7 @@ public static class Workspace
         RegisterCommands();
         UpdateCamera();
 
-        Graphics.ClearColor = EditorStyle.Workspace.Color;
+        Graphics.ClearColor = EditorStyle.Workspace.FillColor;
 
         // Create a 1x1 white texture for untextured draws
         byte[] white = [255, 255, 255, 255];

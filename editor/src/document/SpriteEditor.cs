@@ -45,7 +45,7 @@ public class SpriteEditor : DocumentEditor
             new Command { Name = "Toggle Playback", ShortName = "play", Handler = TogglePlayback, Key = InputCode.KeySpace },
             new Command { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
             new Command { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
-            new Command { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
+            new Command { Name = "Delete", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
             new Command { Name = "Move", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
             new Command { Name = "Rotate", ShortName = "rotate", Handler = BeginRotateTool, Key = InputCode.KeyR },
             new Command { Name = "Scale", ShortName = "scale", Handler = BeginScaleTool, Key = InputCode.KeyS },
@@ -186,6 +186,7 @@ public class SpriteEditor : DocumentEditor
 
     public void DeleteSelected()
     {
+        Undo.Record(Document);
         var shape = Document.GetFrame(_currentFrame).Shape;
         shape.DeleteSelectedAnchors();
         Document.MarkModified();
@@ -731,16 +732,12 @@ public class SpriteEditor : DocumentEditor
     private static void DrawAnchor(Vector2 worldPosition)
     {
         Gizmos.SetColor(EditorStyle.Shape.AnchorColor);
-        Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
-        Graphics.SetColor(EditorStyle.Shape.AnchorOutlineColor);
         Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize, order: 4);
     }
 
     private static void DrawSelectedAnchor(Vector2 worldPosition)
     {
-        Graphics.SetColor(EditorStyle.Shape.AnchorOutlineColor);
-        Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize * 0.85f, order: 5);
-        Gizmos.SetColor(EditorStyle.Shape.AnchorColor);
+        Gizmos.SetColor(EditorStyle.Shape.SelectedAnchorColor);
         Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize, order: 4);
     }
 

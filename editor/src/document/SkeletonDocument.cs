@@ -189,6 +189,7 @@ public class SkeletonDocument : Document
 
     public override void LoadMetadata(PropertySet meta)
     {
+        SkinCount = 0;
         foreach (var key in meta.GetKeys("skin"))
         {
             Skins[SkinCount++].AssetName = key;

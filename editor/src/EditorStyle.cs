@@ -70,7 +70,7 @@ public static class EditorStyle
 
     public static class Popup
     {
-        public static Color FillColor => _colors.PopupFillColor;
+        public static Color FillColor => _colors.Popup.Fill;
         public readonly static ContainerStyle Item = new()
         {
             Height = 30.0f
@@ -78,7 +78,7 @@ public static class EditorStyle
         public readonly static ContainerStyle Separator = new() { 
             Height = 1,
             Margin = EdgeInsets.TopBottom(6),
-            Color = _colors.PopupSpacerColor
+            Color = _colors.Popup.Spacer
         };
         public readonly static ContainerStyle RootContainer = new()
         {
@@ -129,22 +129,18 @@ public static class EditorStyle
 
     public static class Workspace
     {
-        public static Color Color => _colors.WorkspaceColor;
+        public static Color FillColor => _colors.Workspace.Fill;
         public const float Padding = 16f;
         public const float BoundsLineWidth = 0.015f;
         public const float NameSize = 0.24f;
         public const float NamePadding = 0.04f;
-        public static Color GridColor => _colors.WorkspaceGridColor;
+        public static Color GridColor => _colors.Workspace.Grid;
         public const float GridAlpha = 0.5f;
         public const float GridZeroAlpha = 0.6f;
     }
 
     public static class SpriteEditor
     {
-        public static Color SegmentColor => _colors.SpriteEditor.Segment;
-        public static Color SelectedSegmentColor => _colors.SpriteEditor.SelectedSegment;
-        public static Color AnchorColor => _colors.SpriteEditor.Anchor;
-        public static Color SelectedAnchorColor => _colors.SpriteEditor.SelectedAnchor;
     }
 
     public static class BoxSelect 
@@ -197,13 +193,12 @@ public static class EditorStyle
 
     public static class Shape
     {
-        public static Color AnchorColor => _colors.ShapeAnchorColor;
-        public static Color AnchorOutlineColor => _colors.ShapeAnchorOutlineColor;
-        public static Color SegmentColor => _colors.ShapeSegmentColor;
-        public const float AnchorSize = 0.18f;
-        public const float AnchorSelectedSize = AnchorSize * 1.3f; 
-        public const float SegmentWidth = 0.02f;
-        public const float SegmentHoverWidth = SegmentWidth * 2.0f;
+        public static Color SegmentColor => _colors.Shape.Segment;
+        public static Color SelectedSegmentColor => _colors.Shape.SelectedSegment;
+        public static Color AnchorColor => _colors.Shape.Anchor;
+        public static Color SelectedAnchorColor => _colors.Shape.SelectedAnchor;
+        public const float AnchorSize = 0.10f;
+        public const float SegmentWidth = 0.015f;
     }
 
     // Overlay
@@ -373,9 +368,6 @@ public static class EditorStyle
             Color = EditorStyle.Control.FillColor,
             Border = new BorderStyle { Radius = 6 }
         };
-
-
-
     }
 
     // Color Picker

@@ -12,8 +12,6 @@ public class EditorColors
     public Color SelectionTextColor;
 
     // Workspace
-    public Color WorkspaceColor;
-    public Color WorkspaceGridColor;
     public Color OverlayBackgroundColor;
     public Color OverlayTextColor;
     public Color OverlayAccentTextColor;
@@ -34,12 +32,6 @@ public class EditorColors
     public Color ContextMenuTitleColor;
     public Color ContextMenuSeparatorColor;
 
-    // Shape
-    public Color ShapeAnchorColor;
-    public Color ShapeAnchorOutlineColor;
-    public Color ShapeSelectionColor;
-    public Color ShapeHoverColor;
-    public Color ShapeSegmentColor;
 
     // Box Select
     public Color BoxSelectLineColor;
@@ -58,12 +50,24 @@ public class EditorColors
     public Color ListItemTextColor;
     public Color ListHeaderTextColor;
 
-    // Popup
-    public Color PopupFillColor;
-    public Color PopupTextColor;
-    public Color PopupSpacerColor;
+    public struct WorkspaceColors
+    {
+        public Color Fill;
+        public Color Grid;
+    }
+
+    public struct PopupColors
+    {
+        public Color Fill;
+        public Color Text;
+        public Color Spacer;
+    }
 
     public struct SpriteEditorColors
+    {
+    }
+
+    public struct ShapeColors
     {
         public Color Anchor;
         public Color SelectedAnchor;
@@ -71,7 +75,10 @@ public class EditorColors
         public Color SelectedSegment;
     }
 
+    public WorkspaceColors Workspace;
     public SpriteEditorColors SpriteEditor;
+    public ShapeColors Shape;
+    public PopupColors Popup;
 
     private static readonly Color selectionColor = Color.FromRgb(0x0099ff);
     public static EditorColors Dark => new()
@@ -87,8 +94,6 @@ public class EditorColors
         ButtonDisabledColor = Color.FromRgb(0x2a2a2a),
         ButtonDisabledTextColor = Color.FromRgb(0x636363),
 
-        WorkspaceColor = Color.FromRgb(0x3f3f3f),
-        WorkspaceGridColor = Color.FromRgb(0x4e4e4e),
 
         OverlayBackgroundColor = Color.FromRgb(0x111111),
         OverlayTextColor = Color.FromRgb(0x979797),
@@ -99,11 +104,6 @@ public class EditorColors
         ContextMenuSeparatorColor = Color.FromRgb(0x2a2a2a),
         ContextMenuTitleColor = Color.FromRgb(0x636363),
 
-        ShapeAnchorColor = Color.White,
-        ShapeAnchorOutlineColor = Color.FromRgb(0x0099ff),
-        ShapeSelectionColor = selectionColor,
-        ShapeHoverColor = selectionColor,
-        ShapeSegmentColor = Color.FromRgb(0x111111).WithAlpha(0.5f),
 
         BoxSelectLineColor = selectionColor,
         BoxSelectFillColor = selectionColor.WithAlpha(0.15f),
@@ -119,16 +119,29 @@ public class EditorColors
         ListItemTextColor = Color.FromRgb(0x999999),
         ListHeaderTextColor = Color.FromRgb(0x666666),
 
-        PopupFillColor = Color.FromRgb(0x2b2b2b),
-        PopupTextColor = Color.FromRgb(0xFFFFFF),
-        PopupSpacerColor = Color.FromRgb(0x363636),
+        Workspace = new()
+        {
+            Fill = Color.FromRgb(0x3f3f3f),
+            Grid = Color.FromRgb(0x4e4e4e),
+        },
 
-        SpriteEditor = new()
+        Popup = new()
+        {
+            Fill = Color.FromRgb(0x2b2b2b),
+            Text = Color.FromRgb(0xFFFFFF),
+            Spacer = Color.FromRgb(0x363636),
+        },
+
+        Shape = new ()
         {
             Anchor = Color.Black,
             SelectedAnchor = Color.FromRgb(0xff7900),
             Segment = Color.FromRgb(0x1d1d1d),
             SelectedSegment = Color.FromRgb(0xfd970e)
+        },
+
+        SpriteEditor = new()
+        {
         }
     };
 }

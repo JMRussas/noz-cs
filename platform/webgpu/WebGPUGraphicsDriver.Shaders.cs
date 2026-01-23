@@ -307,7 +307,7 @@ public unsafe partial class WebGPUGraphicsDriver
     private RenderPipeline* GetOrCreatePipeline(nuint shaderHandle, BlendMode blendMode, int vertexStride)
     {
         ref var shaderInfo = ref _shaders[(int)shaderHandle];
-        var key = new PsoKey { ShaderHandle = shaderHandle, BlendMode = blendMode, VertexStride = vertexStride };
+        var key = new PsoKey { ShaderHandle = shaderHandle, BlendMode = blendMode, VertexStride = vertexStride, MsaaSamples = _state.CurrentPassSampleCount };
 
         if (shaderInfo.PsoCache.TryGetValue(key, out var pipelinePtr))
         {
@@ -324,7 +324,7 @@ public unsafe partial class WebGPUGraphicsDriver
         ref var meshInfo = ref _meshes[(int)_state.BoundMesh];
 
         // Create render pipeline
-        var pipeline = CreateRenderPipeline(shaderInfo, blendMode, meshInfo.Descriptor);
+        var pipeline = CreateRenderPipeline(shaderInfo, blendMode, meshInfo.Descriptor, key.MsaaSamples);
 
         if (pipeline == null)
         {
@@ -337,7 +337,7 @@ public unsafe partial class WebGPUGraphicsDriver
         return pipeline;
     }
 
-    private RenderPipeline* CreateRenderPipeline(ShaderInfo shaderInfo, BlendMode blendMode, VertexFormatDescriptor vertexDescriptor)
+    private RenderPipeline* CreateRenderPipeline(ShaderInfo shaderInfo, BlendMode blendMode, VertexFormatDescriptor vertexDescriptor, int sampleCount)
     {
         // Build vertex attributes from descriptor
         var attributeCount = vertexDescriptor.Attributes.Length;
@@ -394,7 +394,7 @@ public unsafe partial class WebGPUGraphicsDriver
         // Multisample state
         var multisampleState = new MultisampleState
         {
-            Count = (uint)_msaaSamples,
+            Count = (uint)sampleCount,
             Mask = ~0u,
             AlphaToCoverageEnabled = false,
         };

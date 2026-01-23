@@ -13,28 +13,14 @@ public unsafe partial class WebGPUGraphicsDriver
 {
     public void ResizeOffscreenTarget(int width, int height, int msaaSamples)
     {
-        if (_offscreenWidth == width && _offscreenHeight == height && _offscreenMsaaTexture != null)
+        if (_offscreenWidth == width && _offscreenHeight == height && _msaaSamples == msaaSamples && _offscreenMsaaTexture != null)
             return;
 
         DestroyOffscreenTarget();
 
         _offscreenWidth = width;
         _offscreenHeight = height;
-        _msaaSamples = 1;
-
-        var colorDesc = new TextureDescriptor
-        {
-            Size = new Extent3D { Width = (uint)width, Height = (uint)height, DepthOrArrayLayers = 1 },
-            MipLevelCount = 1,
-            SampleCount = 1,
-            Dimension = TextureDimension.Dimension2D,
-            Format = _surfaceFormat,
-            Usage = TextureUsage.RenderAttachment | TextureUsage.TextureBinding,
-        };
-        _offscreenMsaaTexture = _wgpu.DeviceCreateTexture(_device, &colorDesc);
-
-        if (_offscreenMsaaTexture == null)
-            throw new Exception("Failed to create offscreen color texture");
+        _msaaSamples = Math.Max(1, msaaSamples);
 
         var viewDesc = new TextureViewDescriptor
         {
@@ -46,13 +32,74 @@ public unsafe partial class WebGPUGraphicsDriver
             ArrayLayerCount = 1,
             Aspect = TextureAspect.All
         };
-        _offscreenMsaaTextureView = _wgpu.TextureCreateView(_offscreenMsaaTexture, &viewDesc);
 
-        if (_offscreenMsaaTextureView == null)
-            throw new Exception("Failed to create offscreen color texture view");
+        if (_msaaSamples > 1)
+        {
+            // MSAA enabled: create separate MSAA and resolve textures
+            var msaaDesc = new TextureDescriptor
+            {
+                Size = new Extent3D { Width = (uint)width, Height = (uint)height, DepthOrArrayLayers = 1 },
+                MipLevelCount = 1,
+                SampleCount = (uint)_msaaSamples,
+                Dimension = TextureDimension.Dimension2D,
+                Format = _surfaceFormat,
+                Usage = TextureUsage.RenderAttachment,
+            };
+            _offscreenMsaaTexture = _wgpu.DeviceCreateTexture(_device, &msaaDesc);
 
-        _offscreenResolveTexture = _offscreenMsaaTexture;
-        _offscreenResolveTextureView = _offscreenMsaaTextureView;
+            if (_offscreenMsaaTexture == null)
+                throw new Exception("Failed to create MSAA texture");
+
+            _offscreenMsaaTextureView = _wgpu.TextureCreateView(_offscreenMsaaTexture, &viewDesc);
+
+            if (_offscreenMsaaTextureView == null)
+                throw new Exception("Failed to create MSAA texture view");
+
+            // Create resolve texture (single sample, for reading after resolve)
+            var resolveDesc = new TextureDescriptor
+            {
+                Size = new Extent3D { Width = (uint)width, Height = (uint)height, DepthOrArrayLayers = 1 },
+                MipLevelCount = 1,
+                SampleCount = 1,
+                Dimension = TextureDimension.Dimension2D,
+                Format = _surfaceFormat,
+                Usage = TextureUsage.RenderAttachment | TextureUsage.TextureBinding,
+            };
+            _offscreenResolveTexture = _wgpu.DeviceCreateTexture(_device, &resolveDesc);
+
+            if (_offscreenResolveTexture == null)
+                throw new Exception("Failed to create resolve texture");
+
+            _offscreenResolveTextureView = _wgpu.TextureCreateView(_offscreenResolveTexture, &viewDesc);
+
+            if (_offscreenResolveTextureView == null)
+                throw new Exception("Failed to create resolve texture view");
+        }
+        else
+        {
+            // No MSAA: single texture for both render and read
+            var colorDesc = new TextureDescriptor
+            {
+                Size = new Extent3D { Width = (uint)width, Height = (uint)height, DepthOrArrayLayers = 1 },
+                MipLevelCount = 1,
+                SampleCount = 1,
+                Dimension = TextureDimension.Dimension2D,
+                Format = _surfaceFormat,
+                Usage = TextureUsage.RenderAttachment | TextureUsage.TextureBinding,
+            };
+            _offscreenMsaaTexture = _wgpu.DeviceCreateTexture(_device, &colorDesc);
+
+            if (_offscreenMsaaTexture == null)
+                throw new Exception("Failed to create offscreen color texture");
+
+            _offscreenMsaaTextureView = _wgpu.TextureCreateView(_offscreenMsaaTexture, &viewDesc);
+
+            if (_offscreenMsaaTextureView == null)
+                throw new Exception("Failed to create offscreen color texture view");
+
+            _offscreenResolveTexture = _offscreenMsaaTexture;
+            _offscreenResolveTextureView = _offscreenMsaaTextureView;
+        }
 
         _offscreenDepthTexture = null;
         _offscreenDepthTextureView = null;
@@ -69,12 +116,14 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_offscreenMsaaTextureView == null)
             throw new InvalidOperationException("Offscreen texture not initialized - call ResizeOffscreenTarget first");
 
+        _state.CurrentPassSampleCount = _msaaSamples;
+
         var colorAttachment = new RenderPassColorAttachment
         {
             View = _offscreenMsaaTextureView,
-            ResolveTarget = null,
+            ResolveTarget = _msaaSamples > 1 ? _offscreenResolveTextureView : null,
             LoadOp = LoadOp.Clear,
-            StoreOp = StoreOp.Store,
+            StoreOp = _msaaSamples > 1 ? StoreOp.Discard : StoreOp.Store,
             ClearValue = new Silk.NET.WebGPU.Color
             {
                 R = clearColor.R,
@@ -123,6 +172,8 @@ public unsafe partial class WebGPUGraphicsDriver
 
         if (_currentSurfaceTexture == null)
             throw new InvalidOperationException("Surface texture is null - BeginFrame not called?");
+
+        _state.CurrentPassSampleCount = 1;
 
         var swapChainView = _wgpu.TextureCreateView(_currentSurfaceTexture, null);
 
@@ -241,6 +292,8 @@ public unsafe partial class WebGPUGraphicsDriver
 
         if (_currentSurfaceTexture == null)
             throw new InvalidOperationException("Surface texture is null - BeginFrame not called?");
+
+        _state.CurrentPassSampleCount = 1;
 
         var swapChainView = _wgpu.TextureCreateView(_currentSurfaceTexture, null);
 
