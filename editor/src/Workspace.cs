@@ -300,14 +300,13 @@ public static class Workspace
             if (!doc.IsVisible) continue;
 
             if (doc.IsSelected)
-                doc.DrawBounds(EditorStyle.SelectionColor);
+                doc.DrawBounds(selected:true);
 
             Graphics.SetTransform(doc.Transform);
             doc.Draw();
         }
 
-        if (ActiveEditor != null)
-            ActiveEditor.Document.DrawBounds(EditorStyle.Workspace.GridColor);
+        ActiveEditor?.Document.DrawBounds();
 
         Graphics.PopState();
     }

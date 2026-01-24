@@ -43,11 +43,17 @@ public class SpriteDocument : Document
             AssetType.Sprite,
             ".sprite",
             () => new SpriteDocument(),
-            doc => new SpriteEditor((SpriteDocument)doc)
+            doc => new SpriteEditor((SpriteDocument)doc),
+            newFile: NewFile
         ));
     }
 
     public SpriteFrame GetFrame(ushort frameIndex) => Frames[frameIndex];
+
+    private static void NewFile(StreamWriter writer)
+    {
+        // empty
+    }
 
     public override void Load()
     {
@@ -144,7 +150,10 @@ public class SpriteDocument : Document
     public void UpdateBounds()
     {
         if (FrameCount <= 0)
+        {
+            Bounds = new Rect(-0.5f, -0.5f, 1f, 1f);
             return;
+        }
 
         var bounds = Frames[0].Shape.Bounds;
         for (ushort fi = 1; fi < FrameCount; fi++)
@@ -157,6 +166,12 @@ public class SpriteDocument : Document
             bounds = Rect.FromMinMax(new Vector2(minX, minY), new Vector2(maxX, maxY));
         }
         Bounds = bounds;
+
+        if (Bounds.Width <= 0 || Bounds.Height <= 0)
+        {
+            Bounds = new Rect(-0.5f, -0.5f, 1f, 1f);
+            return;
+        }
 
         RasterBounds = Frames[0].Shape.RasterBounds;
 
@@ -224,9 +239,16 @@ public class SpriteDocument : Document
         if (size.X <= 0 || size.Y <= 0 || Atlas == null)
             return;
 
+        ref var frame0 = ref Frames[0];
+        if (frame0.Shape.PathCount == 0)
+        {
+            DrawBounds();
+            return;
+        }
+
         using (Graphics.PushState())
         {
-            ref var frame0 = ref Frames[0];
+            
             Graphics.SetTexture(Atlas.Texture);
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetColor(Color.White);

@@ -138,6 +138,9 @@ public static class ContextMenu
                 if (UI.WasPressed())
                     Close();
 
+            if (!_visible || _items == null)
+                return;
+
             var menuWidth = RenderMenu(0, -1, _position, ref executed);
 
             // Track menu positions for each level

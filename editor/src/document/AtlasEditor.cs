@@ -72,7 +72,7 @@ internal class AtlasEditor : DocumentEditor
             Graphics.SetTransform(Document.Transform);
             Gizmos.SetColor(Color.Yellow);
 
-            var lineWidth = EditorStyle.Workspace.BoundsLineWidth;
+            var lineWidth = EditorStyle.Workspace.DocumentBoundsLineWidth;
             var atlasSize = EditorApplication.Config.AtlasSize;
             var ppu = (float)EditorApplication.Config.PixelsPerUnit;
 

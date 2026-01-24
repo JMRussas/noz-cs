@@ -76,8 +76,10 @@ public static class EditorStyle
     {
         public static readonly Color FillColor = Color.FromRgb(0x3f3f3f);
         public static readonly Color GridColor = Color.FromRgb(0x4e4e4e);
+        public static readonly Color DocumentBoundsColor = Color.FromRgb(0x212121);
+        public static readonly Color SelectedDocumentBoundsColor = Color.FromRgb(0xfd970e);
+        public const float DocumentBoundsLineWidth = 0.015f;
         public const float Padding = 16f;
-        public const float BoundsLineWidth = 0.015f;
         public const float NameSize = 0.24f;
         public const float NamePadding = 0.04f;
         public const float GridAlpha = 0.3f;

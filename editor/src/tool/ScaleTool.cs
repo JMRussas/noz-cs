@@ -84,7 +84,7 @@ public class ScaleTool : Tool
         Gizmos.DrawRect(_pivot, EditorStyle.Shape.AnchorSize * 1.5f, order: 10);
 
         // Draw scale indicator lines
-        var thickness = EditorStyle.Workspace.BoundsLineWidth / Workspace.Zoom;
+        var thickness = EditorStyle.Workspace.DocumentBoundsLineWidth / Workspace.Zoom;
 
         if (_scaleConstraint.X == 0 || _scaleConstraint.Y == 0)
         {

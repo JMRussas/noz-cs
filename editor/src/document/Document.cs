@@ -95,13 +95,15 @@ public abstract class Document : IDisposable
 
     public virtual void Dispose () { }
 
-    public void DrawBounds(Color color)
+    public void DrawBounds(bool selected=false)
     {
-        using (Gizmos.PushState(EditorLayer.Selection))
+        using (Gizmos.PushState(selected ? EditorLayer.Selection : EditorLayer.Document))
         {
             Graphics.SetTransform(Transform);
-            Graphics.SetColor(color);
-            Gizmos.DrawRect(Bounds, EditorStyle.Workspace.BoundsLineWidth, outside: true);
+            Graphics.SetColor(selected
+                ? EditorStyle.Workspace.SelectedDocumentBoundsColor
+                : EditorStyle.Workspace.DocumentBoundsColor);
+            Gizmos.DrawRect(Bounds, EditorStyle.Workspace.DocumentBoundsLineWidth, outside: true);
         }
     }
 }

@@ -65,7 +65,7 @@ public class MoveTool : Tool
 
             var camera = Workspace.Camera;
             var bounds = camera.WorldBounds;
-            var thickness = EditorStyle.Workspace.BoundsLineWidth / Workspace.Zoom;
+            var thickness = EditorStyle.Workspace.DocumentBoundsLineWidth / Workspace.Zoom;
 
             if (_deltaScale.X > 0)
                 Graphics.Draw(bounds.X, Workspace.MouseWorldPosition.Y - thickness, bounds.Width, thickness * 2);
