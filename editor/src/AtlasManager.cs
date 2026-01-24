@@ -81,6 +81,11 @@ public static class AtlasManager
             }
         }
     }
+
+    public static void Rebuild()
+    {
+        
+    }
 }
 
 

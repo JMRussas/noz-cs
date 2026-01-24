@@ -42,19 +42,6 @@ public class EditorColors
     public Color ListItemTextColor;
     public Color ListHeaderTextColor;
 
-    public struct WorkspaceColors
-    {
-        public Color Fill;
-        public Color Grid;
-    }
-
-    public struct PopupColors
-    {
-        public Color Fill;
-        public Color Text;
-        public Color Spacer;
-    }
-
     public struct SpriteEditorColors
     {
     }
@@ -85,10 +72,8 @@ public class EditorColors
         public Color ButtonDisabledFill;
     }
 
-    public WorkspaceColors Workspace;
     public SpriteEditorColors SpriteEditor;
     public ShapeColors Shape;
-    public PopupColors Popup;
     public OverlayColors Overlay;
     public ToolbarColors Toolbar;
 
@@ -124,19 +109,6 @@ public class EditorColors
         ListItemSelectedTextColor = Color.FromRgb(0xf4f4f4),
         ListItemTextColor = Color.FromRgb(0x999999),
         ListHeaderTextColor = Color.FromRgb(0x666666),
-
-        Workspace = new()
-        {
-            Fill = Color.FromRgb(0x3f3f3f),
-            Grid = Color.FromRgb(0x4e4e4e),
-        },
-
-        Popup = new()
-        {
-            Fill = Color.FromRgb(0x181818),
-            Text = Color.FromRgb(0xdbdbdb),
-            Spacer = Color.FromRgb(0x2f2f2f),
-        },
 
         Shape = new ()
         {

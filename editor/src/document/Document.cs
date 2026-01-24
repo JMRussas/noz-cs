@@ -21,6 +21,7 @@ public abstract class Document : IDisposable
 
     public Matrix3x2 Transform => Matrix3x2.CreateTranslation(Position);
     
+    public bool IsVisible { get; set; } = true;
     public bool IsSelected { get; set; }
     public bool IsEditing { get; set; }
     public bool IsModified { get; private set; }

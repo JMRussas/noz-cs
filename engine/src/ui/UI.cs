@@ -138,6 +138,7 @@ public static partial class UI
             _canvasStates[canvasStateIndex] = new CanvasState
             {
                 ElementIndex = -1,
+                LastActiveFrame = 0,
                 ElementStates = _elementStates.AsUnsafeSpan(canvasStateIndex * (ElementId.MaxValue + 1), ElementId.MaxValue + 1)
             };
 
@@ -206,6 +207,29 @@ public static partial class UI
 
     private static ref CanvasState GetCanvasState(CanvasId canvasId) =>
         ref _canvasStates[canvasId];
+
+    private static void ResetCanvasElementStates(CanvasId canvasId)
+    {
+        ref var cs = ref GetCanvasState(canvasId);
+        var states = cs.ElementStates;
+
+        for (int i = 0; i <= ElementId.MaxValue; i++)
+        {
+            ref var es = ref states[i];
+            es.Flags = ElementFlags.None;
+            es.Index = 0;
+            es.Rect = Rect.Zero;
+            es.Data = default;
+        }
+
+        if (_focusCanvasId == canvasId)
+        {
+            _hotElementId = 0;
+            _pendingFocusId = 0;
+            _focusCanvasId = 0;
+            _pendingFocusCanvasId = 0;
+        }
+    }
 
     private static ref NativeArray<char> GetTextBuffer() => ref _textBuffers[_currentTextBuffer];
 
@@ -442,6 +466,12 @@ public static partial class UI
         {
             _currentCanvasId = id;
             ref var cs = ref GetCanvasState(id);
+
+            var currentFrame = Time.FrameCount;
+            if (cs.LastActiveFrame > 0 && cs.LastActiveFrame < currentFrame - 1)
+                ResetCanvasElementStates(id);
+            cs.LastActiveFrame = currentFrame;
+
             cs.ElementIndex = e.Index;
             _activeCanvasIds.Add(id);
         }

@@ -1,39 +1,8 @@
+//
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
 namespace NoZ.Editor;
-
-public class Command
-{
-    public required string Name { get; init; }
-    public required string ShortName { get; init; }
-    public required Action Handler { get; init; }
-
-    public InputCode Key { get; init; } = InputCode.None;
-    public bool Ctrl { get; init; }
-    public bool Alt { get; init; }
-    public bool Shift { get; init; }
-}
-
-public readonly struct ParsedCommand(string name, string[] args)
-{
-    public const int MaxArgs = 4;
-    public const int MaxArgSize = 128;
-
-    public readonly string Name = name;
-    public readonly string[] Args = args;
-
-    public string GetArg(int index) => index < Args.Length ? Args[index] : string.Empty;
-    public int ArgCount => Args.Length;
-}
-
-public struct CommandInputOptions
-{
-    public string? Prefix;
-    public string? Placeholder;
-    public string? InitialText;
-    public bool HideWhenEmpty;
-}
 
 public static class CommandPalette
 {
@@ -42,33 +11,20 @@ public static class CommandPalette
     private static readonly ElementId CommandListId = new(3);
     private const int MaxFilteredCommands = 32;
 
-    private static string? _prefix;
-    private static string? _placeholder;
-    private static bool _hideWhenEmpty;
-    private static bool _enabled;
     private static string _text = string.Empty;
     private static string _lastFilterText = string.Empty;
     private static readonly Command?[] _filteredCommands = new Command?[MaxFilteredCommands];
     private static int _filteredCount;
     private static int _selectedIndex;
 
-    public static bool IsEnabled => _enabled;
+    public static bool IsOpen { get; private set; }
 
-    public static void Init()
+    public static void Open()
     {
-    }
+        if (IsOpen) return;
 
-    public static void Shutdown()
-    {
-    }
-
-    public static void Open(CommandInputOptions options)
-    {
-        _enabled = true;
-        _prefix = options.Prefix;
-        _placeholder = options.Placeholder;
-        _hideWhenEmpty = options.HideWhenEmpty;
-        _text = options.InitialText ?? string.Empty;
+        IsOpen = true;
+        _text = string.Empty;
         _lastFilterText = string.Empty;
         _selectedIndex = 0;
         _filteredCount = 0;
@@ -79,14 +35,11 @@ public static class CommandPalette
 
     public static void Close()
     {
-        if (!_enabled)
-            return;
+        if (!IsOpen) return;
 
         UI.ClearFocus();
 
-        _enabled = false;
-        _prefix = null;
-        _placeholder = null;
+        IsOpen = false;
         _text = string.Empty;
         _lastFilterText = string.Empty;
         _filteredCount = 0;
@@ -95,7 +48,7 @@ public static class CommandPalette
 
     public static void Update()
     {
-        if (!_enabled)
+        if (!IsOpen)
             return;
 
         if (Input.WasButtonPressed(InputCode.KeyEscape))
@@ -133,11 +86,7 @@ public static class CommandPalette
 
     public static void UpdateUI()
     {
-        if (!_enabled)
-            return;
-
-        if (_hideWhenEmpty && string.IsNullOrEmpty(_text))
-            return;
+        if (!IsOpen) return;
 
         using (UI.BeginCanvas(id:EditorStyle.CanvasId.CommandPalette))
         {
@@ -149,7 +98,7 @@ public static class CommandPalette
             {
                 using (UI.BeginRow(EditorStyle.Popup.Item with { Spacing = 4.0f }))
                 {
-                    using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
+                    using (UI.BeginContainer(EditorStyle.CommandPalette.Icon))
                         UI.Image(EditorAssets.Sprites.AssetIconShader);
 
                     using (UI.BeginFlex())
@@ -159,8 +108,7 @@ public static class CommandPalette
 
                 UI.Container(EditorStyle.Popup.Separator);
 
-                using (UI.BeginFlex())
-                    CommandList();
+                CommandList();
             }
         }
     }
@@ -169,8 +117,9 @@ public static class CommandPalette
     {
         var execute = false;
 
+        using (UI.BeginContainer(EditorStyle.CommandPalette.CommandList))
         using (UI.BeginScrollable(CommandListId))
-        using (UI.BeginColumn(ContainerStyle.Default.WithAlignY(Align.Min)))
+        using (UI.BeginColumn())
         {
             var selectedIndex = _selectedIndex;
             for (var i = 0; i < _filteredCount; i++)
@@ -183,13 +132,14 @@ public static class CommandPalette
                 using (UI.BeginContainer(
                     id: (byte)(i + 10),
                     style: isSelected
-                        ? EditorStyle.CommandPalette.SelectedCommandContainer
-                        : EditorStyle.CommandPalette.CommandContainer))
+                        ? EditorStyle.CommandPalette.SelectedCommand
+                        : EditorStyle.CommandPalette.Command))
                 {
-                    using (UI.BeginRow(ContainerStyle.Default))
+                    using (UI.BeginRow())
                     {
-                        using (UI.BeginContainer(EditorStyle.CommandPalette.CommandIconContainer))
-                            UI.Image(EditorAssets.Sprites.AssetIconShader);
+                        using (UI.BeginContainer(EditorStyle.CommandPalette.Icon))
+                            if (cmd.Icon != null)
+                                UI.Image(cmd.Icon);
 
                         UI.Label(cmd.Name, style: EditorStyle.Control.Text);
                         UI.Flex();

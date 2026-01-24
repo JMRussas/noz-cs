@@ -30,11 +30,9 @@ public class EditorConfig
         OutputPath = ResolvePath(props.GetString("editor", "output_path", "./library"));
         SavePath = ResolvePath(props.GetString("editor", "save_path", "./assets"));
         Palette = props.GetString("editor", "palette", "palette");
-        AtlasSize = props.GetInt("editor", "atlas_size", props.GetInt("atlas", "size", 2048));
+        AtlasSize = props.GetInt("atlas", "size", 2048);
+        AtlasPrefix = props.GetString("atlas", "prefix", "sprites");
         PixelsPerUnit = props.GetInt("editor", "pixels_per_unit", 64);
-
-        AtlasPrefix = props.GetString("atlas", "prefix", "atlas");
-
         FrameRate = props.GetInt("animation", "frame_rate", 12);
 
         var generateCs = props.GetString("manifest", "generate_cs", "");

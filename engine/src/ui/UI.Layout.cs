@@ -122,15 +122,6 @@ public static partial class UI
             ]);
         LogUI(e, $"Content: {e.ContentRect}", depth: 1, condition: () => contentRect != baseContentRect);
 
-        e.LocalToWorld = p.LocalToWorld * Matrix3x2.CreateTranslation(e.Rect.X, e.Rect.Y);
-        Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
-        //var localTransform =
-        //    Matrix3x2.CreateTranslation(t.Translate + new Vector2(e.Rect.X, e.Rect.Y)) *
-        //    Matrix3x2.CreateTranslation(pivot) *
-        //    Matrix3x2.CreateRotation(t.Rotate) *
-        //    Matrix3x2.CreateScale(t.Scale) *
-        //    Matrix3x2.CreateTranslation(-pivot);
-
         if (e.Type == ElementType.Column)
         {
             LayoutRowColumn(ref e, in p, 1);
@@ -150,6 +141,29 @@ public static partial class UI
         }
     }
 
+    private static void UpdateTransforms(ref Element e, ref readonly Element p)
+    {
+        e.LocalToWorld = p.LocalToWorld * Matrix3x2.CreateTranslation(e.Rect.X, e.Rect.Y);
+        Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
+
+        var elementIndex = e.Index + 1;
+        for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
+        {
+            ref var child = ref GetElement(elementIndex);
+            UpdateTransforms(ref child, in e);
+            elementIndex = child.NextSiblingIndex;
+        }
+
+        //e.LocalToWorld = p.LocalToWorld * Matrix3x2.CreateTranslation(e.Rect.X, e.Rect.Y);
+        //Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
+        //var localTransform =
+        //    Matrix3x2.CreateTranslation(t.Translate + new Vector2(e.Rect.X, e.Rect.Y)) *
+        //    Matrix3x2.CreateTranslation(pivot) *
+        //    Matrix3x2.CreateRotation(t.Rotate) *
+        //    Matrix3x2.CreateScale(t.Scale) *
+        //    Matrix3x2.CreateTranslation(-pivot);
+    }
+
     private static void LayoutCanvas(int elementIndex)
     {
         ref var e = ref _elements[elementIndex++];
@@ -159,12 +173,15 @@ public static partial class UI
 
         e.Rect = new Rect(0, 0, ScreenSize.X, ScreenSize.Y);
         e.ContentRect = e.Rect;
+        e.LocalToWorld = Matrix3x2.Identity;
+        e.WorldToLocal = Matrix3x2.Identity;
 
         for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
         {
             ref var child = ref _elements[elementIndex];
             LayoutElement(elementIndex, Vector2.Zero, AutoSize);
             elementIndex = child.NextSiblingIndex;
+            UpdateTransforms(ref child, ref e);
         }
     }
 

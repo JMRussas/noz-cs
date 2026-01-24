@@ -29,10 +29,11 @@ public static class Workspace
             new Command { Name = "Increase UI Scale", ShortName = "ui+", Handler = IncreaseUIScale, Key = InputCode.KeyEquals, Ctrl = true },
             new Command { Name = "Decrease UI Scale", ShortName = "ui-", Handler = DecreaseUIScale, Key = InputCode.KeyMinus, Ctrl = true },
             new Command { Name = "Reset UI Scale", ShortName = "ui0", Handler = ResetUIScale, Key = InputCode.Key0, Ctrl = true },
-            new Command { Name = "Command Palette", ShortName = "palette", Handler = OpenCommandPalette, Key = InputCode.KeyP, Ctrl = true, Shift = true },
+            new Command { Name = "Command Palette", ShortName = "palette", Handler = CommandPalette.Open, Key = InputCode.KeyP, Ctrl = true, Shift = true },
             new Command { Name = "Toggle Edit Mode", ShortName = "edit", Handler = ToggleEdit, Key = InputCode.KeyTab },
             new Command { Name = "Toggle Grid", ShortName = "grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Ctrl = true },
             new Command { Name = "Frame Selected", ShortName = "frame", Handler = FrameSelected, Key = InputCode.KeyF },
+            new Command { Name = "Rebuild Atlas", ShortName = "rebuild", Handler = AtlasManager.Rebuild },
         ]);
 
         CommandManager.RegisterWorkspace([
@@ -171,7 +172,7 @@ public static class Workspace
     {
         UpdateCamera();
 
-        if (!CommandPalette.IsEnabled && !ContextMenu.IsVisible && !ConfirmDialog.IsVisible)
+        if (!CommandPalette.IsOpen && !ContextMenu.IsVisible && !ConfirmDialog.IsVisible)
         {
             CommandManager.ProcessShortcuts();
 
@@ -264,6 +265,7 @@ public static class Workspace
         {
             if (!doc.Loaded || !doc.PostLoaded) continue;
             if (doc.IsEditing || doc.IsClipped) continue;
+            if (!doc.IsVisible) continue;
 
             if (doc.IsSelected)
                 doc.DrawBounds(EditorStyle.SelectionColor);
@@ -292,7 +294,7 @@ public static class Workspace
 
             foreach (var doc in DocumentManager.Documents)
             {
-                if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped)
+                if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || !doc.IsVisible)
                     continue;
 
                 var bounds = doc.Bounds.Translate(doc.Position);
@@ -353,18 +355,6 @@ public static class Workspace
                 }
             }
         ));
-    }
-
-    private static void OpenCommandPalette()
-    {
-        if (CommandPalette.IsEnabled)
-            return;
-
-        CommandPalette.Open(new CommandInputOptions
-        {
-            Prefix = ":",
-            Placeholder = "Enter command..."
-        });
     }
 
     private static void ToggleGrid()

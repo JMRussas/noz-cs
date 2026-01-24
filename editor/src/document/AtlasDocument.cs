@@ -29,6 +29,11 @@ namespace NoZ.Editor
         public int RectCount => _rects.Count;
         public ReadOnlySpan<AtlasSpriteRect> Rects => CollectionsMarshal.AsSpan(_rects);
 
+        public AtlasDocument()
+        {
+            IsVisible = false;
+        }
+
         public static void RegisterDef()
         {
             DocumentManager.RegisterDef(new DocumentDef(

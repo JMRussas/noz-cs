@@ -69,7 +69,6 @@ public static class EditorApplication
 
         DocumentManager.PostLoad();
         EditorStyle.Init();
-        CommandPalette.Init();
         ContextMenu.Init();
         ConfirmDialog.Init();
         Notifications.Init();
@@ -88,7 +87,6 @@ public static class EditorApplication
         Notifications.Shutdown();
         ConfirmDialog.Shutdown();
         ContextMenu.Shutdown();
-        CommandPalette.Shutdown();
         EditorStyle.Shutdown();
         PaletteManager.Shutdown();
         Importer.Shutdown();

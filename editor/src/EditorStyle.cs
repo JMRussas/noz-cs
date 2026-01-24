@@ -72,21 +72,22 @@ public static class EditorStyle
     public const float ButtonHeight = 32f;
     public const float ButtonBorderRadius = 8f;
 
-    // Workspace
+    public static class Workspace
+    {
+        public static readonly Color FillColor = Color.FromRgb(0x3f3f3f);
+        public static readonly Color GridColor = Color.FromRgb(0x4e4e4e);
+        public const float Padding = 16f;
+        public const float BoundsLineWidth = 0.015f;
+        public const float NameSize = 0.24f;
+        public const float NamePadding = 0.04f;
+        public const float GridAlpha = 0.3f;
+        public const float GridZeroAlpha = 0.4f;
+    }
 
     public static class Popup
     {
-        public static Color FillColor => _colors.Popup.Fill;
-        public readonly static ContainerStyle Item = new()
-        {
-            Height = 30.0f
-        };
-        public readonly static ContainerStyle Separator = new() { 
-            Height = 1,
-            Margin = EdgeInsets.TopBottom(6),
-            Color = _colors.Popup.Spacer
-        };
-        public readonly static ContainerStyle RootContainer = new()
+        public static readonly Color FillColor = Color.FromRgb(0x181818);
+        public readonly static ContainerStyle Root = new()
         {
             AlignX = Align.Center,
             AlignY = Align.Center,
@@ -94,10 +95,19 @@ public static class EditorStyle
             Color = Popup.FillColor,
             Border = new BorderStyle { Radius = 10.0f }
         };
+        public readonly static ContainerStyle Item = new()
+        {
+            Height = 30.0f
+        };
+        public readonly static ContainerStyle Separator = new() { 
+            Height = 1,
+            Margin = EdgeInsets.TopBottom(6),
+            Color = Color.FromRgb(0x2f2f2f)
+        };
         public readonly static LabelStyle Text = new()
         {
             FontSize = Control.TextSize,
-            Color = Control.TextColor,
+            Color = Color.FromRgb(0xdbdbdb),
             AlignX = Align.Min,
             AlignY = Align.Center
         };
@@ -133,17 +143,7 @@ public static class EditorStyle
         public static Color HeaderTextColor => _colors.ListHeaderTextColor;
     }
 
-    public static class Workspace
-    {
-        public static Color FillColor => _colors.Workspace.Fill;
-        public const float Padding = 16f;
-        public const float BoundsLineWidth = 0.015f;
-        public const float NameSize = 0.24f;
-        public const float NamePadding = 0.04f;
-        public static Color GridColor => _colors.Workspace.Grid;
-        public const float GridAlpha = 0.3f;
-        public const float GridZeroAlpha = 0.4f;
-    }
+
     
     public static class BoxSelect 
     {
@@ -154,11 +154,11 @@ public static class EditorStyle
 
     public static class CommandPalette
     {
-        public static readonly ContainerStyle Root = Popup.RootContainer with
+        public static readonly ContainerStyle Root = Popup.Root with
         {
             Width = 450.0f,
-            MinHeight = 100.0f,
-            MaxHeight = 400.0f
+            Height = Size.Fit,
+            MinHeight = 100.0f
         };
 
         public static readonly ContainerStyle SearchContainer = Popup.Item;
@@ -172,26 +172,26 @@ public static class EditorStyle
             PlaceholderColor = Control.PlaceholderTextColor
         };
 
-        public static readonly ContainerStyle ListColumn = new()
+        public static readonly ContainerStyle CommandList = new()
         {
-            Spacing = 0.0f,
-        };       
+            Height = Popup.Item.Height.Value * 10,
+        };
 
-        public static readonly ContainerStyle CommandContainer = new()
+        public static readonly ContainerStyle Command = new()
         {
             Height = Popup.Item.Height,
             Padding = EdgeInsets.Right(8),
         };
 
-        public static readonly ContainerStyle CommandIconContainer = new()
+        public static readonly ContainerStyle Icon = new()
         {
             Width = Popup.Item.Height,
             Height = Popup.Item.Height,
             Padding = EdgeInsets.All(6f),
         };
 
-        public static readonly ContainerStyle SelectedCommandContainer = 
-            CommandContainer.WithColor(Control.SelectedFillColor);
+        public static readonly ContainerStyle SelectedCommand = 
+            Command with { Color = Control.SelectedFillColor };
     }
 
     public static class Shape
@@ -280,7 +280,7 @@ public static class EditorStyle
         public const float SeparatorSpacing = 12f;
         public static Color TitleColor => _colors.ContextMenuTitleColor;
         public static Color SeparatorColor => _colors.ContextMenuSeparatorColor;
-        public static readonly ContainerStyle Menu = Popup.RootContainer with {
+        public static readonly ContainerStyle Menu = Popup.Root with {
             AlignX = Align.Min,
             AlignY = Align.Min
         };
@@ -509,6 +509,7 @@ public static class EditorStyle
         };
     }
 
+    // :spriteeditor
     public static class SpriteEditor
     { 
         public const float ButtonSize = 40f;
@@ -554,6 +555,19 @@ public static class EditorStyle
             Color = Control.TextColor,
             AlignX = Align.Center,
             AlignY = Align.Center
+        };
+    }
+
+    // :atlaseditor
+    public static class AtlasEditor
+    {
+        public static readonly ContainerStyle Root = Overlay.Root with
+        {
+            AlignX = Align.Center,
+            AlignY = Align.Max,
+            Width = Size.Fit,
+            Height = Size.Fit,
+            Margin = EdgeInsets.Bottom(20f)
         };
     }
 

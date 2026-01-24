@@ -2,7 +2,6 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System.Numerics;
 using System.Runtime.InteropServices;
 
 namespace NoZ;
@@ -63,4 +62,5 @@ internal struct CanvasState
     public short ElementIndex;
     public Rect WorldBounds;
     public UnsafeSpan<ElementState> ElementStates;
+    public int LastActiveFrame;
 }

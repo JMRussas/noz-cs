@@ -654,15 +654,25 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
 
     public void SetScissor(in RectInt scissor)
     {
-        _state.ScissorEnabled = true;
-        _state.Scissor = scissor;
+        var clampedScissor = scissor;
+        clampedScissor.X = Math.Max(0, scissor.X);
+        clampedScissor.Y = Math.Max(0, scissor.Y);
+        clampedScissor.Width = Math.Min(scissor.Width, _surfaceWidth - scissor.X);
+        clampedScissor.Height = Math.Min(scissor.Height, _surfaceHeight - scissor.Y);
+        if (clampedScissor.Width <= 0 || clampedScissor.Height <= 0)
+            return;
 
-        if (_currentRenderPass != null)
-        {
-            _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass,
-                (uint)_state.Scissor.X, (uint)_state.Scissor.Y,
-                (uint)_state.Scissor.Width, (uint)_state.Scissor.Height);
-        }
+        _state.ScissorEnabled = true;
+        _state.Scissor = clampedScissor;
+
+        if (_currentRenderPass == null) return;
+
+        _wgpu.RenderPassEncoderSetScissorRect(
+            _currentRenderPass,
+            (uint)clampedScissor.X,
+            (uint)clampedScissor.Y,
+            (uint)clampedScissor.Width,
+            (uint)clampedScissor.Height);
     }
 
     public void ClearScissor()
