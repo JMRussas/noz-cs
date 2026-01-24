@@ -77,7 +77,9 @@ public static class Application
     {
         if (_assetTypesRegistered) return;
         _assetTypesRegistered = true;
-        
+
+        Animation.RegisterDef();
+        Skeleton.RegisterDef();
         Texture.RegisterDef();
         Atlas.RegisterDef();
         Sprite.RegisterDef();

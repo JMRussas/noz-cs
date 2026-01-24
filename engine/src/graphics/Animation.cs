@@ -75,8 +75,14 @@ public class Animation : Asset
     {
     }
 
-    public static Animation Load(BinaryReader reader, string name)
+    internal static void RegisterDef()
     {
+        RegisterDef(new AssetDef(AssetType.Animation, typeof(Animation), Load));
+    }
+
+    private static Animation? Load(Stream stream, string name)
+    {
+        var reader = new BinaryReader(stream);
         var animation = new Animation(name);
 
         var boneCount = reader.ReadByte();

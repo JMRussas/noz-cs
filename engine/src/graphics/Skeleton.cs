@@ -38,8 +38,14 @@ public class Skeleton : Asset
     {
     }
 
-    public static Skeleton Load(BinaryReader reader, string name, string[] nameTable)
+    internal static void RegisterDef()
     {
+        RegisterDef(new AssetDef(AssetType.Skeleton, typeof(Skeleton), Load));
+    }
+
+    private static Skeleton? Load(Stream stream, string name)
+    {
+        var reader = new BinaryReader(stream);
         var skeleton = new Skeleton(name);
 
         var boneCount = reader.ReadByte();
@@ -49,7 +55,7 @@ public class Skeleton : Asset
         for (var i = 0; i < boneCount; i++)
         {
             ref var bone = ref skeleton.Bones[i];
-            bone.Name = nameTable[i];
+            bone.Name = reader.ReadString();
             bone.Index = i;
             bone.ParentIndex = reader.ReadSByte();
             bone.Transform.Position = new Vector2(reader.ReadSingle(), reader.ReadSingle());

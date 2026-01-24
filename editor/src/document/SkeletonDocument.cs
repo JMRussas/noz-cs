@@ -583,6 +583,7 @@ public class SkeletonDocument : Document
         for (var i = 0; i < BoneCount; i++)
         {
             var bone = Bones[i];
+            writer.Write(bone.Name);
             writer.Write((sbyte)bone.ParentIndex);
             writer.Write(bone.Transform.Position.X);
             writer.Write(bone.Transform.Position.Y);
