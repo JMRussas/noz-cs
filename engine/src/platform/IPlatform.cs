@@ -58,6 +58,8 @@ public interface IPlatform
     void SetClipboardText(string text);
     string? GetClipboardText();
 
+    void SetCursor(SystemCursor cursor);
+
     nint WindowHandle { get; }
     nint GetGraphicsProcAddress(string name);
 

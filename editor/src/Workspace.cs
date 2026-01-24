@@ -704,6 +704,7 @@ public static class Workspace
 
         ActiveTool.End();
         ActiveTool = null;
+        Cursor.SetDefault();
     }
 
     public static void CancelTool()
@@ -713,6 +714,7 @@ public static class Workspace
 
         ActiveTool.Cancel();
         ActiveTool = null;
+        Cursor.SetDefault();
     }
 
     public static void UpdateDefaultState()

@@ -108,12 +108,12 @@ public static class Gizmos
     
     public static float GetVertexSize(float size=1.0f)
     {
-        return DefaultVertexSize * size * ZoomRefScale;
+        return DefaultVertexSize * size;
     }
     
     public static float GetLineWidth(float width=1.0f)
     {
-        return DefaultLineWidth * width * ZoomRefScale;
+        return DefaultLineWidth * width;
     }
 
     public static void DrawBone(Vector2 start, Vector2 end, float width, Color color)
@@ -132,6 +132,8 @@ public static class Gizmos
         var dir = delta / length;
         var pos = 0f;
         var drawing = true;
+
+        dashLength *= ZoomRefScale;
 
         SetColor(color);
 

@@ -65,6 +65,12 @@ export function getCanvas() {
     return canvas;
 }
 
+export function setCursor(cursorStyle) {
+    if (canvas) {
+        canvas.style.cursor = cursorStyle;
+    }
+}
+
 function onKeyDown(e) {
     // Prevent default for game keys (arrows, space, etc.)
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' ', 'Tab'].includes(e.key)) {

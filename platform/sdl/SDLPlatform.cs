@@ -18,6 +18,9 @@ public unsafe partial class SDLPlatform : IPlatform
     private Action? _resizeCallback;
     private static SDLPlatform? _instance;
 
+    private readonly SDL_Cursor*[] _cursors = new SDL_Cursor*[Enum.GetValues<SystemCursor>().Length];
+    private SystemCursor _currentCursor = SystemCursor.Default;
+
     public Vector2 WindowSize => _windowSize;
 
     internal static SDL_Window* Window => _instance != null ? _instance._window : null;
@@ -135,6 +138,15 @@ public unsafe partial class SDLPlatform : IPlatform
         SDL_RemoveEventWatch(&ResizeEventWatch, nint.Zero);
         _instance = null;
         _resizeCallback = null;
+
+        for (var i = 0; i < _cursors.Length; i++)
+        {
+            if (_cursors[i] != null)
+            {
+                SDL_DestroyCursor(_cursors[i]);
+                _cursors[i] = null;
+            }
+        }
 
         ShutdownNativeTextInput();
 
@@ -410,6 +422,38 @@ public unsafe partial class SDLPlatform : IPlatform
             return SDL_GetClipboardText();
         }
         return null;
+    }
+
+    public void SetCursor(SystemCursor cursor)
+    {
+        if (_currentCursor == cursor)
+            return;
+
+        _currentCursor = cursor;
+
+        if (cursor == SystemCursor.None)
+        {
+            SDL_HideCursor();
+            return;
+        }
+
+        SDL_ShowCursor();
+
+        var index = (int)cursor;
+        if (_cursors[index] == null)
+        {
+            var sdlCursor = cursor switch
+            {
+                SystemCursor.Default => SDL_SystemCursor.SDL_SYSTEM_CURSOR_DEFAULT,
+                SystemCursor.Move => SDL_SystemCursor.SDL_SYSTEM_CURSOR_MOVE,
+                SystemCursor.Crosshair => SDL_SystemCursor.SDL_SYSTEM_CURSOR_CROSSHAIR,
+                SystemCursor.Wait => SDL_SystemCursor.SDL_SYSTEM_CURSOR_WAIT,
+                _ => SDL_SystemCursor.SDL_SYSTEM_CURSOR_DEFAULT
+            };
+            _cursors[index] = SDL_CreateSystemCursor(sdlCursor);
+        }
+
+        SDL_SetCursor(_cursors[index]);
     }
 
     public nint WindowHandle

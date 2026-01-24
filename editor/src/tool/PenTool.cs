@@ -39,6 +39,11 @@ public class PenTool : Tool
         _fillColor = fillColor;
     }
 
+    public override void Begin()
+    {
+        Cursor.SetCrosshair();
+    }
+
     public override void Update()
     {
         var mouseWorld = Workspace.MouseWorldPosition;
@@ -216,11 +221,9 @@ public class PenTool : Tool
             var lineWidth = Gizmos.GetLineWidth();
             var vertexSize = Gizmos.GetVertexSize();
 
+            Gizmos.SetColor(EditorStyle.Shape.SelectedSegmentColor);
             for (var i = 0; i < _pointCount - 1; i++)
-            {
-                Gizmos.SetColor(EditorStyle.Shape.SelectedSegmentColor);
                 Gizmos.DrawLine(_points[i].Position, _points[i + 1].Position, lineWidth);
-            }
 
             if (_pointCount > 0)
             {

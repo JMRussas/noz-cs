@@ -106,6 +106,20 @@ public class WebPlatform : IPlatform
         return null;
     }
 
+    public void SetCursor(SystemCursor cursor)
+    {
+        var cursorStyle = cursor switch
+        {
+            SystemCursor.None => "none",
+            SystemCursor.Default => "default",
+            SystemCursor.Move => "move",
+            SystemCursor.Crosshair => "crosshair",
+            SystemCursor.Wait => "wait",
+            _ => "default"
+        };
+        _module?.InvokeVoidAsync("setCursor", cursorStyle);
+    }
+
     // Called from JavaScript
 
     [JSInvokable]
