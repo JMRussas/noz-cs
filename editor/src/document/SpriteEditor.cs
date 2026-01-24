@@ -802,6 +802,8 @@ public class SpriteEditor : DocumentEditor
 
     private void ApplyColorToSelection()
     {
+        Undo.Record(Document);
+
         var shape = Document.GetFrame(_currentFrame).Shape;
 
         for (ushort p = 0; p < shape.PathCount; p++)
