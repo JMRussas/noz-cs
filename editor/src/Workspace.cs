@@ -703,7 +703,7 @@ public static class Workspace
         if (ActiveTool == null)
             return;
 
-        ActiveTool.End();
+        ActiveTool.Dispose();
         ActiveTool = null;
         Cursor.SetDefault();
     }

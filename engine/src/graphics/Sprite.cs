@@ -31,10 +31,10 @@ public class Sprite : Asset
         var t = reader.ReadInt16();
         var r = reader.ReadInt16();
         var b = reader.ReadInt16();
-        var ul = reader.ReadSingle();
-        var ut = reader.ReadSingle();
-        var ur = reader.ReadSingle();
-        var ub = reader.ReadSingle();
+        var ul = reader.ReadSingle() + 0.001f;
+        var ut = reader.ReadSingle() + 0.001f;
+        var ur = reader.ReadSingle() - 0.001f;
+        var ub = reader.ReadSingle() - 0.001f;
         var ppu = reader.ReadSingle();
         var filter = (TextureFilter)reader.ReadByte();
 

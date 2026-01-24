@@ -29,6 +29,7 @@ public class SpriteEditor : DocumentEditor
         EditorApplication.Config!.AtlasSize);
     private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
+    private bool _showTiling;
 
     private readonly Command[] _commands;
 
@@ -122,6 +123,8 @@ public class SpriteEditor : DocumentEditor
             {
                 EditorUI.ToolbarButton(EditorAssets.Sprites.IconPalette, _isPlaying);
                 UI.Flex();
+                if (EditorUI.ToolbarButton(EditorAssets.Sprites.IconTiling, _showTiling))
+                    _showTiling = !_showTiling;
             }
 
             UI.Spacer(EditorStyle.SpriteEditor.ButtonMarginY);
@@ -923,6 +926,29 @@ public class SpriteEditor : DocumentEditor
             Graphics.SetTexture(_rasterTexture);
             Graphics.SetColor(Color.White);
             Graphics.Draw(quad, uv);
+
+            if (_showTiling)
+            {
+                var tileSize = new Vector2(rb.Width * invDpi, rb.Height * invDpi);
+                ReadOnlySpan<Vector2> offsets =
+                [
+                    new(-tileSize.X, -tileSize.Y),
+                    new(0f, -tileSize.Y),
+                    new(tileSize.X, -tileSize.Y),
+                    new(-tileSize.X, 0f),
+                    new(tileSize.X, 0f),
+                    new(-tileSize.X, tileSize.Y),
+                    new(0f, tileSize.Y),
+                    new(tileSize.X, tileSize.Y),
+                ];
+
+                Graphics.SetColor(Color.White.WithAlpha(0.5f));
+                foreach (var offset in offsets)
+                {
+                    var tiledQuad = new Rect(quad.X + offset.X, quad.Y + offset.Y, quad.Width, quad.Height);
+                    Graphics.Draw(tiledQuad, uv);
+                }
+            }
         }
     }
 

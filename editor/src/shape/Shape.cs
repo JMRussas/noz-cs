@@ -15,6 +15,8 @@ public struct HitResult
     public ushort PathIndex;
     public float AnchorDistSqr;
     public float SegmentDistSqr;
+    public Vector2 AnchorPoint;
+    public Vector2 SegmentPoint;
 
     public static HitResult Empty => new()
     {
@@ -234,6 +236,7 @@ public sealed unsafe partial class Shape : IDisposable
                 if (distSqr >= anchorRadiusSqr || distSqr >= result.AnchorDistSqr) continue;
                 result.AnchorIndex = (ushort)anchorIdx;
                 result.AnchorDistSqr = distSqr;
+                result.AnchorPoint = worldPos;
                 result.PathIndex = p;
             }
 
@@ -249,20 +252,31 @@ public sealed unsafe partial class Shape : IDisposable
                 var a1World = a1.Position;
                 var sample0World = samples[0];
 
-                var distSqr = PointToSegmentDistSqr(point, a0World, sample0World);
+                var bestDistSqr = PointToSegmentDistSqr(point, a0World, sample0World, out var bestClosest);
                 for (var s = 0; s < MaxSegmentSamples - 1; s++)
                 {
                     var sWorld = samples[s];
                     var sNextWorld = samples[s + 1];
-                    distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, sWorld, sNextWorld));
+                    var distSqr = PointToSegmentDistSqr(point, sWorld, sNextWorld, out var closest);
+                    if (distSqr < bestDistSqr)
+                    {
+                        bestDistSqr = distSqr;
+                        bestClosest = closest;
+                    }
                 }
                 var lastSampleWorld = samples[MaxSegmentSamples - 1];
-                distSqr = MathF.Min(distSqr, PointToSegmentDistSqr(point, lastSampleWorld, a1World));
+                var lastDistSqr = PointToSegmentDistSqr(point, lastSampleWorld, a1World, out var lastClosest);
+                if (lastDistSqr < bestDistSqr)
+                {
+                    bestDistSqr = lastDistSqr;
+                    bestClosest = lastClosest;
+                }
 
-                if (distSqr >= segmentRadiusSqr || distSqr >= result.SegmentDistSqr) continue;
+                if (bestDistSqr >= segmentRadiusSqr || bestDistSqr >= result.SegmentDistSqr) continue;
 
                 result.SegmentIndex = a0Idx;
-                result.SegmentDistSqr = distSqr;
+                result.SegmentDistSqr = bestDistSqr;
+                result.SegmentPoint = bestClosest;
                 if (result.PathIndex == ushort.MaxValue)
                     result.PathIndex = p;
             }
@@ -729,13 +743,13 @@ public sealed unsafe partial class Shape : IDisposable
         return winding != 0;
     }
 
-    private static float PointToSegmentDistSqr(Vector2 point, Vector2 a, Vector2 b)
+    private static float PointToSegmentDistSqr(Vector2 point, Vector2 a, Vector2 b, out Vector2 closest)
     {
         var ab = b - a;
         var ap = point - a;
         var t = Vector2.Dot(ap, ab) / Vector2.Dot(ab, ab);
         t = MathF.Max(0, MathF.Min(1, t));
-        var closest = a + ab * t;
+        closest = a + ab * t;
         return Vector2.DistanceSquared(point, closest);
     }
 

@@ -72,6 +72,13 @@ public unsafe struct NativeArray<T>(int capacity, int length=0) : IDisposable
         Length--;
     }
 
+    public void RemoveLast(int count)
+    {
+        Debug.Assert(_ptr != null);
+        Debug.Assert(Length >= count, "NativeArray is empty.");
+        Length-=count;
+    }
+
     public void Clear()
     {
         Length = 0;

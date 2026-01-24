@@ -567,6 +567,8 @@ public static class EditorStyle
         public static readonly Color AnchorColor = Color.FromRgb(0x000000);
         public static readonly Color SegmentColor = Color.FromRgb(0xf5f04e);
         public static readonly Color IntersectionColor = Color.FromRgb(0x4ea64e);
+        public static readonly Color InvalidSegmentColor = Color.FromRgb(0x953d49);
+        public static readonly Color HoverColor = Color.FromRgb(0x63ffff);
         public const float IntersectionAnchorScale = 1.2f;
     }
 
