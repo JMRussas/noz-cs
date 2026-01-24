@@ -8,14 +8,15 @@ using System.Runtime.InteropServices;
 namespace NoZ;
 
 [Flags]
-internal enum ElementFlags : uint
+internal enum ElementFlags : ushort
 {
     None = 0,
     Hovered = 1 << 0,
     Pressed = 1 << 1,
     Down = 1 << 2,
     Focus = 1 << 3,
-    Dragging = 1 << 4
+    Dragging = 1 << 4,
+    Changed = 1 << 5,
 }
 
 internal struct TextBoxState
@@ -25,6 +26,7 @@ internal struct TextBoxState
     public float ScrollOffset;
     public float BlinkTimer;
     public int TextHash;
+    public UnsafeSpan<char> Text;
 }
 
 internal struct ScrollableState
@@ -42,7 +44,7 @@ internal struct ElementStateData
 internal struct ElementState
 {
     public ElementFlags Flags;
-    public int Index;
+    public short Index;
     public Rect Rect;
     public ElementStateData Data;
 
@@ -51,13 +53,14 @@ internal struct ElementState
     public readonly bool IsPressed => (Flags & ElementFlags.Pressed) != 0;
     public readonly bool IsDown => (Flags & ElementFlags.Down) != 0;
     public readonly bool IsDragging => (Flags & ElementFlags.Dragging) != 0;
+    public readonly bool IsChanged => (Flags & ElementFlags.Changed) != 0;
     public void SetFlags(ElementFlags mask, ElementFlags flags) =>
         Flags = (Flags & ~mask) | (flags & mask);
 }
 
 internal struct CanvasState
 {
-    public int ElementIndex;
+    public short ElementIndex;
     public Rect WorldBounds;
     public UnsafeSpan<ElementState> ElementStates;
 }

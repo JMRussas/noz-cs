@@ -37,8 +37,8 @@ public struct CommandInputOptions
 
 public static class CommandPalette
 {
-    private const byte SearchId = 201;
-    private const byte CommandListId = 202;
+    private static readonly ElementId SearchId = new(201);
+    private static readonly ElementId CommandListId = new(202);
     private const int MaxFilteredCommands = 32;
 
     private static string? _prefix;
@@ -147,10 +147,15 @@ public static class CommandPalette
                     UI.Image(EditorAssets.Sprites.AssetIconShader);
 
                 using (UI.BeginFlex())
-                    UI.TextBox(ref _text, style: EditorStyle.CommandPalette.SearchTextBox, id: SearchId, placeholder: "Search...");
+                {
+                    if (UI.TextBox(SearchId, style: EditorStyle.CommandPalette.SearchTextBox, placeholder: "Search..."))
+                    {
+                        _text = new string(UI.GetTextBoxText(EditorStyle.CanvasId.CommandPalette, SearchId));
+                    }
+                }
             }
 
-            //UI.Container(EditorStyle.Popup.Separator);
+            UI.Container(EditorStyle.Popup.Separator);
 
             using (UI.BeginFlex())
                 CommandList();
@@ -161,8 +166,7 @@ public static class CommandPalette
     {
         var execute = false;
 
-        //using (UI.BeginContainer(new ContainerStyle{Color=Color.Red}))
-        using (UI.BeginScrollable(offset: 0, id: CommandListId))
+        using (UI.BeginScrollable(CommandListId))
         using (UI.BeginColumn(ContainerStyle.Default.WithAlignY(Align.Min)))
         {
             var selectedIndex = _selectedIndex;
@@ -238,7 +242,7 @@ public static class CommandPalette
 
     private static void ScrollToSelection()
     {
-        var scrollableRect = UI.GetElementRect(CommandListId, EditorStyle.CanvasId.CommandPalette);
+        var scrollableRect = UI.GetElementRect(EditorStyle.CanvasId.CommandPalette, CommandListId);
 
         if (scrollableRect.Height <= 0)
             return;
@@ -246,7 +250,7 @@ public static class CommandPalette
         var itemTop = _selectedIndex * EditorStyle.List.ItemHeight;
         var itemBottom = itemTop + EditorStyle.List.ItemHeight;
 
-        var currentScroll = UI.GetScrollOffset(CommandListId, EditorStyle.CanvasId.CommandPalette);
+        var currentScroll = UI.GetScrollOffset(EditorStyle.CanvasId.CommandPalette, CommandListId);
         var viewTop = currentScroll;
         var viewBottom = currentScroll + scrollableRect.Height;
         var newScroll = currentScroll;
@@ -257,6 +261,6 @@ public static class CommandPalette
             newScroll = itemBottom - scrollableRect.Height;
 
         if (newScroll != currentScroll)
-            UI.SetScrollOffset(CommandListId, newScroll, EditorStyle.CanvasId.CommandPalette);
+            UI.SetScrollOffset(EditorStyle.CanvasId.CommandPalette, CommandListId, newScroll);
     }
 }

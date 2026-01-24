@@ -310,11 +310,16 @@ public static class Workspace
         if (SelectedCount == 0 || ActiveTool != null || State != WorkspaceState.Default)
             return;
 
+        Undo.BeginGroup();
         foreach (var doc in DocumentManager.Documents)
         {
             if (doc.IsSelected)
+            {
+                Undo.Record(doc);
                 doc.SavedPosition = doc.Position;
+            }
         }
+        Undo.EndGroup();
 
         BeginTool(new MoveTool(
             update: delta =>

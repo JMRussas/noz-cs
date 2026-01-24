@@ -98,7 +98,7 @@ public static partial class UI
             return;
 
         var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
-        UIRender.DrawRect(pos.X, pos.Y, e.Rect.Width, e.Rect.Height, style.Color);
+        UIRender.DrawRect(new Rect(pos.X, pos.Y, e.Rect.Width, e.Rect.Height), style.Color);
     }
 
     private static void DrawContainer(ref Element e)
@@ -109,7 +109,7 @@ public static partial class UI
 
         var pos = Vector2.Transform(Vector2.Zero, e.LocalToWorld);
         UIRender.DrawRect(
-            pos.X, pos.Y, e.Rect.Width, e.Rect.Height,
+            new Rect(pos.X, pos.Y, e.Rect.Width, e.Rect.Height),
             style.Color,
             style.Border.Radius,
             style.Border.Width,
@@ -117,7 +117,7 @@ public static partial class UI
         );
     }
 
-    private static Vector2 GetTextOffset(string text, Font font, float fontSize, in Vector2 containerSize, Align alignX, Align alignY)
+    private static Vector2 GetTextOffset(ReadOnlySpan<char> text, Font font, float fontSize, in Vector2 containerSize, Align alignX, Align alignY)
     {
         var size = new Vector2(TextRender.Measure(text, font, fontSize).X, font.LineHeight * fontSize);
         var offset = new Vector2(
@@ -134,28 +134,30 @@ public static partial class UI
     internal static void DrawText(string text, Font font, float fontSize, Color color, Matrix3x2 localToWorld, Vector2 containerSize, Align alignX = Align.Min, Align alignY = Align.Center)
     {
         var offset = GetTextOffset(text, font, fontSize, containerSize, alignX, alignY);
-
         var transform = localToWorld * Matrix3x2.CreateTranslation(offset);
 
-        Graphics.PushState();
-        Graphics.SetColor(color);
-        Graphics.SetTransform(transform);
-        TextRender.Draw(text, font, fontSize);
-        Graphics.PopState();
+        using (Graphics.PushState())
+        {
+            Graphics.SetColor(color);
+            Graphics.SetTransform(transform);
+            TextRender.Draw(text, font, fontSize);
+        }
     }
 
+    // :label
     private static void DrawLabel(ref Element e)
     {
         var font = e.Font ?? _defaultFont!;
-        var text = new string(GetText(e.Data.Label.TextStart, e.Data.Label.TextLength));
+        var text = e.Data.Label.Text.AsReadOnlySpan();
         var offset = GetTextOffset(text, font, e.Data.Label.FontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
         var transform = e.LocalToWorld * Matrix3x2.CreateTranslation(offset);
 
-        Graphics.PushState();
-        Graphics.SetColor(e.Data.Label.Color);
-        Graphics.SetTransform(transform);
-        TextRender.Draw(text, font, e.Data.Label.FontSize);
-        Graphics.PopState();
+        using (Graphics.PushState())
+        {
+            Graphics.SetColor(e.Data.Label.Color);
+            Graphics.SetTransform(transform);
+            TextRender.Draw(text, font, e.Data.Label.FontSize);
+        }
     }
 
     private static void DrawImage(ref Element e)

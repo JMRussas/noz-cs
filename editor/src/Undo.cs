@@ -216,6 +216,12 @@ public static class Undo
     private static void RestoreDocument(Document target, Document snapshot)
     {
         var wasEditing = target.IsEditing;
+        target.Position = snapshot.Position;
+        target.SavedPosition = snapshot.SavedPosition;
+        target.Bounds = snapshot.Bounds;
+        target.Name = snapshot.Name;
+        target.Path = snapshot.Path;
+        target.SourcePathIndex = snapshot.SourcePathIndex;
         target.Clone(snapshot);
         target.IsEditing = wasEditing;
     }

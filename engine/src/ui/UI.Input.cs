@@ -11,7 +11,10 @@ namespace NoZ;
 
 public static partial class UI
 {
-    // Input handling
+    private static ElementId _pressedElementId;
+    private static bool _mouseLeftPressed;
+    private static Vector2 _mousePosition;
+
     private static void HandleInput()
     {
         var mouse = Camera!.ScreenToWorld(Input.MousePosition);
@@ -20,27 +23,13 @@ public static partial class UI
 
         _mousePosition = mouse;
         _mouseLeftPressed = mouseLeftPressed;
-
-        // Update canvas world bounds and find hot canvas (topmost under mouse)
-        _hotCanvasId = ElementIdNone;
-        for (var c = 0; c < _activeCanvasCount; c++)
-        {
-            var canvasId = _activeCanvasIds[c];
-            ref var cs = ref _canvasStates[canvasId];
-            ref var canvasElement = ref _elements[cs.ElementIndex];
-            var pos = Vector2.Transform(Vector2.Zero, canvasElement.LocalToWorld);
-            cs.WorldBounds = new Rect(pos.X, pos.Y, canvasElement.Rect.Width, canvasElement.Rect.Height);
-
-            // Later canvases are on top, so last one containing mouse wins
-            if (cs.WorldBounds.Contains(mouse))
-                _hotCanvasId = canvasId;
-        }
+        _pressedElementId = ElementId.None;
+        _hotCanvasId = ElementId.None;
 
         LogUI("Input:", values: [("HotCanvasId", _hotCanvasId, true)]);
 
         // Handle popup close detection
         _closePopups = false;
-        _elementWasPressed = false;
         if (mouseLeftPressed && _popupCount > 0)
         {
             var clickInsidePopup = false;
@@ -62,76 +51,60 @@ public static partial class UI
             }
         }
 
-        // Process each canvas independently for hover, but only hot canvas gets press/down
-        for (var c = 0; c < _activeCanvasCount; c++)
+        for (var c = 0; c < _activeCanvasIds.Length; c++)
         {
-            var canvasId = _activeCanvasIds[c];
-            var isHotCanvas = canvasId == _hotCanvasId;
-            ProcessCanvasInput(canvasId, mouse, mouseLeftPressed, buttonDown, isHotCanvas);
+            ref var cid = ref _activeCanvasIds[c];
+            ref var cs = ref GetCanvasState(cid);
+            var isHotCanvas = cid == _hotCanvasId;
+            HandleCanvasInput(cid, mouse, mouseLeftPressed, buttonDown, isHotCanvas);
         }
 
-        // Consume MouseLeft if any UI element was pressed
-        if (_elementWasPressed)
+        if (_pressedElementId != ElementId.None)
             Input.ConsumeButton(InputCode.MouseLeft);
 
-        // Handle scrollable drag
         HandleScrollableDrag(mouse, buttonDown, mouseLeftPressed);
-
-        // Handle mouse wheel scroll
         HandleMouseWheelScroll(mouse);
     }
 
-    private static void ProcessCanvasInput(byte canvasId, Vector2 mouse, bool mouseLeftPressed, bool buttonDown, bool isHotCanvas)
+    private static void HandleCanvasInput(
+        CanvasId canvasId,
+        Vector2 mouse,
+        bool mouseLeftPressed,
+        bool buttonDown,
+        bool isHotCanvas)
     {
-        ref var canvasState = ref _canvasStates[canvasId];
-        ref var canvas = ref _elements[canvasState.ElementIndex];
-        if (canvasState.ElementStates == null) return;
+        ref var cs = ref _canvasStates[canvasId];
+        ref var c = ref _elements[cs.ElementIndex];
 
-        var focusElementPressed = false;
-
-        // Iterate elements belonging to this canvas in reverse order (topmost first)
-        for (var elementIndex=canvas.NextSiblingIndex - 1; elementIndex > canvas.Index; elementIndex--)
+        for (var elementIndex=c.NextSiblingIndex - 1; elementIndex > c.Index; elementIndex--)
         {
             ref var e = ref _elements[elementIndex];
-            Debug.Assert(e.CanvasId == canvas.Id);
-            if (e.Id == ElementIdNone) continue;
+            if (e.Id == ElementId.None) continue;
+
+            Debug.Assert(e.CanvasId == c.CanvasId);
 
             if (e.Type == ElementType.TextBox)
-            {
                 HandleTextBoxInput(ref e);
-            }
 
-
-            ref var state = ref canvasState.ElementStates[e.Id];
-            state.Rect = e.Rect;
+            ref var es = ref cs.ElementStates[e.Id];
+            es.Rect = e.Rect;
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
             var mouseOver = new Rect(0, 0, e.Rect.Width, e.Rect.Height).Contains(localMouse);
 
-            // HOVER: Independent per canvas - all canvases track hover
-            if (mouseOver) 
-                state.Flags |= ElementFlags.Hovered;
-            else
-                state.Flags &= ~ElementFlags.Hovered;
+            es.SetFlags(ElementFlags.Hovered, mouseOver ? ElementFlags.Hovered : ElementFlags.None);
+            es.SetFlags(ElementFlags.Hovered, mouseOver && buttonDown ? ElementFlags.Down : ElementFlags.None);
 
-            // PRESSED: Only hot canvas receives press events
-            if (isHotCanvas && mouseOver && mouseLeftPressed && !focusElementPressed && e.Type != ElementType.Canvas)
+            if (mouseOver && mouseLeftPressed && _pressedElementId == ElementId.None)
             {
-                state.Flags |= ElementFlags.Pressed;
-                focusElementPressed = true;
-                _elementWasPressed = true;
+                es.SetFlags(ElementFlags.Pressed, ElementFlags.Pressed);
+                _pressedElementId = e.Id;
                 _pendingFocusId = e.Id;
                 _pendingFocusCanvasId = canvasId;
             }
-            else
+            else if (es.IsPressed)
             {
-                state.Flags &= ~ElementFlags.Pressed;
+                es.SetFlags(ElementFlags.Pressed, ElementFlags.None);
             }
-
-            // DOWN: Only hot canvas
-            if (isHotCanvas && mouseOver && buttonDown)
-                state.Flags |= ElementFlags.Down;
-            else
-                state.Flags &= ~ElementFlags.Down;
         }
     }
 
@@ -139,9 +112,9 @@ public static partial class UI
     {
         if (!buttonDown)
         {
-            _activeScrollId = ElementIdNone;
+            _activeScrollId = ElementId.None;
         }
-        else if (_activeScrollId != ElementIdNone)
+        else if (_activeScrollId != ElementId.None)
         {
             var deltaY = _lastScrollMouseY - mouse.Y;
             _lastScrollMouseY = mouse.Y;
@@ -149,10 +122,9 @@ public static partial class UI
             for (var i = 0; i < _elementCount; i++)
             {
                 ref var e = ref _elements[i];
-                if (e.Type == ElementType.Scrollable && e.Id == _activeScrollId && e.CanvasId != ElementIdNone)
+                if (e.Type == ElementType.Scrollable && e.Id == _activeScrollId && e.CanvasId != ElementId.None)
                 {
                     ref var cs = ref _canvasStates[e.CanvasId];
-                    if (cs.ElementStates == null) continue;
                     ref var state = ref cs.ElementStates[e.Id];
 
                     var newOffset = e.Data.Scrollable.Offset + deltaY;
@@ -160,7 +132,7 @@ public static partial class UI
                     newOffset = Math.Clamp(newOffset, 0, maxScroll);
 
                     e.Data.Scrollable.Offset = newOffset;
-                    state.ScrollOffset = newOffset;
+                    state.Data.Scrollable.Offset = newOffset;
                     break;
                 }
             }
@@ -170,10 +142,9 @@ public static partial class UI
             for (var i = _elementCount; i > 0; i--)
             {
                 ref var e = ref _elements[i - 1];
-                if (e.Type == ElementType.Scrollable && e.Id != ElementIdNone && e.CanvasId == _hotCanvasId)
+                if (e.Type == ElementType.Scrollable && e.Id != ElementId.None && e.CanvasId == _hotCanvasId)
                 {
                     ref var cs = ref _canvasStates[e.CanvasId];
-                    if (cs.ElementStates == null) continue;
                     ref var state = ref cs.ElementStates[e.Id];
                     if ((state.Flags & ElementFlags.Pressed) != 0)
                     {
@@ -194,7 +165,7 @@ public static partial class UI
         for (var i = _elementCount; i > 0; i--)
         {
             ref var e = ref _elements[i - 1];
-            if (e.Type != ElementType.Scrollable || e.Id == ElementIdNone || e.CanvasId == ElementIdNone)
+            if (e.Type != ElementType.Scrollable || e.Id == ElementId.None || e.CanvasId == ElementId.None)
                 continue;
 
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
@@ -202,7 +173,6 @@ public static partial class UI
                 continue;
 
             ref var cs = ref _canvasStates[e.CanvasId];
-            if (cs.ElementStates == null) continue;
             ref var state = ref cs.ElementStates[e.Id];
 
             var scrollSpeed = 30f;
@@ -211,7 +181,7 @@ public static partial class UI
             newOffset = Math.Clamp(newOffset, 0, maxScroll);
 
             e.Data.Scrollable.Offset = newOffset;
-            state.ScrollOffset = newOffset;
+            state.Data.Scrollable.Offset = newOffset;
             break;
         }
     }

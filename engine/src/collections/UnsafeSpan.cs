@@ -3,10 +3,12 @@
 //
 
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace NoZ;
 
-public readonly unsafe struct UnsafeSpan<T> where T : unmanaged
+[DebuggerDisplay("{ToString(),raw}")]
+public unsafe struct UnsafeSpan<T> where T : unmanaged
 {
     public static readonly UnsafeSpan<T> Empty = new (null, 0);
 
@@ -18,7 +20,8 @@ public readonly unsafe struct UnsafeSpan<T> where T : unmanaged
 
     public T* GetUnsafePtr() => _ptr;
 
-    public ReadOnlySpan<T> AsReadonlySpan() => new(_ptr, Length);
+    public ReadOnlySpan<T> AsReadOnlySpan() => new(_ptr, Length);
+    public Span<T> AsSpan(int start, int length) => new(_ptr + start, length);
 
     public UnsafeSpan(in UnsafeSpan<T> span, int start, int length)
     {
@@ -68,6 +71,14 @@ public readonly unsafe struct UnsafeSpan<T> where T : unmanaged
             _index++;
             return _index < _length;
         }
+    }
+
+    public override string ToString()
+    {
+        if (typeof(T) == typeof(char))
+            return new string(new ReadOnlySpan<char>(_ptr, Length));
+
+        return $"UnsafeSpan<{typeof(T).Name}>[{Length}]";
     }
 }
 

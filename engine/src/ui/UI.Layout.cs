@@ -123,6 +123,7 @@ public static partial class UI
         LogUI(e, $"Content: {e.ContentRect}", depth: 1, condition: () => contentRect != baseContentRect);
 
         e.LocalToWorld = p.LocalToWorld * Matrix3x2.CreateTranslation(e.Rect.X, e.Rect.Y);
+        Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
         //var localTransform =
         //    Matrix3x2.CreateTranslation(t.Translate + new Vector2(e.Rect.X, e.Rect.Y)) *
         //    Matrix3x2.CreateTranslation(pivot) *

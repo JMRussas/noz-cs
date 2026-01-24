@@ -132,6 +132,7 @@ public struct TextBoxStyle()
 {
     public Size Height = 28f;
     public float FontSize = 16;
+    public Font? Font = null;
     public Color BackgroundColor = Color.Transparent;
     public Color TextColor = Color.White;
     public Color PlaceholderColor = new(0.4f, 0.4f, 0.4f, 1f);
@@ -150,10 +151,8 @@ public struct TextBoxStyle()
         PlaceholderColor = PlaceholderColor,
         SelectionColor = SelectionColor,
         Border = Border,
-
         FocusBorder = FocusBorder,
-        Password = IsPassword,
-        Text = UnsafeSpan<char>.Empty,
+        Password = IsPassword
     };
 }
 

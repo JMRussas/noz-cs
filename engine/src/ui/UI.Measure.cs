@@ -92,7 +92,7 @@ public static partial class UI
     private static Vector2 FitLabel(ref readonly Element e, ref readonly Element p)
     {
         return TextRender.Measure(
-            new ReadOnlySpan<char>(_textBuffer, e.Data.Label.TextStart, e.Data.Label.TextLength),
+            e.Data.Label.Text.AsReadOnlySpan(),
             e.Font!,
             e.Data.Label.FontSize);
     }

@@ -35,9 +35,9 @@ public struct ContextMenuItem
 
 public static class ContextMenu
 {
-    private const byte CloseId = 1;
-    private const byte MenuIdStart = 10;
-    private const byte ItemIdStart = 20;
+    private static readonly ElementId CloseId = 1;
+    private static readonly ElementId MenuIdStart = 10;
+    private static readonly ElementId ItemIdStart = 20;
     private const int MaxItems = 64;
     private const int MaxSubmenuDepth = 8;
 

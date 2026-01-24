@@ -17,7 +17,6 @@ public struct TextBoxData
     public Color SelectionColor;
     public BorderStyle Border;
     public BorderStyle FocusBorder;
-    public UnsafeSpan<char> Text;
     public UnsafeSpan<char> Placeholder;
     public bool Password;
 
@@ -32,7 +31,6 @@ public struct TextBoxData
         Border = BorderStyle.None,
         FocusBorder = BorderStyle.None,
         Password = false,
-        Text = UnsafeSpan<char>.Empty,
         Placeholder = UnsafeSpan<char>.Empty
     };
 }
@@ -51,8 +49,8 @@ public static partial class UI
         Debug.Assert(e.Id != ElementId.None, "TextBox element must have a valid Id");
 
         ref var data = ref e.Data.TextBox;
-        var isFocused = e.Id != 0 && IsFocus(e.Id, e.CanvasId);
-        var border = isFocused ? data.FocusBorder : data.Border;
+        var isHot = e.Id != 0 && IsHotElement(ref e);
+        var border = isHot ? data.FocusBorder : data.Border;
 
         UIRender.DrawRect(
             new Rect(Vector2.Transform(Vector2.Zero, e.LocalToWorld), e.Rect.Size),
@@ -68,141 +66,113 @@ public static partial class UI
         var font = e.Font ?? DefaultFont;
         if (font == null) return;
 
-        var text = UI.GetElementText(e.Id);
-        var fontSize = data.FontSize;
+        ref var es = ref GetElementState(ref e);
+        var text = es.Data.TextBox.Text.AsReadOnlySpan();
+        DrawTextBoxSelection(ref e, text, font);
+        DrawTextBoxText(ref e, text, font, data.FontSize, data.TextColor, data.Password);
+        DrawTextBoxPlaceholder(ref e, text, font);
+        DrawTextBoxCursor(ref e, text, font);            
+    }
 
-        // Custom TextBox Implementation
-        if (isFocused)
+    private static void UpdateTextBoxState(ref Element e)
+    {
+        Debug.Assert(e.Id != ElementId.None, "TextBox element must have a valid Id");
+
+        ref var es = ref GetElementState(e.CanvasId, e.Id);
+        if (!IsHotElement(ref e))
         {
-            DrawTextBoxSelection(ref e, text, font, fontSize);
-            DrawTextBoxText(ref e, text, font, fontSize, data.TextColor, data.Password);
-            DrawTextBoxCursor(ref e, text, font, fontSize);
-            DrawTextBoxPlaceholder(ref e, text, font, fontSize);
-            
-            // Save modified text back
-            UI.SetElementText(e.Id, text);
-            
-            _focusId = e.Id;
-            _focusCanvasId = e.CanvasId;
-            _renderedThisFrame = true;
-            
-            // Ensure native textbox is hidden if we are using custom
-            if (_visible)
-            {
-                Application.Platform.HideTextbox();
-                _visible = false;
-            }
+            es.SetFlags(ElementFlags.Focus | ElementFlags.Dragging, ElementFlags.None);
+            es.Data.TextBox.ScrollOffset = 0.0f;
+            return;
         }
-        else
-        {
-            // Clear focus state if not focused
-            var state = GetElementState(e.CanvasId, e.Id);
-            state.HasFocus = false;
-            state.Dragging = false;
-            state.ScrollOffset = 0;
 
-            // Draw Placeholder if empty
-            if (text.Length == 0 && data.Placeholder.Length > 0)
-            {
-                var placeholderOffset = new Vector2(0, (e.Rect.Height - font.LineHeight * fontSize) * 0.5f);
-                var transform = e.LocalToWorld * Matrix3x2.CreateTranslation(placeholderOffset);
+        HandleTextBoxInput(ref e);
+        UpdateTextBoxScroll(ref e);
+    }
 
-                using (Graphics.PushState())
-                {
-                    Graphics.SetColor(data.PlaceholderColor);
-                    Graphics.SetTransform(transform);
-                    TextRender.Draw(data.Placeholder.AsReadonlySpan(), font, fontSize);
-                }
-            }
-            else
-            {
-                // Draw Text (consistent with focused state)
-                DrawTextBoxText(ref e, text, font, fontSize, data.TextColor, data.Password);
-            }
-        }
+    private static ReadOnlySpan<char> SetTextBoxText(ref ElementState es, in UnsafeSpan<char> text)
+    {
+        ref var tb = ref es.Data.TextBox;
+        var oldHash = tb.TextHash;
+        tb.Text = text;
+        tb.TextHash = string.GetHashCode(text.AsReadOnlySpan());
+        es.SetFlags(ElementFlags.Changed, oldHash != tb.TextHash ? ElementFlags.Changed : ElementFlags.None);
+        return tb.Text.AsReadOnlySpan();
+    }
+
+    private static void RemoveSelectedTextBoxText(ref ElementState es)
+    {
+        ref var tb = ref es.Data.TextBox;
+        if (tb.CursorIndex == tb.SelectionStart) return;
+        var start = Math.Min(tb.CursorIndex, tb.SelectionStart);
+        var end = Math.Max(tb.CursorIndex, tb.SelectionStart);
+        SetTextBoxText(ref es, RemoveText(tb.Text.AsReadOnlySpan(), start, end - start));
+        tb.CursorIndex = start;
+        tb.SelectionStart = start;
     }
 
     private static void HandleTextBoxInput(ref Element e)
-    {
-        if (e.Id == ElementIdNone)
-            return;
-
-        var isFocused = IsFocus(e.Id, e.CanvasId);
-        if (!isFocused)
-            return;
-
-        var font = e.Font ?? DefaultFont;
-        if (font == null) return;
-
-        ref var data = ref e.Data.TextBox;
-        var fontSize = data.FontSize;
-        ref var state = ref _elementStates[e.Id].Data.TextBox;
-        var text = UI.GetElementText(e.Id);
-
-        HandleTextBoxInput(ref e, text, font, fontSize);
-        UpdateTextBoxScroll(ref e, ref state, text, font, fontSize);
-    }
-
-    private static void HandleTextBoxInput(ref Element e, in ReadOnlySpan<char> text, Font font, float fontSize)
     {
         var control = Input.IsCtrlDown();
         var shift = Input.IsShiftDown();
         var mousePos = UI.Camera!.ScreenToWorld(Input.MousePosition);
         var localMouse = Vector2.Transform(mousePos, e.WorldToLocal);
         var isMouseOver = new Rect(0, 0, e.Rect.Width, e.Rect.Height).Contains(localMouse);
-        var isHotCanvas = e.CanvasId == UI.HotCanvasId();
+        var isHotCanvas = e.CanvasId == _hotCanvasId;
+        var fontSize = e.Data.TextBox.FontSize;
+        var font = e.Font!;
 
-        ref var elementState = ref GetElementState(ref e);
-        ref var state = ref elmentState.Data.TextBox;
-        
-        if (!elementState.HasFocus)
+        ref var es = ref GetElementState(ref e);
+        ref var tb = ref es.Data.TextBox;
+
+        if (!es.HasFocus)
         {
-            elementState.SetFlags(ElementFlags.Focus, ElementFlags.Focus);
+            es.SetFlags(ElementFlags.Focus, ElementFlags.Focus);
 
             // If mouse is down inside, start dragging immediately
             // We verify hot canvas to ensure we don't steal focus/drag if obscured, 
             // though UI system usually handles the focus switch.
             if (isMouseOver && Input.IsButtonDown(InputCode.MouseLeft) && isHotCanvas)
             {
-                var mouseIndex = GetCharacterIndexAtPosition(ref e, state, text, font, fontSize, mousePos);
-                state.CursorIndex = mouseIndex;
-                state.SelectionStart = mouseIndex;
-                state.Dragging = true;
-                state.BlinkTimer = 0;
+                var mouseIndex = GetTextBoxPosition(ref e, tb.Text.AsReadOnlySpan(), font, fontSize, mousePos);
+                tb.CursorIndex = mouseIndex;
+                tb.SelectionStart = mouseIndex;
+                tb.BlinkTimer = 0;
+                es.SetFlags(ElementFlags.Dragging, ElementFlags.Dragging);
             }
         }
 
         // Double Click to Select All
         if (isMouseOver && Input.WasButtonPressed(InputCode.MouseLeftDoubleClick) && isHotCanvas)
         {
-            state.SelectionStart = 0;
-            state.CursorIndex = text.Length;
-            state.Dragging = false; // Stop dragging to prevent overwrite on next frame
-            state.BlinkTimer = 0;
+            tb.SelectionStart = 0;
+            tb.CursorIndex = tb.Text.AsReadOnlySpan().Length;
+            es.SetFlags(ElementFlags.Dragging, ElementFlags.None);
+            tb.BlinkTimer = 0;
             return; // Skip standard click handling
         }
 
         // Standard Mouse Input
         if (isMouseOver && Input.WasButtonPressed(InputCode.MouseLeft) && isHotCanvas)
         {
-            var mouseIndex = GetCharacterIndexAtPosition(ref e, state, text, font, fontSize, mousePos);
-            state.CursorIndex = mouseIndex;
-            state.SelectionStart = mouseIndex;
-            state.Dragging = true;
-            state.BlinkTimer = 0;
+            var mouseIndex = GetTextBoxPosition(ref e, tb.Text.AsReadOnlySpan(), font, fontSize, mousePos);
+            tb.CursorIndex = mouseIndex;
+            tb.SelectionStart = mouseIndex;
+            es.SetFlags(ElementFlags.Dragging, ElementFlags.Dragging);
+            tb.BlinkTimer = 0;
         }
-        else if (state.Dragging)
+        else if (es.IsDragging)
         {
             if (Input.IsButtonDown(InputCode.MouseLeft))
             {
-                var mouseIndex = GetCharacterIndexAtPosition(ref e, state, text, font, fontSize, mousePos);
-                state.CursorIndex = mouseIndex;
+                var mouseIndex = GetTextBoxPosition(ref e, tb.Text.AsReadOnlySpan(), font, fontSize, mousePos);
+                tb.CursorIndex = mouseIndex;
                 // Scroll if dragging outside bounds?
                 // For now just update cursor.
             }
             else
             {
-                state.Dragging = false;
+                es.SetFlags(ElementFlags.Dragging, ElementFlags.None);
             }
         }
 
@@ -212,65 +182,65 @@ public static partial class UI
             if (control)
             {
                 // Move by word
-                state.CursorIndex = FindPrevWordStart(text, state.CursorIndex);
+                tb.CursorIndex = FindPrevWordStart(tb.Text.AsReadOnlySpan(), tb.CursorIndex);
             }
-            else if (state.CursorIndex > 0)
+            else if (tb.CursorIndex > 0)
             {
-                state.CursorIndex--;
+                tb.CursorIndex--;
             }
-            else if (!shift && state.CursorIndex != state.SelectionStart)
+            else if (!shift && tb.CursorIndex != tb.SelectionStart)
             {
                  // Left at start with selection clears selection to start
-                 state.CursorIndex = Math.Min(state.CursorIndex, state.SelectionStart);
+                 tb.CursorIndex = Math.Min(tb.CursorIndex, tb.SelectionStart);
             }
 
-            if (!shift) state.SelectionStart = state.CursorIndex;
-            state.BlinkTimer = 0;
+            if (!shift) tb.SelectionStart = tb.CursorIndex;
+            tb.BlinkTimer = 0;
         }
         else if (Input.WasButtonPressed(InputCode.KeyRight, true))
         {
             if (control)
             {
                 // Move by word
-                state.CursorIndex = FindNextWordStart(text, state.CursorIndex);
+                tb.CursorIndex = FindNextWordStart(tb.Text.AsReadOnlySpan(), tb.CursorIndex);
             }
-            else if (state.CursorIndex < text.Length)
+            else if (tb.CursorIndex < tb.Text.AsReadOnlySpan().Length)
             {
-                state.CursorIndex++;
+                tb.CursorIndex++;
             }
-            else if (!shift && state.CursorIndex != state.SelectionStart)
+            else if (!shift && tb.CursorIndex != tb.SelectionStart)
             {
                  // Right at end with selection clears selection to end
-                 state.CursorIndex = Math.Max(state.CursorIndex, state.SelectionStart);
+                 tb.CursorIndex = Math.Max(tb.CursorIndex, tb.SelectionStart);
             }
 
-            if (!shift) state.SelectionStart = state.CursorIndex;
-            state.BlinkTimer = 0;
+            if (!shift) tb.SelectionStart = tb.CursorIndex;
+            tb.BlinkTimer = 0;
         }
         else if (Input.WasButtonPressed(InputCode.KeyHome))
         {
-            state.CursorIndex = 0;
-            if (!shift) state.SelectionStart = state.CursorIndex;
-            state.BlinkTimer = 0;
+            tb.CursorIndex = 0;
+            if (!shift) tb.SelectionStart = tb.CursorIndex;
+            tb.BlinkTimer = 0;
         }
         else if (Input.WasButtonPressed(InputCode.KeyEnd))
         {
-            state.CursorIndex = text.Length;
-            if (!shift) state.SelectionStart = state.CursorIndex;
-            state.BlinkTimer = 0;
+            tb.CursorIndex = tb.Text.AsReadOnlySpan().Length;
+            if (!shift) tb.SelectionStart = tb.CursorIndex;
+            tb.BlinkTimer = 0;
         }
         else if (control && Input.WasButtonPressed(InputCode.KeyA))
         {
-            state.SelectionStart = 0;
-            state.CursorIndex = text.Length;
+            tb.SelectionStart = 0;
+            tb.CursorIndex = tb.Text.AsReadOnlySpan().Length;
         }
         else if (control && Input.WasButtonPressed(InputCode.KeyC))
         {
-            if (state.CursorIndex != state.SelectionStart)
+            if (tb.CursorIndex != tb.SelectionStart)
             {
-                var start = Math.Min(state.CursorIndex, state.SelectionStart);
-                var length = Math.Abs(state.CursorIndex - state.SelectionStart);
-                Application.Platform.SetClipboardText(new string(text.Slice(start, length)));
+                var start = Math.Min(tb.CursorIndex, tb.SelectionStart);
+                var length = Math.Abs(tb.CursorIndex - tb.SelectionStart);
+                Application.Platform.SetClipboardText(new string(tb.Text.AsReadOnlySpan().Slice(start, length)));
             }
         }
         else if (control && Input.WasButtonPressed(InputCode.KeyV))
@@ -278,66 +248,62 @@ public static partial class UI
             var clipboard = Application.Platform.GetClipboardText();
             if (!string.IsNullOrEmpty(clipboard))
             {
-                if (state.CursorIndex != state.SelectionStart)
-                    DeleteSelection(ref text, state);
-                
-                text = text.Insert(state.CursorIndex, clipboard);
-                state.CursorIndex += clipboard.Length;
-                state.SelectionStart = state.CursorIndex;
-                state.BlinkTimer = 0;
+                RemoveSelectedTextBoxText(ref es);
+                SetTextBoxText(ref es, InsertText(tb.Text.AsReadOnlySpan(), tb.CursorIndex, clipboard));                
+                tb.CursorIndex += clipboard.Length;
+                tb.SelectionStart = tb.CursorIndex;
+                tb.BlinkTimer = 0;
             }
         }
         else if (control && Input.WasButtonPressed(InputCode.KeyX))
         {
-            if (state.CursorIndex != state.SelectionStart)
+            if (tb.CursorIndex != tb.SelectionStart)
             {
-                var start = Math.Min(state.CursorIndex, state.SelectionStart);
-                var length = Math.Abs(state.CursorIndex - state.SelectionStart);
-                Application.Platform.SetClipboardText(text.Substring(start, length));
-                DeleteSelection(ref text, state);
-                state.BlinkTimer = 0;
+                var start = Math.Min(tb.CursorIndex, tb.SelectionStart);
+                var length = Math.Abs(tb.CursorIndex - tb.SelectionStart);
+                Application.Platform.SetClipboardText(new string(tb.Text.AsReadOnlySpan().Slice(start, length)));
+                RemoveSelectedTextBoxText(ref es);
+                tb.BlinkTimer = 0;
             }
         }
-        
-        // Text Modification
-        if (Input.WasButtonPressed(InputCode.KeyBackspace, true))
+        else if (Input.WasButtonPressed(InputCode.KeyBackspace, true))
         {
-            if (state.CursorIndex != state.SelectionStart)
+            if (tb.CursorIndex != tb.SelectionStart)
             {
-                DeleteSelection(ref text, state);
+                RemoveSelectedTextBoxText(ref es);
             }
-            else if (state.CursorIndex > 0)
+            else if (tb.CursorIndex > 0)
             {
                 var removeCount = 1;
                 if (control)
                 {
-                    var prevWord = FindPrevWordStart(text, state.CursorIndex);
-                    removeCount = state.CursorIndex - prevWord;
+                    var prevWord = FindPrevWordStart(tb.Text.AsReadOnlySpan(), tb.CursorIndex);
+                    removeCount = tb.CursorIndex - prevWord;
                 }
-                
-                text = text.Remove(state.CursorIndex - removeCount, removeCount);
-                state.CursorIndex -= removeCount;
-                state.SelectionStart = state.CursorIndex;
+
+                SetTextBoxText(ref es, RemoveText(tb.Text.AsReadOnlySpan(), tb.CursorIndex - removeCount, removeCount));
+                tb.CursorIndex -= removeCount;
+                tb.SelectionStart = tb.CursorIndex;
             }
-            state.BlinkTimer = 0;
+            tb.BlinkTimer = 0;
         }
         else if (Input.WasButtonPressed(InputCode.KeyDelete, true))
         {
-            if (state.CursorIndex != state.SelectionStart)
+            if (tb.CursorIndex != tb.SelectionStart)
             {
-                DeleteSelection(ref text, state);
+                RemoveSelectedTextBoxText(ref es);
             }
-            else if (state.CursorIndex < text.Length)
+            else if (tb.CursorIndex < tb.Text.AsReadOnlySpan().Length)
             {
                 var removeCount = 1;
                 if (control)
                 {
-                    var nextWord = FindNextWordStart(text, state.CursorIndex);
-                    removeCount = nextWord - state.CursorIndex;
+                    var nextWord = FindNextWordStart(tb.Text.AsReadOnlySpan(), tb.CursorIndex);
+                    removeCount = nextWord - tb.CursorIndex;
                 }
-                text = text.Remove(state.CursorIndex, removeCount);
+                SetTextBoxText(ref es, RemoveText(tb.Text.AsReadOnlySpan(), tb.CursorIndex, removeCount));
             }
-            state.BlinkTimer = 0;
+            tb.BlinkTimer = 0;
         }
         else if (Input.WasButtonPressed(InputCode.KeyEnter) || Input.WasButtonPressed(InputCode.KeyEscape))
         {
@@ -349,27 +315,17 @@ public static partial class UI
         var input = Input.GetTextInput();
         if (!string.IsNullOrEmpty(input))
         {
-            if (state.CursorIndex != state.SelectionStart)
-            {
-                DeleteSelection(ref text, state);
-            }
-            
-            // Filter non-printable? 
-            // Input.GetTextInput usually returns printable chars.
-            text = text.Insert(state.CursorIndex, input);
-            state.CursorIndex += input.Length;
-            state.SelectionStart = state.CursorIndex;
-            state.BlinkTimer = 0;
+            RemoveSelectedTextBoxText(ref es);
+            SetTextBoxText(ref es, InsertText(tb.Text.AsReadOnlySpan(), tb.CursorIndex, input));
+            tb.CursorIndex += input.Length;
+            tb.SelectionStart = tb.CursorIndex;
+            tb.BlinkTimer = 0;
         }
-    }
 
-    private static void DeleteSelection(ref ReadOnlySpan<char> text, State state)
-    {
-        var start = Math.Min(state.CursorIndex, state.SelectionStart);
-        var end = Math.Max(state.CursorIndex, state.SelectionStart);
-        text = text.Remove(start, end - start);
-        state.CursorIndex = start;
-        state.SelectionStart = start;
+        //// Save modified text back
+        //UI.SetElementText(e.Id, text);
+
+        //_renderedThisFrame = true;
     }
 
     private static int FindPrevWordStart(in ReadOnlySpan<char> text, int index)
@@ -389,44 +345,40 @@ public static partial class UI
         return index;
     }
 
-    private static void UpdateTextBoxScroll(
-        ref Element e,
-        ref TextBoxState state,
-        in ReadOnlySpan<char> text,
-        Font font,
-        float fontSize)
+    private static void UpdateTextBoxScroll(ref Element e)
     {
-        var cursorX = MeasureText(text, 0, state.CursorIndex, font, fontSize);
+        ref var es = ref GetElementState(ref e);
+        ref var tb = ref es.Data.TextBox;
+        var font = e.Font!;
+        var text = es.Data.TextBox.Text.AsReadOnlySpan();
+        var cursorX = MeasureText(text, 0, tb.CursorIndex, font, e.Data.TextBox.FontSize);
         var viewportWidth = e.Rect.Width;
-        var cursorScreenX = cursorX - state.ScrollOffset;
+        var cursorScreenX = cursorX - tb.ScrollOffset;
 
         if (cursorScreenX < 0)
-            state.ScrollOffset = cursorX;
+            tb.ScrollOffset = cursorX;
         else if (cursorScreenX > viewportWidth)
-            state.ScrollOffset = cursorX - viewportWidth;
+            tb.ScrollOffset = cursorX - viewportWidth;
         
-        var totalWidth = MeasureText(text, 0, text.Length, font, fontSize);
+        var totalWidth = MeasureText(text, 0, text.Length, font, e.Data.TextBox.FontSize);
         if (totalWidth < viewportWidth)
-            state.ScrollOffset = 0;
+            tb.ScrollOffset = 0;
         else
-            state.ScrollOffset = Math.Clamp(state.ScrollOffset, 0, totalWidth - viewportWidth);
+            tb.ScrollOffset = Math.Clamp(tb.ScrollOffset, 0, totalWidth - viewportWidth);
     }
 
-    private static void DrawTextBoxSelection(
-        ref Element e,
-        in ReadOnlySpan<char> text,
-        Font font,
-        float fontSize)
+    private static void DrawTextBoxSelection(ref Element e, in ReadOnlySpan<char> text, Font font)
     {
         ref var es = ref GetElementState(ref e);
         ref var tb = ref es.Data.TextBox;
 
+        if (!es.HasFocus) return;
         if (tb.CursorIndex == tb.SelectionStart) return;
 
         var start = Math.Min(tb.CursorIndex, tb.SelectionStart);
         var end = Math.Max(tb.CursorIndex, tb.SelectionStart);
-        var startX = MeasureText(text, 0, start, font, fontSize) - tb.ScrollOffset;
-        var endX = MeasureText(text, 0, end, font, fontSize) - tb.ScrollOffset;        
+        var startX = MeasureText(text, 0, start, font, e.Data.TextBox.FontSize) - tb.ScrollOffset;
+        var endX = MeasureText(text, 0, end, font, e.Data.TextBox.FontSize) - tb.ScrollOffset;        
         var rectX = 0f;
         var rectW = e.Rect.Width;
         var drawX = Math.Max(rectX, startX);
@@ -475,14 +427,15 @@ public static partial class UI
         }
     }
 
-    private static void DrawTextBoxPlaceholder(ref Element e, in ReadOnlySpan<char> text, Font font, float fontSize)
+    private static void DrawTextBoxPlaceholder(ref Element e, in ReadOnlySpan<char> text, Font font)
     {
         ref var data = ref e.Data.TextBox;
-        if (text.Length == 0 && data.Placeholder.Length > 0)
+        if (text.Length > 0 || data.Placeholder.Length == 0)
             return;
 
         ref var state = ref GetElementState(ref e).Data.TextBox;
-        var placeholder = new string(data.Placeholder.AsReadonlySpan());
+        var fontSize = e.Data.TextBox.FontSize;
+        var placeholder = new string(data.Placeholder.AsReadOnlySpan());
         var placeholderOffset = new Vector2(-state.ScrollOffset, (e.Rect.Height - font.LineHeight * fontSize) * 0.5f);
         var transform = e.LocalToWorld * Matrix3x2.CreateTranslation(placeholderOffset);
 
@@ -494,20 +447,18 @@ public static partial class UI
         }
     }
 
-    private static void DrawTextBoxCursor(
-        ref Element e,
-        in ReadOnlySpan<char> text,
-        Font font,
-        float fontSize)
+    private static void DrawTextBoxCursor(ref Element e, in ReadOnlySpan<char> text, Font font)
     {
         ref var es = ref GetElementState(ref e);
         ref var tb = ref es.Data.TextBox;
 
+        if (!es.HasFocus) return;
         if (tb.CursorIndex != tb.SelectionStart) return;
 
         tb.BlinkTimer += Time.DeltaTime;
         if ((int)(tb.BlinkTimer * 2) % 2 == 1 && !es.IsDragging) return; // Blink off
-        
+
+        var fontSize = e.Data.TextBox.FontSize;
         var cursorX = MeasureText(text, 0, tb.CursorIndex, font, fontSize) - tb.ScrollOffset;
         
         if (cursorX < 0 || cursorX > e.Rect.Width) return;
@@ -531,7 +482,7 @@ public static partial class UI
         return TextRender.Measure(text.Slice(start, length), font, fontSize).X;
     }
 
-    private static int GetCharacterIndexAtPosition(ref Element e, in ReadOnlySpan<char> text, Font font, float fontSize, Vector2 worldMousePos)
+    private static int GetTextBoxPosition(ref Element e, in ReadOnlySpan<char> text, Font font, float fontSize, Vector2 worldMousePos)
     {
         ref var es = ref GetElementState(ref e);
         ref var tb = ref es.Data.TextBox;
@@ -559,18 +510,28 @@ public static partial class UI
         return text.Length;
     }
 
+    public static ReadOnlySpan<char> GetTextBoxText(CanvasId canvasId, ElementId elementId)
+    {
+        ref var es = ref GetElementState(canvasId, elementId);
+        ref var e = ref GetElement(es.Index);
+        Debug.Assert(e.Type == ElementType.TextBox, "Element is not a TextBox");
+        return es.Data.TextBox.Text.AsReadOnlySpan();
+    }
+
     public static void TextBoxEndFrame()
     {
+#if false
         // Hide textbox if it wasn't rendered this frame (element no longer exists)
         if (_visible && !_renderedThisFrame)
         {
             Application.Platform.HideTextbox();
-            _focusId = 0;
+            _hotElementId = 0;
             _focusCanvasId = 0;
             _visible = false;
         }
         
         // Reset for next frame
         _renderedThisFrame = false;
+#endif
     }
 }
