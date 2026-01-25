@@ -130,7 +130,7 @@ public class SpriteEditor : DocumentEditor
         using (UI.BeginColumn(EditorStyle.SpriteEditor.Root, id: RootId))
         {
             // Toobar
-            using (UI.BeginRow(EditorStyle.Toolbar.Root))
+            using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
             {
                 UI.Flex();
                 if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, _showTiling))
@@ -139,10 +139,11 @@ public class SpriteEditor : DocumentEditor
                     _showPalettes = !_showPalettes;
             }
 
-            UI.Spacer(EditorStyle.SpriteEditor.ButtonMarginY);
-
-            PalettePickerUI();
-            ColorPickerUI();
+            using (UI.BeginContainer(EditorStyle.Overlay.Content))
+            {
+                PalettePickerUI();
+                ColorPickerUI();
+            }
         }
     }
 
@@ -273,17 +274,14 @@ public class SpriteEditor : DocumentEditor
     private void PaletteColorUI(byte colorIndex, Color color, bool selected)
     {
         using (UI.BeginContainer(
-            selected
-                ? EditorStyle.SpriteEditor.SelectedPaletteColor
-                : EditorStyle.SpriteEditor.PaletteColor,
+            EditorStyle.SpriteEditor.PaletteColor,
             id: (byte)(FirstPaletteColorId + colorIndex)))
         {
+            if (selected)
+                UI.Container(EditorStyle.SpriteEditor.PaletteSelectedColor);
+
             var displayColor = color.A > 0 ? color : EditorStyle.SpriteEditor.UndefinedColor;
-            UI.Container(ContainerStyle.Default with
-            {
-                Color = displayColor,
-                Border = new BorderStyle { Radius = 6f }
-            });
+            UI.Container(EditorStyle.SpriteEditor.PaletteDisplayColor with { Color = displayColor });
 
             if (UI.WasPressed() && color.A > 0)
                 SetSelectionColor(colorIndex);

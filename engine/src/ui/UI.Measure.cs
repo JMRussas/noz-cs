@@ -53,9 +53,16 @@ public static partial class UI
     {
         var size = ResolveSize(in e, in p, e.Data.Container.Size);
 
-        if (e.Data.Container.Size.Width.Mode is SizeMode.Percent or SizeMode.Default)
+        // Only subtract margin when size resolves to Percent (filling parent space)
+        // Default resolves to Fit (not Percent) for width in Row, height in Column
+        var widthResolvesToPercent = e.Data.Container.Size.Width.Mode == SizeMode.Percent ||
+            (e.Data.Container.Size.Width.Mode == SizeMode.Default && p.Type != ElementType.Row);
+        var heightResolvesToPercent = e.Data.Container.Size.Height.Mode == SizeMode.Percent ||
+            (e.Data.Container.Size.Height.Mode == SizeMode.Default && p.Type != ElementType.Column);
+
+        if (widthResolvesToPercent)
             size.X -= e.Data.Container.Margin.Horizontal;
-        if (e.Data.Container.Size.Height.Mode is SizeMode.Percent or SizeMode.Default)
+        if (heightResolvesToPercent)
             size.Y -= e.Data.Container.Margin.Vertical;
 
         if (e.Data.Container.MinWidth > 0) size.X = Math.Max(size.X, e.Data.Container.MinWidth);

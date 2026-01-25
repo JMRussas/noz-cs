@@ -88,7 +88,7 @@ internal class AnimationEditor : DocumentEditor
         using (UI.BeginContainer(EditorStyle.AnimationEditor.Panel with { Width = panelWidth }))
         using (UI.BeginColumn())
         {
-            using (UI.BeginRow(EditorStyle.Toolbar.Root))
+            using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
             {
                 //DopeSheetButton("M", false, MirrorPose);
                 //UI.Flex();

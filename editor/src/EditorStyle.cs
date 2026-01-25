@@ -267,27 +267,34 @@ public static class EditorStyle
         public const float BorderWidth = 2.0f;
         public const int TextSize = 12;
         public const float ContentBorderRadius = 9f;
+        public const float VerticalSpacing = 4.0f;
         public static Color FillColor => _colors.Overlay.Fill;
         public static readonly Color TextColor = Color.White;
         public static Color AccentTextColor => _colors.Overlay.AccentText;
         public static Color DisabledTextColor => _colors.Overlay.DisabledText;
         public static Color IconColor => _colors.Overlay.Icon;
-        public static Color ContentColor => _colors.Overlay.Content;
+        public static readonly Color ContentColor = Color.FromRgb(0x232323);
         public static readonly ContainerStyle Root = new()
         {
             Color = FillColor,
-            Padding = EdgeInsets.Symmetric(Control.Spacing + BorderWidth, Control.Spacing * 2 + BorderWidth),
-            Border = new BorderStyle { Radius = BorderRadius, Width = BorderWidth, Color = Color.FromRgb(0x3d3d3d) }
+            Border = new BorderStyle { Radius = BorderRadius, Width = BorderWidth, Color = Color.FromRgb(0x3d3d3d) },
+            Padding = EdgeInsets.All(BorderWidth)
         };
-    }
 
-    // :toolbar
-    public static class Toolbar
-    {
-        public static readonly ContainerStyle Root = new()
+        public static readonly ContainerStyle Toolbar = new()
         {
+            Padding = EdgeInsets.LeftRight(Control.Spacing + BorderWidth),
+            Spacing = Control.Spacing,
             Height = Control.Height,
-            Spacing = Control.Spacing
+            Margin = EdgeInsets.Top(VerticalSpacing)
+        };
+
+        public static readonly ContainerStyle Content = new()
+        {
+            Color = ContentColor,
+            Spacing = Control.Spacing,
+            Margin = EdgeInsets.TopBottom(VerticalSpacing),
+            Padding = EdgeInsets.All(Control.Spacing)
         };
     }
 
@@ -526,8 +533,7 @@ public static class EditorStyle
             AlignY = Align.Max,
             Width = Size.Fit,
             Height = Size.Fit,
-            Margin = EdgeInsets.Bottom(Workspace.Padding),
-            Spacing = Control.Spacing
+            Margin = EdgeInsets.Bottom(Workspace.Padding)
         };
 
         public static readonly ContainerStyle ColorPicker = new()
@@ -546,13 +552,19 @@ public static class EditorStyle
         {
             Width = ColorSize,
             Height = ColorSize,
-            Padding = EdgeInsets.All(2.0f),
-            Border = new BorderStyle { Radius = 8f }
+            Padding = EdgeInsets.All(1.0f),
         };
 
-        public static readonly ContainerStyle SelectedPaletteColor = PaletteColor with
+        public static readonly ContainerStyle PaletteSelectedColor = new()
         {
-            Color = SelectionColor
+            Border = new BorderStyle { Radius = 8f },
+            Color = SelectionColor,
+            Margin = EdgeInsets.All(-1.5f),
+        };
+
+        public static readonly ContainerStyle PaletteDisplayColor = new()
+        {
+            Border = new BorderStyle { Radius = 6f }
         };
     }
 

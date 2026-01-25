@@ -123,7 +123,8 @@ public static partial class UI
         LogUI(e, $"Size: {e.Rect.Size}", depth: 1, values: [
             ( "Width", e.Data.Container.Size.Width, e.IsContainer ),
             ( "Height", e.Data.Container.Size.Height, e.IsContainer ),
-            ( "Padding", e.Data.Container.Padding, e.IsContainer && !e.Data.Container.Padding.IsZero )
+            ( "Padding", e.Data.Container.Padding, e.IsContainer && !e.Data.Container.Padding.IsZero ),
+            ( "Spacing", e.Data.Container.Spacing, e.IsContainer && e.Data.Container.Spacing > 0 )
             ]);
         LogUI(e, $"Position: ({e.Rect.X}, {e.Rect.Y})", depth: 1, values: [
             ( "Offset", offset + p.ContentRect.Position, offset + p.ContentRect.Position != Vector2.Zero ),
