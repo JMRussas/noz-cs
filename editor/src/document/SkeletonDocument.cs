@@ -560,7 +560,7 @@ public class SkeletonDocument : Document
                 {
                     var parentTransform = GetParentLocalToWorld(b, b.LocalToWorld);
                     var pp = Vector2.Transform(Vector2.Zero, parentTransform);
-                    Gizmos.SetColor(EditorStyle.Skeleton.BoneColor);
+                    Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
                     Gizmos.DrawDashedLine(pp, p0);
                 }
 

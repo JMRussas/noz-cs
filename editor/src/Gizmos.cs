@@ -13,7 +13,7 @@ public static class Gizmos
     private const float DashedLineSegmentLength = 0.1f;
     private const int MinCircleSegments = 8;
     private const int MaxCircleSegments = 64;
-    private const float MaxZoomRefScale = 1.0f;
+    private const float MaxZoomRefScale = 0.5f;
 
     public static float ZoomRefScale => MathF.Min(1f / Workspace.Zoom, MaxZoomRefScale);
 
@@ -157,7 +157,7 @@ public static class Gizmos
         ushort order = 0)
     {
         const int CircleSegments = 16;
-        const float OutlineScale = 1.3f;
+        
 
         var delta = end - start;
         var length = delta.Length();
@@ -168,28 +168,46 @@ public static class Gizmos
         var vertCount = 1 + CircleSegments + 1;
         var triCount = CircleSegments + 2;
 
-        Span<MeshVertex> verts = stackalloc MeshVertex[vertCount];
-        Span<ushort> indices = stackalloc ushort[triCount * 3];
-
         var dir = delta / length;
         var angle = MathF.Atan2(dir.Y, dir.X);
-        var topIdx = (ushort)(CircleSegments / 4 + 1);
-        var botIdx = (ushort)(3 * CircleSegments / 4 + 1);
-        var tipIdx = (ushort)(vertCount - 1);
+        var topIdx = CircleSegments / 4;
+        var botIdx = 3 * CircleSegments / 4;
+
+        // Calculate outline points
+        var angleStep = MathF.PI * 2f / CircleSegments;
+        Span<Vector2> circlePoints = stackalloc Vector2[CircleSegments];
+        for (var i = 0; i < CircleSegments; i++)
+        {
+            var a = i * angleStep + angle;
+            circlePoints[i] = start + new Vector2(MathF.Cos(a) * circleRadius, MathF.Sin(a) * circleRadius);
+        }
+
+        // Draw outline - circle arc from top to bottom (front half)
+        Graphics.SetColor(EditorStyle.Skeleton.BoneOriginColor);
+        for (var i = topIdx; i != botIdx; i = (i + 1) % CircleSegments)
+        {
+            var next = (i + 1) % CircleSegments;
+            DrawLine(circlePoints[i], circlePoints[next], EditorStyle.Skeleton.BoneOutlineWidth, order: order);
+        }
+
+        // Draw outline - lines to tip
+        DrawLine(circlePoints[topIdx], end, EditorStyle.Skeleton.BoneOutlineWidth, order: order);
+        DrawLine(circlePoints[botIdx], end, EditorStyle.Skeleton.BoneOutlineWidth, order: order);
+
+        // Build fill mesh
+        Span<MeshVertex> verts = stackalloc MeshVertex[vertCount];
+        Span<ushort> indices = stackalloc ushort[triCount * 3];
 
         Graphics.PushState();
         Graphics.SetTransform(Matrix3x2.CreateRotation(angle, start) * Graphics.Transform);
 
-        // Build outline mesh
-        var outlineRadius = circleRadius * OutlineScale;
         verts[0] = new MeshVertex { Position = start };
-        var angleStep = MathF.PI * 2f / CircleSegments;
         for (var i = 0; i < CircleSegments; i++)
         {
             var a = i * angleStep;
             verts[i + 1] = new MeshVertex
             {
-                Position = start + new Vector2(MathF.Cos(a) * outlineRadius, MathF.Sin(a) * outlineRadius)
+                Position = start + new Vector2(MathF.Cos(a) * circleRadius, MathF.Sin(a) * circleRadius)
             };
         }
         verts[vertCount - 1] = new MeshVertex { Position = start + new Vector2(length, 0) };
@@ -202,27 +220,12 @@ public static class Gizmos
         }
 
         var baseIdx = CircleSegments * 3;
-        indices[baseIdx + 0] = topIdx;
-        indices[baseIdx + 1] = tipIdx;
+        indices[baseIdx + 0] = (ushort)(topIdx + 1);
+        indices[baseIdx + 1] = (ushort)(vertCount - 1);
         indices[baseIdx + 2] = 0;
         indices[baseIdx + 3] = 0;
-        indices[baseIdx + 4] = tipIdx;
-        indices[baseIdx + 5] = botIdx;
-
-        Graphics.SetColor(EditorStyle.Skeleton.BoneOriginColor);
-        Graphics.AddTriangles(verts, indices, order);
-
-        // Build fill mesh
-        verts[0] = new MeshVertex { Position = start };
-        for (var i = 0; i < CircleSegments; i++)
-        {
-            var a = i * angleStep;
-            verts[i + 1] = new MeshVertex
-            {
-                Position = start + new Vector2(MathF.Cos(a) * circleRadius, MathF.Sin(a) * circleRadius)
-            };
-        }
-        verts[vertCount - 1] = new MeshVertex { Position = start + new Vector2(length, 0) };
+        indices[baseIdx + 4] = (ushort)(vertCount - 1);
+        indices[baseIdx + 5] = (ushort)(botIdx + 1);
 
         Graphics.SetColor(color);
         Graphics.AddTriangles(verts, indices, (ushort)(order + 1));

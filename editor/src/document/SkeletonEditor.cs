@@ -617,11 +617,11 @@ internal class SkeletonEditor : DocumentEditor
                 var p0 = Vector2.Transform(Vector2.Zero, b.LocalToWorld);
                 var p1 = Vector2.Transform(new Vector2(b.Length, 0), b.LocalToWorld);
 
-                Gizmos.SetColor(boneColor);
                 if (b.ParentIndex >= 0)
                 {
                     var parentTransform = Document.GetParentLocalToWorld(b, b.LocalToWorld);
                     var pp = Vector2.Transform(Vector2.Zero, parentTransform);
+                    Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
                     Gizmos.DrawDashedLine(pp, p0);
                 }
 
