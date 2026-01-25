@@ -16,9 +16,9 @@ internal class AtlasEditor : DocumentEditor
         [
             new Command { Name = "Rebuild Atlas", ShortName = "rebuild", Handler = RebuildAtlas, Key = InputCode.KeyR, Ctrl = true }
         ];
-    }
 
-    public override Command[]? GetCommands() => _commands;
+        Commands = _commands;
+    }
 
     public override void Update()
     {

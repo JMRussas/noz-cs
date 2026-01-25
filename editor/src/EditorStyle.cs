@@ -91,36 +91,57 @@ public static class EditorStyle
         {
             AlignX = Align.Center,
             AlignY = Align.Center,
-            Padding = EdgeInsets.All(12.0f),
+            Padding = EdgeInsets.Symmetric(8.0f, 4.0f),
             Color = Popup.FillColor,
-            Border = new BorderStyle { Radius = 10.0f }
+            Border = new BorderStyle { Radius = 10.0f, Width = 1.0f, Color = Color.FromRgb(0x272727) }
         };
         public readonly static ContainerStyle Item = new()
         {
-            Height = 20.0f
+            Height = 19.0f,
+            Width = Size.Fit,
+            Spacing = Control.Spacing
+        };
+        public readonly static ContainerStyle TitleItem = Item with 
+        {
+            Padding = EdgeInsets.LeftRight(4.0f)
         };
         public readonly static ContainerStyle Separator = new() { 
             Height = 1,
-            Margin = EdgeInsets.TopBottom(1),
+            Margin = EdgeInsets.Symmetric(2, 4),
             Color = Color.FromRgb(0x2f2f2f)
         };
         public readonly static LabelStyle Title = new()
         {
             FontSize = Control.TextSize,
+            AlignX = Align.Min,
+            AlignY = Align.Center,
             Color = Color.FromRgb(0x999999),
         };
         public readonly static LabelStyle Text = new()
         {
             FontSize = Control.TextSize,
-            Color = Color.FromRgb(0xdddddd),
+            Color = Color.FromRgb(0xdcdcdc),
             AlignX = Align.Min,
             AlignY = Align.Center
+        };
+        public readonly static LabelStyle DisabledText = Text with { Color = Color.FromRgb(0x727272) };
+        public static readonly ContainerStyle IconContainer = new()
+        {
+            Width = Item.Height,
+            Height = Item.Height,
+            Padding = EdgeInsets.All(4f),
+        };
+        public static readonly ImageStyle Icon = new()
+        {
+            Color = Color.FromRgb(0x868686),
+            AlignX = Align.Center,
+            AlignY = Align.Center,
         };
     }
 
     public static class Control
     {
-        public const float TextSize = 10.0f;
+        public const float TextSize = 11.0f;
         public const float Height = 20.0f;
         public const float BorderRadius = 6.0f;
         public const float Spacing = 5.0f;
@@ -338,37 +359,34 @@ public static class EditorStyle
             Border = new BorderStyle { Radius = 4f }
         };
 
-        public static readonly LabelStyle Text = Control.Text.WithColor(Control.PlaceholderTextColor);
+        public static readonly LabelStyle Text = Popup.Text with { Color = Color.FromRgb(0x767676) };
     }
 
+    // :contextmenu
     public static class ContextMenu
     {
-        public const int MinWidth = 100;
         public const int TextSize = 12;
         public const float SeparatorHeight = 2f;
         public const float SeparatorSpacing = 12f;
         public static Color TitleColor => _colors.ContextMenuTitleColor;
         public static Color SeparatorColor => _colors.ContextMenuSeparatorColor;
         public static readonly ContainerStyle Menu = Popup.Root with {
+            Size = Size2.Fit,
             AlignX = Align.Min,
-            AlignY = Align.Min
+            AlignY = Align.Min,            
         };
 
-        public static readonly ContainerStyle ItemLeft = ContainerStyle.Default with 
+        public static readonly ContainerStyle Item = Popup.Item with
         {
-            Width = 120f,
+            Width = Size.Default,
+            MinWidth = 140.0f,
+            Spacing = 0.0f,
+            Padding = EdgeInsets.LeftRight(4.0f, 4.0f)
         };
 
         public static readonly ContainerStyle ItemRight = ContainerStyle.Default with
         {
             Width = 120f
-        };
-
-        public static readonly ContainerStyle IconContainer = new()
-        {
-            Width = Popup.Item.Height,
-            Height = Popup.Item.Height,
-            Padding = EdgeInsets.All(4f),
         };
     }
 

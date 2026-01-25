@@ -691,7 +691,7 @@ public static partial class UI
 
     public static void EndGrid() => EndElement(ElementType.Grid);
 
-    public static AutoPopup BeginPopup(PopupStyle style)
+    public static AutoPopup BeginPopup(PopupStyle style, ElementId id = default)
     {
         ref var e = ref CreateElement(ElementType.Popup);
         e.Data.Popup = new PopupData
@@ -704,6 +704,7 @@ public static partial class UI
             ClampToScreen = style.ClampToScreen,
             AnchorRect = style.AnchorRect
         };
+        SetId(ref e, _currentCanvasId, id);
         PushElement(e.Index);
         _popups[_popupCount++] = e.Index;
         return new AutoPopup();

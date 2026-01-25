@@ -6,36 +6,46 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
+public struct ContextMenuDef(ContextMenuItem[] items, string? title = null, Sprite? icon = null)
+{
+    public string? Title = title;
+    public Sprite? Icon = icon;
+    public ContextMenuItem[] Items = items;
+
+    public static implicit operator ContextMenuDef(ContextMenuItem[] items) => new(items);
+}
+
 public struct ContextMenuItem
 {
     public string? Label;
     public Action? Handler;
-    public bool Enabled;
     public int Level;
     public InputCode Key;
     public bool Ctrl;
     public bool Alt;
     public bool Shift;
+    public Sprite? Icon;
+    public Func<bool>? GetEnabled;
+    public Func<bool>? GetChecked;
 
-    public static ContextMenuItem Item(string label, Action handler, InputCode key = InputCode.None, bool ctrl = false, bool alt = false, bool shift = false, int level = 0) =>
-        new() { Label = label, Handler = handler, Enabled = true, Level = level, Key = key, Ctrl = ctrl, Alt = alt, Shift = shift };
+    public readonly bool IsEnabled => GetEnabled?.Invoke() ?? true;
+    public readonly bool IsChecked => GetChecked?.Invoke() ?? false;
+
+    public static ContextMenuItem Item(string label, Action handler, InputCode key = InputCode.None, bool ctrl = false, bool alt = false, bool shift = false, int level = 0, Func<bool>? enabled = null, Func<bool>? isChecked = null) =>
+        new() { Label = label, Handler = handler, Level = level, Key = key, Ctrl = ctrl, Alt = alt, Shift = shift, GetEnabled = enabled, GetChecked = isChecked };
 
     public static ContextMenuItem Submenu(string label, int level = 0) =>
-        new() { Label = label, Handler = null, Enabled = true, Level = level };
+        new() { Label = label, Handler = null, Level = level };
 
     public static ContextMenuItem Separator(int level = 0) =>
-        new() { Label = null, Handler = null, Enabled = true, Level = level };
+        new() { Label = null, Handler = null, Level = level };
 
-    public static ContextMenuItem Disabled(string label, int level = 0) =>
-        new() { Label = label, Handler = null, Enabled = false, Level = level };
-
-    public static ContextMenuItem FromCommand(Command cmd, int level = 0) =>
-        new() { Label = cmd.Name, Handler = cmd.Handler, Enabled = true, Level = level, Key = cmd.Key, Ctrl = cmd.Ctrl, Alt = cmd.Alt, Shift = cmd.Shift };
+    public static ContextMenuItem FromCommand(Command cmd, int level = 0, Func<bool>? enabled = null, Func<bool>? isChecked = null) =>
+        new() { Label = cmd.Name, Handler = cmd.Handler, Level = level, Key = cmd.Key, Ctrl = cmd.Ctrl, Alt = cmd.Alt, Shift = cmd.Shift, GetEnabled = enabled, GetChecked = isChecked };
 }
 
 public static class ContextMenu
 {
-    private static readonly ElementId CloseId = 1;
     private static readonly ElementId MenuIdStart = 10;
     private static readonly ElementId ItemIdStart = 20;
     private const int MaxItems = 64;
@@ -62,6 +72,11 @@ public static class ContextMenu
         _items = null;
         _itemCount = 0;
         _title = null;
+    }
+
+    public static void Open(ContextMenuDef def)
+    {
+        Open(def.Items, def.Title);
     }
 
     public static void Open(ContextMenuItem[] items, string? title = null)
@@ -132,15 +147,12 @@ public static class ContextMenu
 
         Action? executed = null;
 
+        var shouldClose = false;
+
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.ContextMenu))
         {
-            // Close if clicked outside
-            using (UI.BeginContainer(id: CloseId))
-                if (UI.WasPressed())
-                    Close();
-
             // Render root menu at click position
-            MenuUI(0, -1, new Rect(_position, Vector2.Zero), 0, ref executed);
+            MenuUI(0, -1, new Rect(_position, Vector2.Zero), 0, ref executed, ref shouldClose);
 
             // Render open submenus
             for (var level = 0; level < MaxSubmenuDepth; level++)
@@ -177,11 +189,16 @@ public static class ContextMenu
                 }
 
                 // Submenu Y offset is relative to anchor rect
-                MenuUI(level + 1, parentIndex, anchorRect, itemY - parentMenuRect.Y, ref executed);
+                MenuUI(level + 1, parentIndex, anchorRect, itemY - parentMenuRect.Y, ref executed, ref shouldClose);
             }
         }
 
-        if (executed != null)
+        if (shouldClose)
+        {
+            Input.ConsumeButton(InputCode.MouseLeft);
+            Close();
+        }
+        else if (executed != null)
         {
             Close();
             executed();
@@ -194,133 +211,123 @@ public static class ContextMenu
         return _items![index + 1].Level > _items[index].Level;
     }
 
-    private static float MenuUI(int level, int parentIndex, Rect anchorRect, float itemOffset, ref Action? executed)
+    private static float MenuUI(int level, int parentIndex, Rect anchorRect, float itemOffset, ref Action? executed, ref bool shouldClose)
     {
         var startIndex = level == 0 ? 0 : parentIndex + 1;
         var parentLevel = level == 0 ? -1 : _items![parentIndex].Level;
 
-        UI.BeginPopup(new PopupStyle
+        using (UI.BeginPopup(new PopupStyle
         {
             Margin = EdgeInsets.Top(itemOffset),
             ClampToScreen = true,
             AnchorRect = anchorRect
-        });
-        using (UI.BeginContainer(
-            style: EditorStyle.ContextMenu.Menu with { Size = Size2.Fit },
-            id: (byte)(MenuIdStart + level)))
-        using (UI.BeginColumn(new ContainerStyle { Size = Size2.Fit }))
+        }, id: (byte)(MenuIdStart + level)))
         {
-            if (level == 0 && _title != null)
-            { 
-                using (UI.BeginContainer(EditorStyle.Popup.Item))
-                    UI.Label(_title, EditorStyle.Popup.Title);
-                UI.Container(EditorStyle.Popup.Separator);
-            }
+            if (UI.IsClosed())
+                shouldClose = true;
 
-            for (var index = startIndex; index < _itemCount; index++)
+            using (UI.BeginContainer(EditorStyle.ContextMenu.Menu))
+            using (UI.BeginColumn(ContainerStyle.Fit))
             {
-                ref var item = ref _items![index];
-                if (item.Level <= parentLevel) break;
-                if (item.Level != parentLevel + 1) continue;
-                if (item.Label == null)
+                if (level == 0 && _title != null)
                 {
+                    using (UI.BeginContainer(EditorStyle.Popup.TitleItem))
+                        UI.Label(_title, EditorStyle.Popup.Title);
+                    UI.Spacer(EditorStyle.Control.Spacing);
                     UI.Container(EditorStyle.Popup.Separator);
-                    continue;
                 }
 
-                var hasChildren = HasChildren(index);
-                var isSubmenuOpen = level < MaxSubmenuDepth && _openSubmenu[level] == index;
-
-                using (UI.BeginContainer(EditorStyle.Popup.Item, id: (byte)(ItemIdStart + index)))
+                for (var index = startIndex; index < _itemCount; index++)
                 {
-                    var hovered = UI.IsHovered() && item.Enabled;
-                    if (hovered || isSubmenuOpen)
-                        UI.Container(new ContainerStyle
-                        {
-                            Margin = EdgeInsets.LeftRight(-4),
-                            Color = EditorStyle.SelectionColor
-                        });
-
-                    using (UI.BeginRow(ContainerStyle.Default))
+                    ref var item = ref _items![index];
+                    if (item.Level <= parentLevel) break;
+                    if (item.Level != parentLevel + 1) continue;
+                    if (item.Label == null)
                     {
-                        using (UI.BeginContainer(EditorStyle.ContextMenu.IconContainer))
-                            UI.Image(EditorAssets.Sprites.AssetIconEvent, ImageStyle.Center);
+                        UI.Container(EditorStyle.Popup.Separator);
+                        continue;
+                    }
 
-                        using (UI.BeginContainer(EditorStyle.ContextMenu.ItemLeft))
-                            UI.Label(item.Label, new LabelStyle
+                    var hasChildren = HasChildren(index);
+                    var isSubmenuOpen = level < MaxSubmenuDepth && _openSubmenu[level] == index;
+
+                    using (UI.BeginContainer(EditorStyle.Popup.Item, id: (byte)(ItemIdStart + index)))
+                    {
+                        var enabled = item.IsEnabled;
+                        var hovered = UI.IsHovered() && enabled;
+                        if (hovered || isSubmenuOpen)
+                            UI.Container(new ContainerStyle
                             {
-                                FontSize = EditorStyle.ContextMenu.TextSize,
-                                Color = !item.Enabled
-                                    ? EditorStyle.Overlay.DisabledTextColor
-                                    : (hovered || isSubmenuOpen)
-                                        ? EditorStyle.Overlay.AccentTextColor
-                                        : EditorStyle.Overlay.TextColor,
-                                AlignX = Align.Min,
-                                AlignY = Align.Center
+                                Color = EditorStyle.SelectionColor
                             });
 
-                        // Submenu arrow or shortcut
-                        using (UI.BeginContainer(EditorStyle.ContextMenu.ItemRight))
+                        using (UI.BeginRow(EditorStyle.ContextMenu.Item))
                         {
+                            using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
+                            {
+                                if (item.IsChecked)
+                                    UI.Label("\u2713", EditorStyle.Popup.Text);
+                                else if (item.Icon != null)
+                                    UI.Image(item.Icon, style: EditorStyle.Popup.Icon);
+                            }
+                            UI.Spacer(EditorStyle.Control.Spacing);
+
+                            UI.Label(item.Label, enabled ? EditorStyle.Popup.Text : EditorStyle.Popup.DisabledText);
+                            UI.Spacer(EditorStyle.Control.Spacing);
+                            UI.Flex();
+
+                            // Submenu arrow or shortcut
                             if (hasChildren)
                             {
-                                UI.Label(">", new LabelStyle
-                                {
-                                    FontSize = EditorStyle.ContextMenu.TextSize,
-                                    Color = !item.Enabled
-                                        ? EditorStyle.Overlay.DisabledTextColor
-                                        : (hovered || isSubmenuOpen)
-                                            ? EditorStyle.Overlay.AccentTextColor
-                                            : EditorStyle.Overlay.TextColor,
-                                    AlignX = Align.Min,
-                                    AlignY = Align.Center
-                                });
+                                UI.Spacer(EditorStyle.Control.Spacing);
+                                using (UI.BeginContainer(EditorStyle.Popup.IconContainer with { Padding = EdgeInsets.TopBottom(EditorStyle.Popup.IconContainer.Padding.T) }))
+                                    UI.Image(EditorAssets.Sprites.IconSubmenu, style: EditorStyle.Popup.Icon with { AlignX = Align.Max});
                             }
                             else if (item.Key != InputCode.None)
                             {
-                                EditorUI.Shortcut(item.Key, item.Ctrl, item.Alt, item.Shift, selected: hovered, align: Align.Max);
+                                UI.Spacer(EditorStyle.Control.Spacing);
+                                EditorUI.Shortcut(item.Key, item.Ctrl, item.Alt, item.Shift, selected: hovered, align: Align.Min);
                             }
                         }
-                    }
 
-                    if (UI.WasPressed() && item.Enabled)
-                    {
-                        if (hasChildren)
+                        if (UI.WasPressed() && item.IsEnabled)
                         {
-                            // Toggle submenu
-                            if (isSubmenuOpen)
-                                _openSubmenu[level] = -1;
+                            if (hasChildren)
+                            {
+                                // Toggle submenu
+                                if (isSubmenuOpen)
+                                    _openSubmenu[level] = -1;
+                                else
+                                    _openSubmenu[level] = index;
+
+                                // Close any deeper submenus
+                                for (var l = level + 1; l < MaxSubmenuDepth; l++)
+                                    _openSubmenu[l] = -1;
+                            }
                             else
+                            {
+                                executed = item.Handler;
+                            }
+                        }
+
+                        // Open submenu on hover (after a parent is clicked open)
+                        if (hovered && hasChildren && item.IsEnabled)
+                        {
+                            if (_openSubmenu[level] >= 0 && _openSubmenu[level] != index)
+                            {
                                 _openSubmenu[level] = index;
-
-                            // Close any deeper submenus
-                            for (var l = level + 1; l < MaxSubmenuDepth; l++)
-                                _openSubmenu[l] = -1;
-                        }
-                        else
-                        {
-                            executed = item.Handler;
-                        }
-                    }
-
-                    // Open submenu on hover (after a parent is clicked open)
-                    if (hovered && hasChildren && item.Enabled)
-                    {
-                        if (_openSubmenu[level] >= 0 && _openSubmenu[level] != index)
-                        {
-                            _openSubmenu[level] = index;
-                            for (var l = level + 1; l < MaxSubmenuDepth; l++)
-                                _openSubmenu[l] = -1;
+                                for (var l = level + 1; l < MaxSubmenuDepth; l++)
+                                    _openSubmenu[l] = -1;
+                            }
                         }
                     }
                 }
             }
         }
-        UI.EndPopup();
 
         var menuRect = UI.GetElementRect(EditorStyle.CanvasId.ContextMenu, (byte)(MenuIdStart + level));
         return menuRect.Width > 0
             ? menuRect.Width
-            : EditorStyle.ContextMenu.MinWidth; //  + EditorStyle.Overlay.Padding * 2;
+            : 100.0f;  //  EditorStyle.ContextMenu.MinWidth; //  + EditorStyle.Overlay.Padding * 2;
     }
 }

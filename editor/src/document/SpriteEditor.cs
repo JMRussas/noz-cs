@@ -28,8 +28,6 @@ public class SpriteEditor : DocumentEditor
     private bool _showTiling;
     private bool _showPalettes;
 
-    private readonly Command[] _commands;
-
     public SpriteEditor(SpriteDocument document) : base(document)
     {
         _rasterTexture = Texture.Create(
@@ -40,25 +38,35 @@ public class SpriteEditor : DocumentEditor
             TextureFilter.Point,
             "SpriteEditor");
 
-        _commands =
+        var deleteCommand = new Command { Name = "Delete", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX };
+     
+        Commands =
         [
             new Command { Name = "Toggle Playback", ShortName = "play", Handler = TogglePlayback, Key = InputCode.KeySpace },
             new Command { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
             new Command { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
-            new Command { Name = "Delete", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
             new Command { Name = "Move", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
             new Command { Name = "Rotate", ShortName = "rotate", Handler = BeginRotateTool, Key = InputCode.KeyR },
             new Command { Name = "Scale", ShortName = "scale", Handler = BeginScaleTool, Key = InputCode.KeyS },
+            deleteCommand,
             new Command { Name = "Curve", ShortName = "curve", Handler = BeginCurveTool, Key = InputCode.KeyC },
+            new Command { Name = "Center", ShortName = "center", Handler = CenterShape, Key = InputCode.KeyC, Shift = true },
+            new Command { Name = "Select All", ShortName = "all", Handler = SelectAll, Key = InputCode.KeyA },
             new Command { Name = "Insert Anchor", ShortName = "insert", Handler = InsertAnchorAtHover, Key = InputCode.KeyV },
             new Command { Name = "Pen Tool", ShortName = "pen", Handler = BeginPenTool, Key = InputCode.KeyP },
             new Command { Name = "Knife Tool", ShortName = "knife", Handler = BeginKnifeTool, Key = InputCode.KeyK },
             new Command { Name = "Parent to Bone", ShortName = "parent", Handler = BeginParentTool, Key = InputCode.KeyB },
             new Command { Name = "Clear Parent", ShortName = "unparent", Handler = ClearParent, Key = InputCode.KeyB, Alt = true },
         ];
-    }
 
-    public override Command[]? GetCommands() => _commands;
+        ContextMenu = new ContextMenuDef
+        {
+            Title = "Sprite",
+            Items = [
+                ContextMenuItem.FromCommand(deleteCommand, enabled: () => Document.GetFrame(_currentFrame).Shape.HasSelection())
+            ]
+        };  
+    }
 
     // Selection
     private byte _selectionColor;
@@ -411,6 +419,27 @@ public class SpriteEditor : DocumentEditor
         Document.MarkModified();
         Document.UpdateBounds();
         MarkRasterDirty();
+    }
+
+    private void CenterShape()
+    {
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        if (shape.AnchorCount == 0)
+            return;
+
+        Undo.Record(Document);
+        shape.CenterOnOrigin();
+        Document.MarkModified();
+        Document.UpdateBounds();
+        MarkRasterDirty();
+    }
+
+    private void SelectAll()
+    {
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort i = 0; i < shape.AnchorCount; i++)
+            shape.SetAnchorSelected(i, true);
+        UpdateSelectionColorFromSelection();
     }
 
     private void UpdateAnimation()

@@ -8,8 +8,9 @@ public abstract class DocumentEditor(Document document) : IDisposable
 {
     public Document Document { get; } = document;
 
-    public virtual Command[]? GetCommands() => null;
-    public virtual ContextMenuItem[]? GetContextMenuItems() => null;
+    public Command[]? Commands { get; protected set; }
+    public ContextMenuDef? ContextMenu { get; protected set; }
+
     public virtual void Update() { }
     public virtual void UpdateUI() { }
     public virtual void LateUpdate() { }

@@ -181,6 +181,8 @@ public static class CommandPalette
 
         foreach (var cmd in CommandManager.GetActiveCommands())
         {
+            if (cmd == null) continue;
+
             if (_filteredCount >= MaxFilteredCommands)
                 break;
 
@@ -191,6 +193,8 @@ public static class CommandPalette
                 _filteredCommands[_filteredCount++] = cmd;
             }
         }
+        
+        _filteredCommands.AsSpan(0, _filteredCount).Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a!.Name, b!.Name));
     }
 
     private static void ScrollToSelection()

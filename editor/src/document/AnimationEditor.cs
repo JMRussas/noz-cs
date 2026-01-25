@@ -57,11 +57,10 @@ internal class AnimationEditor : DocumentEditor
             new Command { Name = "Mirror Pose", ShortName = "mirror", Handler = MirrorPose, Key = InputCode.KeyM },
         ];
 
+        Commands = _commands;
         ClearSelection();
         Document.UpdateTransforms();
     }
-
-    public override Command[]? GetCommands() => _commands;
 
     public override void Update()
     {

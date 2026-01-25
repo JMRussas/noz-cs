@@ -1088,6 +1088,29 @@ public sealed unsafe partial class Shape : IDisposable
         RasterBounds = RectInt.Zero;
     }
 
+    public void CenterOnOrigin()
+    {
+        if (AnchorCount == 0)
+            return;
+
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+
+        for (ushort i = 0; i < AnchorCount; i++)
+        {
+            min = Vector2.Min(min, _anchors[i].Position);
+            max = Vector2.Max(max, _anchors[i].Position);
+        }
+
+        var center = (min + max) * 0.5f;
+
+        for (ushort i = 0; i < AnchorCount; i++)
+            _anchors[i].Position -= center;
+
+        UpdateSamples();
+        UpdateBounds();
+    }
+
     public void SplitPathAtAnchors(
         ushort pathIndex,
         ushort anchor1,

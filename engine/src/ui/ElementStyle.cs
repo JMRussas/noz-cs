@@ -52,6 +52,7 @@ public struct ContainerStyle()
     };
 
     public static readonly ContainerStyle Default = new();
+    public static readonly ContainerStyle Fit = new() { Size = Size2.Fit };
 }
 
 public struct LabelStyle()

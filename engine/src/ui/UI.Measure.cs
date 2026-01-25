@@ -226,6 +226,7 @@ public static partial class UI
         ElementType.Row => FitContainer(in e, in p),
         ElementType.Popup => FitPopup(in e, in p),
         ElementType.Label => FitLabel(in e, in p),
+        ElementType.Spacer => e.Data.Spacer.Size,
         _ => Vector2.Zero
     };
 }

@@ -20,7 +20,7 @@ public static class Workspace
             Importer.QueueImport(doc, true);
     }
 
-    private static ContextMenuItem[] BuildWorkspaceContextMenu()
+    private static ContextMenuDef BuildWorkspaceContextMenu()
     {
         var items = new List<ContextMenuItem>();
 
@@ -42,7 +42,7 @@ public static class Workspace
         items.Add(ContextMenuItem.Separator());
         items.Add(ContextMenuItem.Item("Rebuild All", RebuildAll, alt: true, ctrl: true, shift: true, key: InputCode.KeyA));
 
-        return items.ToArray();
+        return new ContextMenuDef(items.ToArray(), "Asset");
     }
 
     private static void CreateNewDocument(AssetType assetType)
@@ -89,7 +89,7 @@ public static class Workspace
             new Command { Name = "Play/Stop", ShortName = "play]", Handler = Play, Key = InputCode.KeySpace },
         ]);
 
-        _workspaceContextMenuItems = BuildWorkspaceContextMenu();
+        _workspaceContextMenu = BuildWorkspaceContextMenu();
     }
 
     private const float ZoomMin = 0.01f;
@@ -124,8 +124,7 @@ public static class Workspace
     private static Document? _activeDocument;
     private static DocumentEditor? _activeEditor;
     private static Texture? _whiteTexture;
-    private static ContextMenuItem[]? _contextMenuItems;
-    private static ContextMenuItem[] _workspaceContextMenuItems = [];
+    private static ContextMenuDef _workspaceContextMenu;
 
     public static Camera Camera => _camera;
     public static float Zoom => _zoom;
@@ -224,6 +223,9 @@ public static class Workspace
                 UpdateDefaultState();
                 UpdateToolAutoStart();
             }
+
+            if (Input.WasButtonReleased(InputCode.MouseRight) && !_wasDragging)
+                OpenContextMenu();
 
             ActiveTool?.Update();
         }
@@ -710,8 +712,7 @@ public static class Workspace
         doc.IsEditing = true;
         State = WorkspaceState.Edit;
 
-        CommandManager.RegisterEditor(_activeEditor.GetCommands());
-        SetContextMenuItems(_activeEditor.GetContextMenuItems());
+        CommandManager.RegisterEditor(_activeEditor.Commands);
     }
 
     public static void EndEdit()
@@ -720,7 +721,6 @@ public static class Workspace
             return;
 
         CommandManager.RegisterEditor(null);
-        SetContextMenuItems(null);
 
         _activeEditor?.Dispose();
         _activeEditor = null;
@@ -786,25 +786,19 @@ public static class Workspace
         {
             ClearSelection();
         }
-
-        if (Input.WasButtonReleased(InputCode.MouseRight) && !_wasDragging)
-            OpenContextMenu("Asset");
     }
 
-    private static void OpenContextMenu(string? title=null)
+    private static void OpenContextMenu()
     {
-        var items = GetContextMenuItems();
-        if (items != null && items.Length > 0)
-            ContextMenu.Open(items, title: title);
+        var menu = GetContextMenu();
+        if (menu != null && menu.Value.Items.Length > 0)
+            ContextMenu.Open(menu.Value);
     }
 
-    public static ContextMenuItem[]? GetContextMenuItems()
+    public static ContextMenuDef? GetContextMenu()
     {
-        return _contextMenuItems ?? _workspaceContextMenuItems;
-    }
-
-    public static void SetContextMenuItems(ContextMenuItem[]? items)
-    {
-        _contextMenuItems = items;
+        if (_activeEditor != null)
+            return _activeEditor.ContextMenu;
+        return _workspaceContextMenu;
     }
 }

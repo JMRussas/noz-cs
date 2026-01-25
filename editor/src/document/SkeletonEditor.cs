@@ -37,10 +37,9 @@ internal class SkeletonEditor : DocumentEditor
             new Command { Name = "Reset Translation", ShortName = "resettrans", Handler = ResetTranslation, Key = InputCode.KeyG, Alt = true },
         ];
 
+        Commands = _commands;
         ClearSelection();
     }
-
-    public override Command[]? GetCommands() => _commands;
 
     public override void OnUndoRedo()
     {

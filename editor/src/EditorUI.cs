@@ -19,20 +19,11 @@ internal static class EditorUI
         using (UI.BeginRow(EditorStyle.Shortcut.ListContainer with { AlignX = align}))
         {
             if (ctrl)
-            {
                 ShortcutText(InputCode.KeyLeftCtrl, selected);
-                ShortcutText("+", selected);
-            }
             if (alt)
-            {
                 ShortcutText(InputCode.KeyLeftAlt, selected);
-                ShortcutText("+", selected);
-            }
             if (shift)
-            {
                 ShortcutText(InputCode.KeyLeftShift, selected);
-                ShortcutText("+", selected);
-            }
             ShortcutText(code, selected);
         }
     }
