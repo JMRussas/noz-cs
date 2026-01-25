@@ -137,7 +137,8 @@ public static class Input
                     }
                 }
 
-                if (evt.ClickCount == 2 && evt.MouseButton == InputCode.MouseLeft &&
+                if (evt.ClickCount == 2 &&
+                    evt.MouseButton == InputCode.MouseLeft &&
                     !Buttons[(int)InputCode.MouseLeftDoubleClick].Consumed)
                     Buttons[(int)InputCode.MouseLeftDoubleClick].Pressed = true;
                 break;

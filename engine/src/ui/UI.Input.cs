@@ -11,26 +11,29 @@ namespace NoZ;
 
 public static partial class UI
 {
-    private static ElementId _pressedElementId;
+    private static ElementId _mouseLeftElementId;
+    private static ElementId _mouseDoubleClickElementId;
     private static bool _mouseLeftPressed;
+    private static bool _mouseLeftDown;
+    private static bool _mouseLeftDoubleClickPressed;
     private static Vector2 _mousePosition;
 
     private static void HandleInput()
     {
-        var mouse = Camera!.ScreenToWorld(Input.MousePosition);
-        var mouseLeftPressed = Input.WasButtonPressedRaw(InputCode.MouseLeft);
-        var buttonDown = Input.IsButtonDownRaw(InputCode.MouseLeft);
-
+        var mouse = Camera!.ScreenToWorld(Input.MousePosition);        
         _mousePosition = mouse;
-        _mouseLeftPressed = mouseLeftPressed;
-        _pressedElementId = ElementId.None;
+        _mouseLeftPressed = Input.WasButtonPressedRaw(InputCode.MouseLeft);
+        _mouseLeftDown = Input.IsButtonDownRaw(InputCode.MouseLeft);
+        _mouseLeftDoubleClickPressed = Input.WasButtonPressedRaw(InputCode.MouseLeftDoubleClick);
+        _mouseLeftElementId = ElementId.None;
+        _mouseDoubleClickElementId = ElementId.None;
         _hotCanvasId = ElementId.None;
 
         LogUI("Input:", values: [("HotCanvasId", _hotCanvasId, true)]);
 
         // Handle popup close detection
         _closePopups = false;
-        if (mouseLeftPressed && _popupCount > 0)
+        if (_mouseLeftPressed && _popupCount > 0)
         {
             var clickInsidePopup = false;
             for (var i = 0; i < _popupCount; i++)
@@ -56,22 +59,20 @@ public static partial class UI
             ref var cid = ref _activeCanvasIds[c];
             ref var cs = ref GetCanvasState(cid);
             var isHotCanvas = cid == _hotCanvasId;
-            HandleCanvasInput(cid, mouse, mouseLeftPressed, buttonDown, isHotCanvas);
+            HandleCanvasInput(cid, mouse, isHotCanvas);
         }
 
-        if (_pressedElementId != ElementId.None)
+        if (_mouseLeftElementId != ElementId.None)
             Input.ConsumeButton(InputCode.MouseLeft);
 
-        HandleScrollableDrag(mouse, buttonDown, mouseLeftPressed);
+        if (_mouseDoubleClickElementId != ElementId.None)
+            Input.ConsumeButton(InputCode.MouseLeftDoubleClick);
+
+        HandleScrollableDrag(mouse);
         HandleMouseWheelScroll(mouse);
     }
 
-    private static void HandleCanvasInput(
-        CanvasId canvasId,
-        Vector2 mouse,
-        bool mouseLeftPressed,
-        bool buttonDown,
-        bool isHotCanvas)
+    private static void HandleCanvasInput(CanvasId canvasId, Vector2 mouse, bool isHotCanvas)
     {
         ref var cs = ref _canvasStates[canvasId];
         ref var c = ref _elements[cs.ElementIndex];
@@ -92,12 +93,20 @@ public static partial class UI
             var mouseOver = new Rect(0, 0, e.Rect.Width, e.Rect.Height).Contains(localMouse);
 
             es.SetFlags(ElementFlags.Hovered, mouseOver ? ElementFlags.Hovered : ElementFlags.None);
-            es.SetFlags(ElementFlags.Down, mouseOver && buttonDown ? ElementFlags.Down : ElementFlags.None);
+            es.SetFlags(ElementFlags.Down, mouseOver && _mouseLeftDown ? ElementFlags.Down : ElementFlags.None);
 
-            if (mouseOver && mouseLeftPressed && _pressedElementId == ElementId.None)
+            if (mouseOver && _mouseLeftDoubleClickPressed && _mouseDoubleClickElementId == ElementId.None)
+            {
+                _mouseDoubleClickElementId = e.Id;
+                es.SetFlags(ElementFlags.DoubleClick, ElementFlags.DoubleClick);
+            }
+            else
+                es.SetFlags(ElementFlags.DoubleClick, ElementFlags.None);
+
+            if (mouseOver && _mouseLeftPressed && _mouseLeftElementId == ElementId.None)
             {
                 es.SetFlags(ElementFlags.Pressed, ElementFlags.Pressed);
-                _pressedElementId = e.Id;
+                _mouseLeftElementId = e.Id;
                 _pendingFocusId = e.Id;
                 _pendingFocusCanvasId = canvasId;
             }
@@ -108,9 +117,9 @@ public static partial class UI
         }
     }
 
-    private static void HandleScrollableDrag(Vector2 mouse, bool buttonDown, bool mouseLeftPressed)
+    private static void HandleScrollableDrag(Vector2 mouse)
     {
-        if (!buttonDown)
+        if (!_mouseLeftDown)
         {
             _activeScrollId = ElementId.None;
         }
@@ -137,7 +146,7 @@ public static partial class UI
                 }
             }
         }
-        else if (mouseLeftPressed)
+        else if (_mouseLeftPressed)
         {
             for (var i = _elementCount; i > 0; i--)
             {

@@ -273,6 +273,11 @@ public static class Workspace
         Workspace.ActiveEditor?.UpdateUI();
     }
 
+    public static void LateUpdate()
+    {
+        Workspace.ActiveEditor?.LateUpdate();
+    }
+
     private static void UpdateCulling()
     {
         var cameraBounds = _camera.WorldBounds;

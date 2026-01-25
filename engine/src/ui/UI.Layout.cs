@@ -36,6 +36,8 @@ public static partial class UI
         var sizeOverride = e.ContentRect.Size;
         sizeOverride[axis] = AutoSize.X;
 
+        // First pass: layout non-flex children, spacing only between adjacent non-flex elements
+        var prevWasNonFlex = false;
         var elementIndex = e.Index + 1;
         for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
         {
@@ -43,15 +45,20 @@ public static partial class UI
             if (child.Type == ElementType.Flex)
             {
                 flexTotal += child.Data.Flex.Flex;
+                prevWasNonFlex = false;
                 elementIndex = child.NextSiblingIndex;
                 continue;
             }
 
+            if (prevWasNonFlex)
+                offset[axis] += e.Data.Container.Spacing;
+
             LayoutElement(elementIndex, offset, sizeOverride);
 
             var childRelativeEnd = (child.Rect[axis] - e.ContentRect[axis]) + child.Rect.GetSize(axis);
-            offset[axis] = childRelativeEnd + child.MarginMax[axis] + e.Data.Container.Spacing;
+            offset[axis] = childRelativeEnd + child.MarginMax[axis];
             fixedSize = offset[axis];
+            prevWasNonFlex = true;
             elementIndex = child.NextSiblingIndex;
         }
 
@@ -59,15 +66,20 @@ public static partial class UI
         {
             var flexAvailable = e.ContentRect.Size[axis] - fixedSize;
             var flexOffset = Vector2.Zero;
+            prevWasNonFlex = false;
             elementIndex = e.Index + 1;
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref var child = ref GetElement(elementIndex);
                 if (child.Type != ElementType.Flex)
                 {
+                    if (prevWasNonFlex)
+                        flexOffset[axis] += e.Data.Container.Spacing;
+
                     var align = child.MarginMin[axis];
                     child.Rect[axis] = e.ContentRect[axis] + flexOffset[axis] + align;
-                    flexOffset[axis] += align + child.Rect.GetSize(axis) + child.MarginMax[axis] + e.Data.Container.Spacing;
+                    flexOffset[axis] += align + child.Rect.GetSize(axis) + child.MarginMax[axis];
+                    prevWasNonFlex = true;
                 }
                 else
                 {
@@ -76,6 +88,7 @@ public static partial class UI
                     flexSizeOverride[axis] = flex;
                     LayoutElement(child.Index, flexOffset, flexSizeOverride);
                     flexOffset[axis] += flex;
+                    prevWasNonFlex = false;
                 }
 
                 elementIndex = child.NextSiblingIndex;

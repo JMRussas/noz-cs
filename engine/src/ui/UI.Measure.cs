@@ -127,27 +127,47 @@ public static partial class UI
         }
         else if (e.Type == ElementType.Column)
         {
-            float spacing = 0;
+            var prevWasNonFlex = false;
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
+                if (child.Type == ElementType.Flex)
+                {
+                    prevWasNonFlex = false;
+                    elementIndex = child.NextSiblingIndex;
+                    continue;
+                }
+
+                if (prevWasNonFlex)
+                    fit.Y += e.Data.Container.Spacing;
+
                 var childOuter = GetOuterSize(in child, FitElement(in child, in e));
                 fit.X = Math.Max(fit.X, childOuter.X);
-                fit.Y += childOuter.Y + spacing;
-                spacing = e.Data.Container.Spacing;
+                fit.Y += childOuter.Y;
+                prevWasNonFlex = true;
                 elementIndex = child.NextSiblingIndex;
             }
         }
         else if (e.Type == ElementType.Row)
         {
-            float spacing = 0;
+            var prevWasNonFlex = false;
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
+                if (child.Type == ElementType.Flex)
+                {
+                    prevWasNonFlex = false;
+                    elementIndex = child.NextSiblingIndex;
+                    continue;
+                }
+
+                if (prevWasNonFlex)
+                    fit.X += e.Data.Container.Spacing;
+
                 var childOuter = GetOuterSize(in child, FitElement(in child, in e));
-                fit.X += childOuter.X + spacing;
+                fit.X += childOuter.X;
                 fit.Y = Math.Max(fit.Y, childOuter.Y);
-                spacing = e.Data.Container.Spacing;
+                prevWasNonFlex = true;
                 elementIndex = child.NextSiblingIndex;
             }
         }
@@ -161,6 +181,11 @@ public static partial class UI
             fit.Y = e.Data.Container.Size.Height.Value;
         else
             fit.Y += e.Data.Container.Padding.Vertical;
+
+        if (e.Data.Container.MinWidth > 0) fit.X = Math.Max(fit.X, e.Data.Container.MinWidth);
+        if (e.Data.Container.MinHeight > 0) fit.Y = Math.Max(fit.Y, e.Data.Container.MinHeight);
+        if (e.Data.Container.MaxWidth > 0) fit.X = Math.Min(fit.X, e.Data.Container.MaxWidth);
+        if (e.Data.Container.MaxHeight > 0) fit.Y = Math.Min(fit.Y, e.Data.Container.MaxHeight);
 
         return fit;
     }

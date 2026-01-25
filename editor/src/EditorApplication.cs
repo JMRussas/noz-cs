@@ -4,10 +4,11 @@
 
 namespace NoZ.Editor;
 
-internal class EditorVtable : IApplicationVtable
+internal class EditorApplicationInstance : IApplication
 {
     public void Update() => EditorApplication.Update();
     public void UpdateUI() => EditorApplication.UpdateUI();
+    public void LateUpdate() => EditorApplication.LateUpdate();
 
     public void LoadAssets()
     {
@@ -112,5 +113,10 @@ public static class EditorApplication
         ContextMenu.UpdateUI();
         CommandPalette.UpdateUI();
         ConfirmDialog.UpdateUI();
+    }
+
+    public static void LateUpdate()
+    {
+        Workspace.LateUpdate();
     }
 }

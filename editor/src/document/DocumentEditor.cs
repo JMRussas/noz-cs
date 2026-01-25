@@ -12,6 +12,7 @@ public abstract class DocumentEditor(Document document) : IDisposable
     public virtual ContextMenuItem[]? GetContextMenuItems() => null;
     public virtual void Update() { }
     public virtual void UpdateUI() { }
+    public virtual void LateUpdate() { }
     public virtual void OnUndoRedo() { }
     public virtual void Dispose() { }
 }

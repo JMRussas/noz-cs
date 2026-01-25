@@ -16,6 +16,7 @@ internal enum ElementFlags : ushort
     Focus = 1 << 3,
     Dragging = 1 << 4,
     Changed = 1 << 5,
+    DoubleClick = 1 << 6,
 }
 
 internal struct TextBoxState

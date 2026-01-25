@@ -81,7 +81,7 @@ Application.Init(new ApplicationConfig
     IconPath = "res/windows/nozed.png",
     Platform = new SDLPlatform(),
     AudioBackend = new SDLAudioDriver(),
-    Vtable = new EditorVtable(),
+    Vtable = new EditorApplicationInstance(),
     AssetPath = Path.Combine(EditorApplication.EditorPath, "library"),
 
     UI = new UIConfig()

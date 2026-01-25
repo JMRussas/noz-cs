@@ -6,10 +6,11 @@ using NoZ.Platform;
 
 namespace NoZ;
 
-public interface IApplicationVtable
+public interface IApplication
 {
     void Update();
     void UpdateUI() { }
+    void LateUpdate() { }
     void LoadAssets() { }
     void UnloadAssets() { }
     void ReloadAssets() { }
@@ -25,7 +26,7 @@ public class ApplicationConfig
     public string? IconPath { get; init; }
     public GraphicsConfig? Graphics { get; init; }
     public UIConfig? UI { get; init; }
-    public IApplicationVtable? Vtable { get; init; }
+    public IApplication? Vtable { get; init; }
     public IPlatform? Platform { get; init; }
     public IAudioDriver? AudioBackend { get; init; }
     public string? AssetPath { get; init; } = null;

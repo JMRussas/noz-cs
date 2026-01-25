@@ -12,7 +12,7 @@ public static class Application
     private static bool _running;
     private static bool _assetTypesRegistered = false;
 
-    private static IApplicationVtable _vtable = null!;
+    private static IApplication _instance = null!;
 
     public static ApplicationConfig Config { get; private set; } = null!;
     public static IPlatform Platform { get; private set; } = null!;
@@ -34,7 +34,7 @@ public static class Application
         AudioDriverBackend = config.AudioBackend ?? throw new ArgumentNullException(nameof(config.AudioBackend),
             "AudioBackend must be provided. Use SDLAudio for desktop or WebAudio for web.");
 
-        _vtable = config.Vtable ?? throw new ArgumentNullException(nameof(config.Vtable),
+        _instance = config.Vtable ?? throw new ArgumentNullException(nameof(config.Vtable),
             "App must be provided. Implement IApplication in your game.");
 
         AssetPath = config.AssetPath ?? Path.Combine(Directory.GetCurrentDirectory(), "library");
@@ -61,7 +61,7 @@ public static class Application
 
         // Register asset types and load assets
         RegisterAssetTypes();
-        _vtable.LoadAssets();
+        _instance.LoadAssets();
         Graphics.ResolveAssets();
 
         TextRender.Init(config);
@@ -115,11 +115,12 @@ public static class Application
         if (!Graphics.BeginFrame())
             return _running;
 
-        _vtable.Update();
+        _instance.Update();
         Graphics.BeginUI();
         UI.Begin();
-        _vtable.UpdateUI();
+        _instance.UpdateUI();
         UI.End();
+        _instance.LateUpdate();
         Graphics.EndFrame();
 
         return _running;
@@ -127,7 +128,7 @@ public static class Application
 
     public static void Shutdown()
     {
-        _vtable.UnloadAssets();
+        _instance.UnloadAssets();
 
         UI.Shutdown();
         TextRender.Shutdown();
@@ -155,10 +156,10 @@ public static class Application
         Input.Update();
 
         Graphics.BeginFrame();
-        _vtable.Update();
+        _instance.Update();
         Graphics.BeginUI();
         UI.Begin();
-        _vtable.UpdateUI();
+        _instance.UpdateUI();
         UI.End();
         Graphics.EndFrame();
     }

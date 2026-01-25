@@ -51,7 +51,7 @@ public readonly struct EdgeInsets(float top, float left, float bottom, float rig
     public static EdgeInsets TopLeft(float t, float l) => new(t, l, 0, 0);
 
     public static EdgeInsets Symmetric(float vertical, float horizontal) =>
-        new(horizontal, horizontal, vertical, vertical);
+        new(vertical, horizontal, vertical, horizontal);
 
     public static readonly EdgeInsets Zero = new(0, 0, 0, 0);
 

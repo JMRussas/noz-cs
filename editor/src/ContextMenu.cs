@@ -158,7 +158,7 @@ public static class ContextMenu
                 var parentMenuPos = menuPositions[level];
 
                 // Calculate Y position of parent item within its menu
-                var itemY = parentMenuPos.Y + EditorStyle.Overlay.Padding;
+                var itemY = parentMenuPos.Y; //  + EditorStyle.Overlay.Padding;
 
                 // Add title height only for root menu
                 if (level == 0 && _title != null)
@@ -324,6 +324,6 @@ public static class ContextMenu
         var menuRect = UI.GetElementRect((byte)(MenuIdStart + level), EditorStyle.CanvasId.ContextMenu);
         return menuRect.Width > 0
             ? menuRect.Width
-            : EditorStyle.ContextMenu.MinWidth + EditorStyle.Overlay.Padding * 2;
+            : EditorStyle.ContextMenu.MinWidth; //  + EditorStyle.Overlay.Padding * 2;
     }
 }

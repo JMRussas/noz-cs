@@ -40,36 +40,43 @@ internal static class EditorUI
     public static void Shortcut(Command command, bool selected=false) =>
         Shortcut(command.Key, command.Ctrl, command.Alt, command.Shift, selected);
 
-    public static bool Button(ElementId id, string text, bool selected = false)
+    private static void ButtonFill(bool selected, bool hovered, bool disabled)
+    {
+        if (disabled)
+            UI.Container(EditorStyle.Button.DisabledFill);
+        else if (selected && hovered)
+            UI.Container(EditorStyle.Button.SelectedHoverFill);
+        else if (selected)
+            UI.Container(EditorStyle.Button.SelectedFill);
+        else if (hovered)
+            UI.Container(EditorStyle.Button.HoverFill);
+        else
+            UI.Container(EditorStyle.Button.Fill);
+    }
+
+    public static bool Button(ElementId id, string text, bool selected = false, bool disabled = false)
     {
         bool pressed = false;
-        using (UI.BeginContainer(EditorStyle.Confirm.Button, id: id))
+        using (UI.BeginContainer(EditorStyle.Button.Root, id: id))
         {
-            var hovered = UI.IsHovered();
-            if (selected && hovered)
-                UI.Container(EditorStyle.Button.SelectedHoverFill);
-            else if (selected)
-                UI.Container(EditorStyle.Button.SelectedFill);
-            else if (hovered)
-                UI.Container(EditorStyle.Button.HoverFill);
-            else
-                UI.Container(EditorStyle.Button.Fill);
-
-            UI.Label(text, EditorStyle.Button.Text);
-            pressed = UI.WasPressed();
+            ButtonFill(selected, UI.IsHovered(), disabled);            
+            using (UI.BeginContainer(EditorStyle.Button.TextContent))
+                UI.Label(text, disabled ? EditorStyle.Button.DisabledText : EditorStyle.Button.Text);
+            pressed = !disabled && UI.WasPressed();
         }
 
         return pressed;
     }
 
-    public static bool ToolbarButton(ElementId id, Sprite icon, bool isChecked)
+    public static bool Button(ElementId id, Sprite icon, bool selected = false, bool disabled = false)
     {
-        var style = isChecked ? EditorStyle.Toolbar.ButtonChecked : EditorStyle.Toolbar.Button;
-        var pressed = false;
-        using (UI.BeginContainer(style, id: id))
+        bool pressed = false;
+        using (UI.BeginContainer(EditorStyle.Button.RootWithIcon, id: id))
         {
+            ButtonFill(selected, UI.IsHovered(), disabled);
+            using (UI.BeginContainer(EditorStyle.Button.IconContent))
+                UI.Image(icon, disabled ? EditorStyle.Button.DisabledIcon : EditorStyle.Button.Icon);
             pressed = UI.WasPressed();
-            UI.Image(icon, ImageStyle.Center);
         }
 
         return pressed;

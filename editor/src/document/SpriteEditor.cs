@@ -15,7 +15,8 @@ public enum SpriteEditorTool
 public class SpriteEditor : DocumentEditor
 {
     private const byte RootId = 1;
-    private const byte TileButtonId = 2;
+    private const byte PaletteButtonId = 2;
+    private const byte TileButtonId = 3;
     private const byte FirstPaletteColorId = 64;
    
     public new SpriteDocument Document => (SpriteDocument)base.Document;
@@ -29,6 +30,7 @@ public class SpriteEditor : DocumentEditor
     private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
     private bool _showTiling;
+    private bool _showPalettes;
 
     private readonly Command[] _commands;
 
@@ -112,6 +114,16 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
+    public override void LateUpdate()
+    {
+        if (Workspace.DragStarted && Workspace.DragButton == InputCode.MouseLeft)
+            HandleDragStart();
+        else if (Input.WasButtonReleased(InputCode.MouseLeft))
+            HandleLeftClick();
+        else if (Input.WasButtonPressed(InputCode.MouseLeftDoubleClick))
+            HandleDoubleClick();
+    }
+
     public override void UpdateUI()
     {
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
@@ -120,15 +132,37 @@ public class SpriteEditor : DocumentEditor
             // Toobar
             using (UI.BeginRow(EditorStyle.Toolbar.Root))
             {
-                //EditorUI.ToolbarButton( EditorAssets.Sprites.IconPalette, _isPlaying);
                 UI.Flex();
-                if (EditorUI.ToolbarButton(TileButtonId, EditorAssets.Sprites.IconTiling, _showTiling))
+                if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, _showTiling))
                     _showTiling = !_showTiling;
+                if (EditorUI.Button(PaletteButtonId, EditorAssets.Sprites.IconPalette, _showPalettes, disabled: PaletteManager.Palettes.Count < 2))
+                    _showPalettes = !_showPalettes;
             }
 
             UI.Spacer(EditorStyle.SpriteEditor.ButtonMarginY);
 
+            PalettePickerUI();
             ColorPickerUI();
+        }
+    }
+
+    private void PalettePickerUI()
+    {
+        if (!_showPalettes) return;
+        if (PaletteManager.Palettes.Count > 0) return;
+
+        using (UI.BeginColumn(ContainerStyle.Default with
+        {
+            Padding = EdgeInsets.All(4f),
+            Color = EditorStyle.Overlay.ContentColor,
+            Spacing = 4.0f
+        }))
+        {
+            for (int i = 0; i < PaletteManager.Palettes.Count; i++)
+            {
+                if ((byte)i != Document.Palette)
+                    PaletteUI(PaletteManager.GetPalette((byte)i)!, showSelection: false);
+            }
         }
     }
 
@@ -138,13 +172,7 @@ public class SpriteEditor : DocumentEditor
         if (palette == null)
             return;
 
-        using (UI.BeginContainer(ContainerStyle.Default with
-        {
-            Padding = EdgeInsets.All(4f),
-            Color = EditorStyle.Overlay.ContentColor,
-            Border = new BorderStyle { Radius = EditorStyle.Overlay.ContentBorderRadius }
-        }))
-        using (UI.BeginColumn())
+        using (UI.BeginColumn(EditorStyle.SpriteEditor.ColorPicker))
         {
             using (UI.BeginRow())
             {
@@ -257,7 +285,7 @@ public class SpriteEditor : DocumentEditor
                 Border = new BorderStyle { Radius = 6f }
             });
 
-            if (UI.WasPressed())
+            if (UI.WasPressed() && color.A > 0)
                 SetSelectionColor(colorIndex);
         }
     }
@@ -408,13 +436,6 @@ public class SpriteEditor : DocumentEditor
 
         if (Input.WasButtonPressed(InputCode.KeyDelete))
             DeleteSelected();
-
-        if (Workspace.DragStarted && Workspace.DragButton == InputCode.MouseLeft)
-            HandleDragStart();
-        else if (Input.WasButtonReleased(InputCode.MouseLeft))
-            HandleLeftClick();
-        else if (Input.WasButtonPressed(InputCode.MouseLeftDoubleClick))
-            HandleDoubleClick();
     }
 
     private void UpdateHover()
