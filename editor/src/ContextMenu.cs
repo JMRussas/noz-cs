@@ -134,20 +134,13 @@ public static class ContextMenu
 
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.ContextMenu))
         {
+            // Close if clicked outside
             using (UI.BeginContainer(id: CloseId))
                 if (UI.WasPressed())
                     Close();
 
-            if (!_visible || _items == null)
-                return;
-
-            var menuWidth = RenderMenu(0, -1, _position, ref executed);
-
-            // Track menu positions for each level
-            Span<Vector2> menuPositions = stackalloc Vector2[MaxSubmenuDepth + 1];
-            Span<float> menuWidths = stackalloc float[MaxSubmenuDepth + 1];
-            menuPositions[0] = _position;
-            menuWidths[0] = menuWidth;
+            // Render root menu at click position
+            MenuUI(0, -1, new Rect(_position, Vector2.Zero), 0, ref executed);
 
             // Render open submenus
             for (var level = 0; level < MaxSubmenuDepth; level++)
@@ -155,10 +148,12 @@ public static class ContextMenu
                 var parentIndex = _openSubmenu[level];
                 if (parentIndex < 0) break;
 
-                var parentMenuPos = menuPositions[level];
+                // Get parent menu rect to use as anchor (with padding)
+                var parentMenuRect = UI.GetElementRect(EditorStyle.CanvasId.ContextMenu, (byte)(MenuIdStart + level));
+                var anchorRect = parentMenuRect.Expand(2);
 
                 // Calculate Y position of parent item within its menu
-                var itemY = parentMenuPos.Y; //  + EditorStyle.Overlay.Padding;
+                var itemY = parentMenuRect.Y;
 
                 // Add title height only for root menu
                 if (level == 0 && _title != null)
@@ -181,10 +176,8 @@ public static class ContextMenu
                     }
                 }
 
-                // Position submenu to the right of parent menu
-                var submenuPos = new Vector2(parentMenuPos.X + menuWidths[level] + 2, itemY);
-                menuPositions[level + 1] = submenuPos;
-                menuWidths[level + 1] = RenderMenu(level + 1, parentIndex, submenuPos, ref executed);
+                // Submenu Y offset is relative to anchor rect
+                MenuUI(level + 1, parentIndex, anchorRect, itemY - parentMenuRect.Y, ref executed);
             }
         }
 
@@ -201,23 +194,26 @@ public static class ContextMenu
         return _items![index + 1].Level > _items[index].Level;
     }
 
-    private static float RenderMenu(int level, int parentIndex, Vector2 menuPos, ref Action? executed)
+    private static float MenuUI(int level, int parentIndex, Rect anchorRect, float itemOffset, ref Action? executed)
     {
         var startIndex = level == 0 ? 0 : parentIndex + 1;
         var parentLevel = level == 0 ? -1 : _items![parentIndex].Level;
 
+        UI.BeginPopup(new PopupStyle
+        {
+            Margin = EdgeInsets.Top(itemOffset),
+            ClampToScreen = true,
+            AnchorRect = anchorRect
+        });
         using (UI.BeginContainer(
-            style: EditorStyle.ContextMenu.Menu with 
-            { 
-                Margin = EdgeInsets.TopLeft(menuPos.Y, menuPos.X),
-                Size = Size2.Fit
-            },
+            style: EditorStyle.ContextMenu.Menu with { Size = Size2.Fit },
             id: (byte)(MenuIdStart + level)))
         using (UI.BeginColumn(new ContainerStyle { Size = Size2.Fit }))
         {
             if (level == 0 && _title != null)
-            {
-                UI.Label(_title, EditorStyle.Popup.Text);
+            { 
+                using (UI.BeginContainer(EditorStyle.Popup.Item))
+                    UI.Label(_title, EditorStyle.Popup.Title);
                 UI.Container(EditorStyle.Popup.Separator);
             }
 
@@ -320,8 +316,9 @@ public static class ContextMenu
                 }
             }
         }
+        UI.EndPopup();
 
-        var menuRect = UI.GetElementRect((byte)(MenuIdStart + level), EditorStyle.CanvasId.ContextMenu);
+        var menuRect = UI.GetElementRect(EditorStyle.CanvasId.ContextMenu, (byte)(MenuIdStart + level));
         return menuRect.Width > 0
             ? menuRect.Width
             : EditorStyle.ContextMenu.MinWidth; //  + EditorStyle.Overlay.Padding * 2;

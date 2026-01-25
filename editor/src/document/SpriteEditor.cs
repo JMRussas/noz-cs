@@ -11,6 +11,8 @@ public class SpriteEditor : DocumentEditor
     private const byte RootId = 1;
     private const byte PaletteButtonId = 2;
     private const byte TileButtonId = 3;
+    private const byte BoneBindButtonId = 4;
+    private const byte BoneUnbindButtonId = 5;
     private const byte FirstPaletteColorId = 64;
    
     public new SpriteDocument Document => (SpriteDocument)base.Document;
@@ -51,6 +53,8 @@ public class SpriteEditor : DocumentEditor
             new Command { Name = "Insert Anchor", ShortName = "insert", Handler = InsertAnchorAtHover, Key = InputCode.KeyV },
             new Command { Name = "Pen Tool", ShortName = "pen", Handler = BeginPenTool, Key = InputCode.KeyP },
             new Command { Name = "Knife Tool", ShortName = "knife", Handler = BeginKnifeTool, Key = InputCode.KeyK },
+            new Command { Name = "Parent to Bone", ShortName = "parent", Handler = BeginParentTool, Key = InputCode.KeyB },
+            new Command { Name = "Clear Parent", ShortName = "unparent", Handler = ClearParent, Key = InputCode.KeyB, Alt = true },
         ];
     }
 
@@ -119,9 +123,10 @@ public class SpriteEditor : DocumentEditor
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
         using (UI.BeginColumn(EditorStyle.SpriteEditor.Root, id: RootId))
         {
-            // Toobar
+            // Toolbar
             using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
             {
+                BoneBindingUI();
                 UI.Flex();
                 if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, _showTiling))
                     _showTiling = !_showTiling;
@@ -135,6 +140,18 @@ public class SpriteEditor : DocumentEditor
                 ColorPickerUI();
             }
         }
+    }
+
+    private void BoneBindingUI()
+    {
+        var binding = Document.Binding;
+        var label = binding.IsBound ? binding.BoneName : "No Bone";
+
+        if (EditorUI.Button(BoneBindButtonId, label))
+            BeginParentTool();
+
+        if (binding.IsBound && EditorUI.Button(BoneUnbindButtonId, EditorAssets.Sprites.IconClose))
+            ClearParent();
     }
 
     private void PalettePickerUI()
@@ -997,4 +1014,32 @@ public class SpriteEditor : DocumentEditor
             }
         }
     }
+
+    #region Bone Binding
+
+    private void BeginParentTool()
+    {
+        Workspace.BeginTool(new BoneSelectTool(CommitBoneBinding));
+    }
+
+    private void CommitBoneBinding(SkeletonDocument skeleton, int boneIndex)
+    {
+        Document.SetBoneBinding(skeleton, boneIndex);
+        var boneName = skeleton.Bones[boneIndex].Name;
+        Notifications.Add($"bound to {skeleton.Name}:{boneName}");
+    }
+
+    private void ClearParent()
+    {
+        if (!Document.Binding.IsBound)
+        {
+            Notifications.Add("sprite has no bone binding");
+            return;
+        }
+
+        Document.ClearBoneBinding();
+        Notifications.Add("bone binding cleared");
+    }
+
+    #endregion
 }

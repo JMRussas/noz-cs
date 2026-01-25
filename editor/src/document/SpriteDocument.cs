@@ -20,6 +20,66 @@ public class SpriteFrame : IDisposable
 
 public class SpriteDocument : Document
 {
+    public class BoneBinding
+    {
+        public string SkeletonName = "";
+        public string BoneName = "";
+        public SkeletonDocument? Skeleton;
+        public int BoneIndex = -1;
+
+        public bool IsBound => Skeleton != null && BoneIndex >= 0;
+
+        public void Set(SkeletonDocument? skeleton, int boneIndex)
+        {
+            if (skeleton == null || boneIndex < 0 || boneIndex >= skeleton.BoneCount)
+            {
+                Clear();
+                return;
+            }
+
+            Skeleton = skeleton;
+            SkeletonName = skeleton.Name;
+            BoneName = skeleton.Bones[boneIndex].Name;
+            BoneIndex = boneIndex;
+        }
+
+        public void Clear()
+        {
+            Skeleton = null;
+            SkeletonName = "";
+            BoneName = "";
+            BoneIndex = -1;
+        }
+
+        public void CopyFrom(BoneBinding src)
+        {
+            SkeletonName = src.SkeletonName;
+            BoneName = src.BoneName;
+            Skeleton = src.Skeleton;
+            BoneIndex = src.BoneIndex;
+        }
+
+        public void Resolve()
+        {
+            Skeleton = null;
+            BoneIndex = -1;
+
+            if (string.IsNullOrEmpty(SkeletonName))
+                return;
+
+            foreach (var doc in DocumentManager.Documents)
+            {
+                if (doc is SkeletonDocument skel && doc.Name == SkeletonName)
+                {
+                    Skeleton = skel;
+                    if (!string.IsNullOrEmpty(BoneName))
+                        BoneIndex = skel.FindBoneIndex(BoneName);
+                    break;
+                }
+            }
+        }
+    }
+
     public readonly SpriteFrame[] Frames = new SpriteFrame[Sprite.MaxFrames];
     public ushort FrameCount;
     public byte Palette;
@@ -29,6 +89,8 @@ public class SpriteDocument : Document
 
     internal AtlasDocument? Atlas;
     internal Rect AtlasUV;
+
+    public readonly BoneBinding Binding = new();
 
     public SpriteDocument()
     {
@@ -234,6 +296,8 @@ public class SpriteDocument : Document
 
     public override void Draw()
     {
+        DrawOrigin();
+
         var size = Bounds.Size;
         if (size.X <= 0 || size.Y <= 0 || Atlas == null)
             return;
@@ -244,8 +308,6 @@ public class SpriteDocument : Document
             DrawBounds();
             return;
         }
-
-        DrawOrigin();
 
         using (Graphics.PushState())
         {            
@@ -265,6 +327,7 @@ public class SpriteDocument : Document
         Palette = src.Palette;
         Depth = src.Depth;
         Bounds = src.Bounds;
+        Binding.CopyFrom(src.Binding);
 
         for (var i = 0; i < src.FrameCount; i++)
         {
@@ -274,6 +337,42 @@ public class SpriteDocument : Document
 
         for (var i = src.FrameCount; i < Sprite.MaxFrames; i++)
             Frames[i].Shape.Clear();
+    }
+
+    public override void LoadMetadata(PropertySet meta)
+    {
+        Binding.SkeletonName = meta.GetString("bone", "skeleton", "");
+        Binding.BoneName = meta.GetString("bone", "name", "");
+    }
+
+    public override void SaveMetadata(PropertySet meta)
+    {
+        if (Binding.IsBound)
+        {
+            meta.SetString("bone", "skeleton", Binding.SkeletonName);
+            meta.SetString("bone", "name", Binding.BoneName);
+        }
+        else
+        {
+            meta.ClearGroup("bone");
+        }
+    }
+
+    public override void PostLoad()
+    {
+        Binding.Resolve();
+    }
+
+    public void SetBoneBinding(SkeletonDocument? skeleton, int boneIndex)
+    {
+        Binding.Set(skeleton, boneIndex);
+        MarkMetaModified();
+    }
+
+    public void ClearBoneBinding()
+    {
+        Binding.Clear();
+        MarkMetaModified();
     }
 
     public override void Import(string outputPath, PropertySet config, PropertySet meta)

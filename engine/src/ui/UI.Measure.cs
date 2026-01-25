@@ -91,10 +91,32 @@ public static partial class UI
         ElementType.Container => MeasureContainer(in e, in p),
         ElementType.Column => MeasureContainer(in e, in p),
         ElementType.Row => MeasureContainer(in e, in p),
+        ElementType.Popup => MeasurePopup(in e, in p),
         ElementType.Flex when p.Type is ElementType.Row => MeasureRowFlex(in e, in p),
         ElementType.Flex when p.Type is ElementType.Column => MeasureColumnFlex(in e, in p),
         _ => ResolveSize(in e, in p, Size2.Default)
     };
+
+    private static Vector2 MeasurePopup(ref readonly Element e, ref readonly Element p)
+    {
+        // Popup fits to its content
+        return FitPopup(in e, in p);
+    }
+
+    private static Vector2 FitPopup(ref readonly Element e, ref readonly Element p)
+    {
+        var fit = Vector2.Zero;
+        var elementIndex = e.Index + 1;
+        for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
+        {
+            ref readonly var child = ref GetElement(elementIndex);
+            var childFit = FitElement(in child, in e);
+            fit.X = Math.Max(fit.X, childFit.X);
+            fit.Y = Math.Max(fit.Y, childFit.Y);
+            elementIndex = child.NextSiblingIndex;
+        }
+        return fit;
+    }
 
     private static Vector2 FitLabel(ref readonly Element e, ref readonly Element p)
     {
@@ -202,6 +224,7 @@ public static partial class UI
         ElementType.Container => FitContainer(in e, in p),
         ElementType.Column => FitContainer(in e, in p),
         ElementType.Row => FitContainer(in e, in p),
+        ElementType.Popup => FitPopup(in e, in p),
         ElementType.Label => FitLabel(in e, in p),
         _ => Vector2.Zero
     };

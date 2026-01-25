@@ -478,9 +478,16 @@ public sealed unsafe partial class Shape : IDisposable
         for (var p = pathIndex + 1; p < PathCount; p++)
             _paths[p].AnchorStart++;
 
-        UpdateSamples(pathIndex, (ushort)(localIndex > 0 ? localIndex - 1 : _paths[pathIndex].AnchorCount - 1));
-        UpdateSamples(pathIndex, localIndex);
-        UpdateBounds();
+        if (_editing)
+        {
+            _paths[pathIndex].Flags |= PathFlags.Dirty;
+        }
+        else
+        {
+            UpdateSamples(pathIndex, (ushort)(localIndex > 0 ? localIndex - 1 : _paths[pathIndex].AnchorCount - 1));
+            UpdateSamples(pathIndex, localIndex);
+            UpdateBounds();
+        }
 
         return insertIndex;
     }
@@ -505,7 +512,7 @@ public sealed unsafe partial class Shape : IDisposable
         SplitSegmentAtPoint(anchorIndex, midpoint);
     }
 
-    public void SplitSegmentAtPoint(ushort anchorIndex, Vector2 targetPoint)
+    public ushort SplitSegmentAtPoint(ushort anchorIndex, Vector2 targetPoint)
     {
         ushort pathIndex = ushort.MaxValue;
         for (ushort p = 0; p < PathCount; p++)
@@ -518,7 +525,7 @@ public sealed unsafe partial class Shape : IDisposable
             }
         }
 
-        if (pathIndex == ushort.MaxValue) return;
+        if (pathIndex == ushort.MaxValue) return ushort.MaxValue;
 
         ref var pathRef = ref _paths[pathIndex];
         var nextLocalIdx = (anchorIndex - pathRef.AnchorStart + 1) % pathRef.AnchorCount;
@@ -536,7 +543,7 @@ public sealed unsafe partial class Shape : IDisposable
         var dirLen = dir.Length();
 
         if (dirLen < 0.0001f)
-            return;
+            return ushort.MaxValue;
 
         var perp = new Vector2(-dir.Y, dir.X) / dirLen;
         var cp = mid + perp * curve;
@@ -641,10 +648,15 @@ public sealed unsafe partial class Shape : IDisposable
         }
 
         a0.Curve = newCurve1;
-        InsertAnchor(anchorIndex, splitPoint, newCurve2);
+        var newAnchorIndex = InsertAnchor(anchorIndex, splitPoint, newCurve2);
 
-        UpdateSamples();
-        UpdateBounds();
+        if (!_editing)
+        {
+            UpdateSamples();
+            UpdateBounds();
+        }
+
+        return newAnchorIndex;
     }
 
     public void DeleteAnchors()
@@ -1074,56 +1086,6 @@ public sealed unsafe partial class Shape : IDisposable
         PathCount = 0;
         Bounds = Rect.Zero;
         RasterBounds = RectInt.Zero;
-    }
-
-    public void InsertAnchorsRaw(ushort afterAnchorIndex, ReadOnlySpan<Vector2> positions)
-    {
-        for (var j = 0; j < positions.Length; j++)
-        {
-            afterAnchorIndex = InsertAnchorRaw(afterAnchorIndex, positions[j]);
-            if (afterAnchorIndex == ushort.MaxValue) return;
-        }
-    }
-
-    public ushort InsertAnchorRaw(ushort afterAnchorIndex, Vector2 position, float curve = 0f)
-    {
-        if (AnchorCount >= MaxAnchors) return ushort.MaxValue;
-
-        ushort pathIndex = ushort.MaxValue;
-        ushort localIndex = 0;
-        for (ushort p = 0; p < PathCount; p++)
-        {
-            ref var path = ref _paths[p];
-            if (afterAnchorIndex >= path.AnchorStart && afterAnchorIndex < path.AnchorStart + path.AnchorCount)
-            {
-                pathIndex = p;
-                localIndex = (ushort)(afterAnchorIndex - path.AnchorStart + 1);
-                break;
-            }
-        }
-
-        if (pathIndex == ushort.MaxValue) return ushort.MaxValue;
-
-        var insertIndex = (ushort)(_paths[pathIndex].AnchorStart + localIndex);
-
-        for (var i = AnchorCount; i > insertIndex; i--)
-            _anchors[i] = _anchors[i - 1];
-
-        _anchors[insertIndex] = new Anchor
-        {
-            Position = position,
-            Curve = curve,
-            Flags = AnchorFlags.None,
-            Path = pathIndex
-        };
-
-        AnchorCount++;
-        _paths[pathIndex].AnchorCount++;
-
-        for (var p = pathIndex + 1; p < PathCount; p++)
-            _paths[p].AnchorStart++;
-
-        return insertIndex;
     }
 
     public void SplitPathAtAnchors(

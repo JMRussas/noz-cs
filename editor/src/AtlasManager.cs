@@ -17,12 +17,21 @@ public static class AtlasManager
     {
         UpdateAssets();
         Update();
+
+        DocumentManager.DocumentAdded += HandleDocumentAdded;
     }
 
     public static void Shutdown()
     {
         _atlases.Clear();
         _sprites.Clear();
+    }
+
+    private static void HandleDocumentAdded(Document doc)
+    {
+        if (doc is not SpriteDocument sprite) return;
+        AddSprite(sprite);
+        Update();
     }
 
     private static string GetAtlasName(int index) => $"{EditorApplication.Config.AtlasPrefix}{index:000}.atlas";

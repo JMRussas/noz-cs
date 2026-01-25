@@ -183,16 +183,17 @@ public static class Gizmos
         }
 
         // Draw outline - circle arc from top to bottom (front half)
+        var lineOrder = (ushort)(order + 1);
         Graphics.SetColor(EditorStyle.Skeleton.BoneOriginColor);
         for (var i = topIdx; i != botIdx; i = (i + 1) % CircleSegments)
         {
             var next = (i + 1) % CircleSegments;
-            DrawLine(circlePoints[i], circlePoints[next], EditorStyle.Skeleton.BoneOutlineWidth, order: order);
+            DrawLine(circlePoints[i], circlePoints[next], EditorStyle.Skeleton.BoneOutlineWidth, order: lineOrder);
         }
 
         // Draw outline - lines to tip
-        DrawLine(circlePoints[topIdx], end, EditorStyle.Skeleton.BoneOutlineWidth, order: order);
-        DrawLine(circlePoints[botIdx], end, EditorStyle.Skeleton.BoneOutlineWidth, order: order);
+        DrawLine(circlePoints[topIdx], end, EditorStyle.Skeleton.BoneOutlineWidth, order: lineOrder);
+        DrawLine(circlePoints[botIdx], end, EditorStyle.Skeleton.BoneOutlineWidth, order: lineOrder);
 
         // Build fill mesh
         Span<MeshVertex> verts = stackalloc MeshVertex[vertCount];
@@ -232,7 +233,7 @@ public static class Gizmos
         Graphics.PopState();
 
         Graphics.SetColor(EditorStyle.Skeleton.BoneOriginColor);
-        DrawCircle(start, EditorStyle.Skeleton.BoneOriginSize, (ushort)(order + 2));
+        DrawCircle(start, EditorStyle.Skeleton.BoneOriginSize, (ushort)(order + 1));
     }
 
     public static void DrawDashedLine(Vector2 start, Vector2 end, ushort order=0)

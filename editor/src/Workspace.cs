@@ -37,6 +37,7 @@ public static class Workspace
         }
 
         items.Add(ContextMenuItem.Item("Move", BeginMoveTool, key: InputCode.KeyG));
+        items.Add(ContextMenuItem.Item("Duplicate", DuplicateSelected, ctrl: true, key: InputCode.KeyD));
         items.Add(ContextMenuItem.Item("Delete", DeleteSelected, key: InputCode.KeyX));
         items.Add(ContextMenuItem.Separator());
         items.Add(ContextMenuItem.Item("Rebuild All", RebuildAll, alt: true, ctrl: true, shift: true, key: InputCode.KeyA));
@@ -81,6 +82,7 @@ public static class Workspace
 
         CommandManager.RegisterWorkspace([
             new Command { Name = "Move Selected", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
+            new Command { Name = "Duplicate Selected", ShortName = "duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true },
             new Command { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
             new Command { Name = "Rebuild All", ShortName = "build", Handler = RebuildAll },
             new Command { Name = "Frame Selected", ShortName = "origin", Handler = FrameOrigin },
@@ -305,9 +307,12 @@ public static class Workspace
 
         foreach (var doc in DocumentManager.Documents)
         {
-            if (!doc.Loaded || !doc.PostLoaded) continue;
-            if (doc.IsEditing || doc.IsClipped) continue;
-            if (!doc.IsVisible) continue;
+            if (!doc.Loaded || !doc.PostLoaded)
+                continue;
+            if (doc.IsEditing || doc.IsClipped)
+                continue;
+            if (!doc.IsVisible)
+                continue;
 
             if (doc.IsSelected)
                 doc.DrawBounds(selected:true);
@@ -552,6 +557,34 @@ public static class Workspace
                 doc.TogglePlay();
     }
 
+    private static void DuplicateSelected()
+    {
+        if (SelectedCount == 0)
+        {
+            Notifications.AddError("no asset selected");
+            return;
+        }
+
+        var selected = DocumentManager.Documents.Where(d => d.IsSelected).ToArray();
+
+        ClearSelection();
+
+        foreach (var source in selected)
+        {
+            var dup = DocumentManager.Duplicate(source);
+            if (dup == null)
+            {
+                Notifications.AddError("duplicate failed");
+                continue;
+            }
+            SetSelected(dup, true);
+        }
+
+        Input.ConsumeButton(InputCode.KeyLeftCtrl);
+        Input.ConsumeButton(InputCode.KeyRightCtrl);
+        BeginMoveTool();
+    }
+
     private static void DeleteSelected()
     {
         if (SelectedCount == 0)
@@ -755,16 +788,14 @@ public static class Workspace
         }
 
         if (Input.WasButtonReleased(InputCode.MouseRight) && !_wasDragging)
-        {
-            OpenContextMenu();
-        }
+            OpenContextMenu("Asset");
     }
 
-    private static void OpenContextMenu()
+    private static void OpenContextMenu(string? title=null)
     {
         var items = GetContextMenuItems();
         if (items != null && items.Length > 0)
-            ContextMenu.Open(items);
+            ContextMenu.Open(items, title: title);
     }
 
     public static ContextMenuItem[]? GetContextMenuItems()

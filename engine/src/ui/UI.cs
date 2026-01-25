@@ -78,6 +78,7 @@ public static partial class UI
     public struct AutoRow : IDisposable { readonly void IDisposable.Dispose() => EndRow(); }
     public struct AutoScrollable : IDisposable { readonly void IDisposable.Dispose() => EndScrollable(); }
     public struct AutoFlex : IDisposable { readonly void IDisposable.Dispose() => EndFlex(); }
+    public struct AutoPopup : IDisposable { readonly void IDisposable.Dispose() => EndPopup(); }
 
     private static Font? _defaultFont;
     public static Font? DefaultFont => _defaultFont;
@@ -690,7 +691,7 @@ public static partial class UI
 
     public static void EndGrid() => EndElement(ElementType.Grid);
 
-    public static void BeginPopup(PopupStyle style)
+    public static AutoPopup BeginPopup(PopupStyle style)
     {
         ref var e = ref CreateElement(ElementType.Popup);
         e.Data.Popup = new PopupData
@@ -699,10 +700,13 @@ public static partial class UI
             AnchorY = style.AnchorY,
             PopupAlignX = style.PopupAlignX,
             PopupAlignY = style.PopupAlignY,
-            Margin = style.Margin
+            Margin = style.Margin,
+            ClampToScreen = style.ClampToScreen,
+            AnchorRect = style.AnchorRect
         };
         PushElement(e.Index);
         _popups[_popupCount++] = e.Index;
+        return new AutoPopup();
     }
 
     public static void EndPopup() => EndElement(ElementType.Popup);

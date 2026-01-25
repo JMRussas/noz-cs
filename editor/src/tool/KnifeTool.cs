@@ -290,14 +290,28 @@ public class KnifeTool : Tool
         if (reversed)
             (headHit, tailHit) = (tailHit, headHit);
 
-        // Insert first anchor
-        var currentIdx = _shape.InsertAnchorRaw(headHit.SegmentIndex, headHit.SegmentPosition);
-        if (currentIdx == ushort.MaxValue) return;
+        _shape.BeginEdit();
 
-        if (ushort.MaxValue == _shape.InsertAnchorRaw(currentIdx, tailHit.SegmentPosition))
+        // Split segment at head position (preserves curve)
+        var currentIdx = _shape.SplitSegmentAtPoint(headHit.SegmentIndex, headHit.SegmentPosition);
+        if (currentIdx == ushort.MaxValue)
+        {
+            _shape.EndEdit();
             return;
+        }
 
-        // Intermediate anchors
+        // Split at tail position (preserves curve for the remaining segment)
+        var headIdx = currentIdx;
+        if (ushort.MaxValue == _shape.SplitSegmentAtPoint(currentIdx, tailHit.SegmentPosition))
+        {
+            _shape.EndEdit();
+            return;
+        }
+
+        // The segment from head to tail (or first intermediate) is the knife cut - make it straight
+        _shape.SetAnchorCurve(headIdx, 0);
+
+        // Intermediate anchors (knife line - straight, curve=0)
         Span<Vector2> intermediatePositions = stackalloc Vector2[intermediatePoints.Length];
         if (reversed)
         {
@@ -309,7 +323,14 @@ public class KnifeTool : Tool
             for (var i = 0; i < intermediatePoints.Length; i++)
                 intermediatePositions[i] = intermediatePoints[i].Position;
         }
-        _shape.InsertAnchorsRaw(currentIdx, intermediatePositions);
+
+        for (var i = 0; i < intermediatePositions.Length; i++)
+        {
+            currentIdx = _shape.InsertAnchor(currentIdx, intermediatePositions[i]);
+            if (currentIdx == ushort.MaxValue) break;
+        }
+
+        _shape.EndEdit();
 
         ref readonly var path = ref _shape.GetPath(pathIndex);
         var newShapeIndex = _shape.AddPath(path.FillColor);
@@ -331,18 +352,22 @@ public class KnifeTool : Tool
         if (reverseIntermediates)
             (headHit, tailHit) = (tailHit, headHit);
 
+        _shape.BeginEdit();
+
         // Get or create anchor at head position
         var headAnchorIndex = headHit.AnchorIndex;
         if (headAnchorIndex == ushort.MaxValue)
         {
-            headAnchorIndex = _shape.InsertAnchorRaw(headHit.SegmentIndex, headHit.SegmentPosition);
+            headAnchorIndex = _shape.SplitSegmentAtPoint(headHit.SegmentIndex, headHit.SegmentPosition);
             if (tailHit.AnchorIndex != ushort.MaxValue) tailHit.AnchorIndex++;
             tailHit.SegmentIndex++;
         }
 
         var tailAnchorIndex = tailHit.AnchorIndex;
         if (tailAnchorIndex == ushort.MaxValue)
-            tailAnchorIndex = _shape.InsertAnchorRaw(tailHit.SegmentIndex, tailHit.SegmentPosition);
+            tailAnchorIndex = _shape.SplitSegmentAtPoint(tailHit.SegmentIndex, tailHit.SegmentPosition);
+
+        _shape.EndEdit();
 
         Span<Vector2> intermediatePositions = stackalloc Vector2[intermediatePoints.Length];
         for (var i = 0; i < intermediatePoints.Length; i++)

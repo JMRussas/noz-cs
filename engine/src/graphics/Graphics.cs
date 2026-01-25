@@ -88,10 +88,8 @@ public static unsafe class Graphics
     private static Shader? _spriteShader;
     private static bool _inUIPass;
     private static GraphicsStats _stats;
-    private static ushort[] _sortGroupStack = null!;
     private static State[] _stateStack = null!;
     private static Matrix3x2[] _bones = null!;
-    private static ushort _sortGroupStackDepth = 0;
     private static int _stateStackDepth = 0;
     private static bool _batchStateDirty = true;
     
@@ -145,9 +143,7 @@ public static unsafe class Graphics
 
         _maxDrawCommands = RenderConfig.MaxDrawCommands;
         _maxBatches = RenderConfig.MaxBatches;
-        _sortGroupStack = new ushort[MaxSortGroups];
         _stateStack = new State[MaxStateStack];
-        _sortGroupStackDepth = 0;
         _stateStackDepth = 0;
 
         PixelsPerUnit = graphicsConfig.PixelsPerUnit;
@@ -471,6 +467,12 @@ public static unsafe class Graphics
 
     #endregion
 
+    public static void SetSortGroup(ushort group)
+    {
+        Debug.Assert((group & 0xFFFF) == group);
+        CurrentState.SortGroup = group;
+    }
+
     public static void SetLayer(ushort layer)
     {
         Debug.Assert((layer & 0xFFF) == layer);
@@ -582,21 +584,6 @@ public static unsafe class Graphics
     public static void SetTransform(in Matrix3x2 transform)
     {
         CurrentState.Transform = transform;
-    }
-
-    public static void PushSortGroup(ushort group)
-    {
-        _sortGroupStack[_sortGroupStackDepth++] = CurrentState.SortGroup;
-        CurrentState.SortGroup = group;
-    }
-
-    public static void PopSortGroup()
-    {
-        if (_sortGroupStackDepth == 0)
-            return;
-
-        _sortGroupStackDepth--;
-        CurrentState.SortGroup = _sortGroupStack[_sortGroupStackDepth];
     }
 
     private static long MakeSortKey(ushort order) =>

@@ -245,6 +245,7 @@ internal class AtlasDocument : Document
             rect.Name = sprite.Name;
             rect.Sprite = sprite;
             rect.FrameCount = sprite.FrameCount;
+            rect.Dirty = true;
             sprite.Atlas = this;
             sprite.AtlasUV = ToUV(rect);
             return true;

@@ -159,6 +159,8 @@ internal struct PopupData
     public Align PopupAlignX;
     public Align PopupAlignY;
     public EdgeInsets Margin;
+    public bool ClampToScreen;
+    public Rect AnchorRect;
 
     public static PopupData Default => new()
     {
@@ -166,7 +168,9 @@ internal struct PopupData
         AnchorY = Align.Min,
         PopupAlignX = Align.Min,
         PopupAlignY = Align.Min,
-        Margin = EdgeInsets.Zero
+        Margin = EdgeInsets.Zero,
+        ClampToScreen = false,
+        AnchorRect = Rect.Zero
     };
 }
 

@@ -110,6 +110,42 @@ public static partial class UI
         e.Rect.X = align.X + offset.X + p.ContentRect.X;
         e.Rect.Y = align.Y + offset.Y + p.ContentRect.Y;
 
+        // Position and clamp popup to screen bounds
+        if (e.Type == ElementType.Popup)
+        {
+            ref var popup = ref e.Data.Popup;
+
+            if (popup.AnchorRect.Width > 0)
+            {
+                // Anchored to rect: position to the right of anchor
+                e.Rect.X = popup.AnchorRect.Right;
+                e.Rect.Y = popup.AnchorRect.Y + popup.Margin.T;
+
+                // If it doesn't fit on the right, flip to the left
+                if (popup.ClampToScreen && e.Rect.X + e.Rect.Width > ScreenSize.X)
+                    e.Rect.X = popup.AnchorRect.X - e.Rect.Width;
+            }
+            else
+            {
+                // Anchored to point: position at anchor point
+                e.Rect.X = popup.AnchorRect.X;
+                e.Rect.Y = popup.AnchorRect.Y;
+            }
+
+            // Clamp to screen bounds
+            if (popup.ClampToScreen)
+            {
+                if (e.Rect.X + e.Rect.Width > ScreenSize.X)
+                    e.Rect.X = ScreenSize.X - e.Rect.Width;
+                if (e.Rect.Y + e.Rect.Height > ScreenSize.Y)
+                    e.Rect.Y = ScreenSize.Y - e.Rect.Height;
+                if (e.Rect.X < 0)
+                    e.Rect.X = 0;
+                if (e.Rect.Y < 0)
+                    e.Rect.Y = 0;
+            }
+        }
+
         var padding = e.IsContainer ? e.Data.Container.Padding : EdgeInsets.Zero;
         var baseContentRect = new Rect(0, 0, e.Rect.Width, e.Rect.Height);
         var contentRect = baseContentRect;

@@ -83,6 +83,7 @@ public static class EditorStyle
         public const float GridZeroAlpha = 0.4f;
     }
 
+    // :popup
     public static class Popup
     {
         public static readonly Color FillColor = Color.FromRgb(0x181818);
@@ -96,17 +97,22 @@ public static class EditorStyle
         };
         public readonly static ContainerStyle Item = new()
         {
-            Height = 30.0f
+            Height = 20.0f
         };
         public readonly static ContainerStyle Separator = new() { 
             Height = 1,
-            Margin = EdgeInsets.TopBottom(6),
+            Margin = EdgeInsets.TopBottom(1),
             Color = Color.FromRgb(0x2f2f2f)
+        };
+        public readonly static LabelStyle Title = new()
+        {
+            FontSize = Control.TextSize,
+            Color = Color.FromRgb(0x999999),
         };
         public readonly static LabelStyle Text = new()
         {
             FontSize = Control.TextSize,
-            Color = Color.FromRgb(0xdbdbdb),
+            Color = Color.FromRgb(0xdddddd),
             AlignX = Align.Min,
             AlignY = Align.Center
         };
@@ -114,7 +120,7 @@ public static class EditorStyle
 
     public static class Control
     {
-        public const float TextSize = 12.0f;
+        public const float TextSize = 10.0f;
         public const float Height = 20.0f;
         public const float BorderRadius = 6.0f;
         public const float Spacing = 5.0f;

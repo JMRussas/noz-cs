@@ -30,7 +30,7 @@ public class BoneData
     public Matrix3x2 LocalToWorld;
     public Matrix3x2 WorldToLocal;
     public float Length = 0.25f;
-    public bool Selected;
+    public bool IsSelected;
 
     public BoneData()
     {
@@ -233,7 +233,7 @@ public class SkeletonDocument : Document
             Bones[i].LocalToWorld = src.Bones[i].LocalToWorld;
             Bones[i].WorldToLocal = src.Bones[i].WorldToLocal;
             Bones[i].Length = src.Bones[i].Length;
-            Bones[i].Selected = src.Bones[i].Selected;
+            Bones[i].IsSelected = src.Bones[i].IsSelected;
         }
 
         for (var i = 0; i < src.SkinCount; i++)
@@ -435,7 +435,7 @@ public class SkeletonDocument : Document
             Bones[i].LocalToWorld = nextBone.LocalToWorld;
             Bones[i].WorldToLocal = nextBone.WorldToLocal;
             Bones[i].Length = nextBone.Length;
-            Bones[i].Selected = nextBone.Selected;
+            Bones[i].IsSelected = nextBone.IsSelected;
 
             if (nextBone.ParentIndex == boneIndex)
                 Bones[i].ParentIndex = parentIndex;
@@ -564,7 +564,8 @@ public class SkeletonDocument : Document
                     Gizmos.DrawDashedLine(pp, p0);
                 }
 
-                Gizmos.DrawBone(p0, p1, lineWidth, EditorStyle.Skeleton.BoneColor);
+                Graphics.SetSortGroup((ushort)(b.IsSelected ? 1 : 0));
+                Gizmos.DrawBone(p0, p1, lineWidth, EditorStyle.Skeleton.BoneColor, order: (ushort)(boneIndex * 2));
             }
         }
     }

@@ -14,6 +14,10 @@ public static class DocumentManager
     public static IReadOnlyList<string> SourcePaths => _sourcePaths;
     public static string OutputPath => _outputPath;
 
+    public delegate void DocumentAddedDelegate(Document doc);
+
+    public static event DocumentAddedDelegate? DocumentAdded;
+
     private static readonly Dictionary<AssetType, DocumentDef> _defsByType = new();
     private static readonly Dictionary<string, DocumentDef> _defsByExtension = new();
 
@@ -136,14 +140,23 @@ public static class DocumentManager
         }
 
         var doc = Load(path);
-        doc?.LoadMetadata();
-        doc?.Load();
+        if (doc == null) return null;
 
-        if (doc != null && position.HasValue)
+        doc.LoadMetadata();
+        doc.Load();
+
+        _documents.Add(doc);
+
+        if (position.HasValue)
         {
             doc.Position = position.Value;
             doc.MarkMetaModified();
         }
+
+        doc.PostLoad();
+        doc.PostLoaded = true;
+
+        DocumentAdded?.Invoke(doc);
 
         return doc;
     }
@@ -282,4 +295,65 @@ public static class DocumentManager
     }
 
     public static Document Get(int index) => _documents[index];
+
+    public static string GetUniquePath(string sourcePath)
+    {
+        var parentPath = Path.GetDirectoryName(sourcePath) ?? "";
+        var fileName = Path.GetFileNameWithoutExtension(sourcePath);
+        var ext = Path.GetExtension(sourcePath);
+        var canonicalBase = MakeCanonicalName(fileName);
+
+        var startIndex = 2;
+        var lastUnderscore = canonicalBase.LastIndexOf('_');
+        if (lastUnderscore > 0 && int.TryParse(canonicalBase[(lastUnderscore + 1)..], out var existingNum))
+        {
+            canonicalBase = canonicalBase[..lastUnderscore];
+            startIndex = existingNum + 1;
+        }
+
+        for (var i = startIndex; ; i++)
+        {
+            var candidate = Path.Combine(parentPath, $"{canonicalBase}_{i}{ext}");
+
+            if (File.Exists(candidate))
+                continue;
+
+            var canonicalName = MakeCanonicalName(candidate);
+            if (Find(canonicalName) != null)
+                continue;
+
+            return candidate;
+        }
+    }
+
+    public static Document? Duplicate(Document source)
+    {
+        var newPath = GetUniquePath(source.Path);
+
+        var directory = Path.GetDirectoryName(newPath);
+        if (directory != null)
+            Directory.CreateDirectory(directory);
+
+        File.Copy(source.Path, newPath);
+
+        var metaPath = source.Path + ".meta";
+        if (File.Exists(metaPath))
+            File.Copy(metaPath, newPath + ".meta");
+
+        var doc = Load(newPath);
+        if (doc == null)
+            return null;
+
+        doc.LoadMetadata();
+        doc.Load();
+        doc.PostLoad();
+        doc.PostLoaded = true;
+        doc.Position = source.Position;
+
+        DocumentAdded?.Invoke(doc);
+
+        Importer.QueueImport(doc, true);
+
+        return doc;
+    }
 }

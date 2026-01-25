@@ -109,6 +109,8 @@ public struct PopupStyle()
     public Align PopupAlignX = Align.Min;
     public Align PopupAlignY = Align.Min;
     public EdgeInsets Margin = EdgeInsets.Zero;
+    public bool ClampToScreen = false;
+    public Rect AnchorRect = Rect.Zero;
 }
 
 public struct CanvasStyle()

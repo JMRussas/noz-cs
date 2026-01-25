@@ -70,7 +70,7 @@ public static partial class UI
         for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
         {
             ref var child = ref _elements[childElementIndex];
-            DrawElement(childElementIndex, false);
+            DrawElement(childElementIndex, isPopup);
             childElementIndex = child.NextSiblingIndex;
         }
 

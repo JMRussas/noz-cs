@@ -54,14 +54,14 @@ internal class SkeletonEditor : DocumentEditor
         UpdateBoneNames();
     }
 
-    private bool IsBoneSelected(int boneIndex) => Document.Bones[boneIndex].Selected;
+    private bool IsBoneSelected(int boneIndex) => Document.Bones[boneIndex].IsSelected;
 
     private bool IsAncestorSelected(int boneIndex)
     {
         var parentIndex = Document.Bones[boneIndex].ParentIndex;
         while (parentIndex >= 0)
         {
-            if (Document.Bones[parentIndex].Selected)
+            if (Document.Bones[parentIndex].IsSelected)
                 return true;
             parentIndex = Document.Bones[parentIndex].ParentIndex;
         }
@@ -73,7 +73,7 @@ internal class SkeletonEditor : DocumentEditor
         if (IsBoneSelected(boneIndex) == selected)
             return;
 
-        Document.Bones[boneIndex].Selected = selected;
+        Document.Bones[boneIndex].IsSelected = selected;
         Document.SelectedBoneCount += selected ? 1 : -1;
     }
 
@@ -123,7 +123,7 @@ internal class SkeletonEditor : DocumentEditor
             dst.LocalToWorld = src.LocalToWorld;
             dst.WorldToLocal = src.WorldToLocal;
             dst.Length = src.Length;
-            dst.Selected = src.Selected;
+            dst.IsSelected = src.IsSelected;
         }
     }
 
@@ -140,7 +140,7 @@ internal class SkeletonEditor : DocumentEditor
             dst.LocalToWorld = src.LocalToWorld;
             dst.WorldToLocal = src.WorldToLocal;
             dst.Length = src.Length;
-            dst.Selected = src.Selected;
+            dst.IsSelected = src.IsSelected;
         }
 
         Document.UpdateTransforms();
@@ -154,7 +154,7 @@ internal class SkeletonEditor : DocumentEditor
             return false;
 
         if (Input.IsShiftDown())
-            SetBoneSelected(boneIndex, !Document.Bones[boneIndex].Selected);
+            SetBoneSelected(boneIndex, !Document.Bones[boneIndex].IsSelected);
         else
         {
             ClearSelection();
@@ -227,7 +227,7 @@ internal class SkeletonEditor : DocumentEditor
                 var textY = p.Y;
 
                 Graphics.SetTransform(Matrix3x2.CreateTranslation(textX, textY));
-                Graphics.SetColor(b.Selected ? EditorStyle.SelectionColor : EditorStyle.TextColor);
+                Graphics.SetColor(b.IsSelected ? EditorStyle.SelectionColor : EditorStyle.TextColor);
                 TextRender.Draw(b.Name, font, fontSize);
             }
         }
@@ -611,7 +611,7 @@ internal class SkeletonEditor : DocumentEditor
             for (var boneIndex = 0; boneIndex < Document.BoneCount; boneIndex++)
             {
                 var b = Document.Bones[boneIndex];
-                var selected = b.Selected;
+                var selected = b.IsSelected;
                 var boneColor = selected ? EditorStyle.Skeleton.SelectedBoneColor : EditorStyle.Skeleton.BoneColor;
 
                 var p0 = Vector2.Transform(Vector2.Zero, b.LocalToWorld);
