@@ -14,14 +14,13 @@ struct Globals {
 @group(0) @binding(1) var texture0: texture_2d<f32>;
 @group(0) @binding(2) var sampler0: sampler;
 
-// Vertex input
 struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) uv: vec2<f32>,
-    @location(3) color: vec4<f32>,
+    @location(2) color: vec4<f32>,
+    @location(3) bone: i32
 }
 
-// Vertex output / Fragment input
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,

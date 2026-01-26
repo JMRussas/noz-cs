@@ -323,37 +323,34 @@ public class SkeletonDocument : Document
         return hitCount;
     }
 
-    public int HitTestBone(Matrix3x2 transform, Vector2 position)
+    public int HitTestBone(Matrix3x2 transform, Vector2 position, bool cycle = false)
     {
         var bones = new int[MaxBones];
         var boneCount = HitTestBones(transform, position, bones);
         if (boneCount == 0)
             return -1;
 
-        var bestDist = float.MaxValue;
-        var bestBoneIndex = -1;
+        // Return topmost bone (first in list since we iterate in reverse order)
+        if (!cycle)
+            return bones[0];
 
+        // Find the first selected bone and cycle to the next one
         for (var i = 0; i < boneCount; i++)
         {
-            var b = Bones[bones[i]];
-            var localToWorld = b.LocalToWorld * transform;
-            var b0 = Vector2.Transform(Vector2.Zero, localToWorld);
-            var b1 = Vector2.Transform(new Vector2(b.Length, 0), localToWorld);
-            var dist = DistanceFromLine(b0, b1, position);
+            if (!Bones[bones[i]].IsSelected)
+                continue;
 
-            if (dist < bestDist)
-            {
-                bestDist = dist;
-                bestBoneIndex = bones[i];
-            }
+            // Return the next bone in the list (wrap around)
+            return bones[(i + 1) % boneCount];
         }
 
-        return bestBoneIndex;
+        // No selected bone found, return topmost
+        return bones[0];
     }
 
-    public int HitTestBone(Vector2 worldPos)
+    public int HitTestBone(Vector2 worldPos, bool cycle = false)
     {
-        return HitTestBone(Matrix3x2.CreateTranslation(Position), worldPos);
+        return HitTestBone(Matrix3x2.CreateTranslation(Position), worldPos, cycle);
     }
 
     private static bool HitTestBoneShape(Vector2 point, Vector2 boneStart, Vector2 boneEnd)

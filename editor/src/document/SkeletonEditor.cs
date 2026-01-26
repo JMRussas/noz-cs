@@ -8,6 +8,10 @@ namespace NoZ.Editor;
 
 internal class SkeletonEditor : DocumentEditor
 {
+    private const int SortGroupSkin = 0;
+    private const int SortGroupBones = 1;
+    private const int SortGroupSelectedBones = 2;
+
     public new SkeletonDocument Document => (SkeletonDocument)base.Document;
 
     private readonly BoneData[] _savedBones = new BoneData[SkeletonDocument.MaxBones];
@@ -74,7 +78,11 @@ internal class SkeletonEditor : DocumentEditor
     {
         UpdateDefaultState();
         DrawSkeleton();
-        Document.DrawSkin();
+        using (Graphics.PushState())
+        {
+            Graphics.SetSortGroup(SortGroupSkin);
+            Document.DrawSkin();
+        }            
         UpdateBoneNames();
     }
 
@@ -173,7 +181,8 @@ internal class SkeletonEditor : DocumentEditor
 
     private bool TrySelect()
     {
-        var boneIndex = Document.HitTestBone(Workspace.MouseWorldPosition);
+        var cycle = !Input.IsShiftDown();
+        var boneIndex = Document.HitTestBone(Workspace.MouseWorldPosition, cycle);
         if (boneIndex == -1)
             return false;
 
@@ -633,6 +642,7 @@ internal class SkeletonEditor : DocumentEditor
     {
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
+            Graphics.SetSortGroup(SortGroupBones);
             Graphics.SetTransform(Document.Transform);
 
             for (var boneIndex = 0; boneIndex < Document.BoneCount; boneIndex++)
@@ -648,10 +658,12 @@ internal class SkeletonEditor : DocumentEditor
                 {
                     var parentTransform = Document.GetParentLocalToWorld(b, b.LocalToWorld);
                     var pp = Vector2.Transform(Vector2.Zero, parentTransform);
+                    Graphics.SetSortGroup(SortGroupBones);
                     Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
                     Gizmos.DrawDashedLine(pp, p0, order: 1);
                 }
 
+                Graphics.SetSortGroup(selected ? SortGroupSelectedBones : SortGroupBones);
                 Gizmos.DrawBone(p0, p1, boneColor, order: 1);
             }
         }

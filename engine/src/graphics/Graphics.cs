@@ -473,10 +473,10 @@ public static unsafe class Graphics
 
     #endregion
 
-    public static void SetSortGroup(ushort group)
+    public static void SetSortGroup(int group)
     {
         Debug.Assert((group & 0xFFFF) == group);
-        CurrentState.SortGroup = group;
+        CurrentState.SortGroup = (ushort)group;
     }
 
     public static void SetLayer(ushort layer)

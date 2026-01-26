@@ -651,9 +651,7 @@ internal class AnimationDocument : Document
             }
 
             Graphics.SetTransform(transform);
-
-            var lineWidth = EditorStyle.Skeleton.BoneWidth * Gizmos.ZoomRefScale;
-            var boneRadius = EditorStyle.Skeleton.BoneSize * Gizmos.ZoomRefScale;
+            Gizmos.SetColor(EditorStyle.Skeleton.BoneColor);
 
             for (var boneIndex = 0; boneIndex < Skeleton.BoneCount; boneIndex++)
             {
@@ -661,19 +659,24 @@ internal class AnimationDocument : Document
                 var boneTransform = AnimatorBones[boneIndex];
                 var p0 = Vector2.Transform(Vector2.Zero, boneTransform);
                 var p1 = Vector2.Transform(new Vector2(b.Length, 0), boneTransform);
-
-                if (b.ParentIndex >= 0)
-                {
-                    var parentTransform = AnimatorBones[b.ParentIndex];
-                    var pp = Vector2.Transform(Vector2.Zero, parentTransform);
-                    Gizmos.SetColor(EditorStyle.Skeleton.BoneColor);
-                    Gizmos.DrawDashedLine(pp, p0);
-                }
-
                 Gizmos.DrawBone(p0, p1, EditorStyle.Skeleton.BoneColor);
-                Gizmos.SetColor(EditorStyle.Skeleton.BoneColor);
-                Gizmos.DrawCircle(p0, boneRadius);
             }
+
+            DrawSkin();
+        }
+    }
+
+    public void DrawSkin()
+    {
+        if (Skeleton == null) return;
+
+        using (Graphics.PushState())
+        {
+            Graphics.SetLayer(EditorLayer.Document);
+            Graphics.SetTransform(Transform);
+            Graphics.SetBones(AnimatorBones);
+            for (var i = 0; i < Skeleton.SkinCount; i++)
+                Skeleton.Skins[i].Sprite?.DrawSprite();
         }
     }
 
