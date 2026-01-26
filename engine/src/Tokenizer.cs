@@ -435,26 +435,47 @@ public ref struct Tokenizer
         BeginToken();
 
         var hasDecimal = false;
+        var hasExponent = false;
 
         while (HasTokens())
         {
             c = PeekChar();
-            if (!char.IsDigit(c) && c != '.' && c != '-' && c != '+')
-                break;
 
-            if (c == '.' && hasDecimal)
-                break;
-
-            if (c == '.')
+            if (c == '.' && !hasDecimal && !hasExponent)
+            {
                 hasDecimal = true;
+                NextChar();
+                continue;
+            }
 
-            NextChar();
+            if ((c == 'E' || c == 'e') && !hasExponent)
+            {
+                hasExponent = true;
+                NextChar();
+                if (HasTokens() && (PeekChar() == '+' || PeekChar() == '-'))
+                    NextChar();
+                continue;
+            }
+
+            if (char.IsDigit(c))
+            {
+                NextChar();
+                continue;
+            }
+
+            if ((c == '-' || c == '+') && _nextToken.Start == _position)
+            {
+                NextChar();
+                continue;
+            }
+
+            break;
         }
 
-        EndToken(hasDecimal ? TokenType.Float : TokenType.Int);
+        EndToken((hasDecimal || hasExponent) ? TokenType.Float : TokenType.Int);
 
         var span = GetSpan(_nextToken);
-        if (hasDecimal)
+        if (hasDecimal || hasExponent)
             _nextToken.FloatValue = float.TryParse(span, out float f) ? f : 0f;
         else
             _nextToken.IntValue = int.TryParse(span, out int i) ? i : 0;

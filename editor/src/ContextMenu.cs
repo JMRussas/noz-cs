@@ -41,7 +41,7 @@ public struct ContextMenuItem
         new() { Label = null, Handler = null, Level = level };
 
     public static ContextMenuItem FromCommand(Command cmd, int level = 0, Func<bool>? enabled = null, Func<bool>? isChecked = null) =>
-        new() { Label = cmd.Name, Handler = cmd.Handler, Level = level, Key = cmd.Key, Ctrl = cmd.Ctrl, Alt = cmd.Alt, Shift = cmd.Shift, GetEnabled = enabled, GetChecked = isChecked };
+        new() { Label = cmd.Name, Handler = cmd.Handler, Level = level, Key = cmd.Key, Ctrl = cmd.Ctrl, Alt = cmd.Alt, Shift = cmd.Shift, GetEnabled = enabled, GetChecked = isChecked, Icon = cmd.Icon };
 }
 
 public static class ContextMenu

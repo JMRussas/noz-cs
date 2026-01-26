@@ -186,12 +186,8 @@ public static class CommandPalette
             if (_filteredCount >= MaxFilteredCommands)
                 break;
 
-            if (string.IsNullOrEmpty(filter) ||
-                cmd.Name.Contains(filter, StringComparison.OrdinalIgnoreCase) ||
-                cmd.ShortName.Contains(filter, StringComparison.OrdinalIgnoreCase))
-            {
+            if (string.IsNullOrEmpty(filter) || cmd.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))
                 _filteredCommands[_filteredCount++] = cmd;
-            }
         }
         
         _filteredCommands.AsSpan(0, _filteredCount).Sort((a, b) => StringComparer.OrdinalIgnoreCase.Compare(a!.Name, b!.Name));

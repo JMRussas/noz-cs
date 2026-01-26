@@ -2,7 +2,7 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-#define NOZ_KNIFE_DEBUG
+// #define NOZ_KNIFE_DEBUG
 
 using System.Diagnostics;
 using System.Numerics;
@@ -125,17 +125,23 @@ public class KnifeTool : Tool
     private void AddPoint()
     {
         if (!_hoverPositionValid)
+        {
+            LogKnife("AddPoint: hover position invalid");
             return;
+        }
+
+        LogKnife($"AddPoint: pos={_hoverPosition}, isIntersection={_hoverIsIntersection}, isClose={_hoverIsClose}, pointCount={_pointCount}");
 
         // First point needs to be added directly (no line to intersect yet)
         if (_pointCount == 0)
             _points.Add(new KnifePoint
-            { 
+            {
                 Position = _hoverPosition,
                 Intersection = _hoverIsIntersection
             });
 
         _pointCount = _points.Length;
+        LogKnife($"AddPoint: new pointCount={_pointCount}, total points={_points.Length}");
 
         if (_hoverIsClose)
             Commit();
@@ -189,13 +195,20 @@ public class KnifeTool : Tool
 
     private void Commit()
     {
+        LogKnife($"Commit: start with {_points.Length} points, pointCount={_pointCount}");
+
         _points.RemoveLast(_points.Length - _pointCount);
 
         if (_points.Length < 2)
         {
+            LogKnife("Commit: not enough points, finishing");
             Finish();
             return;
         }
+
+        LogKnife($"Commit: {_points.Length} points after trim");
+        for (var i = 0; i < _points.Length; i++)
+            LogKnife($"  Point[{i}]: pos={_points[i].Position}, intersection={_points[i].Intersection}, isFree={_points[i].IsFree}");
 
         Undo.Record(_editor.Document);
 
@@ -207,9 +220,13 @@ public class KnifeTool : Tool
         var anchorHitSize = EditorStyle.Shape.AnchorHitSize / Workspace.Zoom;
         var segmentHitSize = EditorStyle.Shape.SegmentHitSize / Workspace.Zoom;
 
+        LogKnife($"Commit: {knifeSegmentCount} knife segments, anchorHitSize={anchorHitSize}, segmentHitSize={segmentHitSize}");
+
         for (int knifeSegmentIndex=0; knifeSegmentIndex < knifeSegmentCount; knifeSegmentIndex++)
         {
             ref var knifeSegment = ref knifeSegments[knifeSegmentIndex];
+            LogKnife($"Commit: processing knife segment {knifeSegmentIndex}: start={knifeSegment.Start}, end={knifeSegment.End}");
+
             Span<KnifePoint> knifePoints = _points.AsSpan(knifeSegment.Start, knifeSegment.End - knifeSegment.Start + 1);
             var intermediatePoints = knifePoints[1..^1];
 
@@ -218,8 +235,18 @@ public class KnifeTool : Tool
             ref readonly var tailPoint = ref knifePoints[^1];
             var headPos = headPoint.Position;
             var tailPos = tailPoint.Position;
+
+            LogKnife($"Commit: headPos={headPos}, tailPos={tailPos}");
+
             var headCount = _shape.HitTestAll(headPos, headHits, anchorHitSize, segmentHitSize);
             var tailCount = _shape.HitTestAll(tailPos, tailHits, anchorHitSize, segmentHitSize);
+
+            LogKnife($"Commit: headCount={headCount}, tailCount={tailCount}");
+            for (var i = 0; i < headCount; i++)
+                LogKnife($"  HeadHit[{i}]: path={headHits[i].PathIndex}, anchor={headHits[i].AnchorIndex}, segment={headHits[i].SegmentIndex}, anchorPos={headHits[i].AnchorPosition}, segmentPos={headHits[i].SegmentPosition}");
+            for (var i = 0; i < tailCount; i++)
+                LogKnife($"  TailHit[{i}]: path={tailHits[i].PathIndex}, anchor={tailHits[i].AnchorIndex}, segment={tailHits[i].SegmentIndex}, anchorPos={tailHits[i].AnchorPosition}, segmentPos={tailHits[i].SegmentPosition}");
+
             // todo: we should find commong with intermedite points too
             // todo: if there are non intermedia points then we check the mid point and use that for common path finding
             var commonPath = FindSharedPath(
@@ -228,21 +255,39 @@ public class KnifeTool : Tool
                 out var headHit,
                 out var tailHit);
 
+            LogKnife($"Commit: commonPath={commonPath}");
+
             if (commonPath == ushort.MaxValue)
-                continue;            
-            if (headHit.SegmentIndex == ushort.MaxValue || tailHit.SegmentIndex == ushort.MaxValue)
+            {
+                LogKnife("Commit: no common path found, skipping");
                 continue;
+            }
+
+            LogKnife($"Commit: headHit.SegmentIndex={headHit.SegmentIndex}, tailHit.SegmentIndex={tailHit.SegmentIndex}");
+
+            if (headHit.SegmentIndex == ushort.MaxValue || tailHit.SegmentIndex == ushort.MaxValue)
+            {
+                LogKnife("Commit: segment index invalid, skipping");
+                continue;
+            }
 
             if (headHit.SegmentIndex == tailHit.SegmentIndex)
+            {
+                LogKnife("Commit: same segment - calling CutNotch");
                 CutNotch(commonPath, headHit, tailHit, intermediatePoints);
+            }
             else
+            {
+                LogKnife("Commit: different segments - calling CutPath");
                 CutPath(commonPath, headHit, tailHit, intermediatePoints);
+            }
 
             _shape.UpdateSamples();
         }
 
         _shape.UpdateBounds();
 
+        LogKnife("Commit: finished");
         Finish();
 
         _commit?.Invoke();
@@ -254,14 +299,41 @@ public class KnifeTool : Tool
         out HitResult headHit,
         out HitResult tailHit)
     {
+        // Find first matching path, but prefer hits with valid anchor indices
         for (var h = 0; h < headHits.Length; h++)
+        {
             for (var t = 0; t < tailHits.Length; t++)
-                if (headHits[h].PathIndex == tailHits[t].PathIndex)
+            {
+                if (headHits[h].PathIndex != tailHits[t].PathIndex)
+                    continue;
+
+                var pathIndex = headHits[h].PathIndex;
+
+                // Find best head hit for this path (prefer anchor hits)
+                headHit = headHits[h];
+                for (var h2 = h + 1; h2 < headHits.Length; h2++)
                 {
-                    headHit = headHits[h];
-                    tailHit = tailHits[t];
-                    return headHits[h].PathIndex;
+                    if (headHits[h2].PathIndex == pathIndex && headHits[h2].AnchorIndex != ushort.MaxValue)
+                    {
+                        headHit = headHits[h2];
+                        break;
+                    }
                 }
+
+                // Find best tail hit for this path (prefer anchor hits)
+                tailHit = tailHits[t];
+                for (var t2 = t + 1; t2 < tailHits.Length; t2++)
+                {
+                    if (tailHits[t2].PathIndex == pathIndex && tailHits[t2].AnchorIndex != ushort.MaxValue)
+                    {
+                        tailHit = tailHits[t2];
+                        break;
+                    }
+                }
+
+                return pathIndex;
+            }
+        }
 
         headHit = default;
         tailHit = default;
@@ -284,29 +356,46 @@ public class KnifeTool : Tool
         HitResult tailHit,
         ReadOnlySpan<KnifePoint> intermediatePoints)
     {
+        LogKnife($"CutNotch: pathIndex={pathIndex}, headSegment={headHit.SegmentIndex}, tailSegment={tailHit.SegmentIndex}");
+        LogKnife($"CutNotch: headPos={headHit.SegmentPosition}, tailPos={tailHit.SegmentPosition}");
+
         ref readonly var a = ref _shape.GetAnchor(headHit.SegmentIndex);
-        var reversed = Vector2.DistanceSquared(headHit.SegmentPosition, a.Position) >
-                       Vector2.DistanceSquared(tailHit.SegmentPosition, a.Position);
+        ref readonly var aNext = ref _shape.GetNextAnchor(headHit.SegmentIndex);
+        LogKnife($"CutNotch: segment anchor a0={a.Position}, a1={aNext.Position}");
+
+        var headDistToA = Vector2.DistanceSquared(headHit.SegmentPosition, a.Position);
+        var tailDistToA = Vector2.DistanceSquared(tailHit.SegmentPosition, a.Position);
+        var reversed = headDistToA > tailDistToA;
+        LogKnife($"CutNotch: headDistToA={headDistToA}, tailDistToA={tailDistToA}, reversed={reversed}");
+
         if (reversed)
             (headHit, tailHit) = (tailHit, headHit);
 
         _shape.BeginEdit();
 
         // Split segment at head position (preserves curve)
+        LogKnife($"CutNotch: splitting at head position {headHit.SegmentPosition}");
         var currentIdx = _shape.SplitSegmentAtPoint(headHit.SegmentIndex, headHit.SegmentPosition);
         if (currentIdx == ushort.MaxValue)
         {
+            LogKnife("CutNotch: head split failed!");
             _shape.EndEdit();
             return;
         }
+        LogKnife($"CutNotch: head split created anchor at index {currentIdx}");
+        _shape.UpdateSamples();
 
         // Split at tail position (preserves curve for the remaining segment)
         var headIdx = currentIdx;
-        if (ushort.MaxValue == _shape.SplitSegmentAtPoint(currentIdx, tailHit.SegmentPosition))
+        LogKnife($"CutNotch: splitting at tail position {tailHit.SegmentPosition}");
+        var tailIdx = _shape.SplitSegmentAtPoint(currentIdx, tailHit.SegmentPosition);
+        if (tailIdx == ushort.MaxValue)
         {
+            LogKnife("CutNotch: tail split failed!");
             _shape.EndEdit();
             return;
         }
+        LogKnife($"CutNotch: tail split created anchor at index {tailIdx}");
 
         // The segment from head to tail (or first intermediate) is the knife cut - make it straight
         _shape.SetAnchorCurve(headIdx, 0);
@@ -324,21 +413,28 @@ public class KnifeTool : Tool
                 intermediatePositions[i] = intermediatePoints[i].Position;
         }
 
+        LogKnife($"CutNotch: inserting {intermediatePositions.Length} intermediate anchors");
         for (var i = 0; i < intermediatePositions.Length; i++)
         {
             currentIdx = _shape.InsertAnchor(currentIdx, intermediatePositions[i]);
-            if (currentIdx == ushort.MaxValue) break;
+            if (currentIdx == ushort.MaxValue)
+            {
+                LogKnife($"CutNotch: intermediate insert {i} failed!");
+                break;
+            }
         }
 
         _shape.EndEdit();
 
         ref readonly var path = ref _shape.GetPath(pathIndex);
-        var newShapeIndex = _shape.AddPath(path.FillColor);
+        LogKnife($"CutNotch: creating new path from existing path {pathIndex}");
+        var newShapeIndex = _shape.AddPath(path.FillColor, opacity: path.FillOpacity, subract: path.IsSubtract);
         _shape.BeginEdit();
         _shape.AddAnchor(newShapeIndex, headHit.SegmentPosition);
         _shape.AddAnchors(newShapeIndex, intermediatePositions);
         _shape.AddAnchor(newShapeIndex, tailHit.SegmentPosition);
         _shape.EndEdit();
+        LogKnife("CutNotch: done");
     }
 
     private void CutPath(ushort pathIndex,
@@ -347,10 +443,18 @@ public class KnifeTool : Tool
         ReadOnlySpan<KnifePoint> intermediatePoints)
     {
         ref readonly var path = ref _shape.GetPath(pathIndex);
+        LogKnife($"CutPath: pathIndex={pathIndex}, pathAnchorStart={path.AnchorStart}, pathAnchorCount={path.AnchorCount}");
+        LogKnife($"CutPath: headHit segment={headHit.SegmentIndex}, anchor={headHit.AnchorIndex}, pos={headHit.SegmentPosition}");
+        LogKnife($"CutPath: tailHit segment={tailHit.SegmentIndex}, anchor={tailHit.AnchorIndex}, pos={tailHit.SegmentPosition}");
+
         var reverseIntermediates = headHit.SegmentIndex > tailHit.SegmentIndex;
+        LogKnife($"CutPath: reverseIntermediates={reverseIntermediates} (head.seg={headHit.SegmentIndex} > tail.seg={tailHit.SegmentIndex})");
 
         if (reverseIntermediates)
+        {
             (headHit, tailHit) = (tailHit, headHit);
+            LogKnife("CutPath: swapped head and tail");
+        }
 
         _shape.BeginEdit();
 
@@ -358,21 +462,40 @@ public class KnifeTool : Tool
         var headAnchorIndex = headHit.AnchorIndex;
         if (headAnchorIndex == ushort.MaxValue)
         {
+            LogKnife($"CutPath: head has no anchor, splitting segment {headHit.SegmentIndex} at {headHit.SegmentPosition}");
             headAnchorIndex = _shape.SplitSegmentAtPoint(headHit.SegmentIndex, headHit.SegmentPosition);
+            LogKnife($"CutPath: head split created anchor {headAnchorIndex}");
             if (tailHit.AnchorIndex != ushort.MaxValue) tailHit.AnchorIndex++;
             tailHit.SegmentIndex++;
+            LogKnife($"CutPath: adjusted tail: anchor={tailHit.AnchorIndex}, segment={tailHit.SegmentIndex}");
+            _shape.UpdateSamples();
+        }
+        else
+        {
+            LogKnife($"CutPath: head already has anchor {headAnchorIndex}");
         }
 
         var tailAnchorIndex = tailHit.AnchorIndex;
         if (tailAnchorIndex == ushort.MaxValue)
+        {
+            LogKnife($"CutPath: tail has no anchor, splitting segment {tailHit.SegmentIndex} at {tailHit.SegmentPosition}");
             tailAnchorIndex = _shape.SplitSegmentAtPoint(tailHit.SegmentIndex, tailHit.SegmentPosition);
+            LogKnife($"CutPath: tail split created anchor {tailAnchorIndex}");
+        }
+        else
+        {
+            LogKnife($"CutPath: tail already has anchor {tailAnchorIndex}");
+        }
 
         _shape.EndEdit();
 
         Span<Vector2> intermediatePositions = stackalloc Vector2[intermediatePoints.Length];
         for (var i = 0; i < intermediatePoints.Length; i++)
             intermediatePositions[i] = intermediatePoints[i].Position;
+
+        LogKnife($"CutPath: calling SplitPathAtAnchors(path={pathIndex}, head={headAnchorIndex}, tail={tailAnchorIndex}, intermediates={intermediatePositions.Length}, reverse={reverseIntermediates})");
         _shape.SplitPathAtAnchors(pathIndex, headAnchorIndex, tailAnchorIndex, intermediatePositions, reverseIntermediates);
+        LogKnife("CutPath: done");
     }
     
     private void UpdateHover()
@@ -400,7 +523,7 @@ public class KnifeTool : Tool
             }
             else if (result.AnchorIndex != ushort.MaxValue)
             {
-                _hoverPosition = result.AnchorPoint;
+                _hoverPosition = result.AnchorPosition;
                 _hoverIsIntersection = true;
                 _hoverAnchorIndex = result.AnchorIndex;
             }
@@ -470,18 +593,18 @@ public class KnifeTool : Tool
 
                 // Check from anchor0 to first sample
                 if (Physics.OverlapLine(from, to, a0.Position, samples[0], out var intersection))
-                    _points.Add(new KnifePoint { Position = intersection, Intersection = true});
+                    _points.Add(new KnifePoint { Position = Grid.SnapToPixelGrid(intersection), Intersection = true});
 
                 // Check between samples
                 for (var s = 0; s < Shape.MaxSegmentSamples - 1; s++)
                 {
                     if (Physics.OverlapLine(from, to, samples[s], samples[s + 1], out intersection))
-                        _points.Add(new KnifePoint { Position = intersection, Intersection = true});
+                        _points.Add(new KnifePoint { Position = Grid.SnapToPixelGrid(intersection), Intersection = true});
                 }
 
                 // Check from last sample to anchor1
                 if (Physics.OverlapLine(from, to, samples[Shape.MaxSegmentSamples - 1], a1.Position, out intersection))
-                    _points.Add(new KnifePoint { Position = intersection, Intersection = true});
+                    _points.Add(new KnifePoint { Position = Grid.SnapToPixelGrid(intersection), Intersection = true});
             }
         }
 
@@ -495,7 +618,7 @@ public class KnifeTool : Tool
             Vector2.DistanceSquared(origin, a.Position).CompareTo(Vector2.DistanceSquared(origin, b.Position)));
 
         // Remove duplicates (also check against last committed point)
-        const float duplicateThreshold = 0.0001f;
+        var duplicateThreshold = 0.5f / EditorApplication.Config.PixelsPerUnit;
         var duplicateThresholdSqr = duplicateThreshold * duplicateThreshold;
         var writeIdx = _pointCount;
 

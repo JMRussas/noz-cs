@@ -6,7 +6,6 @@ namespace NoZ.Editor;
 public class Command
 {
     public required string Name { get; init; }
-    public required string ShortName { get; init; }
     public required Action Handler { get; init; }
 
     public InputCode Key { get; init; } = InputCode.None;

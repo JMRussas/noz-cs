@@ -3,16 +3,18 @@
 //
 
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace NoZ;
 
-public struct SkeletonBoneTransform
+[StructLayout(LayoutKind.Sequential)]
+public struct BoneTransform
 {
     public Vector2 Position;
     public float Rotation;
     public Vector2 Scale;
 
-    public static readonly SkeletonBoneTransform Identity = new()
+    public static readonly BoneTransform Identity = new()
     {
         Position = Vector2.Zero,
         Rotation = 0f,
@@ -25,7 +27,7 @@ public struct Bone
     public string Name;
     public int Index;
     public int ParentIndex;
-    public SkeletonBoneTransform Transform;
+    public BoneTransform Transform;
     public Matrix3x2 BindPose;
 }
 

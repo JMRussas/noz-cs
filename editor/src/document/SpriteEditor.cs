@@ -45,35 +45,47 @@ public class SpriteEditor : DocumentEditor
             TextureFilter.Point,
             "SpriteEditor");
 
-        var deleteCommand = new Command { Name = "Delete", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX };
+        var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
+        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
+        var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
+        var rotateCommand = new Command { Name = "Rotate", Handler = BeginRotateTool, Key = InputCode.KeyR };
+        var scaleCommand = new Command { Name = "Scale", Handler = BeginScaleTool, Key = InputCode.KeyS };
      
         Commands =
         [
-            new Command { Name = "Toggle Playback", ShortName = "play", Handler = TogglePlayback, Key = InputCode.KeySpace },
-            new Command { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
-            new Command { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
-            new Command { Name = "Move", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
-            new Command { Name = "Rotate", ShortName = "rotate", Handler = BeginRotateTool, Key = InputCode.KeyR },
-            new Command { Name = "Scale", ShortName = "scale", Handler = BeginScaleTool, Key = InputCode.KeyS },
             deleteCommand,
-            new Command { Name = "Curve", ShortName = "curve", Handler = BeginCurveTool, Key = InputCode.KeyC },
-            new Command { Name = "Center", ShortName = "center", Handler = CenterShape, Key = InputCode.KeyC, Shift = true },
-            new Command { Name = "Select All", ShortName = "all", Handler = SelectAll, Key = InputCode.KeyA },
-            new Command { Name = "Insert Anchor", ShortName = "insert", Handler = InsertAnchorAtHover, Key = InputCode.KeyV },
-            new Command { Name = "Pen Tool", ShortName = "pen", Handler = BeginPenTool, Key = InputCode.KeyP },
-            new Command { Name = "Knife Tool", ShortName = "knife", Handler = BeginKnifeTool, Key = InputCode.KeyK },
-            new Command { Name = "Rectangle Tool", ShortName = "rect", Handler = BeginRectangleTool, Key = InputCode.KeyR, Ctrl = true },
-            new Command { Name = "Circle Tool", ShortName = "circle", Handler = BeginCircleTool, Key = InputCode.KeyO, Ctrl = true },
-            new Command { Name = "Duplicate", ShortName = "dup", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true },
-            new Command { Name = "Parent to Bone", ShortName = "parent", Handler = BeginParentTool, Key = InputCode.KeyB },
-            new Command { Name = "Clear Parent", ShortName = "unparent", Handler = ClearParent, Key = InputCode.KeyB, Alt = true },
+            exitEditCommand,
+            moveCommand,
+            rotateCommand,
+            scaleCommand,
+            new Command { Name = "Toggle Playback", Handler = TogglePlayback, Key = InputCode.KeySpace },
+            new Command { Name = "Previous Frame", Handler = PreviousFrame, Key = InputCode.KeyQ },
+            new Command { Name = "Next Frame", Handler = NextFrame, Key = InputCode.KeyE },
+            new Command { Name = "Curve", Handler = BeginCurveTool, Key = InputCode.KeyC },
+            new Command { Name = "Center", Handler = CenterShape, Key = InputCode.KeyC, Shift = true },
+            new Command { Name = "Select All", Handler = SelectAll, Key = InputCode.KeyA },
+            new Command { Name = "Insert Anchor", Handler = InsertAnchorAtHover, Key = InputCode.KeyV },
+            new Command { Name = "Pen Tool", Handler = BeginPenTool, Key = InputCode.KeyP },
+            new Command { Name = "Knife Tool", Handler = BeginKnifeTool, Key = InputCode.KeyK },
+            new Command { Name = "Rectangle Tool", Handler = BeginRectangleTool, Key = InputCode.KeyR, Ctrl = true },
+            new Command { Name = "Circle Tool", Handler = BeginCircleTool, Key = InputCode.KeyO, Ctrl = true },
+            new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true },
+            new Command { Name = "Parent to Bone", Handler = BeginParentTool, Key = InputCode.KeyB },
+            new Command { Name = "Clear Parent", Handler = ClearParent, Key = InputCode.KeyB, Alt = true },
         ];
+
+        bool HasSelection() => Document.GetFrame(_currentFrame).Shape.HasSelection();
 
         ContextMenu = new ContextMenuDef
         {
             Title = "Sprite",
             Items = [
-                ContextMenuItem.FromCommand(deleteCommand, enabled: () => Document.GetFrame(_currentFrame).Shape.HasSelection())
+                ContextMenuItem.FromCommand(deleteCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(moveCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(rotateCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(scaleCommand, enabled: HasSelection),
+                ContextMenuItem.Separator(),
+                ContextMenuItem.FromCommand(exitEditCommand),
             ]
         };  
     }
@@ -94,7 +106,9 @@ public class SpriteEditor : DocumentEditor
 
     public override void Dispose()
     {
-        AtlasManager.UpdateSprite(Document);
+        if (Document.IsModified)
+            AtlasManager.UpdateSprite(Document);
+
         _rasterTexture.Dispose();
         _pixelData.Dispose();
         base.Dispose();
@@ -717,6 +731,7 @@ public class SpriteEditor : DocumentEditor
             return;
 
         var worldPivot = Vector2.Transform(localPivot.Value, Document.Transform);
+        var worldOrigin = Vector2.Transform(Vector2.Zero, Document.Transform);
         Matrix3x2.Invert(Document.Transform, out var invTransform);
 
         Undo.Record(Document);
@@ -727,10 +742,13 @@ public class SpriteEditor : DocumentEditor
         Workspace.BeginTool(new RotateTool(
             worldPivot,
             localPivot.Value,
+            worldOrigin,
+            Vector2.Zero,
             invTransform,
             update: angle =>
             {
-                shape.RotateAnchors(localPivot.Value, angle, _savedPositions);
+                var pivot = Input.IsShiftDown() ? Vector2.Zero : localPivot.Value;
+                shape.RotateAnchors(pivot, angle, _savedPositions);
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 MarkRasterDirty();
@@ -762,6 +780,7 @@ public class SpriteEditor : DocumentEditor
             return;
 
         var worldPivot = Vector2.Transform(localPivot.Value, Document.Transform);
+        var worldOrigin = Vector2.Transform(Vector2.Zero, Document.Transform);
 
         Undo.Record(Document);
 
@@ -773,9 +792,11 @@ public class SpriteEditor : DocumentEditor
 
         Workspace.BeginTool(new ScaleTool(
             worldPivot,
+            worldOrigin,
             update: scale =>
             {
-                shape.ScaleAnchors(localPivot.Value, scale, _savedPositions, _savedCurves);
+                var pivot = Input.IsShiftDown() ? Vector2.Zero : localPivot.Value;
+                shape.ScaleAnchors(pivot, scale, _savedPositions, _savedCurves);
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 MarkRasterDirty();

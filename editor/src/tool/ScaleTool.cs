@@ -9,17 +9,18 @@ namespace NoZ.Editor;
 public class ScaleTool : Tool
 {
     private readonly Vector2 _pivot;
+    private readonly Vector2 _origin;
     private readonly Action<Vector2> _update;
     private readonly Action<Vector2> _commit;
     private readonly Action _cancel;
 
     private Vector2 _startWorld;
-    private float _startDistance;
     private Vector2 _scaleConstraint = Vector2.One;
 
-    public ScaleTool(Vector2 pivot, Action<Vector2> update, Action<Vector2> commit, Action cancel)
+    public ScaleTool(Vector2 pivot, Vector2 origin, Action<Vector2> update, Action<Vector2> commit, Action cancel)
     {
         _pivot = pivot;
+        _origin = origin;
         _update = update;
         _commit = commit;
         _cancel = cancel;
@@ -28,9 +29,6 @@ public class ScaleTool : Tool
     public override void Begin()
     {
         _startWorld = Workspace.MouseWorldPosition;
-        _startDistance = Vector2.Distance(_pivot, _startWorld);
-        if (_startDistance < 0.001f)
-            _startDistance = 1f;
     }
 
     public override void Update()
@@ -59,10 +57,16 @@ public class ScaleTool : Tool
         _update(scale);
     }
 
+    private Vector2 GetCurrentPivot() => Input.IsShiftDown() ? _origin : _pivot;
+
     private Vector2 GetCurrentScale()
     {
-        var currentDistance = Vector2.Distance(_pivot, Workspace.MouseWorldPosition);
-        var ratio = currentDistance / _startDistance;
+        var pivot = GetCurrentPivot();
+        var startDistance = Vector2.Distance(pivot, _startWorld);
+        if (startDistance < 0.001f)
+            startDistance = 1f;
+        var currentDistance = Vector2.Distance(pivot, Workspace.MouseWorldPosition);
+        var ratio = currentDistance / startDistance;
 
         var scale = new Vector2(ratio, ratio);
 
@@ -78,8 +82,10 @@ public class ScaleTool : Tool
     {
         using var _ = Gizmos.PushState(EditorLayer.Tool);
 
+        var pivot = GetCurrentPivot();
+
         Gizmos.SetColor(EditorStyle.Tool.PointColor);
-        Gizmos.DrawCircle(_pivot, EditorStyle.Tool.PointSize, order: 10);
+        Gizmos.DrawCircle(pivot, EditorStyle.Tool.PointSize, order: 10);
 
         var thickness = EditorStyle.Workspace.DocumentBoundsLineWidth / Workspace.Zoom;
 
@@ -91,13 +97,13 @@ public class ScaleTool : Tool
             var bounds = camera.WorldBounds;
 
             if (_scaleConstraint.X > 0)
-                Graphics.Draw(bounds.X, _pivot.Y - thickness, bounds.Width, thickness * 2);
+                Graphics.Draw(bounds.X, pivot.Y - thickness, bounds.Width, thickness * 2);
             if (_scaleConstraint.Y > 0)
-                Graphics.Draw(_pivot.X - thickness, bounds.Y, thickness * 2, bounds.Height);
+                Graphics.Draw(pivot.X - thickness, bounds.Y, thickness * 2, bounds.Height);
         }
 
         Gizmos.SetColor(EditorStyle.Tool.LineColor);
-        Gizmos.DrawDashedLine(_pivot, Workspace.MouseWorldPosition);
+        Gizmos.DrawDashedLine(pivot, Workspace.MouseWorldPosition);
     }
 
     public override void Cancel()

@@ -7,20 +7,6 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-public struct BoneTransform
-{
-    public Vector2 Position;
-    public float Rotation;
-    public Vector2 Scale;
-
-    public static readonly BoneTransform Identity = new()
-    {
-        Position = Vector2.Zero,
-        Rotation = 0f,
-        Scale = Vector2.One
-    };
-}
-
 public class BoneData
 {
     public string Name = "";
@@ -42,14 +28,14 @@ public class BoneData
 
 public class Skin
 {
-    public string AssetName = "";
-    public Document? Mesh;
+    public string SpriteName = "";
+    public SpriteDocument? Sprite = null;
 }
 
 public class SkeletonDocument : Document
 {
     public const int MaxBones = 64;
-    public const int MaxSkins = 16;
+    public const int MaxSkins = 64;
     private const float BoneWidth = 0.15f;
     private const float BoundsPadding = 0.1f;
 
@@ -191,9 +177,7 @@ public class SkeletonDocument : Document
     {
         SkinCount = 0;
         foreach (var key in meta.GetKeys("skin"))
-        {
-            Skins[SkinCount++].AssetName = key;
-        }
+            Skins[SkinCount++].SpriteName = key;
     }
 
     public override void SaveMetadata(PropertySet meta)
@@ -201,15 +185,25 @@ public class SkeletonDocument : Document
         meta.ClearGroup("skin");
         for (var i = 0; i < SkinCount; i++)
         {
-            if (Skins[i].Mesh == null)
-                continue;
-            meta.AddKey("skin", Skins[i].AssetName);
+            if (Skins[i].Sprite == null) continue;
+            meta.AddKey("skin", Skins[i].SpriteName);
         }
     }
 
     public override void PostLoad()
     {
         UpdateTransforms();
+
+        var skinWriteIndex = 0;
+        for (var skinReadIndex=0; skinReadIndex < SkinCount; skinReadIndex++)
+        {
+            var skin = Skins[skinReadIndex];
+            skin.Sprite = DocumentManager.Find(AssetType.Sprite, skin.SpriteName) as SpriteDocument;
+            if (skin.Sprite != null)
+                Skins[skinWriteIndex++] = skin;
+        }
+
+        SkinCount = skinWriteIndex;
     }
 
     public override void OnUndoRedo()
@@ -238,8 +232,8 @@ public class SkeletonDocument : Document
 
         for (var i = 0; i < src.SkinCount; i++)
         {
-            Skins[i].AssetName = src.Skins[i].AssetName;
-            Skins[i].Mesh = src.Skins[i].Mesh;
+            Skins[i].SpriteName = src.Skins[i].SpriteName;
+            Skins[i].Sprite = src.Skins[i].Sprite;
         }
     }
 
@@ -273,6 +267,13 @@ public class SkeletonDocument : Document
             bounds = ExpandBounds(bounds, Vector2.Transform(new Vector2(b.Length, 0), boneTransform));
             bounds = ExpandBounds(bounds, Vector2.Transform(new Vector2(boneWidth, boneWidth), boneTransform));
             bounds = ExpandBounds(bounds, Vector2.Transform(new Vector2(boneWidth, -boneWidth), boneTransform));
+        }
+
+        for (var skinIndex=0; skinIndex < SkinCount; skinIndex++)
+        {
+            var skin = Skins[skinIndex];
+            if (skin.Sprite == null) continue;
+            bounds = Rect.Union(bounds, skin.Sprite.Bounds);
         }
 
         Bounds = bounds.Expand(BoundsPadding);
@@ -561,16 +562,32 @@ public class SkeletonDocument : Document
                     var parentTransform = GetParentLocalToWorld(b, b.LocalToWorld);
                     var pp = Vector2.Transform(Vector2.Zero, parentTransform);
                     Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
-                    Gizmos.DrawDashedLine(pp, p0);
+                    Gizmos.DrawDashedLine(pp, p0, order: 1);
                 }
 
                 Graphics.SetSortGroup((ushort)(b.IsSelected ? 1 : 0));
-                Gizmos.DrawBone(p0, p1, lineWidth, EditorStyle.Skeleton.BoneColor, order: (ushort)(boneIndex * 2));
+                Gizmos.DrawBone(p0, p1, lineWidth, EditorStyle.Skeleton.BoneColor, order: (ushort)(boneIndex * 2 + 1));
             }
         }
+
+        DrawSkin();
     }
 
+    public void DrawSkin()
+    {
+        using (Graphics.PushState())
+        {
+            Graphics.SetLayer(EditorLayer.Document);
+            Graphics.SetTransform(Transform);
 
+            Span<Matrix3x2> boneTransforms = stackalloc Matrix3x2[MaxBones];
+            for (var i = 0; i < BoneCount; i++)
+                boneTransforms[i] = Bones[i].LocalToWorld;
+            Graphics.SetBones(boneTransforms);
+            for (var i = 0; i < SkinCount; i++)
+                Skins[i].Sprite?.DrawSprite();
+        }
+    }
 
     public override void Import(string outputPath, PropertySet config, PropertySet meta)
     {

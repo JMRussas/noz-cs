@@ -138,28 +138,13 @@ public class SpriteDocument : Document
             else if (tk.ExpectIdentifier("c"))
             {
                 Palette = (byte)tk.ExpectInt();
-            }
-            else if (tk.ExpectIdentifier("a"))
-            {
-                IsAntiAliased = true;
-            }
-            else if (tk.ExpectIdentifier("d"))
-            {
-                tk.ExpectFloat();
+                IsAntiAliased = tk.ExpectIdentifier("a");
             }
             else if (tk.ExpectIdentifier("f"))
             {
                 if (tk.ExpectIdentifier("h"))
                     f.Hold = tk.ExpectInt();
                 f = Frames[FrameCount++];
-            }
-            else if (tk.ExpectIdentifier("s"))
-            {
-                tk.ExpectQuotedString(out _);
-            }
-            else if (tk.ExpectIdentifier("h"))
-            {
-                f.Hold = tk.ExpectInt();
             }
             else
             {
@@ -319,8 +304,15 @@ public class SpriteDocument : Document
             return;
         }
 
+        DrawSprite();
+    }
+
+    public void DrawSprite()
+    {
+        if (Atlas == null) return;
+
         using (Graphics.PushState())
-        {            
+        {
             Graphics.SetTexture(Atlas.Texture);
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetColor(Color.White);

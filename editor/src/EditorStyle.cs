@@ -68,6 +68,7 @@ public static class EditorStyle
     public const float ButtonHeight = 32f;
     public const float ButtonBorderRadius = 8f;
 
+    // :workspace
     public static class Workspace
     {
         public static readonly Color FillColor = Color.FromRgb(0x3f3f3f);
@@ -80,8 +81,8 @@ public static class EditorStyle
         public const float Padding = 16f;
         public const float NameSize = 0.24f;
         public const float NamePadding = 0.26f;
-        public const float GridAlpha = 0.3f;
-        public const float GridZeroAlpha = 0.4f;
+        public const float GridAlpha = 0.4f;
+        public const float GridZeroAlpha = 0.5f;
     }
 
     // :popup

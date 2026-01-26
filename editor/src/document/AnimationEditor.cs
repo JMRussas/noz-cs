@@ -33,28 +33,28 @@ internal class AnimationEditor : DocumentEditor
     {
         _commands =
         [
-            new Command { Name = "Toggle Playback", ShortName = "play", Handler = TogglePlayback, Key = InputCode.KeySpace },
-            new Command { Name = "Previous Frame", ShortName = "prev", Handler = PreviousFrame, Key = InputCode.KeyQ },
-            new Command { Name = "Next Frame", ShortName = "next", Handler = NextFrame, Key = InputCode.KeyE },
-            new Command { Name = "Move", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
-            new Command { Name = "Rotate", ShortName = "rotate", Handler = BeginRotateTool, Key = InputCode.KeyR },
-            new Command { Name = "Reset Rotation", ShortName = "rrot", Handler = ResetRotation, Key = InputCode.KeyR, Shift = true },
-            new Command { Name = "Reset Position", ShortName = "rpos", Handler = ResetPosition, Key = InputCode.KeyG, Shift = true },
-            new Command { Name = "Select All", ShortName = "all", Handler = SelectAll, Key = InputCode.KeyA },
-            new Command { Name = "Insert Frame Before", ShortName = "insbefore", Handler = InsertFrameBefore, Key = InputCode.KeyI },
-            new Command { Name = "Insert Frame After", ShortName = "insafter", Handler = InsertFrameAfter, Key = InputCode.KeyO },
-            new Command { Name = "Insert Frame Lerp", ShortName = "inslerp", Handler = InsertFrameAfterLerp, Key = InputCode.KeyO, Alt = true },
-            new Command { Name = "Delete Frame", ShortName = "delframe", Handler = DeleteFrame, Key = InputCode.KeyX },
-            new Command { Name = "Add Hold", ShortName = "hold+", Handler = AddHoldFrame, Key = InputCode.KeyH },
-            new Command { Name = "Remove Hold", ShortName = "hold-", Handler = RemoveHoldFrame, Key = InputCode.KeyH, Shift = true },
-            new Command { Name = "Copy Keys", ShortName = "copy", Handler = CopyKeys, Key = InputCode.KeyC, Ctrl = true },
-            new Command { Name = "Paste Keys", ShortName = "paste", Handler = PasteKeys, Key = InputCode.KeyV, Ctrl = true },
-            new Command { Name = "Toggle Onion Skin", ShortName = "onion", Handler = ToggleOnionSkin, Key = InputCode.KeyO, Shift = true },
-            new Command { Name = "Toggle Root Motion", ShortName = "root", Handler = ToggleRootMotion, Key = InputCode.KeyM, Shift = true },
-            new Command { Name = "Toggle Loop", ShortName = "loop", Handler = ToggleLoop, Key = InputCode.KeyL },
-            new Command { Name = "Increase Play Speed", ShortName = "speed+", Handler = IncreasePlaySpeed, Key = InputCode.KeyRight },
-            new Command { Name = "Decrease Play Speed", ShortName = "speed-", Handler = DecreasePlaySpeed, Key = InputCode.KeyLeft },
-            new Command { Name = "Mirror Pose", ShortName = "mirror", Handler = MirrorPose, Key = InputCode.KeyM },
+            new Command { Name = "Toggle Playback", Handler = TogglePlayback, Key = InputCode.KeySpace },
+            new Command { Name = "Previous Frame", Handler = PreviousFrame, Key = InputCode.KeyQ },
+            new Command { Name = "Next Frame", Handler = NextFrame, Key = InputCode.KeyE },
+            new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG },
+            new Command { Name = "Rotate", Handler = BeginRotateTool, Key = InputCode.KeyR },
+            new Command { Name = "Reset Rotation", Handler = ResetRotation, Key = InputCode.KeyR, Shift = true },
+            new Command { Name = "Reset Position", Handler = ResetPosition, Key = InputCode.KeyG, Shift = true },
+            new Command { Name = "Select All", Handler = SelectAll, Key = InputCode.KeyA },
+            new Command { Name = "Insert Frame Before", Handler = InsertFrameBefore, Key = InputCode.KeyI },
+            new Command { Name = "Insert Frame After", Handler = InsertFrameAfter, Key = InputCode.KeyO },
+            new Command { Name = "Insert Frame Lerp", Handler = InsertFrameAfterLerp, Key = InputCode.KeyO, Alt = true },
+            new Command { Name = "Delete Frame", Handler = DeleteFrame, Key = InputCode.KeyX },
+            new Command { Name = "Add Hold", Handler = AddHoldFrame, Key = InputCode.KeyH },
+            new Command { Name = "Remove Hold", Handler = RemoveHoldFrame, Key = InputCode.KeyH, Shift = true },
+            new Command { Name = "Copy Keys", Handler = CopyKeys, Key = InputCode.KeyC, Ctrl = true },
+            new Command { Name = "Paste Keys", Handler = PasteKeys, Key = InputCode.KeyV, Ctrl = true },
+            new Command { Name = "Toggle Onion Skin", Handler = ToggleOnionSkin, Key = InputCode.KeyO, Shift = true },
+            new Command { Name = "Toggle Root Motion", Handler = ToggleRootMotion, Key = InputCode.KeyM, Shift = true },
+            new Command { Name = "Toggle Loop", Handler = ToggleLoop, Key = InputCode.KeyL },
+            new Command { Name = "Increase Play Speed", Handler = IncreasePlaySpeed, Key = InputCode.KeyRight },
+            new Command { Name = "Decrease Play Speed", Handler = DecreasePlaySpeed, Key = InputCode.KeyLeft },
+            new Command { Name = "Mirror Pose", Handler = MirrorPose, Key = InputCode.KeyM },
         ];
 
         Commands = _commands;
@@ -470,10 +470,13 @@ internal class AnimationEditor : DocumentEditor
 
         var invTransform = Matrix3x2.Identity;
         Matrix3x2.Invert(GetBaseTransform(), out invTransform);
+        var worldOrigin = Vector2.Transform(Vector2.Zero, GetBaseTransform());
 
         Workspace.BeginTool(new RotateTool(
             _selectionCenterWorld,
             _selectionCenter,
+            worldOrigin,
+            Vector2.Zero,
             invTransform,
             update: angle =>
             {

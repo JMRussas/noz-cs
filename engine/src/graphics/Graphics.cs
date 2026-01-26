@@ -445,7 +445,9 @@ public static unsafe class Graphics
         AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
     }
 
-    public static void Draw(Sprite sprite, ushort order = 0)
+    public static void Draw(Sprite sprite) => Draw(sprite, 0);
+
+    public static void Draw(Sprite sprite, ushort order)
     {
         if (sprite == null || SpriteAtlas == null) return;
 

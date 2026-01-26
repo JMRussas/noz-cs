@@ -23,19 +23,43 @@ internal class SkeletonEditor : DocumentEditor
         for (var i = 0; i < SkeletonDocument.MaxBones; i++)
             _savedBones[i] = new BoneData();
 
+        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
+        var deleteCommand = new Command { Name = "Delete", Handler = HandleDelete, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
+        var moveCommand = new Command { Name = "Move", Handler = HanleMove, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
+        var rotateCommand = new Command { Name = "Rotate", Handler = HandleRotate, Key = InputCode.KeyR };
+        var scaleCommand = new Command { Name = "Scale", Handler = HandleScale, Key = InputCode.KeyS };
+        var renameCommand = new Command { Name = "Rename", Handler = HandleRename, Key = InputCode.KeyF2 };
+
         _commands =
         [
-            new Command { Name = "Move", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
-            new Command { Name = "Rotate", ShortName = "rotate", Handler = BeginRotateTool, Key = InputCode.KeyR },
-            new Command { Name = "Scale Length", ShortName = "scale", Handler = BeginScaleTool, Key = InputCode.KeyS },
-            new Command { Name = "Parent", ShortName = "parent", Handler = BeginParentTool, Key = InputCode.KeyP },
-            new Command { Name = "Unparent", ShortName = "unparent", Handler = BeginUnparentTool, Key = InputCode.KeyP, Ctrl = true },
-            new Command { Name = "Extrude", ShortName = "extrude", Handler = BeginExtrudeTool, Key = InputCode.KeyE, Ctrl = true },
-            new Command { Name = "Delete", ShortName = "delete", Handler = HandleRemove, Key = InputCode.KeyX },
-            new Command { Name = "Rename", ShortName = "rename", Handler = BeginRenameCommand, Key = InputCode.KeyF2 },
-            new Command { Name = "Reset Rotation", ShortName = "resetrot", Handler = ResetRotation, Key = InputCode.KeyR, Alt = true },
-            new Command { Name = "Reset Translation", ShortName = "resettrans", Handler = ResetTranslation, Key = InputCode.KeyG, Alt = true },
+            exitEditCommand,
+            moveCommand,
+            deleteCommand,
+            scaleCommand,
+            rotateCommand,
+            renameCommand,
+            new Command { Name = "Parent", Handler = BeginParentTool, Key = InputCode.KeyP },
+            new Command { Name = "Unparent", Handler = BeginUnparentTool, Key = InputCode.KeyP, Ctrl = true },
+            new Command { Name = "Extrude", Handler = BeginExtrudeTool, Key = InputCode.KeyE, Ctrl = true },
         ];
+
+        bool HasSelection() => Document.SelectedBoneCount > 0;
+
+        ContextMenu = new ContextMenuDef 
+        {
+            Title = "Skeleton",
+            Items = 
+            [
+                ContextMenuItem.FromCommand(renameCommand, enabled: () => Document.SelectedBoneCount == 1),
+                ContextMenuItem.FromCommand(deleteCommand, enabled: HasSelection),
+                ContextMenuItem.Separator(),
+                ContextMenuItem.FromCommand(moveCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(rotateCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(scaleCommand, enabled: HasSelection),
+                ContextMenuItem.Separator(),
+                ContextMenuItem.FromCommand(exitEditCommand),
+            ]
+        };
 
         Commands = _commands;
         ClearSelection();
@@ -50,6 +74,7 @@ internal class SkeletonEditor : DocumentEditor
     {
         UpdateDefaultState();
         DrawSkeleton();
+        Document.DrawSkin();
         UpdateBoneNames();
     }
 
@@ -258,7 +283,7 @@ internal class SkeletonEditor : DocumentEditor
 
     #region Move Tool
 
-    private void BeginMoveTool()
+    private void HanleMove()
     {
         if (Document.SelectedBoneCount <= 0)
             return;
@@ -320,7 +345,7 @@ internal class SkeletonEditor : DocumentEditor
 
     #region Rotate Tool
 
-    private void BeginRotateTool()
+    private void HandleRotate()
     {
         if (Document.SelectedBoneCount <= 0)
             return;
@@ -330,10 +355,13 @@ internal class SkeletonEditor : DocumentEditor
         Undo.Record(Document);
 
         Matrix3x2.Invert(Document.Transform, out var invTransform);
+        var worldOrigin = Vector2.Transform(Vector2.Zero, Document.Transform);
 
         Workspace.BeginTool(new RotateTool(
             _selectionCenterWorld,
             _selectionCenter,
+            worldOrigin,
+            Vector2.Zero,
             invTransform,
             update: UpdateRotateTool,
             commit: _ => Document.MarkModified(),
@@ -381,7 +409,7 @@ internal class SkeletonEditor : DocumentEditor
 
     #region Scale Tool
 
-    private void BeginScaleTool()
+    private void HandleScale()
     {
         if (Document.SelectedBoneCount <= 0)
             return;
@@ -390,8 +418,11 @@ internal class SkeletonEditor : DocumentEditor
         SaveState();
         Undo.Record(Document);
 
+        var worldOrigin = Vector2.Transform(Vector2.Zero, Document.Transform);
+
         Workspace.BeginTool(new ScaleTool(
             _selectionCenterWorld,
+            worldOrigin,
             update: UpdateScaleTool,
             commit: _ => Document.MarkModified(),
             cancel: CancelTool
@@ -507,7 +538,7 @@ internal class SkeletonEditor : DocumentEditor
 
     #region Remove
 
-    private void HandleRemove()
+    private void HandleDelete()
     {
         if (Document.SelectedBoneCount <= 0)
             return;
@@ -532,7 +563,7 @@ internal class SkeletonEditor : DocumentEditor
 
     #region Rename
 
-    private void BeginRenameCommand()
+    private void HandleRename()
     {
         var boneIndex = GetFirstSelectedBoneIndex();
         if (boneIndex == -1)
@@ -621,10 +652,10 @@ internal class SkeletonEditor : DocumentEditor
                     var parentTransform = Document.GetParentLocalToWorld(b, b.LocalToWorld);
                     var pp = Vector2.Transform(Vector2.Zero, parentTransform);
                     Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
-                    Gizmos.DrawDashedLine(pp, p0);
+                    Gizmos.DrawDashedLine(pp, p0, order: 1);
                 }
 
-                Gizmos.DrawBone(p0, p1, lineWidth, boneColor);
+                Gizmos.DrawBone(p0, p1, lineWidth, boneColor, order: 1);
             }
         }
     }

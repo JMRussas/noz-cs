@@ -14,7 +14,7 @@ internal class AtlasEditor : DocumentEditor
     {
         _commands =
         [
-            new Command { Name = "Rebuild Atlas", ShortName = "rebuild", Handler = RebuildAtlas, Key = InputCode.KeyR, Ctrl = true }
+            new Command { Name = "Rebuild Atlas", Handler = RebuildAtlas, Key = InputCode.KeyR, Ctrl = true }
         ];
 
         Commands = _commands;

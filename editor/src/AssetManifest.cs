@@ -10,7 +10,7 @@ public static class AssetManifest
 
     public static void Generate()
     {
-        IsModified = true;
+        IsModified = false;
 
         var config = EditorApplication.Config;
 

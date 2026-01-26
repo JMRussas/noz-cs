@@ -15,7 +15,7 @@ public struct HitResult
     public ushort PathIndex;
     public float AnchorDistSqr;
     public float SegmentDistSqr;
-    public Vector2 AnchorPoint;
+    public Vector2 AnchorPosition;
     public Vector2 SegmentPosition;
 
     public static HitResult Empty => new()
@@ -33,6 +33,7 @@ public sealed unsafe partial class Shape : IDisposable
     public const int MaxAnchors = 1024;
     public const int MaxPaths = 256;
     public const int MaxSegmentSamples = 8;
+    public const float MinCurve = 0.0001f;
     
     private void* _memory;
     private UnsafeSpan<Anchor> _anchors;
@@ -241,7 +242,7 @@ public sealed unsafe partial class Shape : IDisposable
                 if (distSqr >= anchorRadiusSqr || distSqr >= result.AnchorDistSqr) continue;
                 result.AnchorIndex = (ushort)anchorIdx;
                 result.AnchorDistSqr = distSqr;
-                result.AnchorPoint = worldPos;
+                result.AnchorPosition = Grid.SnapToPixelGrid(worldPos);
                 result.PathIndex = p;
             }
 
@@ -323,7 +324,7 @@ public sealed unsafe partial class Shape : IDisposable
                         PathIndex = p,
                         AnchorIndex = a0Idx,
                         AnchorDistSqr = adistSqr,
-                        AnchorPoint = a0.Position
+                        AnchorPosition = Grid.SnapToPixelGrid(a0.Position)
                     };
                     continue;
                 }
@@ -351,6 +352,11 @@ public sealed unsafe partial class Shape : IDisposable
                 }
 
                 if (bestDistSqr >= segmentRadiusSqr)
+                    continue;
+
+                // Skip segment hit if closest point is at an endpoint (would be an anchor hit instead)
+                if (Vector2.DistanceSquared(bestClosest, a0World) <= anchorRadiusSqr ||
+                    Vector2.DistanceSquared(bestClosest, a1World) <= anchorRadiusSqr)
                     continue;
 
                 results[count++] = new HitResult
@@ -551,34 +557,66 @@ public sealed unsafe partial class Shape : IDisposable
         var perp = new Vector2(-dir.Y, dir.X) / dirLen;
         var cp = mid + perp * curve;
 
-        // Find closest t on the bezier to targetPoint using samples
+        // Find which segment of the piecewise linear approximation contains targetPoint
+        // and interpolate t based on where along that segment it lies
+        var samples = GetSegmentSamples(anchorIndex);
         var bestT = 0.5f;
         var bestDistSq = float.MaxValue;
+        var bestSegIdx = -1;
 
-        var samples = GetSegmentSamples(anchorIndex);
-        for (var i = 0; i < MaxSegmentSamples; i++)
+        // Check segment from p0 to first sample
         {
-            var t = (i + 1) / (float)(MaxSegmentSamples + 1);
-            var distSq = Vector2.DistanceSquared(samples[i], targetPoint);
+            var segStart = p0;
+            var segEnd = samples[0];
+            var tStart = 0f;
+            var tEnd = 1f / (MaxSegmentSamples + 1);
+            var (distSq, localT) = PointToSegmentT(targetPoint, segStart, segEnd);
             if (distSq < bestDistSq)
             {
                 bestDistSq = distSq;
-                bestT = t;
+                bestT = tStart + (tEnd - tStart) * localT;
+                bestSegIdx = -1;
             }
         }
 
-        // Also check near endpoints
-        if (Vector2.DistanceSquared(p0, targetPoint) < bestDistSq)
-            bestT = 0.1f;
-        else if (Vector2.DistanceSquared(p1, targetPoint) < bestDistSq)
-            bestT = 0.9f;
+        // Check segments between samples
+        for (var i = 0; i < MaxSegmentSamples - 1; i++)
+        {
+            var segStart = samples[i];
+            var segEnd = samples[i + 1];
+            var tStart = (i + 1) / (float)(MaxSegmentSamples + 1);
+            var tEnd = (i + 2) / (float)(MaxSegmentSamples + 1);
+            var (distSq, localT) = PointToSegmentT(targetPoint, segStart, segEnd);
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestT = tStart + (tEnd - tStart) * localT;
+                bestSegIdx = i;
+            }
+        }
+
+        // Check segment from last sample to p1
+        {
+            var segStart = samples[MaxSegmentSamples - 1];
+            var segEnd = p1;
+            var tStart = MaxSegmentSamples / (float)(MaxSegmentSamples + 1);
+            var tEnd = 1f;
+            var (distSq, localT) = PointToSegmentT(targetPoint, segStart, segEnd);
+            if (distSq < bestDistSq)
+            {
+                bestDistSq = distSq;
+                bestT = tStart + (tEnd - tStart) * localT;
+                bestSegIdx = MaxSegmentSamples;
+            }
+        }
 
         // Clamp t to avoid inserting too close to existing anchors
-        bestT = Math.Clamp(bestT, 0.1f, 0.9f);
+        var clampedT = Math.Clamp(bestT, 0.1f, 0.9f);
 
-        // Calculate split point using bezier formula
-        var oneMinusT = 1f - bestT;
-        var splitPoint = oneMinusT * oneMinusT * p0 + 2f * oneMinusT * bestT * cp + bestT * bestT * p1;
+        // Calculate split point using bezier formula and snap to pixel grid
+        var oneMinusT = 1f - clampedT;
+        var splitPointRaw = oneMinusT * oneMinusT * p0 + 2f * oneMinusT * clampedT * cp + clampedT * clampedT * p1;
+        var splitPoint = Grid.SnapToPixelGrid(splitPointRaw);
 
         // Calculate new curve values using least-squares fit to original samples
         var mid1 = (p0 + splitPoint) * 0.5f;
@@ -595,7 +633,7 @@ public sealed unsafe partial class Shape : IDisposable
             for (var i = 0; i < MaxSegmentSamples; i++)
             {
                 var ti = (i + 1) / (float)(MaxSegmentSamples + 1);
-                var origT = bestT * ti;
+                var origT = clampedT * ti;
 
                 // Point on original curve at origT
                 var oneMinusOrigT = 1f - origT;
@@ -630,7 +668,7 @@ public sealed unsafe partial class Shape : IDisposable
             for (var i = 0; i < MaxSegmentSamples; i++)
             {
                 var ti = (i + 1) / (float)(MaxSegmentSamples + 1);
-                var origT = bestT + (1f - bestT) * ti;
+                var origT = clampedT + (1f - clampedT) * ti;
 
                 // Point on original curve at origT
                 var oneMinusOrigT = 1f - origT;
@@ -650,7 +688,7 @@ public sealed unsafe partial class Shape : IDisposable
                 newCurve2 = numerator / denominator;
         }
 
-        a0.Curve = newCurve1;
+        a0.Curve = ClampCurve(newCurve1);
         var newAnchorIndex = InsertAnchor(anchorIndex, splitPoint, newCurve2);
 
         if (!_editing)
@@ -923,6 +961,19 @@ public sealed unsafe partial class Shape : IDisposable
         return Vector2.DistanceSquared(point, closest);
     }
 
+    private static (float distSq, float t) PointToSegmentT(Vector2 point, Vector2 a, Vector2 b)
+    {
+        var ab = b - a;
+        var ap = point - a;
+        var dot = Vector2.Dot(ab, ab);
+        if (MathEx.Approximately(dot, 0))
+            return (float.MaxValue, 0.5f);
+        var t = Vector2.Dot(ap, ab) / dot;
+        t = MathF.Max(0, MathF.Min(1, t));
+        var closest = a + ab * t;
+        return (Vector2.DistanceSquared(point, closest), t);
+    }
+
     public void SetAnchorSelected(ushort anchorIndex, bool selected)
     {
         if (anchorIndex >= AnchorCount)
@@ -934,12 +985,15 @@ public sealed unsafe partial class Shape : IDisposable
             _anchors[anchorIndex].Flags &= ~AnchorFlags.Selected;
     }
 
+    private static float ClampCurve(float curve) =>
+        curve >= -MinCurve && curve <= MinCurve ? 0f : curve;
+
     public void SetAnchorCurve(ushort anchorIndex, float curve)
     {
         if (anchorIndex >= AnchorCount)
             return;
 
-        _anchors[anchorIndex].Curve = curve;
+        _anchors[anchorIndex].Curve = ClampCurve(curve);
     }
 
     public void TranslateAnchors(Vector2 delta, Vector2[] savedPositions, bool snap)
@@ -1003,7 +1057,7 @@ public sealed unsafe partial class Shape : IDisposable
 
             var offset = savedPositions[i] - pivot;
             _anchors[i].Position = pivot + offset * scale;
-            _anchors[i].Curve = savedCurves[i] * curveScale;
+            _anchors[i].Curve = ClampCurve(savedCurves[i] * curveScale);
         }
 
         UpdateSamples();
@@ -1060,7 +1114,7 @@ public sealed unsafe partial class Shape : IDisposable
 
             var offset = savedPositions[i] - pivot;
             _anchors[i].Position = Grid.SnapToPixelGrid(pivot + offset * correctedScale);
-            _anchors[i].Curve = savedCurves[i] * correctedCurveScale;
+            _anchors[i].Curve = ClampCurve(savedCurves[i] * correctedCurveScale);
         }
     }
 
@@ -1354,7 +1408,8 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorStart = AnchorCount,
             AnchorCount = (ushort)path2Count,
             FillColor = srcPath.FillColor,
-            Flags = PathFlags.None
+            FillOpacity = srcPath.FillOpacity,            
+            Flags = srcPath.IsSubtract ? PathFlags.Subtract : PathFlags.None
         };
 
         // Copy path2 anchors to the end

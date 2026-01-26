@@ -42,17 +42,6 @@ public static class CommandManager
         }
     }
 
-    public static Command? FindCommand(string name)
-    {
-        foreach (var cmd in GetActiveCommands())
-        {
-            if (string.Equals(cmd.Name, name, StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(cmd.ShortName, name, StringComparison.OrdinalIgnoreCase))
-                return cmd;
-        }
-        return null;
-    }
-
     public static bool ProcessShortcuts()
     {
         var shift = Input.IsShiftDown();
@@ -69,24 +58,6 @@ public static class CommandManager
 
             if (cmd.Ctrl != ctrl || cmd.Alt != alt || cmd.Shift != shift)
                 continue;
-
-            if (cmd.Ctrl)
-            {
-                Input.ConsumeButton(InputCode.KeyLeftCtrl);
-                Input.ConsumeButton(InputCode.KeyRightCtrl);
-            }
-
-            if (cmd.Alt)
-            {
-                Input.ConsumeButton(InputCode.KeyLeftAlt);
-                Input.ConsumeButton(InputCode.KeyRightAlt);
-            }
-
-            if (cmd.Shift)
-            {
-                Input.ConsumeButton(InputCode.KeyLeftShift);
-                Input.ConsumeButton(InputCode.KeyRightShift);
-            }
 
             Input.ConsumeButton(cmd.Key);
 

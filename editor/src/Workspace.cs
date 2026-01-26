@@ -14,35 +14,10 @@ public enum WorkspaceState
 
 public static class Workspace
 {
-    private static void RebuildAll()
+    private static void ReimportAll()
     {
         foreach (var doc in DocumentManager.Documents)
             Importer.QueueImport(doc, true);
-    }
-
-    private static ContextMenuDef BuildWorkspaceContextMenu()
-    {
-        var items = new List<ContextMenuItem>();
-
-        var creatableDefs = DocumentManager.GetCreatableDefs().ToArray();
-        if (creatableDefs.Length > 0)
-        {
-            items.Add(ContextMenuItem.Submenu("New"));
-            foreach (var def in creatableDefs)
-            {
-                var assetType = def.Type;
-                items.Add(ContextMenuItem.Item(def.Type.ToString(), () => CreateNewDocument(assetType), level: 1));
-            }
-            items.Add(ContextMenuItem.Separator());
-        }
-
-        items.Add(ContextMenuItem.Item("Move", BeginMoveTool, key: InputCode.KeyG, icon: EditorAssets.Sprites.IconMove));
-        items.Add(ContextMenuItem.Item("Duplicate", DuplicateSelected, ctrl: true, key: InputCode.KeyD, icon: EditorAssets.Sprites.IconDuplicate));
-        items.Add(ContextMenuItem.Item("Delete", DeleteSelected, key: InputCode.KeyX, icon: EditorAssets.Sprites.IconDelete));
-        items.Add(ContextMenuItem.Separator());
-        items.Add(ContextMenuItem.Item("Rebuild All", RebuildAll, alt: true, ctrl: true, shift: true, key: InputCode.KeyA));
-
-        return new ContextMenuDef(items.ToArray(), "Asset");
     }
 
     private static void CreateNewDocument(AssetType assetType)
@@ -63,34 +38,58 @@ public static class Workspace
         DocumentManager.SaveAll();
     }
 
-    private static void RegisterCommands()
+    private static void InitCommands()
     {
+        var renameCommand = new Command { Name = "Rename", Handler = BeginRenameTool, Key = InputCode.KeyF2 };
+        var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
+        var duplicateCommand = new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true, Icon = EditorAssets.Sprites.IconDuplicate };
+        var editCommand = new Command { Name = "Edit", Handler = ToggleEdit, Key = InputCode.KeyTab, Icon = EditorAssets.Sprites.IconEdit };
+        var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
+
         CommandManager.RegisterCommon([
-            new Command { Name = "Save All", ShortName = "save", Handler = DocumentManager.SaveAll, Key = InputCode.KeyS, Ctrl = true },
-            new Command { Name = "Undo", ShortName = "undo", Handler = () => Undo.DoUndo(), Key = InputCode.KeyZ, Ctrl = true },
-            new Command { Name = "Redo", ShortName = "redo", Handler = () => Undo.DoRedo(), Key = InputCode.KeyY, Ctrl = true },
-            new Command { Name = "Increase UI Scale", ShortName = "ui+", Handler = IncreaseUIScale, Key = InputCode.KeyEquals, Ctrl = true },
-            new Command { Name = "Decrease UI Scale", ShortName = "ui-", Handler = DecreaseUIScale, Key = InputCode.KeyMinus, Ctrl = true },
-            new Command { Name = "Reset UI Scale", ShortName = "ui0", Handler = ResetUIScale, Key = InputCode.Key0, Ctrl = true },
-            new Command { Name = "Command Palette", ShortName = "palette", Handler = CommandPalette.Open, Key = InputCode.KeyP, Ctrl = true, Shift = true },
-            new Command { Name = "Toggle Edit Mode", ShortName = "edit", Handler = ToggleEdit, Key = InputCode.KeyTab },
-            new Command { Name = "Toggle Grid", ShortName = "grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Ctrl = true },
-            new Command { Name = "Frame Selected", ShortName = "frame", Handler = FrameSelected, Key = InputCode.KeyF },
-            new Command { Name = "Rebuild Atlas", ShortName = "rebuild", Handler = RebuildAtlas },
-            new Command { Name = "Toggle Names", ShortName = "names", Handler = ToggleNames, Key = InputCode.KeyN, Alt = true },
+            new Command { Name = "Save All", Handler = DocumentManager.SaveAll, Key = InputCode.KeyS, Ctrl = true },
+            new Command { Name = "Undo", Handler = () => Undo.DoUndo(), Key = InputCode.KeyZ, Ctrl = true },
+            new Command { Name = "Redo", Handler = () => Undo.DoRedo(), Key = InputCode.KeyY, Ctrl = true },
+            new Command { Name = "Increase UI Scale", Handler = IncreaseUIScale, Key = InputCode.KeyEquals, Ctrl = true },
+            new Command { Name = "Decrease UI Scale", Handler = DecreaseUIScale, Key = InputCode.KeyMinus, Ctrl = true },
+            new Command { Name = "Reset UI Scale", Handler = ResetUIScale, Key = InputCode.Key0, Ctrl = true },
+            new Command { Name = "Command Palette", Handler = CommandPalette.Open, Key = InputCode.KeyP, Ctrl = true, Shift = true },
+            new Command { Name = "Toggle Grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Ctrl = true },
+            new Command { Name = "Toggle Names", Handler = ToggleNames, Key = InputCode.KeyN, Alt = true },
         ]);
 
         CommandManager.RegisterWorkspace([
-            new Command { Name = "Move Selected", ShortName = "move", Handler = BeginMoveTool, Key = InputCode.KeyG },
-            new Command { Name = "Rename", ShortName = "rename", Handler = BeginRenameTool, Key = InputCode.KeyF2 },
-            new Command { Name = "Duplicate Selected", ShortName = "duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true },
-            new Command { Name = "Delete Selected", ShortName = "delete", Handler = DeleteSelected, Key = InputCode.KeyX },
-            new Command { Name = "Rebuild All", ShortName = "build", Handler = RebuildAll },
-            new Command { Name = "Play/Stop", ShortName = "play]", Handler = Play, Key = InputCode.KeySpace },
-            new Command { Name = "Show/Hide Hidden Assets", ShortName = "hidden", Handler = ToggleShowHidden },
+            editCommand,
+            renameCommand,
+            deleteCommand,
+            duplicateCommand,
+            moveCommand,
+            new Command { Name = "Frame", Handler = FrameSelected, Key = InputCode.KeyF },
+            new Command { Name = "Reimport All", Handler = ReimportAll },
+            new Command { Name = "Play/Stop", Handler = Play, Key = InputCode.KeySpace },
+            new Command { Name = "Show/Hide Hidden Assets", Handler = ToggleShowHidden },
+            new Command { Name = "Rebuild Atlas", Handler = RebuildAtlas },
         ]);
 
-        _workspaceContextMenu = BuildWorkspaceContextMenu();
+        var items = new List<ContextMenuItem>();
+        var creatableDefs = DocumentManager.GetCreatableDefs().ToArray();
+        if (creatableDefs.Length > 0)
+        {
+            items.Add(ContextMenuItem.Submenu("New"));
+            foreach (var def in creatableDefs)
+            {
+                var assetType = def.Type;
+                items.Add(ContextMenuItem.Item(def.Type.ToString(), () => CreateNewDocument(assetType), level: 1));
+            }
+            items.Add(ContextMenuItem.Separator());
+        }
+
+        items.Add(ContextMenuItem.FromCommand(editCommand));
+        items.Add(ContextMenuItem.FromCommand(duplicateCommand));
+        items.Add(ContextMenuItem.FromCommand(renameCommand));
+        items.Add(ContextMenuItem.FromCommand(deleteCommand));
+        items.Add(ContextMenuItem.FromCommand(moveCommand));
+        _workspaceContextMenu = new ContextMenuDef([.. items], "Asset");
     }
 
     private const float ZoomMin = 0.01f;
@@ -121,6 +120,7 @@ public static class Workspace
     private static bool _wasDragging;
     private static InputCode _dragButton;
     private static bool _clearSelectionOnRelease;
+    private static WorkspaceState _pendingState;
 
     private static Document? _activeDocument;
     private static DocumentEditor? _activeEditor;
@@ -171,8 +171,9 @@ public static class Workspace
         _dpi = DefaultDpi;
         _uiScale = 1f;
         _showGrid = true;
+        _pendingState = WorkspaceState.Default;
 
-        RegisterCommands();
+        InitCommands();
         UpdateCamera();
 
         Graphics.ClearColor = EditorStyle.Workspace.FillColor;
@@ -210,6 +211,7 @@ public static class Workspace
     
     public static void Update()
     {
+        UpdateState();
         UpdateCamera();
 
         if (!CommandPalette.IsOpen && !ContextMenu.IsVisible && !ConfirmDialog.IsVisible)
@@ -740,9 +742,21 @@ public static class Workspace
         ShowHidden = !ShowHidden; 
     }
 
-    private static void ToggleEdit()
+    public static void ToggleEdit()
     {
-        if (State == WorkspaceState.Edit)
+        _pendingState = State == WorkspaceState.Edit
+            ? WorkspaceState.Default
+            : WorkspaceState.Edit;
+    }
+
+    private static void UpdateState()
+    {
+        if (_pendingState == State)
+            return;
+
+        State = _pendingState;
+
+        if (State == WorkspaceState.Default)
         {
             EndEdit();
             return;
