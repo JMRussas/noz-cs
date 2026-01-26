@@ -63,13 +63,13 @@ public sealed partial class Shape
 
             if (vertexCount < 3) continue;
 
-            var isHole = (path.Flags & PathFlags.Hole) != 0;
-            var fillColor = isHole
+            var isSubtract = path.IsSubtract;
+            var fillColor = isSubtract
                 ? Color32.Transparent
-                : palette[path.FillColor % palette.Length].ToColor32();
+                : palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
             var rb = RasterBounds;
 
-            RasterizePath(pixels, polyVerts[..vertexCount], fillColor, offset, rb, isHole);
+            RasterizePath(pixels, polyVerts[..vertexCount], fillColor, offset, rb, isSubtract);
         }
     }
 
@@ -238,7 +238,7 @@ public sealed partial class Shape
                     if (IsPointInPolygonFast(worldPoint, polyVerts))
                     {
                         ref var path = ref _paths[pIdx];
-                        var isHole = (path.Flags & PathFlags.Hole) != 0;
+                        var isHole = (path.Flags & PathFlags.Subtract) != 0;
                         inside = isHole ? (byte)0 : (byte)(pIdx + 1);
                     }
                 }
@@ -285,7 +285,7 @@ public sealed partial class Shape
                     {
                         var pathIdx = (ushort)(currentMask - 1);
                         ref var path = ref _paths[pathIdx];
-                        var fillColor = palette[path.FillColor % palette.Length].ToColor32();
+                        var fillColor = palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
 
                         if (fillColor.A == 255 || dst.A == 0)
                             dst = fillColor;
@@ -307,7 +307,7 @@ public sealed partial class Shape
                         // Inside edge pixel - use full coverage with the stored path color
                         var pathIdx = (ushort)(currentMask - 1);
                         ref var path = ref _paths[pathIdx];
-                        var fillColor = palette[path.FillColor % palette.Length].ToColor32();
+                        var fillColor = palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
 
                         if (fillColor.A == 255 || dst.A == 0)
                             dst = fillColor;
@@ -355,7 +355,7 @@ public sealed partial class Shape
 
             if (pathAlpha <= 0f) continue;
 
-            var isHole = (path.Flags & PathFlags.Hole) != 0;
+            var isHole = (path.Flags & PathFlags.Subtract) != 0;
 
             if (isHole)
             {
@@ -363,7 +363,7 @@ public sealed partial class Shape
             }
             else
             {
-                var pathColor = palette[path.FillColor % palette.Length].ToColor32();
+                var pathColor = palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
 
                 if (resultAlpha <= 0f)
                 {

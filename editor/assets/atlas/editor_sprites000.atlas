@@ -1,33 +1,36 @@
 w 4096
 h 4096
-d 96
+d 128
 
-r "asset_icon_atlas" 1 1 88 88
-r "asset_icon_bin" 1 89 66 80
-r "asset_icon_event" 1 169 65 100
-r "asset_icon_font" 1 269 90 90
-r "asset_icon_lua" 66 169 91 93
-r "asset_icon_shader" 89 1 88 88
-r "asset_icon_sound" 1 359 68 92
-r "asset_icon_vfx" 1 451 92 92
-r "icon_circle" 91 262 96 94
-r "icon_close" 91 356 94 94
-r "icon_dropdown" 67 89 92 44
-r "icon_edge_mode" 157 133 84 93
-r "icon_expand_down" 157 226 94 26
-r "icon_expand_up" 159 89 94 26
-r "icon_face_mode" 241 115 87 90
-r "icon_loop" 177 1 92 70
-r "icon_mirror" 269 1 90 76
-r "icon_onion" 1 543 92 838
-r "icon_opacity" 1 1381 80 80
-r "icon_opacity_overlay" 1 1461 80 80
-r "icon_palette" 1 1541 92 92
-r "icon_publish" 81 1381 82 94
-r "icon_root_motion" 93 450 86 90
-r "icon_search" 93 540 92 97
-r "icon_submenu" 93 637 60 92
-r "icon_subtract" 93 729 92 91
-r "icon_tiling" 179 450 90 90
-r "icon_vertex_mode" 153 637 88 88
-r "icon_weight_mode" 185 356 90 86
+r "asset_icon_atlas" 1 1 116 116
+r "asset_icon_bin" 1 117 86 104
+r "asset_icon_event" 1 221 85 131
+r "asset_icon_font" 1 352 118 118
+r "asset_icon_lua" 86 221 120 122
+r "asset_icon_shader" 117 1 116 116
+r "asset_icon_sound" 1 470 90 120
+r "asset_icon_vfx" 1 590 120 120
+r "icon_antialias_off" 91 470 113 113
+r "icon_antialias_on" 119 343 113 113
+r "icon_circle" 206 117 126 126
+r "icon_close" 1 710 122 122
+r "icon_delete" 91 583 2 2
+r "icon_dropdown" 206 243 124 58
+r "icon_duplicate" 233 1 116 116
+r "icon_expand_down" 206 301 126 34
+r "icon_expand_up" 330 243 126 34
+r "icon_loop" 332 117 122 92
+r "icon_mirror" 87 117 118 102
+r "icon_move" 349 1 39 39
+r "icon_onion" 349 40 115 67
+r "icon_opacity" 121 583 115 115
+r "icon_opacity_overlay" 204 456 115 115
+r "icon_palette" 232 335 121 121
+r "icon_publish" 454 107 108 126
+r "icon_root_motion" 1 832 112 116
+r "icon_search" 1 948 107 114
+r "icon_submenu" 1 1062 80 122
+r "icon_subtract" 1 1184 121 120
+r "icon_tiling" 81 1062 118 118
+r "new" 87 219 2 2
+r "new" 89 219 2 2

@@ -25,15 +25,18 @@ public static class EditorAssets
         public const string AssetIconShader = "asset_icon_shader";
         public const string AssetIconSound = "asset_icon_sound";
         public const string AssetIconVfx = "asset_icon_vfx";
+        public const string IconAntialiasOff = "icon_antialias_off";
+        public const string IconAntialiasOn = "icon_antialias_on";
         public const string IconCircle = "icon_circle";
         public const string IconClose = "icon_close";
+        public const string IconDelete = "icon_delete";
         public const string IconDropdown = "icon_dropdown";
-        public const string IconEdgeMode = "icon_edge_mode";
+        public const string IconDuplicate = "icon_duplicate";
         public const string IconExpandDown = "icon_expand_down";
         public const string IconExpandUp = "icon_expand_up";
-        public const string IconFaceMode = "icon_face_mode";
         public const string IconLoop = "icon_loop";
         public const string IconMirror = "icon_mirror";
+        public const string IconMove = "icon_move";
         public const string IconOnion = "icon_onion";
         public const string IconOpacity = "icon_opacity";
         public const string IconOpacityOverlay = "icon_opacity_overlay";
@@ -44,8 +47,6 @@ public static class EditorAssets
         public const string IconSubmenu = "icon_submenu";
         public const string IconSubtract = "icon_subtract";
         public const string IconTiling = "icon_tiling";
-        public const string IconVertexMode = "icon_vertex_mode";
-        public const string IconWeightMode = "icon_weight_mode";
         public const string EditorPalette = "editor_palette";
     }
 
@@ -116,15 +117,18 @@ public static class EditorAssets
         public static Sprite AssetIconShader { get; private set; } = null!;
         public static Sprite AssetIconSound { get; private set; } = null!;
         public static Sprite AssetIconVfx { get; private set; } = null!;
+        public static Sprite IconAntialiasOff { get; private set; } = null!;
+        public static Sprite IconAntialiasOn { get; private set; } = null!;
         public static Sprite IconCircle { get; private set; } = null!;
         public static Sprite IconClose { get; private set; } = null!;
+        public static Sprite IconDelete { get; private set; } = null!;
         public static Sprite IconDropdown { get; private set; } = null!;
-        public static Sprite IconEdgeMode { get; private set; } = null!;
+        public static Sprite IconDuplicate { get; private set; } = null!;
         public static Sprite IconExpandDown { get; private set; } = null!;
         public static Sprite IconExpandUp { get; private set; } = null!;
-        public static Sprite IconFaceMode { get; private set; } = null!;
         public static Sprite IconLoop { get; private set; } = null!;
         public static Sprite IconMirror { get; private set; } = null!;
+        public static Sprite IconMove { get; private set; } = null!;
         public static Sprite IconOnion { get; private set; } = null!;
         public static Sprite IconOpacity { get; private set; } = null!;
         public static Sprite IconOpacityOverlay { get; private set; } = null!;
@@ -135,8 +139,6 @@ public static class EditorAssets
         public static Sprite IconSubmenu { get; private set; } = null!;
         public static Sprite IconSubtract { get; private set; } = null!;
         public static Sprite IconTiling { get; private set; } = null!;
-        public static Sprite IconVertexMode { get; private set; } = null!;
-        public static Sprite IconWeightMode { get; private set; } = null!;
 
         public static void Load()
         {
@@ -148,15 +150,18 @@ public static class EditorAssets
             AssetIconShader = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconShader)!;
             AssetIconSound = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconSound)!;
             AssetIconVfx = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconVfx)!;
+            IconAntialiasOff = (Sprite)Asset.Load(AssetType.Sprite, Names.IconAntialiasOff)!;
+            IconAntialiasOn = (Sprite)Asset.Load(AssetType.Sprite, Names.IconAntialiasOn)!;
             IconCircle = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCircle)!;
             IconClose = (Sprite)Asset.Load(AssetType.Sprite, Names.IconClose)!;
+            IconDelete = (Sprite)Asset.Load(AssetType.Sprite, Names.IconDelete)!;
             IconDropdown = (Sprite)Asset.Load(AssetType.Sprite, Names.IconDropdown)!;
-            IconEdgeMode = (Sprite)Asset.Load(AssetType.Sprite, Names.IconEdgeMode)!;
+            IconDuplicate = (Sprite)Asset.Load(AssetType.Sprite, Names.IconDuplicate)!;
             IconExpandDown = (Sprite)Asset.Load(AssetType.Sprite, Names.IconExpandDown)!;
             IconExpandUp = (Sprite)Asset.Load(AssetType.Sprite, Names.IconExpandUp)!;
-            IconFaceMode = (Sprite)Asset.Load(AssetType.Sprite, Names.IconFaceMode)!;
             IconLoop = (Sprite)Asset.Load(AssetType.Sprite, Names.IconLoop)!;
             IconMirror = (Sprite)Asset.Load(AssetType.Sprite, Names.IconMirror)!;
+            IconMove = (Sprite)Asset.Load(AssetType.Sprite, Names.IconMove)!;
             IconOnion = (Sprite)Asset.Load(AssetType.Sprite, Names.IconOnion)!;
             IconOpacity = (Sprite)Asset.Load(AssetType.Sprite, Names.IconOpacity)!;
             IconOpacityOverlay = (Sprite)Asset.Load(AssetType.Sprite, Names.IconOpacityOverlay)!;
@@ -167,8 +172,6 @@ public static class EditorAssets
             IconSubmenu = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubmenu)!;
             IconSubtract = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubtract)!;
             IconTiling = (Sprite)Asset.Load(AssetType.Sprite, Names.IconTiling)!;
-            IconVertexMode = (Sprite)Asset.Load(AssetType.Sprite, Names.IconVertexMode)!;
-            IconWeightMode = (Sprite)Asset.Load(AssetType.Sprite, Names.IconWeightMode)!;
         }
 
         public static void Unload()
@@ -181,15 +184,18 @@ public static class EditorAssets
             AssetIconShader?.Dispose();
             AssetIconSound?.Dispose();
             AssetIconVfx?.Dispose();
+            IconAntialiasOff?.Dispose();
+            IconAntialiasOn?.Dispose();
             IconCircle?.Dispose();
             IconClose?.Dispose();
+            IconDelete?.Dispose();
             IconDropdown?.Dispose();
-            IconEdgeMode?.Dispose();
+            IconDuplicate?.Dispose();
             IconExpandDown?.Dispose();
             IconExpandUp?.Dispose();
-            IconFaceMode?.Dispose();
             IconLoop?.Dispose();
             IconMirror?.Dispose();
+            IconMove?.Dispose();
             IconOnion?.Dispose();
             IconOpacity?.Dispose();
             IconOpacityOverlay?.Dispose();
@@ -200,8 +206,6 @@ public static class EditorAssets
             IconSubmenu?.Dispose();
             IconSubtract?.Dispose();
             IconTiling?.Dispose();
-            IconVertexMode?.Dispose();
-            IconWeightMode?.Dispose();
         }
     }
 

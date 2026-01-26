@@ -3,8 +3,60 @@
 //
 
 using System.Numerics;
+using System.Diagnostics;
 
 namespace NoZ;
+
+[DebuggerDisplay("{Value}")]
+public struct CanvasId : IEquatable<CanvasId>
+{
+    public byte Value;
+
+    public CanvasId(byte value)
+    {
+        Debug.Assert(value <= MaxValue, "CanvasId value exceeds maximum");
+        Value = value;
+    }
+
+    public readonly bool Equals(CanvasId other) => other.Value == Value;
+    public override readonly bool Equals(object? obj) =>
+        obj is CanvasId canvasId && Equals(canvasId);
+
+    public static bool operator ==(CanvasId a, CanvasId b) => a.Value == b.Value;
+    public static bool operator !=(CanvasId a, CanvasId b) => a.Value != b.Value;
+    public readonly override int GetHashCode() => Value;
+    public static implicit operator byte(CanvasId id) => id.Value;
+    public static implicit operator CanvasId(byte value) => new(value);
+    public static implicit operator CanvasId(int value) => new((byte)value);
+
+    public const byte None = 0;
+    public const byte MaxValue = 64;
+}
+
+[DebuggerDisplay("{Value}")]
+public struct ElementId : IEquatable<ElementId>
+{
+    public byte Value;
+
+    public ElementId(byte value)
+    {
+        Debug.Assert(value <= MaxValue, "ElementId value exceeds maximum");
+        Value = value;
+    }
+
+    public readonly bool Equals(ElementId other) => other.Value == Value;
+    public override readonly bool Equals(object? obj) =>
+        obj is ElementId elementId && Equals(elementId);
+
+    public static bool operator ==(ElementId a, ElementId b) => a.Value == b.Value;
+    public static bool operator !=(ElementId a, ElementId b) => a.Value != b.Value;
+    public readonly override int GetHashCode() => Value;
+    public static implicit operator byte(ElementId id) => id.Value;
+    public static implicit operator ElementId(byte value) => new(value);
+    public static implicit operator ElementId(int value) => new((byte)value);
+    public const byte None = 0;
+    public const byte MaxValue = 255;
+}
 
 internal enum ElementType : ushort
 {

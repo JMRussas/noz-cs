@@ -31,8 +31,8 @@ public struct ContextMenuItem
     public readonly bool IsEnabled => GetEnabled?.Invoke() ?? true;
     public readonly bool IsChecked => GetChecked?.Invoke() ?? false;
 
-    public static ContextMenuItem Item(string label, Action handler, InputCode key = InputCode.None, bool ctrl = false, bool alt = false, bool shift = false, int level = 0, Func<bool>? enabled = null, Func<bool>? isChecked = null) =>
-        new() { Label = label, Handler = handler, Level = level, Key = key, Ctrl = ctrl, Alt = alt, Shift = shift, GetEnabled = enabled, GetChecked = isChecked };
+    public static ContextMenuItem Item(string label, Action handler, InputCode key = InputCode.None, bool ctrl = false, bool alt = false, bool shift = false, int level = 0, Func<bool>? enabled = null, Func<bool>? isChecked = null, Sprite? icon = null) =>
+        new() { Label = label, Handler = handler, Level = level, Key = key, Ctrl = ctrl, Alt = alt, Shift = shift, GetEnabled = enabled, GetChecked = isChecked, Icon = icon };
 
     public static ContextMenuItem Submenu(string label, int level = 0) =>
         new() { Label = label, Handler = null, Level = level };
@@ -245,7 +245,7 @@ public static class ContextMenu
                             if (hasChildren)
                             {
                                 UI.Spacer(EditorStyle.Control.Spacing);
-                                using (UI.BeginContainer(EditorStyle.Popup.IconContainer with { Padding = EdgeInsets.TopBottom(EditorStyle.Popup.IconContainer.Padding.T) }))
+                                using (UI.BeginContainer(EditorStyle.Popup.IconContainer with { Padding = EdgeInsets.TopBottom(EditorStyle.Popup.IconContainer.Padding.T * 2) }))
                                     UI.Image(EditorAssets.Sprites.IconSubmenu, style: EditorStyle.Popup.Icon with { AlignX = Align.Max });
                             }
                             else if (item.Key != InputCode.None)

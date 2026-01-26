@@ -15,9 +15,11 @@ public class SpriteEditor : DocumentEditor
     private const byte BoneUnbindButtonId = 5;
     private const byte OpacityButtonId = 6;
     private const byte OpacityPopupId = 7;
-    private const byte HoleButtonId = 8;
+    private const byte SubtractButtonId = 8;
     private const byte AntiAliasButtonId = 9;
+    private const byte FirstOpacityId = 10;
     private const byte FirstPaletteColorId = 64;
+    private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
    
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
@@ -79,6 +81,7 @@ public class SpriteEditor : DocumentEditor
     // Selection
     private byte _selectionColor;
     private byte _selectionOpacity = 10;
+    private bool _selectionSubtract = false;
 
     // Tool state
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
@@ -144,7 +147,10 @@ public class SpriteEditor : DocumentEditor
             {
                 BoneBindingUI();
                 UI.Flex();
-                if (EditorUI.Button(AntiAliasButtonId, EditorAssets.Sprites.IconEdgeMode, Document.IsAntiAliased))
+                if (EditorUI.Button(
+                    AntiAliasButtonId,
+                    Document.IsAntiAliased ? EditorAssets.Sprites.IconAntialiasOn : EditorAssets.Sprites.IconAntialiasOff,
+                    Document.IsAntiAliased))
                 {
                     Undo.Record(Document);
                     MarkRasterDirty();
@@ -152,10 +158,10 @@ public class SpriteEditor : DocumentEditor
                     Document.IsAntiAliased = !Document.IsAntiAliased;
                 }
                     
-                if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconSearch, _showTiling))
+                if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, _showTiling))
                     _showTiling = !_showTiling;
-                //if (EditorUI.Button(PaletteButtonId, EditorAssets.Sprites.IconPalette, _showPalettes, disabled: PaletteManager.Palettes.Count < 2))
-                //    _showPalettes = !_showPalettes;
+                if (EditorUI.Button(PaletteButtonId, EditorAssets.Sprites.IconPalette, _showPalettes, disabled: PaletteManager.Palettes.Count < 2))
+                    _showPalettes = !_showPalettes;
             }
 
             using (UI.BeginContainer(EditorStyle.Overlay.Content))
@@ -232,9 +238,11 @@ public class SpriteEditor : DocumentEditor
             selectedColors[_selectionColor] = true;
     }
 
-    private void UpdateSelectionColorFromSelection()
+    private void UpdateSelectionColor()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
+        _selectionSubtract = false;
+        _selectionOpacity = 0;
 
         for (ushort p = (ushort)(shape.PathCount - 1); p < shape.PathCount; p--)
         {
@@ -242,6 +250,8 @@ public class SpriteEditor : DocumentEditor
             if (PathHasSelectedAnchor(shape, path))
             {
                 _selectionColor = path.FillColor;
+                _selectionSubtract |= path.IsSubtract;
+                _selectionOpacity = Math.Max((byte)(path.FillOpacity * 10), _selectionOpacity);
                 return;
             }
         }
@@ -309,48 +319,33 @@ public class SpriteEditor : DocumentEditor
     private void OpacityButtonUI()
     {
         using (UI.BeginContainer())
-        using (UI.BeginContainer(OpacityButtonId, EditorStyle.SpriteEditor.OpacityButtonRoot))
         {
-            EditorUI.ButtonFill(_showOpacityPopup, UI.IsHovered(), false);
-
-            using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityButtonIconContainer))
+            using (UI.BeginContainer(OpacityButtonId, EditorStyle.SpriteEditor.OpacityButtonRoot))
             {
-                UI.Image(EditorAssets.Sprites.IconOpacity);
-                UI.Image(EditorAssets.Sprites.IconOpacityOverlay);
-            }
+                EditorUI.ButtonFill(_showOpacityPopup, UI.IsHovered(), false);
 
-            if (UI.WasPressed())
-                _showOpacityPopup = !_showOpacityPopup;
+                using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityButtonIconContainer))
+                {
+                    if (_selectionSubtract)
+                    {
+                        UI.Image(EditorAssets.Sprites.IconSubtract, EditorStyle.Button.Icon);
+                    }
+                    else
+                    {
+                        UI.Image(EditorAssets.Sprites.IconOpacity, EditorStyle.Button.Icon);
+                        UI.Image(
+                            EditorAssets.Sprites.IconOpacityOverlay,
+                            EditorStyle.Button.Icon with { Color = Color.White.WithAlpha(_selectionOpacity / 10.0f) });
+                    }
+                }
+
+                if (UI.WasPressed())
+                    _showOpacityPopup = !_showOpacityPopup;
+            }
 
             if (_showOpacityPopup)
                 OpacityPopupUI();
         }
-
-#if false
-        using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityButton, id: OpacityButtonId))
-        {
-            if (UI.IsHovered() || _showOpacityPopup)
-            {
-                UI.Container(ContainerStyle.Default with
-                {
-                    Color = EditorStyle.Control.SelectedFillColor,
-                    Border = new BorderStyle { Radius = EditorStyle.ButtonBorderRadius }
-                });
-            }
-
-            UI.Label($"{(int)(_selectionOpacity * 10)}%", new LabelStyle
-            {
-                FontSize = EditorStyle.Overlay.TextSize,
-                Color = EditorStyle.Overlay.TextColor,
-                AlignX = Align.Center,
-                AlignY = Align.Center
-            });
-
-            if (UI.WasPressed())
-                _showOpacityPopup = !_showOpacityPopup;
-        }
-#endif
-
     }
 
     private void OpacityPopupUI()
@@ -365,79 +360,88 @@ public class SpriteEditor : DocumentEditor
                 return;
             }
 
-            using (UI.BeginContainer(EditorStyle.Popup.Root with { Width = Size.Fit }))
+            using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityPopupRoot))
             using (UI.BeginColumn(ContainerStyle.Fit with { Spacing = EditorStyle.Control.Spacing }))
             {
-                using (UI.BeginRow(EditorStyle.Popup.Item))
+                // Subtract
+                using (UI.BeginContainer(SubtractButtonId, EditorStyle.Popup.Item))
                 {
-                    using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
-                        UI.Image(EditorAssets.Sprites.IconSubtract);
-
-                    UI.Label("Subtract", EditorStyle.Popup.Text);
-                }
-            }
-        }
-    }
-
-    private void HoleToggleUI()
-    {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        var hasHole = GetSelectionHoleState(shape);
-
-        using (UI.BeginRow(HoleButtonId, EditorStyle.Popup.Item))
-        {
-            UI.Label("Hole", EditorStyle.Popup.Text);
-            UI.Flex();
-
-            using (UI.BeginContainer(ContainerStyle.Default with
-            {
-                Width = 16f,
-                Height = 16f,
-                Border = new BorderStyle { Radius = 4f, Width = 1f, Color = EditorStyle.Popup.BorderColor }
-            }))
-            {
-                if (hasHole)
-                {
-                    UI.Container(ContainerStyle.Default with
+                    EditorUI.PopupItemFill(_selectionSubtract, UI.IsHovered());
+                    using (UI.BeginRow())
                     {
-                        Color = EditorStyle.SelectionColor,
-                        Border = new BorderStyle { Radius = 2f },
-                        Margin = EdgeInsets.All(3f)
-                    });
+                        using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
+                            UI.Image(EditorAssets.Sprites.IconSubtract, style: EditorStyle.Popup.Icon);
+
+                        UI.Label("Subtract", EditorStyle.Popup.Text);
+                        UI.Spacer(EditorStyle.Control.Spacing);
+                    }
+
+                    if (UI.WasPressed())
+                    {
+                        SetSubtract();
+                        _showOpacityPopup = false;
+                    }
                 }
 
+                for (int i=0; i<=10; i++)
+                {
+                    using (UI.BeginContainer(FirstOpacityId + i, EditorStyle.Popup.Item))
+                    {
+                        EditorUI.PopupItemFill(_selectionOpacity == i, UI.IsHovered());
+                        using (UI.BeginRow())
+                        {
+                            using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
+                            {
+                                UI.Image(EditorAssets.Sprites.IconOpacity, style: EditorStyle.Popup.Icon);
+                                UI.Image(
+                                    EditorAssets.Sprites.IconOpacityOverlay,
+                                    EditorStyle.Popup.Icon with { Color = Color.White.WithAlpha(i / 10.0f) });
+                            }
+
+                            UI.Label(OpacityStrings[i], EditorStyle.Popup.Text);
+                            UI.Spacer(EditorStyle.Control.Spacing);
+                        }
+
+                        if (UI.WasPressed())
+                        {
+                            SetOpacity(i / 10.0f);
+                            _showOpacityPopup = false;
+                        }
+                    }
+                }
             }
-
-            if (UI.WasPressed())
-                ToggleSelectionHole();
         }
     }
 
-    private bool GetSelectionHoleState(Shape shape)
-    {
-        for (ushort p = 0; p < shape.PathCount; p++)
-        {
-            var path = shape.GetPath(p);
-            if (PathHasSelectedAnchor(shape, path) && path.IsHole)
-                return true;
-        }
-        return false;
-    }
-
-    private void ToggleSelectionHole()
+    private void SetOpacity(float value)
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        var currentHoleState = GetSelectionHoleState(shape);
-        var newHoleState = !currentHoleState;
-
         Undo.Record(Document);
 
+        _selectionOpacity = (byte)(value * 10);
+        _selectionSubtract = false;
+
         for (ushort p = 0; p < shape.PathCount; p++)
-        {
-            var path = shape.GetPath(p);
-            if (PathHasSelectedAnchor(shape, path))
-                shape.SetPathHole(p, newHoleState);
-        }
+            if (PathHasSelectedAnchor(shape, shape.GetPath(p)))
+            {
+                shape.SetPathSubtract(p, false);
+                shape.SetPathFillOpacity(p, value);
+            }                
+
+        Document.MarkModified();
+        MarkRasterDirty();
+    }
+
+    private void SetSubtract()
+    {
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        Undo.Record(Document);
+
+        _selectionSubtract = true;
+
+        for (ushort p = 0; p < shape.PathCount; p++)
+            if (PathHasSelectedAnchor(shape, shape.GetPath(p)))
+                shape.SetPathSubtract(p, true);
 
         Document.MarkModified();
         MarkRasterDirty();
@@ -519,11 +523,6 @@ public class SpriteEditor : DocumentEditor
         ApplyColorToSelection();
     }
 
-    public void SetSelectionOpacity(byte opacity)
-    {
-        _selectionOpacity = opacity;
-    }
-
     public void DeleteSelected()
     {
         Undo.Record(Document);
@@ -565,8 +564,8 @@ public class SpriteEditor : DocumentEditor
             if (newPathIndex == ushort.MaxValue)
                 break;
 
-            if (srcPath.IsHole)
-                shape.SetPathHole(newPathIndex, true);
+            if (srcPath.IsSubtract)
+                shape.SetPathSubtract(newPathIndex, true);
 
             for (ushort a = 0; a < srcPath.AnchorCount; a++)
             {
@@ -605,7 +604,7 @@ public class SpriteEditor : DocumentEditor
         var shape = Document.GetFrame(_currentFrame).Shape;
         for (ushort i = 0; i < shape.AnchorCount; i++)
             shape.SetAnchorSelected(i, true);
-        UpdateSelectionColorFromSelection();
+        UpdateSelectionColor();
     }
 
     private void UpdateAnimation()
@@ -689,7 +688,7 @@ public class SpriteEditor : DocumentEditor
             update: delta =>
             {
                 var snap = Input.IsCtrlDown();
-                shape.MoveSelectedAnchors(delta, _savedPositions, snap);
+                shape.TranslateAnchors(delta, _savedPositions, snap);
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 MarkRasterDirty();
@@ -738,6 +737,9 @@ public class SpriteEditor : DocumentEditor
             },
             commit: _ =>
             {
+                shape.SnapSelectedAnchorsToPixelGrid();
+                shape.UpdateSamples();
+                shape.UpdateBounds();
                 Document.MarkModified();
                 Document.UpdateBounds();
                 MarkRasterDirty();
@@ -860,7 +862,7 @@ public class SpriteEditor : DocumentEditor
         var localRect = Rect.FromMinMax(minLocal, maxLocal);
         shape.SelectAnchors(localRect);
 
-        UpdateSelectionColorFromSelection();
+        UpdateSelectionColor();
     }
 
     private void SelectAnchor(ushort anchorIndex, bool toggle)
@@ -879,7 +881,7 @@ public class SpriteEditor : DocumentEditor
             shape.SetAnchorSelected(anchorIndex, true);
         }
 
-        UpdateSelectionColorFromSelection();
+        UpdateSelectionColor();
     }
 
     private void SelectSegment(ushort anchorIndex, bool toggle)
@@ -908,7 +910,7 @@ public class SpriteEditor : DocumentEditor
             shape.SetAnchorSelected(nextAnchor, true);
         }
 
-        UpdateSelectionColorFromSelection();
+        UpdateSelectionColor();
     }
 
     private void SelectPath(ushort pathIndex, bool toggle)
@@ -938,7 +940,7 @@ public class SpriteEditor : DocumentEditor
                 shape.SetAnchorSelected((ushort)(path.AnchorStart + a), true);
         }
 
-        UpdateSelectionColorFromSelection();
+        UpdateSelectionColor();
     }
 
     private void SplitSegment(ushort anchorIndex)
@@ -976,13 +978,25 @@ public class SpriteEditor : DocumentEditor
     private void BeginRectangleTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        Workspace.BeginTool(new ShapeTool(this, shape, _selectionColor, ShapeType.Rectangle));
+        Workspace.BeginTool(new ShapeTool(
+            this,
+            shape,
+            _selectionColor,
+            ShapeType.Rectangle,
+            opacity: _selectionOpacity / 10.0f,
+            subtract: _selectionSubtract));
     }
 
     private void BeginCircleTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        Workspace.BeginTool(new ShapeTool(this, shape, _selectionColor, ShapeType.Circle));
+        Workspace.BeginTool(new ShapeTool(
+            this,
+            shape,
+            _selectionColor,
+            ShapeType.Circle,
+            opacity: _selectionOpacity / 10.0f,
+            subtract: _selectionSubtract));
     }
 
     private void InsertAnchorAtHover()
@@ -1017,7 +1031,7 @@ public class SpriteEditor : DocumentEditor
             update: delta =>
             {
                 var snap = Input.IsCtrlDown();
-                shape.MoveSelectedAnchors(delta, _savedPositions, snap);
+                shape.TranslateAnchors(delta, _savedPositions, snap);
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 MarkRasterDirty();

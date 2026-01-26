@@ -36,9 +36,9 @@ public static class Workspace
             items.Add(ContextMenuItem.Separator());
         }
 
-        items.Add(ContextMenuItem.Item("Move", BeginMoveTool, key: InputCode.KeyG));
-        items.Add(ContextMenuItem.Item("Duplicate", DuplicateSelected, ctrl: true, key: InputCode.KeyD));
-        items.Add(ContextMenuItem.Item("Delete", DeleteSelected, key: InputCode.KeyX));
+        items.Add(ContextMenuItem.Item("Move", BeginMoveTool, key: InputCode.KeyG, icon: EditorAssets.Sprites.IconMove));
+        items.Add(ContextMenuItem.Item("Duplicate", DuplicateSelected, ctrl: true, key: InputCode.KeyD, icon: EditorAssets.Sprites.IconDuplicate));
+        items.Add(ContextMenuItem.Item("Delete", DeleteSelected, key: InputCode.KeyX, icon: EditorAssets.Sprites.IconDelete));
         items.Add(ContextMenuItem.Separator());
         items.Add(ContextMenuItem.Item("Rebuild All", RebuildAll, alt: true, ctrl: true, shift: true, key: InputCode.KeyA));
 

@@ -58,7 +58,7 @@ public sealed unsafe partial class Shape : IDisposable
         None = 0,
         Selected = 1 << 0,
         Dirty = 1 << 1,
-        Hole = 1 << 2
+        Subtract = 1 << 2
     }
 
     public struct Anchor
@@ -76,12 +76,13 @@ public sealed unsafe partial class Shape : IDisposable
         public ushort AnchorStart;
         public ushort AnchorCount;
         public byte FillColor;
+        public float FillOpacity;
         public PathFlags Flags;
 
-        public bool IsSelected => (Flags & PathFlags.Selected) != 0;
-        public bool IsHole => (Flags & PathFlags.Hole) != 0;
+        public readonly bool IsSelected => (Flags & PathFlags.Selected) != 0;
+        public readonly bool IsSubtract => (Flags & PathFlags.Subtract) != 0;
 
-        public static Path CreateDefault() => new() { };
+        public static readonly Path Default = new() { FillOpacity = 1.0f };
     }
 
     public Shape()
@@ -744,15 +745,20 @@ public sealed unsafe partial class Shape : IDisposable
         _paths[pathIndex].FillColor = fillColor;
     }
 
-    public void SetPathHole(ushort pathIndex, bool isHole)
+    public void SetPathSubtract(ushort pathIndex, bool value)
     {
-        if (isHole)
-            _paths[pathIndex].Flags |= PathFlags.Hole;
+        if (value)
+            _paths[pathIndex].Flags |= PathFlags.Subtract;
         else
-            _paths[pathIndex].Flags &= ~PathFlags.Hole;
+            _paths[pathIndex].Flags &= ~PathFlags.Subtract;
     }
 
-    public ushort AddPath(byte fillColor = 0, byte strokeColor = 0)
+    public void SetPathFillOpacity(ushort pathIndex, float value)
+    {
+        _paths[pathIndex].FillOpacity = value;
+    }
+
+    public ushort AddPath(byte fillColor = 0, byte strokeColor = 0, float opacity=1.0f, bool subract = false)
     {
         if (PathCount >= MaxPaths) return ushort.MaxValue;
 
@@ -762,7 +768,8 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorStart = AnchorCount,
             AnchorCount = 0,
             FillColor = fillColor,
-            Flags = PathFlags.None
+            FillOpacity = opacity,
+            Flags = PathFlags.None | (subract ? PathFlags.Subtract : PathFlags.None),
         };
 
         return pathIndex;
@@ -791,6 +798,8 @@ public sealed unsafe partial class Shape : IDisposable
 
     public ushort AddAnchor(ushort pathIndex, Vector2 position, float curve = 0f)
     {
+        position = Grid.SnapToPixelGrid(position);
+
         if (pathIndex >= PathCount || AnchorCount >= MaxAnchors) return ushort.MaxValue;
 
         ref var path = ref _paths[pathIndex];
@@ -933,16 +942,17 @@ public sealed unsafe partial class Shape : IDisposable
         _anchors[anchorIndex].Curve = curve;
     }
 
-    public void MoveSelectedAnchors(Vector2 delta, Vector2[] savedPositions, bool snap)
+    public void TranslateAnchors(Vector2 delta, Vector2[] savedPositions, bool snap)
     {
         for (ushort i = 0; i < AnchorCount; i++)
         {
-            if ((_anchors[i].Flags & AnchorFlags.Selected) == 0)
-                continue;
+            if (!_anchors[i].IsSelected) continue;
 
             var newPos = savedPositions[i] + delta;
             if (snap)
                 newPos = Grid.SnapToGrid(newPos);
+            else
+                newPos = Grid.SnapToPixelGrid(newPos);
             _anchors[i].Position = newPos;
         }
     }
@@ -950,38 +960,14 @@ public sealed unsafe partial class Shape : IDisposable
     public void RestoreAnchorPositions(Vector2[] savedPositions)
     {
         for (ushort i = 0; i < AnchorCount; i++)
-        {
-            if ((_anchors[i].Flags & AnchorFlags.Selected) != 0)
+            if (_anchors[i].IsSelected)
                 _anchors[i].Position = savedPositions[i];
-        }
     }
 
     public void RestoreAnchorCurves(float[] savedCurves)
     {
         for (ushort i = 0; i < AnchorCount; i++)
             _anchors[i].Curve = savedCurves[i];
-    }
-
-    public void TranslateAnchors(Vector2 delta, Vector2[] savedPositions, bool snap)
-    {
-        for (ushort p = 0; p < PathCount; p++)
-        {
-            if (!_paths[p].IsSelected)
-                continue;
-
-            ref var path = ref _paths[p];
-            for (ushort a = 0; a < path.AnchorCount; a++)
-            {
-                var anchorIdx = (ushort)(path.AnchorStart + a);
-                var newPos = savedPositions[anchorIdx] + delta;
-                if (snap)
-                {
-                    newPos.X = MathF.Round(newPos.X);
-                    newPos.Y = MathF.Round(newPos.Y);
-                }
-                _anchors[anchorIdx].Position = newPos;
-            }
-        }
     }
 
     public void RotateAnchors(Vector2 pivot, float angle, Vector2[] savedPositions)
@@ -1005,6 +991,10 @@ public sealed unsafe partial class Shape : IDisposable
 
     public void ScaleAnchors(Vector2 pivot, Vector2 scale, Vector2[] savedPositions, float[] savedCurves)
     {
+        var dpi = EditorApplication.Config.PixelsPerUnit;
+        var invDpi = 1f / dpi;
+
+        // first pass: apply scale to determine resulting raster bounds
         var curveScale = (MathF.Abs(scale.X) + MathF.Abs(scale.Y)) * 0.5f;
         for (ushort i = 0; i < AnchorCount; i++)
         {
@@ -1014,6 +1004,133 @@ public sealed unsafe partial class Shape : IDisposable
             var offset = savedPositions[i] - pivot;
             _anchors[i].Position = pivot + offset * scale;
             _anchors[i].Curve = savedCurves[i] * curveScale;
+        }
+
+        UpdateSamples();
+
+        // compute raster bounds of selected anchors only
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+
+        for (ushort i = 0; i < AnchorCount; i++)
+        {
+            if (!_anchors[i].IsSelected)
+                continue;
+
+            min = Vector2.Min(min, _anchors[i].Position);
+            max = Vector2.Max(max, _anchors[i].Position);
+
+            if (MathF.Abs(_anchors[i].Curve) > 0.0001f)
+            {
+                var samples = GetSegmentSamples(i);
+                for (var s = 0; s < MaxSegmentSamples; s++)
+                {
+                    min = Vector2.Min(min, samples[s]);
+                    max = Vector2.Max(max, samples[s]);
+                }
+            }
+        }
+
+        if (min.X == float.MaxValue)
+            return;
+
+        var rbWidth = (max.X - min.X) * dpi;
+        var rbHeight = (max.Y - min.Y) * dpi;
+
+        if (rbWidth <= 0 || rbHeight <= 0)
+            return;
+
+        // compute corrected scale to get whole pixel dimensions
+        // use uniform correction to preserve scale ratio
+        var targetWidth = MathF.Max(1f, MathF.Round(rbWidth));
+        var targetHeight = MathF.Max(1f, MathF.Round(rbHeight));
+
+        var correctionX = targetWidth / rbWidth;
+        var correctionY = targetHeight / rbHeight;
+        var correction = (correctionX + correctionY) * 0.5f;
+
+        var correctedScale = new Vector2(scale.X * correction, scale.Y * correction);
+        var correctedCurveScale = (MathF.Abs(correctedScale.X) + MathF.Abs(correctedScale.Y)) * 0.5f;
+
+        // re-apply with corrected scale and snap to pixel grid
+        for (ushort i = 0; i < AnchorCount; i++)
+        {
+            if (!_anchors[i].IsSelected)
+                continue;
+
+            var offset = savedPositions[i] - pivot;
+            _anchors[i].Position = Grid.SnapToPixelGrid(pivot + offset * correctedScale);
+            _anchors[i].Curve = savedCurves[i] * correctedCurveScale;
+        }
+    }
+
+    public void SnapSelectedAnchorsToPixelGrid()
+    {
+        for (ushort i = 0; i < AnchorCount; i++)
+        {
+            if (_anchors[i].IsSelected)
+                _anchors[i].Position = Grid.SnapToPixelGrid(_anchors[i].Position);
+        }
+    }
+
+    public void AlignSelectedToPixelGrid()
+    {
+        var dpi = EditorApplication.Config.PixelsPerUnit;
+        var invDpi = 1f / dpi;
+
+        // compute bounds of selected anchors only
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+
+        for (ushort i = 0; i < AnchorCount; i++)
+        {
+            if (!_anchors[i].IsSelected)
+                continue;
+
+            min = Vector2.Min(min, _anchors[i].Position);
+            max = Vector2.Max(max, _anchors[i].Position);
+
+            if (MathF.Abs(_anchors[i].Curve) > 0.0001f)
+            {
+                var samples = GetSegmentSamples(i);
+                for (var s = 0; s < MaxSegmentSamples; s++)
+                {
+                    min = Vector2.Min(min, samples[s]);
+                    max = Vector2.Max(max, samples[s]);
+                }
+            }
+        }
+
+        if (min.X == float.MaxValue)
+            return;
+
+        // convert to pixel space
+        var rbX = min.X * dpi;
+        var rbY = min.Y * dpi;
+        var rbWidth = (max.X - min.X) * dpi;
+        var rbHeight = (max.Y - min.Y) * dpi;
+
+        if (rbWidth <= 0 || rbHeight <= 0)
+            return;
+
+        // compute center in pixel coordinates, then round to nearest pixel
+        var centerPixelX = (int)MathF.Round(rbX + rbWidth * 0.5f);
+        var centerPixelY = (int)MathF.Round(rbY + rbHeight * 0.5f);
+
+        // current center in world units
+        var currentCenterX = (rbX + rbWidth * 0.5f) * invDpi;
+        var currentCenterY = (rbY + rbHeight * 0.5f) * invDpi;
+
+        // target center (pixel-aligned) in world units
+        var targetCenterX = centerPixelX * invDpi;
+        var targetCenterY = centerPixelY * invDpi;
+
+        var offset = new Vector2(targetCenterX - currentCenterX, targetCenterY - currentCenterY);
+
+        for (ushort i = 0; i < AnchorCount; i++)
+        {
+            if (_anchors[i].IsSelected)
+                _anchors[i].Position += offset;
         }
     }
 
@@ -1105,19 +1222,25 @@ public sealed unsafe partial class Shape : IDisposable
         if (AnchorCount == 0)
             return;
 
-        var min = new Vector2(float.MaxValue, float.MaxValue);
-        var max = new Vector2(float.MinValue, float.MinValue);
+        UpdateSamples();
+        UpdateBounds();
 
-        for (var i = 0; i < AnchorCount * MaxSegmentSamples; i++)
-        {
-            min = Vector2.Min(min, _samples[i]);
-            max = Vector2.Max(max, _samples[i]);
-        }
+        var rb = RasterBounds;
+        if (rb.Width <= 0 || rb.Height <= 0)
+            return;
 
-        var center = (min + max) * 0.5f;
+        var dpi = EditorApplication.Config.PixelsPerUnit;
+        var invDpi = 1f / dpi;
+
+        // compute center of raster bounds in pixel coordinates, then round to nearest pixel
+        var centerPixelX = (int)MathF.Round((rb.X + rb.Width * 0.5f));
+        var centerPixelY = (int)MathF.Round((rb.Y + rb.Height * 0.5f));
+
+        // convert pixel offset to world units
+        var offset = new Vector2(centerPixelX * invDpi, centerPixelY * invDpi);
 
         for (ushort i = 0; i < AnchorCount; i++)
-            _anchors[i].Position -= center;
+            _anchors[i].Position -= offset;
 
         UpdateSamples();
         UpdateBounds();

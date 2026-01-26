@@ -173,8 +173,8 @@ public class SpriteDocument : Document
         var pathIndex = f.Shape.AddPath();
         byte fillColor = 0;
         var position = Vector2.Zero;
-        var rotation = 0f;
         var scale = Vector2.One;
+        var opacity = 1.0f;
 
         while (!tk.IsEOF)
         {
@@ -182,18 +182,13 @@ public class SpriteDocument : Document
             {
                 fillColor = (byte)tk.ExpectInt();
             }
+            else if (tk.ExpectIdentifier("o"))
+            {
+                opacity = tk.ExpectFloat();
+            }
             else if (tk.ExpectIdentifier("h"))
             {
-                f.Shape.SetPathHole(pathIndex, true);
-            }
-            else if (tk.ExpectIdentifier("t"))
-            {
-                // Path transform: t <posX> <posY> <rotation> <scaleX> <scaleY>
-                position.X = tk.ExpectFloat();
-                position.Y = tk.ExpectFloat();
-                rotation = tk.ExpectFloat();
-                scale.X = tk.ExpectFloat();
-                scale.Y = tk.ExpectFloat();
+                f.Shape.SetPathSubtract(pathIndex, true);
             }
             else if (tk.ExpectIdentifier("a"))
             {
@@ -206,6 +201,7 @@ public class SpriteDocument : Document
         }
 
         f.Shape.SetPathFillColor(pathIndex, fillColor);
+        f.Shape.SetPathFillOpacity(pathIndex, opacity);
     }
 
     private static void ParseAnchor(Shape shape, ushort pathIndex, ref Tokenizer tk)
@@ -292,8 +288,8 @@ public class SpriteDocument : Document
         {
             var path = shape.GetPath(pIdx);
 
-            var holeStr = path.IsHole ? " h" : "";
-            writer.WriteLine($"p c {path.FillColor}{holeStr}");
+            var holeStr = path.IsSubtract ? " h" : "";
+            writer.WriteLine($"p c {path.FillColor}{holeStr} o {path.FillOpacity}");
 
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {
@@ -328,6 +324,7 @@ public class SpriteDocument : Document
             Graphics.SetTexture(Atlas.Texture);
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetColor(Color.White);
+            Graphics.SetTextureFilter(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point);
             Graphics.Draw(
                 RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv),
                 AtlasUV);

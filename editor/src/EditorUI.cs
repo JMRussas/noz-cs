@@ -86,4 +86,14 @@ internal static class EditorUI
 
         return pressed;
     }
+
+    public static void PopupItemFill(bool selected, bool hovered)
+    {
+        if (selected && hovered)
+            UI.Container(EditorStyle.Button.SelectedHoverFill);
+        else if (selected)
+            UI.Container(EditorStyle.Button.SelectedFill);
+        else if (hovered)
+            UI.Container(EditorStyle.Button.HoverFill);
+    }
 }

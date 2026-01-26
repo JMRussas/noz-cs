@@ -22,13 +22,23 @@ public class ShapeTool : Tool
     private Vector2 _startLocal;
     private Vector2 _currentLocal;
     private bool _isDragging;
+    private bool _isSubtract;
+    private float _opacity;
 
-    public ShapeTool(SpriteEditor editor, Shape shape, byte fillColor, ShapeType shapeType)
+    public ShapeTool(
+        SpriteEditor editor,
+        Shape shape,
+        byte fillColor,
+        ShapeType shapeType,
+        float opacity = 1.0f,
+        bool subtract = false)
     {
         _editor = editor;
         _shape = shape;
         _fillColor = fillColor;
         _shapeType = shapeType;
+        _opacity = opacity;
+        _isSubtract = subtract;
     }
 
     public override void Begin()
@@ -156,7 +166,7 @@ public class ShapeTool : Tool
         _shape.ClearAnchorSelection();
 
         var firstAnchor = _shape.AnchorCount;
-        var pathIndex = _shape.AddPath(_fillColor);
+        var pathIndex = _shape.AddPath(_fillColor, opacity: _opacity, subract: _isSubtract);
         if (pathIndex == ushort.MaxValue)
         {
             Finish();

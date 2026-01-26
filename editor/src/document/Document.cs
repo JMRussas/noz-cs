@@ -120,6 +120,7 @@ public abstract class Document : IDisposable
 
     public void Reimport()
     {
-        File.SetLastWriteTimeUtc(Path, DateTime.UtcNow);
+        if (File.Exists(Path))
+            File.SetLastWriteTimeUtc(Path, DateTime.UtcNow);
     }
 }

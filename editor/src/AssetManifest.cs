@@ -6,8 +6,14 @@ namespace NoZ.Editor;
 
 public static class AssetManifest
 {
-    public static void Generate(EditorConfig config)
+    public static bool IsModified { get; set; }
+
+    public static void Generate()
     {
+        IsModified = true;
+
+        var config = EditorApplication.Config;
+
         if (config.GenerateCs != null)
             GenerateCs(config);
 

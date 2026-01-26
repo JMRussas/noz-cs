@@ -145,8 +145,6 @@ public static class DocumentManager
         doc.LoadMetadata();
         doc.Load();
 
-        _documents.Add(doc);
-
         if (position.HasValue)
         {
             doc.Position = position.Value;
@@ -157,6 +155,8 @@ public static class DocumentManager
         doc.PostLoaded = true;
 
         DocumentAdded?.Invoke(doc);
+
+        AssetManifest.IsModified = true;
 
         return doc;
     }
@@ -224,7 +224,10 @@ public static class DocumentManager
         {
             Log.Info($"Saved {count} asset(s)");
             Notifications.Add($"saved {count} asset(s)");
-        }            
+        }
+
+        if (AssetManifest.IsModified)
+            AssetManifest.Generate();
     }
 
     public static bool Rename(Document doc, string name)
@@ -251,6 +254,9 @@ public static class DocumentManager
 
         doc.Path = Path.GetFullPath(newPath).ToLowerInvariant();
         doc.Name = canonicalName;
+        doc.MarkModified();
+
+        AssetManifest.IsModified = true;
 
         return true;
     }
@@ -266,6 +272,8 @@ public static class DocumentManager
         var metaPath = doc.Path + ".meta";
         if (File.Exists(metaPath))
             File.Delete(metaPath);
+
+        AssetManifest.IsModified = true;
 
         _documents.Remove(doc);
     }

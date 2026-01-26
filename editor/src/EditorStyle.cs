@@ -131,7 +131,7 @@ public static class EditorStyle
         {
             Width = Item.Height,
             Height = Item.Height,
-            Padding = EdgeInsets.All(4f),
+            Padding = EdgeInsets.All(2f),
         };
         public static readonly ImageStyle Icon = new()
         {
@@ -408,7 +408,7 @@ public static class EditorStyle
         { 
             AlignX = Align.Max,
             AlignY = Align.Max,
-            Width = 300.0f,
+            Width = 240.0f,
             Height = Size.Fit,
             Margin = EdgeInsets.BottomRight(EditorStyle.Workspace.Padding),
             Spacing = Control.Spacing,
@@ -416,8 +416,8 @@ public static class EditorStyle
 
         public readonly static ContainerStyle Notification = new()
         {
-            Height = Popup.Item.Height,
-            Padding = EdgeInsets.All(4),
+            Height = Popup.Item.Height.Value + 8,
+            Padding = EdgeInsets.Symmetric(4,8),
             Color = Popup.FillColor,
             Border = new BorderStyle { Radius = Overlay.BorderRadius }
         };
@@ -627,15 +627,22 @@ public static class EditorStyle
 
         public static readonly ContainerStyle OpacityButtonIconContainer = new()
         {
-            Padding = EdgeInsets.All(4)
+            Padding = EdgeInsets.All(6)
         };
 
         public static readonly PopupStyle OpacityPopup = new()
         {
             AnchorY = Align.Min,
             PopupAlignY = Align.Max,
-            Spacing = Control.Spacing,  
+            //Spacing = Control.Spacing,  
             ClampToScreen = true
+        };
+
+        public readonly static ContainerStyle OpacityPopupRoot = new()
+        {
+            Padding = Popup.Root.Padding,
+            Color = Popup.Root.Color,
+            Border = Popup.Root.Border
         };
     }
 

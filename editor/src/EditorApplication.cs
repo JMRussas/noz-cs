@@ -60,7 +60,7 @@ public static class EditorApplication
         PaletteManager.Init(Config);
         AtlasManager.Init();
         Importer.Init(clean);
-        AssetManifest.Generate(Config);
+        AssetManifest.Generate();
     }
 
     internal static void PostLoad()
