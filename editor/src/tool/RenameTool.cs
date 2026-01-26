@@ -79,7 +79,7 @@ public class RenameTool : Tool
         uiPos.X -= EditorStyle.RenameTool.Root.Width.Value * 0.5f;
         uiPos.Y -= EditorStyle.RenameTool.Root.Height.Value * 0.5f;
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.Workspace))
-        using (UI.BeginContainer(EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }, id: 99))
+        using (UI.BeginContainer(99, EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
         using (UI.BeginContainer(EditorStyle.RenameTool.TextContainer))
         {
             if (_firstFrame)

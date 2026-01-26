@@ -31,7 +31,7 @@ internal static class EditorUI
     public static void Shortcut(Command command, bool selected=false) =>
         Shortcut(command.Key, command.Ctrl, command.Alt, command.Shift, selected);
 
-    private static void ButtonFill(bool selected, bool hovered, bool disabled)
+    public static void ButtonFill(bool selected, bool hovered, bool disabled)
     {
         if (disabled)
             UI.Container(EditorStyle.Button.DisabledFill);
@@ -48,7 +48,7 @@ internal static class EditorUI
     public static bool Button(ElementId id, string text, bool selected = false, bool disabled = false)
     {
         bool pressed = false;
-        using (UI.BeginContainer(EditorStyle.Button.Root, id: id))
+        using (UI.BeginContainer(id, EditorStyle.Button.Root))
         {
             ButtonFill(selected, UI.IsHovered(), disabled);            
             using (UI.BeginContainer(EditorStyle.Button.TextContent))
@@ -62,11 +62,25 @@ internal static class EditorUI
     public static bool Button(ElementId id, Sprite icon, bool selected = false, bool disabled = false)
     {
         bool pressed = false;
-        using (UI.BeginContainer(EditorStyle.Button.RootWithIcon, id: id))
+        using (UI.BeginContainer(id, EditorStyle.Button.RootWithIcon))
         {
             ButtonFill(selected, UI.IsHovered(), disabled);
             using (UI.BeginContainer(EditorStyle.Button.IconContent))
                 UI.Image(icon, disabled ? EditorStyle.Button.DisabledIcon : EditorStyle.Button.Icon);
+            pressed = UI.WasPressed();
+        }
+
+        return pressed;
+    }
+
+    public static bool Button(ElementId id, Action content, bool selected = false, bool disabled = false)
+    {
+        bool pressed = false;
+        using (UI.BeginContainer(id, EditorStyle.Button.RootWithContent))
+        {
+            ButtonFill(selected, UI.IsHovered(), disabled);
+            using (UI.BeginContainer(EditorStyle.Button.Content))
+                content.Invoke();
             pressed = UI.WasPressed();
         }
 

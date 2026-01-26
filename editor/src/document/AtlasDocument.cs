@@ -152,9 +152,12 @@ internal class AtlasDocument : Document
             if (rect.Sprite == null) continue;
             rect.Sprite.Atlas = null;
             rect.Sprite.AtlasUV = Rect.Zero;
+            rect.Sprite.Reimport();
         }
 
         _rects.Clear();
+        var atlasSize = EditorApplication.Config!.AtlasSize;
+        _packer = new RectPacker(atlasSize, atlasSize);
     }
 
     private static Rect ToUV(in AtlasSpriteRect rect)
@@ -194,6 +197,7 @@ internal class AtlasDocument : Document
                 
             rect.Sprite.Atlas = this;
             rect.Sprite.AtlasUV = ToUV(rect);
+            rect.Sprite.Reimport();
         }
     }
 
@@ -248,6 +252,7 @@ internal class AtlasDocument : Document
             rect.Dirty = true;
             sprite.Atlas = this;
             sprite.AtlasUV = ToUV(rect);
+            rect.Sprite.Reimport();
             return true;
         }
 
@@ -266,6 +271,7 @@ internal class AtlasDocument : Document
 
         sprite.Atlas = this;
         sprite.AtlasUV = ToUV(_rects[^1]);
+        sprite.Reimport();
 
         return true;
     }
@@ -288,6 +294,7 @@ internal class AtlasDocument : Document
         }
 
         rect.Dirty = true;
+        MarkModified();
         return true;
     }
 
@@ -319,10 +326,16 @@ internal class AtlasDocument : Document
 
                 AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} Rect={rect.Rect} Size={rect.Sprite.AtlasSize}");
 
+                var rasterBounds = rect.Sprite.RasterBounds;
+                var frameOffset = new Vector2Int(frameIndex * rasterBounds.Size.X, 0);
                 frame.Shape.Rasterize(
                     _image,
                     palette.Colors,
-                    rect.Rect.Position + Vector2Int.One - frame.Shape.RasterBounds.Position);
+                    rect.Rect.Position + Vector2Int.One + frameOffset - rasterBounds.Position,
+                    new Shape.RasterizeOptions
+                    {
+                        AntiAlias = rect.Sprite.IsAntiAliased
+                    });
             }
 
             var maxSize = rect.Rect.Size - Vector2Int.One * 2;
@@ -352,7 +365,7 @@ internal class AtlasDocument : Document
         // Clear sprites from their atlas reference
         foreach (var rect in _rects)
         {
-            if (rect.Sprite != null)
+            if (rect.Sprite != null) { }
                 rect.Sprite.Atlas = null;
         }
 

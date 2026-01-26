@@ -17,6 +17,7 @@ internal enum ElementFlags : ushort
     Dragging = 1 << 4,
     Changed = 1 << 5,
     DoubleClick = 1 << 6,
+    RightClick = 1 << 7,
 }
 
 internal struct TextBoxState
@@ -46,6 +47,7 @@ internal struct ElementState
     public ElementFlags Flags;
     public short Index;
     public Rect Rect;
+    public System.Numerics.Matrix3x2 LocalToWorld;
     public ElementStateData Data;
 
     public readonly bool HasFocus => (Flags & ElementFlags.Focus) != 0;

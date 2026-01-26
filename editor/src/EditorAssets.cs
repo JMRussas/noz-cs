@@ -45,7 +45,6 @@ public static class EditorAssets
         public const string IconTiling = "icon_tiling";
         public const string IconVertexMode = "icon_vertex_mode";
         public const string IconWeightMode = "icon_weight_mode";
-        public const string New = "new";
         public const string EditorPalette = "editor_palette";
     }
 
@@ -136,7 +135,6 @@ public static class EditorAssets
         public static Sprite IconTiling { get; private set; } = null!;
         public static Sprite IconVertexMode { get; private set; } = null!;
         public static Sprite IconWeightMode { get; private set; } = null!;
-        public static Sprite New { get; private set; } = null!;
 
         public static void Load()
         {
@@ -168,7 +166,6 @@ public static class EditorAssets
             IconTiling = (Sprite)Asset.Load(AssetType.Sprite, Names.IconTiling)!;
             IconVertexMode = (Sprite)Asset.Load(AssetType.Sprite, Names.IconVertexMode)!;
             IconWeightMode = (Sprite)Asset.Load(AssetType.Sprite, Names.IconWeightMode)!;
-            New = (Sprite)Asset.Load(AssetType.Sprite, Names.New)!;
         }
 
         public static void Unload()
@@ -201,7 +198,6 @@ public static class EditorAssets
             IconTiling?.Dispose();
             IconVertexMode?.Dispose();
             IconWeightMode?.Dispose();
-            New?.Dispose();
         }
     }
 

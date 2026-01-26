@@ -88,6 +88,7 @@ public static class Workspace
             new Command { Name = "Rebuild All", ShortName = "build", Handler = RebuildAll },
             new Command { Name = "Frame Selected", ShortName = "origin", Handler = FrameOrigin },
             new Command { Name = "Play/Stop", ShortName = "play]", Handler = Play, Key = InputCode.KeySpace },
+            new Command { Name = "Show/Hide Hidden Assets", ShortName = "hidden", Handler = ToggleShowHidden },
         ]);
 
         _workspaceContextMenu = BuildWorkspaceContextMenu();
@@ -131,6 +132,7 @@ public static class Workspace
     public static float Zoom => _zoom;
     public static bool ShowGrid => _showGrid;
     public static bool ShowNames => _showNames;
+    public static bool ShowHidden { get; set; }
     public static Vector2 MousePosition => _mousePosition;
     public static Vector2 MouseWorldPosition => _mouseWorldPosition;
     public static bool IsDragging => _isDragging;
@@ -315,7 +317,7 @@ public static class Workspace
                 continue;
             if (doc.IsEditing || doc.IsClipped)
                 continue;
-            if (!doc.IsVisible)
+            if (!ShowHidden && !doc.IsVisible)
                 continue;
 
             if (doc.IsSelected)
@@ -347,7 +349,7 @@ public static class Workspace
 
             foreach (var doc in DocumentManager.Documents)
             {
-                if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || !doc.IsVisible)
+                if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || (!ShowHidden && !doc.IsVisible))
                     continue;
 
                 // Skip if this document is being renamed (TextBox will show instead)
@@ -739,6 +741,11 @@ public static class Workspace
                 return doc;
         }
         return null;
+    }
+
+    private static void ToggleShowHidden()
+    { 
+        ShowHidden = !ShowHidden; 
     }
 
     private static void ToggleEdit()

@@ -13,7 +13,9 @@ public static partial class UI
 {
     private static ElementId _mouseLeftElementId;
     private static ElementId _mouseDoubleClickElementId;
+    private static ElementId _mouseRightElementId;
     private static bool _mouseLeftPressed;
+    private static bool _mouseRightPressed;
     private static bool _mouseLeftDown;
     private static bool _mouseLeftDoubleClickPressed;
     private static Vector2 _mousePosition;
@@ -26,6 +28,8 @@ public static partial class UI
         _mouseLeftDown = Input.IsButtonDownRaw(InputCode.MouseLeft);
         _mouseLeftDoubleClickPressed = Input.WasButtonPressedRaw(InputCode.MouseLeftDoubleClick);
         _mouseLeftElementId = ElementId.None;
+        _mouseRightPressed = Input.WasButtonPressedRaw(InputCode.MouseRight);
+        _mouseRightElementId = ElementId.None;
         _mouseDoubleClickElementId = ElementId.None;
         _hotCanvasId = ElementId.None;
 
@@ -68,6 +72,9 @@ public static partial class UI
         if (_mouseDoubleClickElementId != ElementId.None)
             Input.ConsumeButton(InputCode.MouseLeftDoubleClick);
 
+        if (_mouseRightElementId != ElementId.None)
+            Input.ConsumeButton(InputCode.MouseRight);
+
         HandleScrollableDrag(mouse);
         HandleMouseWheelScroll(mouse);
     }
@@ -89,6 +96,7 @@ public static partial class UI
 
             ref var es = ref cs.ElementStates[e.Id];
             es.Rect = e.Rect;
+            es.LocalToWorld = e.LocalToWorld;
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
             var mouseOver = new Rect(0, 0, e.Rect.Width, e.Rect.Height).Contains(localMouse);
 
@@ -114,6 +122,17 @@ public static partial class UI
             {
                 es.SetFlags(ElementFlags.Pressed, ElementFlags.None);
             }
+
+            if (mouseOver && _mouseRightPressed && _mouseRightElementId == ElementId.None)
+            {
+                es.SetFlags(ElementFlags.RightClick, ElementFlags.RightClick);
+                _mouseRightElementId = e.Id;
+            }
+            else if (es.IsPressed)
+            {
+                es.SetFlags(ElementFlags.RightClick, ElementFlags.None);
+            }
+
         }
     }
 

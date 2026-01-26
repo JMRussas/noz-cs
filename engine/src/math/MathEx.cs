@@ -133,10 +133,12 @@ public static class MathEx
             : 1f - MathF.Pow(-2f * t + 2f, 3f) / 2f;
     }
 
+    public static float SmoothStep(float t) => t * t * (3f - 2f * t);
+
     public static float SmoothStep(float a, float b, float t)
     {
         t = Clamp01(t);
-        t = t * t * (3f - 2f * t);
+        t = SmoothStep(t);
         return Mix(a, b, t);
     }
 

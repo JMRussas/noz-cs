@@ -8,6 +8,9 @@ namespace NoZ.Editor;
 
 public sealed partial class Shape
 {
+    private const float AntiAliasEdgeInner = -0.5f;
+    private const float AntiAliasEdgeOuter = 0.5f;
+
     public struct RasterizeOptions
     {
         public bool AntiAlias;
@@ -21,6 +24,12 @@ public sealed partial class Shape
     public void Rasterize(PixelData<Color32> pixels, Color[] palette, Vector2Int offset, RasterizeOptions options)
     {
         if (PathCount == 0) return;
+
+        if (options.AntiAlias)
+        {
+            RasterizeAA(pixels, palette, offset);
+            return;
+        }
 
         const int maxPolyVerts = 256;
         Span<Vector2> polyVerts = stackalloc Vector2[maxPolyVerts];
@@ -54,10 +63,13 @@ public sealed partial class Shape
 
             if (vertexCount < 3) continue;
 
-            var fillColor = palette[path.FillColor % palette.Length].ToColor32();
+            var isHole = (path.Flags & PathFlags.Hole) != 0;
+            var fillColor = isHole
+                ? Color32.Transparent
+                : palette[path.FillColor % palette.Length].ToColor32();
             var rb = RasterBounds;
 
-            RasterizePath(pixels, polyVerts[..vertexCount], fillColor, offset, rb);
+            RasterizePath(pixels, polyVerts[..vertexCount], fillColor, offset, rb, isHole);
         }
     }
 
@@ -66,7 +78,8 @@ public sealed partial class Shape
         Span<Vector2> polyVerts,
         Color32 fillColor,
         Vector2Int offset,
-        RectInt rb)
+        RectInt rb,
+        bool isHole = false)
     {
         var vertCount = polyVerts.Length;
 
@@ -141,7 +154,9 @@ public sealed partial class Shape
                         if (px < 0 || px >= pixels.Width) continue;
 
                         ref var dst = ref pixels[px, py];
-                        if (fillColor.A == 255 || dst.A == 0)
+                        if (isHole)
+                            dst = Color32.Transparent;
+                        else if (fillColor.A == 255 || dst.A == 0)
                             dst = fillColor;
                         else if (fillColor.A > 0)
                             dst = Color32.Blend(dst, fillColor);
@@ -149,5 +164,103 @@ public sealed partial class Shape
                 }
             }
         }
+    }
+
+    private void RasterizeAA(PixelData<Color32> pixels, Color[] palette, Vector2Int offset)
+    {
+        var dpi = EditorApplication.Config.PixelsPerUnit;
+        var rb = RasterBounds;
+
+        for (var y = 0; y < rb.Height; y++)
+        {
+            var py = offset.Y + rb.Y + y;
+            if (py < 0 || py >= pixels.Height) continue;
+
+            for (var x = 0; x < rb.Width; x++)
+            {
+                var px = offset.X + rb.X + x;
+                if (px < 0 || px >= pixels.Width) continue;
+
+                var pixelX = rb.X + x + 0.5f;
+                var pixelY = rb.Y + y + 0.5f;
+                var worldPoint = new Vector2(pixelX / dpi, pixelY / dpi);
+
+                var (fillColor, alpha) = ComputePixelCoverage(worldPoint, palette, dpi);
+
+                if (alpha <= 0f) continue;
+
+                ref var dst = ref pixels[px, py];
+                var srcAlpha = (byte)(fillColor.A * alpha);
+                var srcColor = new Color32(fillColor.R, fillColor.G, fillColor.B, srcAlpha);
+
+                if (srcAlpha == 255 || dst.A == 0)
+                    dst = srcColor;
+                else if (srcAlpha > 0)
+                    dst = Color32.Blend(dst, srcColor);
+            }
+        }
+    }
+
+    private (Color32 fillColor, float alpha) ComputePixelCoverage(Vector2 worldPoint, Color[] palette, float dpi)
+    {
+        var resultAlpha = 0f;
+        var resultColor = Color32.Transparent;
+
+        for (ushort pIdx = 0; pIdx < PathCount; pIdx++)
+        {
+            ref var path = ref _paths[pIdx];
+            if (path.AnchorCount < 3) continue;
+
+            var signedDist = GetPathSignedDistance(worldPoint, pIdx);
+            var pixelDist = signedDist * dpi;
+            var pathAlpha = DistanceToAlpha(pixelDist);
+
+            if (pathAlpha <= 0f) continue;
+
+            var isHole = (path.Flags & PathFlags.Hole) != 0;
+
+            if (isHole)
+            {
+                resultAlpha *= (1f - pathAlpha);
+            }
+            else
+            {
+                var pathColor = palette[path.FillColor % palette.Length].ToColor32();
+
+                if (resultAlpha <= 0f)
+                {
+                    resultColor = pathColor;
+                    resultAlpha = pathAlpha;
+                }
+                else
+                {
+                    var newAlpha = pathAlpha + resultAlpha * (1f - pathAlpha);
+                    if (newAlpha > 0f)
+                    {
+                        var t = pathAlpha / newAlpha;
+                        resultColor = new Color32(
+                            (byte)(pathColor.R * t + resultColor.R * (1f - t)),
+                            (byte)(pathColor.G * t + resultColor.G * (1f - t)),
+                            (byte)(pathColor.B * t + resultColor.B * (1f - t)),
+                            resultColor.A
+                        );
+                    }
+                    resultAlpha = newAlpha;
+                }
+            }
+        }
+
+        return (resultColor, Math.Clamp(resultAlpha, 0f, 1f));
+    }
+
+    private static float DistanceToAlpha(float signedDistancePixels)
+    {
+        if (signedDistancePixels <= AntiAliasEdgeInner)
+            return 1f;
+        if (signedDistancePixels >= AntiAliasEdgeOuter)
+            return 0f;
+
+        var t = (signedDistancePixels - AntiAliasEdgeInner) / (AntiAliasEdgeOuter - AntiAliasEdgeInner);
+        return 1f - MathEx.SmoothStep(t);
     }
 }

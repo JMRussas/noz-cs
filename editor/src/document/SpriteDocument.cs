@@ -139,6 +139,10 @@ public class SpriteDocument : Document
             {
                 Palette = (byte)tk.ExpectInt();
             }
+            else if (tk.ExpectIdentifier("a"))
+            {
+                IsAntiAliased = true;
+            }
             else if (tk.ExpectIdentifier("d"))
             {
                 tk.ExpectFloat();
@@ -177,6 +181,10 @@ public class SpriteDocument : Document
             if (tk.ExpectIdentifier("c"))
             {
                 fillColor = (byte)tk.ExpectInt();
+            }
+            else if (tk.ExpectIdentifier("h"))
+            {
+                f.Shape.SetPathHole(pathIndex, true);
             }
             else if (tk.ExpectIdentifier("t"))
             {
@@ -243,13 +251,18 @@ public class SpriteDocument : Document
             RasterBounds = RasterBounds.Union(Frames[fi].Shape.RasterBounds);
         }
 
+        if (IsAntiAliased)
+            RasterBounds = RasterBounds.Expand(1);
 
         Bounds = RasterBounds.ToRect().Scale(1.0f / EditorApplication.Config.PixelsPerUnit);
     }
 
+    // :save
     public override void Save(StreamWriter writer)
     {
         writer.WriteLine($"c {Palette}");
+        if (IsAntiAliased)
+            writer.WriteLine(" a");
         writer.WriteLine();
 
         for (ushort frameIndex = 0; frameIndex < FrameCount; frameIndex++)
@@ -279,7 +292,8 @@ public class SpriteDocument : Document
         {
             var path = shape.GetPath(pIdx);
 
-            writer.WriteLine($"p c {path.FillColor}");
+            var holeStr = path.IsHole ? " h" : "";
+            writer.WriteLine($"p c {path.FillColor}{holeStr}");
 
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {
@@ -315,7 +329,7 @@ public class SpriteDocument : Document
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetColor(Color.White);
             Graphics.Draw(
-                frame0.Shape.RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv),
+                RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv),
                 AtlasUV);
         }
     }

@@ -177,6 +177,12 @@ public static class EditorStyle
             Width = Control.Height,
             Height = Control.Height
         };
+        
+        public static readonly ContainerStyle RootWithContent = new()
+        {
+            Width = Size.Fit,
+            Height = Control.Height
+        };
 
         public static readonly ContainerStyle Fill = new()
         {
@@ -195,6 +201,10 @@ public static class EditorStyle
             Padding = EdgeInsets.Symmetric(2, 4)
         };
         public static readonly ContainerStyle IconContent = new()
+        {
+            Padding = EdgeInsets.Symmetric(3, 3)
+        };
+        public static readonly ContainerStyle Content = new()
         {
             Padding = EdgeInsets.Symmetric(3, 3)
         };
@@ -605,6 +615,27 @@ public static class EditorStyle
         public static readonly ContainerStyle PaletteDisplayColor = new()
         {
             Border = new BorderStyle { Radius = 6f }
+        };
+
+        public static readonly ContainerStyle OpacityButtonRoot = new()
+        {
+            Margin = EdgeInsets.Left(Control.Spacing),
+            Width = ColorSize * 2,
+            Height = ColorSize * 2,
+            AlignY = Align.Max
+        };
+
+        public static readonly ContainerStyle OpacityButtonIconContainer = new()
+        {
+            Padding = EdgeInsets.All(4)
+        };
+
+        public static readonly PopupStyle OpacityPopup = new()
+        {
+            AnchorY = Align.Min,
+            PopupAlignY = Align.Max,
+            Spacing = Control.Spacing,
+            ClampToScreen = true
         };
     }
 

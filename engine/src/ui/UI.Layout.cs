@@ -110,39 +110,31 @@ public static partial class UI
         e.Rect.X = align.X + offset.X + p.ContentRect.X;
         e.Rect.Y = align.Y + offset.Y + p.ContentRect.Y;
 
-        // Position and clamp popup to screen bounds
+        // Position popup relative to anchor (in parent-local space)
+        // Transform pass will convert to canvas space
         if (e.Type == ElementType.Popup)
         {
             ref var popup = ref e.Data.Popup;
 
-            if (popup.AnchorRect.Width > 0)
-            {
-                // Anchored to rect: position to the right of anchor
-                e.Rect.X = popup.AnchorRect.Right;
-                e.Rect.Y = popup.AnchorRect.Y + popup.Margin.T;
+            // Anchor rect is in parent-local space, position popup relative to it
+            var anchorX = popup.AnchorRect.X + popup.AnchorRect.Width * popup.AnchorX.ToFactor();
+            var anchorY = popup.AnchorRect.Y + popup.AnchorRect.Height * popup.AnchorY.ToFactor();
 
-                // If it doesn't fit on the right, flip to the left
-                if (popup.ClampToScreen && e.Rect.X + e.Rect.Width > ScreenSize.X)
-                    e.Rect.X = popup.AnchorRect.X - e.Rect.Width;
-            }
-            else
-            {
-                // Anchored to point: position at anchor point
-                e.Rect.X = popup.AnchorRect.X;
-                e.Rect.Y = popup.AnchorRect.Y;
-            }
+            // Position popup so the specified edge/corner aligns with anchor point
+            e.Rect.X = anchorX - e.Rect.Width * popup.PopupAlignX.ToFactor();
+            e.Rect.Y = anchorY - e.Rect.Height * popup.PopupAlignY.ToFactor();
 
-            // Clamp to screen bounds
-            if (popup.ClampToScreen)
+            // Apply spacing only in directions where anchor and popup alignments differ
+            // (where there's actual separation - e.g. popup to right, popup above, etc.)
+            if (popup.AnchorX != popup.PopupAlignX)
             {
-                if (e.Rect.X + e.Rect.Width > ScreenSize.X)
-                    e.Rect.X = ScreenSize.X - e.Rect.Width;
-                if (e.Rect.Y + e.Rect.Height > ScreenSize.Y)
-                    e.Rect.Y = ScreenSize.Y - e.Rect.Height;
-                if (e.Rect.X < 0)
-                    e.Rect.X = 0;
-                if (e.Rect.Y < 0)
-                    e.Rect.Y = 0;
+                var spacingDirX = 1f - 2f * popup.PopupAlignX.ToFactor();
+                e.Rect.X += popup.Spacing * spacingDirX;
+            }
+            if (popup.AnchorY != popup.PopupAlignY)
+            {
+                var spacingDirY = 1f - 2f * popup.PopupAlignY.ToFactor();
+                e.Rect.Y += popup.Spacing * spacingDirY;
             }
         }
 

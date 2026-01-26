@@ -179,6 +179,12 @@ public static partial class UI
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
+                if (child.Type == ElementType.Popup)
+                {
+                    elementIndex = child.NextSiblingIndex;
+                    continue;
+                }
+
                 var childOuter = GetOuterSize(in child, FitElement(in child, in e));
                 fit.X = Math.Max(fit.X, childOuter.X);
                 fit.Y = Math.Max(fit.Y, childOuter.Y);
@@ -191,7 +197,7 @@ public static partial class UI
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
-                if (child.Type == ElementType.Flex)
+                if (child.Type == ElementType.Flex || child.Type == ElementType.Popup)
                 {
                     prevWasNonFlex = false;
                     elementIndex = child.NextSiblingIndex;
@@ -214,7 +220,7 @@ public static partial class UI
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
-                if (child.Type == ElementType.Flex)
+                if (child.Type == ElementType.Flex || child.Type == ElementType.Popup)
                 {
                     prevWasNonFlex = false;
                     elementIndex = child.NextSiblingIndex;

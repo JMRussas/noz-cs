@@ -30,6 +30,7 @@ public abstract class Document : IDisposable
     public bool Loaded { get; set; }
     public bool PostLoaded { get; set; }
     public bool IsEditorOnly { get; set; }
+    public bool IsAntiAliased { get; set; }
 
     public virtual void Load() { }
     public virtual void Save(StreamWriter sw) { }
@@ -115,5 +116,10 @@ public abstract class Document : IDisposable
                 ? EditorStyle.Workspace.OriginColor
                 : EditorStyle.Workspace.DocumentBoundsColor,
                 order: 1);
+    }
+
+    public void Reimport()
+    {
+        File.SetLastWriteTimeUtc(Path, DateTime.UtcNow);
     }
 }

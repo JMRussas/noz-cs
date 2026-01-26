@@ -100,7 +100,7 @@ public static class CommandPalette
                 {
                     using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
                         UI.Image(EditorAssets.Sprites.IconSearch, EditorStyle.Popup.Icon);
-
+                   
                     using (UI.BeginFlex())
                         if (UI.TextBox(SearchId, style: EditorStyle.CommandPalette.SearchTextBox, placeholder: "Search..."))
                             _text = new string(UI.GetTextBoxText(EditorStyle.CanvasId.CommandPalette, SearchId));

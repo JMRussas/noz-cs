@@ -109,7 +109,7 @@ public struct PopupStyle()
     public Align AnchorY = Align.Min;
     public Align PopupAlignX = Align.Min;
     public Align PopupAlignY = Align.Min;
-    public EdgeInsets Margin = EdgeInsets.Zero;
+    public float Spacing = 0;
     public bool ClampToScreen = false;
     public Rect AnchorRect = Rect.Zero;
 }

@@ -243,6 +243,49 @@ public static partial class UI
         return GetElementState(canvasId, id).Rect;
     }
 
+    public static Rect GetElementRectInCanvas(CanvasId canvasId, ElementId elementId)
+    {
+        if (elementId == ElementId.None || canvasId == CanvasId.None)
+            return Rect.Zero;
+
+        ref var state = ref GetElementState(canvasId, elementId);
+
+        // Transform local rect corners (0,0 to Width,Height) to canvas/world space using cached transform
+        var topLeft = Vector2.Transform(Vector2.Zero, state.LocalToWorld);
+        var bottomRight = Vector2.Transform(new Vector2(state.Rect.Width, state.Rect.Height), state.LocalToWorld);
+
+        return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
+    }
+
+    public static Rect GetRelativeElementRect(
+        CanvasId canvasId,
+        ElementId elementId,
+        CanvasId relativeToCanvasId,
+        ElementId relativeToElementId)
+    {
+        if (elementId == ElementId.None || canvasId == CanvasId.None)
+            return Rect.Zero;
+
+        ref var sourceState = ref GetElementState(canvasId, elementId);
+
+        // Transform local rect corners (0,0 to Width,Height) to canvas/world space using cached transform
+        var topLeft = Vector2.Transform(Vector2.Zero, sourceState.LocalToWorld);
+        var bottomRight = Vector2.Transform(new Vector2(sourceState.Rect.Width, sourceState.Rect.Height), sourceState.LocalToWorld);
+
+        // If no relative element specified, return canvas-space rect
+        if (relativeToElementId == ElementId.None || relativeToCanvasId == CanvasId.None)
+            return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
+
+        // Transform to target element's local space using cached transform
+        ref var targetState = ref GetElementState(relativeToCanvasId, relativeToElementId);
+        Matrix3x2.Invert(targetState.LocalToWorld, out var targetWorldToLocal);
+
+        topLeft = Vector2.Transform(topLeft, targetWorldToLocal);
+        bottomRight = Vector2.Transform(bottomRight, targetWorldToLocal);
+
+        return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
+    }
+
     private static bool HasCurrentElement() => _elementStackCount > 0;
 
     private static void SetId(ref Element e, CanvasId canvasId, ElementId elementId)
@@ -457,7 +500,7 @@ public static partial class UI
         _activeCanvasIds.Clear();
     }
 
-    public static AutoCanvas BeginCanvas(CanvasStyle style = default, CanvasId id = default)
+    public static AutoCanvas BeginCanvas(CanvasId id, in CanvasStyle style)
     {
         ref var e = ref CreateElement(ElementType.Canvas);
         e.Data.Canvas = style.ToData();
@@ -481,6 +524,15 @@ public static partial class UI
         return new AutoCanvas();
     }
 
+    public static AutoCanvas BeginCanvas(CanvasId id) =>
+        BeginCanvas(id, new CanvasStyle());
+
+    public static AutoCanvas BeginCanvas(in CanvasStyle style) =>
+        BeginCanvas(CanvasId.None, style);
+
+    public static AutoCanvas BeginCanvas() =>
+        BeginCanvas(CanvasId.None, new CanvasStyle());
+
     public static void EndCanvas()
     {
         EndElement(ElementType.Canvas);
@@ -496,7 +548,7 @@ public static partial class UI
         return new AutoContainer();
     }
 
-    public static AutoContainer BeginContainer(in ContainerStyle style, ElementId id = default)
+    public static AutoContainer BeginContainer(ElementId id, in ContainerStyle style)
     {
         ref var e = ref CreateElement(ElementType.Container);
         e.Data.Container = style.ToData();
@@ -504,6 +556,9 @@ public static partial class UI
         PushElement(e.Index);
         return new AutoContainer();
     }
+
+    public static AutoContainer BeginContainer(in ContainerStyle style) =>
+        BeginContainer(ElementId.None, style);
 
     public static void EndContainer() => EndElement(ElementType.Container);
 
@@ -513,22 +568,16 @@ public static partial class UI
         EndContainer();
     }
 
-    public static void Container(ContainerStyle style, ElementId id = default)
+    public static void Container(ElementId id, ContainerStyle style)
     {
-        BeginContainer(style, id:id);
+        BeginContainer(id, style);
         EndContainer();
     }
 
-    public static AutoColumn BeginColumn(ElementId id = default)
-    {
-        ref var e = ref CreateElement(ElementType.Column);
-        e.Data.Container = ContainerData.Default;
-        SetId(ref e, _currentCanvasId, id);
-        PushElement(e.Index);
-        return new AutoColumn();
-    }
+    public static void Container(ContainerStyle style) =>
+        Container(ElementId.None, style);
 
-    public static AutoColumn BeginColumn(ContainerStyle style, ElementId id = default)
+    public static AutoColumn BeginColumn(ElementId id, in ContainerStyle style)
     {
         ref var e = ref CreateElement(ElementType.Column);
         e.Data.Container = style.ToData();
@@ -536,19 +585,19 @@ public static partial class UI
         PushElement(e.Index);
         return new AutoColumn();
     }
+
+    public static AutoColumn BeginColumn(ElementId id) =>
+        BeginColumn(id, ContainerStyle.Default);
+
+    public static AutoColumn BeginColumn(in ContainerStyle style) =>
+        BeginColumn(ElementId.None, style);
+
+    public static AutoColumn BeginColumn() =>
+        BeginColumn(ElementId.None, ContainerStyle.Default);
 
     public static void EndColumn() => EndElement(ElementType.Column);
 
-    public static AutoRow BeginRow(ElementId id = default)
-    {
-        ref var e = ref CreateElement(ElementType.Row);
-        e.Data.Container = ContainerData.Default;
-        SetId(ref e, _currentCanvasId, id);
-        PushElement(e.Index);
-        return new AutoRow();
-    }
-
-    public static AutoRow BeginRow(ContainerStyle style, ElementId id = default)
+    public static AutoRow BeginRow(ElementId id, in ContainerStyle style)
     {
         ref var e = ref CreateElement(ElementType.Row);
         e.Data.Container = style.ToData();
@@ -556,6 +605,15 @@ public static partial class UI
         PushElement(e.Index);
         return new AutoRow();
     }
+
+    public static AutoRow BeginRow(ElementId id) =>
+        BeginRow(id, ContainerStyle.Default);
+
+    public static AutoRow BeginRow(in ContainerStyle style) =>
+        BeginRow(ElementId.None, style);
+
+    public static AutoRow BeginRow() =>
+        BeginRow(ElementId.None, ContainerStyle.Default);
 
     public static void EndRow() => EndElement(ElementType.Row);
 
@@ -691,7 +749,7 @@ public static partial class UI
 
     public static void EndGrid() => EndElement(ElementType.Grid);
 
-    public static AutoPopup BeginPopup(PopupStyle style, ElementId id = default)
+    public static AutoPopup BeginPopup(ElementId id, PopupStyle style)
     {
         ref var e = ref CreateElement(ElementType.Popup);
         e.Data.Popup = new PopupData
@@ -700,7 +758,7 @@ public static partial class UI
             AnchorY = style.AnchorY,
             PopupAlignX = style.PopupAlignX,
             PopupAlignY = style.PopupAlignY,
-            Margin = style.Margin,
+            Spacing = style.Spacing,
             ClampToScreen = style.ClampToScreen,
             AnchorRect = style.AnchorRect
         };

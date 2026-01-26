@@ -508,8 +508,9 @@ public static unsafe class Graphics
         var viewportChanged = current.Viewport != prev.Viewport;
         var scissorChanged = current.ScissorEnabled != prev.ScissorEnabled ||
                              current.Scissor != prev.Scissor;
+        var meshChanged = current.Mesh != prev.Mesh;
 
-        if (shaderChanged || blendChanged || filterChanged || texturesChanged || viewportChanged || scissorChanged)
+        if (shaderChanged || blendChanged || filterChanged || texturesChanged || viewportChanged || scissorChanged || meshChanged)
             _batchStateDirty = true;
     }
 
@@ -684,8 +685,7 @@ public static unsafe class Graphics
         if (CurrentState.Shader == null)
             return;
 
-        if (_batchStates.Length == 0 || _batchStates[_currentBatchState].Mesh != _mesh)
-            SetMesh(_mesh);
+        SetMesh(_mesh);
 
         if (_batchStateDirty)
             AddBatchState();

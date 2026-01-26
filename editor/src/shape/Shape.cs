@@ -57,7 +57,8 @@ public sealed unsafe partial class Shape : IDisposable
     {
         None = 0,
         Selected = 1 << 0,
-        Dirty = 1 << 1
+        Dirty = 1 << 1,
+        Hole = 1 << 2
     }
 
     public struct Anchor
@@ -78,6 +79,7 @@ public sealed unsafe partial class Shape : IDisposable
         public PathFlags Flags;
 
         public bool IsSelected => (Flags & PathFlags.Selected) != 0;
+        public bool IsHole => (Flags & PathFlags.Hole) != 0;
 
         public static Path CreateDefault() => new() { };
     }
@@ -742,6 +744,14 @@ public sealed unsafe partial class Shape : IDisposable
         _paths[pathIndex].FillColor = fillColor;
     }
 
+    public void SetPathHole(ushort pathIndex, bool isHole)
+    {
+        if (isHole)
+            _paths[pathIndex].Flags |= PathFlags.Hole;
+        else
+            _paths[pathIndex].Flags &= ~PathFlags.Hole;
+    }
+
     public ushort AddPath(byte fillColor = 0, byte strokeColor = 0)
     {
         if (PathCount >= MaxPaths) return ushort.MaxValue;
@@ -1231,5 +1241,181 @@ public sealed unsafe partial class Shape : IDisposable
             _anchors[AnchorCount].Path = newPathIndex;
             AnchorCount++;
         }
+    }
+
+    public float GetPathSignedDistance(Vector2 point, ushort pathIndex)
+    {
+        ref var path = ref _paths[pathIndex];
+        if (path.AnchorCount < 3) return float.MaxValue;
+
+        var minDist = float.MaxValue;
+
+        for (ushort a = 0; a < path.AnchorCount; a++)
+        {
+            var anchorIdx = (ushort)(path.AnchorStart + a);
+            var segDist = GetSegmentSignedDistance(anchorIdx, point);
+
+            if (MathF.Abs(segDist) < MathF.Abs(minDist))
+                minDist = segDist;
+        }
+
+        var inside = IsPointInPath(point, pathIndex);
+        return inside ? -MathF.Abs(minDist) : MathF.Abs(minDist);
+    }
+
+    public float GetSegmentSignedDistance(ushort anchorIndex, Vector2 point)
+    {
+        ref readonly var a0 = ref GetAnchor(anchorIndex);
+        ref readonly var a1 = ref GetNextAnchor(anchorIndex);
+
+        var p0 = a0.Position;
+        var p1 = a1.Position;
+        var curve = a0.Curve;
+
+        if (MathF.Abs(curve) < 0.0001f)
+        {
+            return GetLinearSignedDistance(p0, p1, point);
+        }
+        else
+        {
+            var mid = (p0 + p1) * 0.5f;
+            var dir = p1 - p0;
+            var perp = Vector2.Normalize(new Vector2(-dir.Y, dir.X));
+            var cp = mid + perp * curve;
+            return GetQuadraticSignedDistance(p0, cp, p1, point);
+        }
+    }
+
+    private static float GetLinearSignedDistance(Vector2 p0, Vector2 p1, Vector2 origin)
+    {
+        var aq = origin - p0;
+        var ab = p1 - p0;
+        var abLenSqr = Vector2.Dot(ab, ab);
+
+        if (abLenSqr < 0.0001f)
+            return Vector2.Distance(origin, p0);
+
+        var param = Math.Clamp(Vector2.Dot(aq, ab) / abLenSqr, 0f, 1f);
+        var closest = p0 + ab * param;
+        var dist = Vector2.Distance(origin, closest);
+
+        var cross = ab.X * aq.Y - ab.Y * aq.X;
+        return MathF.Sign(cross) * dist;
+    }
+
+    private static float GetQuadraticSignedDistance(Vector2 p0, Vector2 cp, Vector2 p1, Vector2 origin)
+    {
+        var qa = p0 - origin;
+        var ab = cp - p0;
+        var br = p0 + p1 - cp - cp;
+
+        float a = Vector2.Dot(br, br);
+        float b = 3f * Vector2.Dot(ab, br);
+        float c = 2f * Vector2.Dot(ab, ab) + Vector2.Dot(qa, br);
+        float d = Vector2.Dot(qa, ab);
+
+        Span<float> solutions = stackalloc float[3];
+        var numSolutions = SolveCubic(a, b, c, d, solutions);
+
+        var minDistSqr = Vector2.DistanceSquared(origin, p0);
+        var bestT = 0f;
+
+        var distSqrP1 = Vector2.DistanceSquared(origin, p1);
+        if (distSqrP1 < minDistSqr)
+        {
+            minDistSqr = distSqrP1;
+            bestT = 1f;
+        }
+
+        for (var i = 0; i < numSolutions; i++)
+        {
+            var t = solutions[i];
+            if (t > 0f && t < 1f)
+            {
+                var oneMinusT = 1f - t;
+                var pt = oneMinusT * oneMinusT * p0 + 2f * oneMinusT * t * cp + t * t * p1;
+                var distSqr = Vector2.DistanceSquared(origin, pt);
+
+                if (distSqr < minDistSqr)
+                {
+                    minDistSqr = distSqr;
+                    bestT = t;
+                }
+            }
+        }
+
+        var dist = MathF.Sqrt(minDistSqr);
+
+        var tVal = bestT;
+        var tangent = 2f * (1f - tVal) * (cp - p0) + 2f * tVal * (p1 - cp);
+
+        float omt = 1f - tVal;
+        var pointOnCurve = omt * omt * p0 + 2f * omt * tVal * cp + tVal * tVal * p1;
+        var toOrigin = origin - pointOnCurve;
+
+        var cross = tangent.X * toOrigin.Y - tangent.Y * toOrigin.X;
+        return MathF.Sign(cross) * dist;
+    }
+
+    private static int SolveCubic(float a, float b, float c, float d, Span<float> solutions)
+    {
+        if (MathF.Abs(a) < 1e-7f)
+            return SolveQuadratic(b, c, d, solutions);
+
+        b /= a;
+        c /= a;
+        d /= a;
+
+        var b2 = b * b;
+        var q = (b2 - 3f * c) / 9f;
+        var r = (b * (2f * b2 - 9f * c) + 27f * d) / 54f;
+        var r2 = r * r;
+        var q3 = q * q * q;
+
+        if (r2 < q3)
+        {
+            var t = Math.Clamp(r / MathF.Sqrt(q3), -1f, 1f);
+            var theta = MathF.Acos(t);
+            var sqrtQ = -2f * MathF.Sqrt(q);
+            var bOver3 = b / 3f;
+
+            solutions[0] = sqrtQ * MathF.Cos(theta / 3f) - bOver3;
+            solutions[1] = sqrtQ * MathF.Cos((theta + 2f * MathF.PI) / 3f) - bOver3;
+            solutions[2] = sqrtQ * MathF.Cos((theta - 2f * MathF.PI) / 3f) - bOver3;
+            return 3;
+        }
+        else
+        {
+            var A = -MathF.Sign(r) * MathF.Pow(MathF.Abs(r) + MathF.Sqrt(r2 - q3), 1f / 3f);
+            var B = A != 0f ? q / A : 0f;
+            solutions[0] = (A + B) - b / 3f;
+            return 1;
+        }
+    }
+
+    private static int SolveQuadratic(float a, float b, float c, Span<float> solutions)
+    {
+        if (MathF.Abs(a) < 1e-7f)
+        {
+            if (MathF.Abs(b) < 1e-7f)
+                return 0;
+            solutions[0] = -c / b;
+            return 1;
+        }
+
+        var disc = b * b - 4f * a * c;
+        if (disc < 0f)
+            return 0;
+
+        var sqrtDisc = MathF.Sqrt(disc);
+        var twoA = 2f * a;
+        solutions[0] = (-b + sqrtDisc) / twoA;
+
+        if (disc > 0f)
+        {
+            solutions[1] = (-b - sqrtDisc) / twoA;
+            return 2;
+        }
+        return 1;
     }
 }
