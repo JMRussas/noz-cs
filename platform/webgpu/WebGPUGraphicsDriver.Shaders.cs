@@ -25,13 +25,12 @@ public unsafe partial class WebGPUGraphicsDriver
 
         if (bindings.Count > 0)
         {
-            // Use pre-computed metadata from asset pipeline
-            bindGroupLayout = CreateBindGroupLayoutFromMetadata(name, bindings, out bindingCount);
-
             // Derive texture slots and uniform bindings from metadata
-            for (int i = 0; i < bindings.Count; i++)
+            // Also detect unfilterable textures (textures not followed by a sampler)
+            var processedBindings = new List<ShaderBinding>(bindings);
+            for (int i = 0; i < processedBindings.Count; i++)
             {
-                var binding = bindings[i];
+                var binding = processedBindings[i];
 
                 if (binding.Type == ShaderBindingType.UniformBuffer)
                     uniformBindings[binding.Name] = binding.Binding;
@@ -39,17 +38,42 @@ public unsafe partial class WebGPUGraphicsDriver
                 if (binding.Type == ShaderBindingType.Texture2D ||
                     binding.Type == ShaderBindingType.Texture2DArray)
                 {
-                    uint samplerBinding = binding.Binding + 1;
-                    if (i + 1 < bindings.Count && bindings[i + 1].Type == ShaderBindingType.Sampler)
+                    bool hasSampler = i + 1 < processedBindings.Count &&
+                                      processedBindings[i + 1].Type == ShaderBindingType.Sampler;
+
+                    if (hasSampler)
                     {
+                        // Filterable texture with sampler
                         textureSlots.Add(new TextureSlotInfo
                         {
                             TextureBinding = binding.Binding,
-                            SamplerBinding = samplerBinding
+                            SamplerBinding = binding.Binding + 1,
+                            IsUnfilterable = false
+                        });
+                    }
+                    else
+                    {
+                        // Unfilterable texture (no sampler) - mark as unfilterable
+                        processedBindings[i] = new ShaderBinding
+                        {
+                            Binding = binding.Binding,
+                            Name = binding.Name,
+                            Type = ShaderBindingType.Texture2DUnfilterable
+                        };
+
+                        // Still add to texture slots so it gets bound
+                        textureSlots.Add(new TextureSlotInfo
+                        {
+                            TextureBinding = binding.Binding,
+                            SamplerBinding = 0,  // No sampler
+                            IsUnfilterable = true
                         });
                     }
                 }
             }
+
+            // Use pre-computed metadata from asset pipeline (with unfilterable fixups)
+            bindGroupLayout = CreateBindGroupLayoutFromMetadata(name, processedBindings, out bindingCount);
         }
         else
         {
@@ -108,6 +132,7 @@ public unsafe partial class WebGPUGraphicsDriver
         UniformBuffer,
         Texture2D,
         Texture2DArray,
+        Texture2DUnfilterable,  // For textures like RGBA32F that use textureLoad
         Sampler
     }
 
@@ -127,6 +152,7 @@ public unsafe partial class WebGPUGraphicsDriver
                 ShaderBindingType.UniformBuffer => BindingType.UniformBuffer,
                 ShaderBindingType.Texture2D => BindingType.Texture2D,
                 ShaderBindingType.Texture2DArray => BindingType.Texture2DArray,
+                ShaderBindingType.Texture2DUnfilterable => BindingType.Texture2DUnfilterable,
                 ShaderBindingType.Sampler => BindingType.Sampler,
                 _ => throw new NotSupportedException($"Binding type {binding.Type} not supported")
             };
@@ -252,6 +278,16 @@ public unsafe partial class WebGPUGraphicsDriver
                 {
                     SampleType = TextureSampleType.Float,
                     ViewDimension = TextureViewDimension.Dimension2DArray,
+                },
+            },
+            BindingType.Texture2DUnfilterable => new BindGroupLayoutEntry
+            {
+                Binding = binding,
+                Visibility = ShaderStage.Vertex | ShaderStage.Fragment,
+                Texture = new TextureBindingLayout
+                {
+                    SampleType = TextureSampleType.UnfilterableFloat,
+                    ViewDimension = TextureViewDimension.Dimension2D,
                 },
             },
             BindingType.Sampler => new BindGroupLayoutEntry

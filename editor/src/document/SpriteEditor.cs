@@ -18,6 +18,7 @@ public class SpriteEditor : DocumentEditor
     private const byte SubtractButtonId = 8;
     private const byte AntiAliasButtonId = 9;
     private const byte FirstOpacityId = 10;
+    private const byte PreviewButtonId = 11;
     private const byte FirstPaletteColorId = 64;
     private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
    
@@ -50,6 +51,8 @@ public class SpriteEditor : DocumentEditor
         var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
         var rotateCommand = new Command { Name = "Rotate", Handler = BeginRotateTool, Key = InputCode.KeyR };
         var scaleCommand = new Command { Name = "Scale", Handler = BeginScaleTool, Key = InputCode.KeyS };
+        var bindCommand = new Command { Name = "Select Bone", Handler = HandleSelectBone, Key = InputCode.KeyB };
+        var unbindCommand = new Command { Name = "Clear Bone", Handler = ClearBoneBinding, Key = InputCode.KeyB, Alt = true };
      
         Commands =
         [
@@ -58,6 +61,8 @@ public class SpriteEditor : DocumentEditor
             moveCommand,
             rotateCommand,
             scaleCommand,
+            bindCommand,
+            unbindCommand,
             new Command { Name = "Toggle Playback", Handler = TogglePlayback, Key = InputCode.KeySpace },
             new Command { Name = "Previous Frame", Handler = PreviousFrame, Key = InputCode.KeyQ },
             new Command { Name = "Next Frame", Handler = NextFrame, Key = InputCode.KeyE },
@@ -70,8 +75,6 @@ public class SpriteEditor : DocumentEditor
             new Command { Name = "Rectangle Tool", Handler = BeginRectangleTool, Key = InputCode.KeyR, Ctrl = true },
             new Command { Name = "Circle Tool", Handler = BeginCircleTool, Key = InputCode.KeyO, Ctrl = true },
             new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true },
-            new Command { Name = "Parent to Bone", Handler = BeginParentTool, Key = InputCode.KeyB },
-            new Command { Name = "Clear Parent", Handler = ClearParent, Key = InputCode.KeyB, Alt = true },
         ];
 
         bool HasSelection() => Document.GetFrame(_currentFrame).Shape.HasSelection();
@@ -84,6 +87,9 @@ public class SpriteEditor : DocumentEditor
                 ContextMenuItem.FromCommand(moveCommand, enabled: HasSelection),
                 ContextMenuItem.FromCommand(rotateCommand, enabled: HasSelection),
                 ContextMenuItem.FromCommand(scaleCommand, enabled: HasSelection),
+                ContextMenuItem.Separator(),
+                ContextMenuItem.FromCommand(bindCommand),
+                ContextMenuItem.FromCommand(unbindCommand, enabled: () => Document.Binding.IsBound),
                 ContextMenuItem.Separator(),
                 ContextMenuItem.FromCommand(exitEditCommand),
             ]
@@ -160,6 +166,7 @@ public class SpriteEditor : DocumentEditor
             using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
             {
                 BoneBindingUI();
+
                 UI.Flex();
                 if (EditorUI.Button(
                     AntiAliasButtonId,
@@ -189,13 +196,49 @@ public class SpriteEditor : DocumentEditor
     private void BoneBindingUI()
     {
         var binding = Document.Binding;
-        var label = binding.IsBound ? binding.BoneName : "No Bone";
 
-        if (EditorUI.Button(BoneBindButtonId, label))
-            BeginParentTool();
+        if (EditorUI.Button(BoneBindButtonId, () =>
+        {
+            using (UI.BeginRow())
+            {
+                using (UI.BeginContainer(EditorStyle.Button.IconContent))
+                    UI.Image(EditorAssets.Sprites.IconBone, EditorStyle.Button.Icon);
 
-        if (binding.IsBound && EditorUI.Button(BoneUnbindButtonId, EditorAssets.Sprites.IconClose))
-            ClearParent();
+                if (binding.IsBound)
+                {
+                    UI.Label(binding.SkeletonName, EditorStyle.Button.Text);
+                    UI.Label(".", EditorStyle.Button.Text);
+                    UI.Label(binding.BoneName, EditorStyle.Button.Text);
+
+                    UI.Spacer(EditorStyle.Control.Spacing);
+
+                    using (UI.BeginContainer(BoneUnbindButtonId, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4)}))
+                    {
+                        UI.Image(
+                            EditorAssets.Sprites.IconDelete,
+                            UI.IsHovered()
+                                ? EditorStyle.Button.SelectedIcon
+                                : EditorStyle.Button.Icon);
+
+                        if (UI.WasPressed())
+                            ClearBoneBinding();
+                    }
+                }
+                else
+                {
+                    UI.Label("Select Bone...", EditorStyle.Button.DisabledText);
+                    UI.Spacer(EditorStyle.Control.Spacing);
+                }                
+            }
+        }))
+            HandleSelectBone();
+
+        if (EditorUI.Button(PreviewButtonId, EditorAssets.Sprites.IconPreview, selected: Document.ShowInSkeleton, disabled: !Document.Binding.IsBound))
+        {
+            Undo.Record(Document);
+            Document.ShowInSkeleton = !Document.ShowInSkeleton;
+            Document.Binding.Skeleton?.UpdateSprites();
+        }
     }
 
     private void PalettePickerUI()
@@ -1263,19 +1306,20 @@ public class SpriteEditor : DocumentEditor
 
     #region Bone Binding
 
-    private void BeginParentTool()
+    private void HandleSelectBone()
     {
         Workspace.BeginTool(new BoneSelectTool(CommitBoneBinding));
     }
 
     private void CommitBoneBinding(SkeletonDocument skeleton, int boneIndex)
     {
+        Undo.Record(Document);
         Document.SetBoneBinding(skeleton, boneIndex);
         var boneName = skeleton.Bones[boneIndex].Name;
         Notifications.Add($"bound to {skeleton.Name}:{boneName}");
     }
 
-    private void ClearParent()
+    private void ClearBoneBinding()
     {
         if (!Document.Binding.IsBound)
         {
@@ -1283,6 +1327,7 @@ public class SpriteEditor : DocumentEditor
             return;
         }
 
+        Undo.Record(Document); 
         Document.ClearBoneBinding();
         Notifications.Add("bone binding cleared");
     }

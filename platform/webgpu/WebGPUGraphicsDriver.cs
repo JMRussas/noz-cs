@@ -165,6 +165,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     {
         public uint TextureBinding;
         public uint SamplerBinding;
+        public bool IsUnfilterable;  // True for textures like RGBA32F that use textureLoad
     }
 
     private struct ShaderInfo

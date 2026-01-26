@@ -221,6 +221,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
                 case ShaderBindingType.Texture2D:
                 case ShaderBindingType.Texture2DArray:
+                case ShaderBindingType.Texture2DUnfilterable:
                 {
                     int textureSlot = GetTextureSlotForBinding(binding.Binding, ref shader);
                     nuint textureHandle = textureSlot >= 0 ? (nuint)_state.BoundTextures[textureSlot] : 0;

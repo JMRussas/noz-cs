@@ -178,6 +178,7 @@ public static unsafe class Graphics
         CurrentState.Shader = null;
         CurrentState.BlendMode = default;
         CurrentState.TextureFilter = TextureFilter.Point;
+        CurrentState.BoneIndex = 0;
         for (var i = 0; i < MaxTextures; i++)
             CurrentState.Textures[i] = 0;
 
@@ -396,58 +397,58 @@ public static unsafe class Graphics
 
     #region Draw
 
-    public static void Draw(in Rect rect, ushort order = 0) =>
-        Draw(rect.X, rect.Y, rect.Width, rect.Height, order: order);
+    public static void Draw(in Rect rect, ushort order = 0, int bone = 0) =>
+        Draw(rect.X, rect.Y, rect.Width, rect.Height, order: order, bone: bone);
 
-    public static void Draw(in Rect rect, in Rect uv, ushort order = 0) =>
-        Draw(rect.X, rect.Y, rect.Width, rect.Height, uv.Left, uv.Top, uv.Right, uv.Bottom, order:order);
+    public static void Draw(in Rect rect, in Rect uv, ushort order = 0, int bone = 0) =>
+        Draw(rect.X, rect.Y, rect.Width, rect.Height, uv.Left, uv.Top, uv.Right, uv.Bottom, order:order, bone:bone);
 
-    public static void Draw(float x, float y, float width, float height, ushort order = 0)
+    public static void Draw(float x, float y, float width, float height, ushort order = 0, int bone = 0)
     {
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
         var p2 = new Vector2(x + width, y + height);
         var p3 = new Vector2(x, y + height);
-        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
+        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order: order, bone: bone);
     }
 
-    public static void Draw(float x, float y, float width, float height, in Matrix3x2 transform, ushort order = 0)
+    public static void Draw(float x, float y, float width, float height, in Matrix3x2 transform, ushort order = 0, int bone = 0)
     {
         CurrentState.Transform = transform;
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
         var p2 = new Vector2(x + width, y + height);
         var p3 = new Vector2(x, y + height);
-        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
+        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order: order, bone: bone);
     }
 
-    public static void Draw(float x, float y, float width, float height, float u0, float v0, float u1, float v1, ushort order = 0)
+    public static void Draw(float x, float y, float width, float height, float u0, float v0, float u1, float v1, ushort order = 0, int bone = 0)
     {
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
         var p2 = new Vector2(x + width, y + height);
         var p3 = new Vector2(x, y + height);
-        AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order);
+        AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order: order, bone: bone);
     }
 
-    public static void Draw(float x, float y, float width, float height, float u0, float v0, float u1, float v1, in Matrix3x2 transform, ushort order = 0)
+    public static void Draw(float x, float y, float width, float height, float u0, float v0, float u1, float v1, in Matrix3x2 transform, ushort order = 0, int bone = 0)
     {
         CurrentState.Transform = transform;
         var p0 = new Vector2(x, y);
         var p1 = new Vector2(x + width, y);
         var p2 = new Vector2(x + width, y + height);
         var p3 = new Vector2(x, y + height);
-        AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order);
+        AddQuad(p0, p1, p2, p3, new Vector2(u0, v0), new Vector2(u1, v0), new Vector2(u1, v1), new Vector2(u0, v1), order: order, bone: bone);
     }
 
-    public static void Draw(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, ushort order = 0)
+    public static void Draw(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, ushort order = 0, int bone = 0)
     {
-        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order);
+        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order: order, bone: bone);
     }
 
-    public static void Draw(Sprite sprite) => Draw(sprite, sprite.Order);
+    public static void Draw(Sprite sprite) => Draw(sprite, order: sprite.Order, bone: 0);
 
-    public static void Draw(Sprite sprite, ushort order)
+    public static void Draw(Sprite sprite, ushort order, int bone = 0)
     {
         if (sprite == null || SpriteAtlas == null) return;
 
@@ -467,7 +468,9 @@ public static unsafe class Graphics
                 p0, p1, p2, p3,
                 uv.TopLeft, new Vector2(uv.Right, uv.Top),
                 uv.BottomRight, new Vector2(uv.Left, uv.Bottom),
-                order, atlasIndex: sprite.AtlasIndex);
+                order: order,
+                atlasIndex: sprite.AtlasIndex,
+                bone: bone);
         }
     }
 
@@ -674,13 +677,14 @@ public static unsafe class Graphics
         in Vector2 uv2,
         in Vector2 uv3,
         ushort order,
-        int atlasIndex = 0)
+        int atlasIndex = 0,
+        int bone = 0)
     {
         Span<MeshVertex> verts = stackalloc MeshVertex[4];
-        verts[0] = new MeshVertex { Position = p0, UV = uv0, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1 };
-        verts[1] = new MeshVertex { Position = p1, UV = uv1, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1 };
-        verts[2] = new MeshVertex { Position = p2, UV = uv2, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1 };
-        verts[3] = new MeshVertex { Position = p3, UV = uv3, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1 };
+        verts[0] = new MeshVertex { Position = p0, UV = uv0, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1, Bone = bone };
+        verts[1] = new MeshVertex { Position = p1, UV = uv1, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1, Bone = bone };
+        verts[2] = new MeshVertex { Position = p2, UV = uv2, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1, Bone = bone };
+        verts[3] = new MeshVertex { Position = p3, UV = uv3, Normal = Vector2.Zero, Atlas = atlasIndex, FrameCount = 1, Bone = bone };
 
         ReadOnlySpan<ushort> indices = [0, 1, 2, 2, 3, 0];
         AddTriangles(verts, indices, order);
@@ -710,11 +714,14 @@ public static unsafe class Graphics
         cmd.BatchState = _currentBatchState;
 
         var baseVertex = _vertices.Length;
+        var boneOffset = CurrentState.BoneIndex;
         foreach (var v in vertices)
         {
             var transformed = v;
             transformed.Position = Vector2.Transform(v.Position, CurrentState.Transform);
             transformed.Color = CurrentState.Color;
+            if (v.Bone != 0)
+                transformed.Bone = v.Bone + boneOffset;
             _vertices.Add(transformed);
         }
 

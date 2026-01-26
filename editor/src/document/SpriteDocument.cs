@@ -28,6 +28,8 @@ public class SpriteDocument : Document
         public int BoneIndex = -1;
 
         public bool IsBound => Skeleton != null && BoneIndex >= 0;
+        public bool IsBoundTo(SkeletonDocument skeleton) =>
+            Skeleton == skeleton && BoneIndex >= 0;
 
         public void Set(SkeletonDocument? skeleton, int boneIndex)
         {
@@ -87,6 +89,7 @@ public class SpriteDocument : Document
     public ushort Order;
     public RectInt RasterBounds { get; private set; }
     public Vector2Int AtlasSize => new(RasterBounds.Size.X * FrameCount, RasterBounds.Size.Y);
+    public bool ShowInSkeleton { get; set; }
 
     internal AtlasDocument? Atlas;
     internal Rect AtlasUV;
@@ -314,7 +317,7 @@ public class SpriteDocument : Document
         DrawSprite();
     }
 
-    public void DrawSprite()
+    public void DrawSprite(int bone=0)
     {
         if (Atlas == null) return;
 
@@ -326,7 +329,9 @@ public class SpriteDocument : Document
             Graphics.SetTextureFilter(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point);
             Graphics.Draw(
                 RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv),
-                AtlasUV, order: Order);
+                AtlasUV,
+                order: Order,
+                bone: bone);
         }
     }
 
@@ -354,10 +359,12 @@ public class SpriteDocument : Document
     {
         Binding.SkeletonName = meta.GetString("bone", "skeleton", "");
         Binding.BoneName = meta.GetString("bone", "name", "");
+        ShowInSkeleton = meta.GetBool("sprite", "show_in_skeleton", false);
     }
 
     public override void SaveMetadata(PropertySet meta)
     {
+        meta.SetBool("sprite", "show_in_skeleton", ShowInSkeleton);
         if (Binding.IsBound)
         {
             meta.SetString("bone", "skeleton", Binding.SkeletonName);

@@ -42,8 +42,6 @@ internal class SkeletonEditor : DocumentEditor
             scaleCommand,
             rotateCommand,
             renameCommand,
-            new Command { Name = "Parent", Handler = BeginParentTool, Key = InputCode.KeyP },
-            new Command { Name = "Unparent", Handler = BeginUnparentTool, Key = InputCode.KeyP, Ctrl = true },
             new Command { Name = "Extrude", Handler = BeginExtrudeTool, Key = InputCode.KeyE, Ctrl = true },
         ];
 
@@ -455,60 +453,6 @@ internal class SkeletonEditor : DocumentEditor
 
     #endregion
 
-    #region Parent Tool
-
-    private void BeginParentTool()
-    {
-        if (Document.SelectedBoneCount != 1)
-            return;
-
-        Workspace.BeginTool(new SelectTool(CommitParentTool));
-    }
-
-    private void CommitParentTool(Vector2 position)
-    {
-        var boneIndex = Document.HitTestBone(position);
-        if (boneIndex == -1)
-            return;
-
-        Undo.BeginGroup();
-        Undo.Record(Document);
-
-        var selectedBone = GetFirstSelectedBoneIndex();
-        boneIndex = Document.ReparentBone(selectedBone, boneIndex);
-
-        ClearSelection();
-        SetBoneSelected(boneIndex, true);
-
-        Undo.EndGroup();
-        Document.MarkModified();
-    }
-
-    private void BeginUnparentTool()
-    {
-        var selectedBone = GetFirstSelectedBoneIndex();
-        if (selectedBone <= 0)
-            return;
-
-        var bone = Document.Bones[selectedBone];
-        if (bone.ParentIndex <= 0)
-            return;
-
-        Undo.BeginGroup();
-        Undo.Record(Document);
-
-        var parentParent = Document.Bones[bone.ParentIndex].ParentIndex;
-        var newIndex = Document.ReparentBone(selectedBone, parentParent);
-
-        ClearSelection();
-        SetBoneSelected(newIndex, true);
-
-        Undo.EndGroup();
-        Document.MarkModified();
-    }
-
-    #endregion
-
     #region Extrude Tool
 
     private void BeginExtrudeTool()
@@ -666,41 +610,6 @@ internal class SkeletonEditor : DocumentEditor
                 Graphics.SetSortGroup(selected ? SortGroupSelectedBones : SortGroupBones);
                 Gizmos.DrawBone(p0, p1, boneColor, order: 1);
             }
-        }
-    }
-}
-
-internal class SelectTool : Tool
-{
-    private readonly Action<Vector2> _commit;
-
-    public SelectTool(Action<Vector2> commit)
-    {
-        _commit = commit;
-    }
-
-    public override void Update()
-    {
-        if (Input.WasButtonPressed(InputCode.KeyEscape) || Input.WasButtonPressed(InputCode.MouseRight))
-        {
-            Workspace.CancelTool();
-            return;
-        }
-
-        if (Input.WasButtonPressed(InputCode.MouseLeft))
-        {
-            _commit(Workspace.MouseWorldPosition);
-            Input.ConsumeButton(InputCode.MouseLeft);
-            Workspace.EndTool();
-        }
-    }
-
-    public override void Draw()
-    {
-        using (Gizmos.PushState(EditorLayer.Tool))
-        {
-            Graphics.SetColor(EditorStyle.SelectionColor.WithAlpha(0.5f));
-            Gizmos.DrawRect(Workspace.MouseWorldPosition, EditorStyle.Shape.AnchorSize * 2f);
         }
     }
 }

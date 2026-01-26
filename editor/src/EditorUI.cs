@@ -66,7 +66,11 @@ internal static class EditorUI
         {
             ButtonFill(selected, UI.IsHovered(), disabled);
             using (UI.BeginContainer(EditorStyle.Button.IconContent))
-                UI.Image(icon, disabled ? EditorStyle.Button.DisabledIcon : EditorStyle.Button.Icon);
+                UI.Image(
+                    icon, 
+                    disabled 
+                        ? EditorStyle.Button.DisabledIcon
+                        : (selected ? EditorStyle.Button.SelectedIcon : EditorStyle.Button.Icon));
             pressed = UI.WasPressed();
         }
 

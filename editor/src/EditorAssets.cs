@@ -43,6 +43,7 @@ public static class EditorAssets
         public const string IconOpacity = "icon_opacity";
         public const string IconOpacityOverlay = "icon_opacity_overlay";
         public const string IconPalette = "icon_palette";
+        public const string IconPreview = "icon_preview";
         public const string IconPublish = "icon_publish";
         public const string IconRootMotion = "icon_root_motion";
         public const string IconSearch = "icon_search";
@@ -137,6 +138,7 @@ public static class EditorAssets
         public static Sprite IconOpacity { get; private set; } = null!;
         public static Sprite IconOpacityOverlay { get; private set; } = null!;
         public static Sprite IconPalette { get; private set; } = null!;
+        public static Sprite IconPreview { get; private set; } = null!;
         public static Sprite IconPublish { get; private set; } = null!;
         public static Sprite IconRootMotion { get; private set; } = null!;
         public static Sprite IconSearch { get; private set; } = null!;
@@ -172,6 +174,7 @@ public static class EditorAssets
             IconOpacity = (Sprite)Asset.Load(AssetType.Sprite, Names.IconOpacity)!;
             IconOpacityOverlay = (Sprite)Asset.Load(AssetType.Sprite, Names.IconOpacityOverlay)!;
             IconPalette = (Sprite)Asset.Load(AssetType.Sprite, Names.IconPalette)!;
+            IconPreview = (Sprite)Asset.Load(AssetType.Sprite, Names.IconPreview)!;
             IconPublish = (Sprite)Asset.Load(AssetType.Sprite, Names.IconPublish)!;
             IconRootMotion = (Sprite)Asset.Load(AssetType.Sprite, Names.IconRootMotion)!;
             IconSearch = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSearch)!;
@@ -208,6 +211,7 @@ public static class EditorAssets
             IconOpacity?.Dispose();
             IconOpacityOverlay?.Dispose();
             IconPalette?.Dispose();
+            IconPreview?.Dispose();
             IconPublish?.Dispose();
             IconRootMotion?.Dispose();
             IconSearch?.Dispose();

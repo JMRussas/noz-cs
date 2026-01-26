@@ -2,6 +2,7 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 
@@ -26,23 +27,16 @@ public class BoneData
     }
 }
 
-public class Skin
-{
-    public string SpriteName = "";
-    public SpriteDocument? Sprite = null;
-}
-
 public class SkeletonDocument : Document
 {
     public const int MaxBones = 64;
-    public const int MaxSkins = 64;
     private const float BoneWidth = 0.15f;
     private const float BoundsPadding = 0.1f;
 
+    public List<SpriteDocument> Sprites = [];
+
     public readonly BoneData[] Bones = new BoneData[MaxBones];
-    public readonly Skin[] Skins = new Skin[MaxSkins];
     public int BoneCount;
-    public int SkinCount;
     public int SelectedBoneCount;
     public float Opacity = 1f;
 
@@ -50,8 +44,6 @@ public class SkeletonDocument : Document
     {
         for (var i = 0; i < MaxBones; i++)
             Bones[i] = new BoneData();
-        for (var i = 0; i < MaxSkins; i++)
-            Skins[i] = new Skin();
     }
 
     public static void RegisterDef()
@@ -173,37 +165,10 @@ public class SkeletonDocument : Document
         }
     }
 
-    public override void LoadMetadata(PropertySet meta)
-    {
-        SkinCount = 0;
-        foreach (var key in meta.GetKeys("skin"))
-            Skins[SkinCount++].SpriteName = key;
-    }
-
-    public override void SaveMetadata(PropertySet meta)
-    {
-        meta.ClearGroup("skin");
-        for (var i = 0; i < SkinCount; i++)
-        {
-            if (Skins[i].Sprite == null) continue;
-            meta.AddKey("skin", Skins[i].SpriteName);
-        }
-    }
-
     public override void PostLoad()
     {
+        UpdateSprites();
         UpdateTransforms();
-
-        var skinWriteIndex = 0;
-        for (var skinReadIndex=0; skinReadIndex < SkinCount; skinReadIndex++)
-        {
-            var skin = Skins[skinReadIndex];
-            skin.Sprite = DocumentManager.Find(AssetType.Sprite, skin.SpriteName) as SpriteDocument;
-            if (skin.Sprite != null)
-                Skins[skinWriteIndex++] = skin;
-        }
-
-        SkinCount = skinWriteIndex;
     }
 
     public override void OnUndoRedo()
@@ -215,7 +180,6 @@ public class SkeletonDocument : Document
     {
         var src = (SkeletonDocument)source;
         BoneCount = src.BoneCount;
-        SkinCount = src.SkinCount;
         Opacity = src.Opacity;
 
         for (var i = 0; i < src.BoneCount; i++)
@@ -230,11 +194,7 @@ public class SkeletonDocument : Document
             Bones[i].IsSelected = src.Bones[i].IsSelected;
         }
 
-        for (var i = 0; i < src.SkinCount; i++)
-        {
-            Skins[i].SpriteName = src.Skins[i].SpriteName;
-            Skins[i].Sprite = src.Skins[i].Sprite;
-        }
+        Sprites = [.. src.Sprites];
     }
 
     public void UpdateTransforms()
@@ -269,13 +229,9 @@ public class SkeletonDocument : Document
             bounds = ExpandBounds(bounds, Vector2.Transform(new Vector2(boneWidth, -boneWidth), boneTransform));
         }
 
-        for (var skinIndex=0; skinIndex < SkinCount; skinIndex++)
-        {
-            var skin = Skins[skinIndex];
-            if (skin.Sprite == null) continue;
-            bounds = Rect.Union(bounds, skin.Sprite.Bounds);
-        }
-
+        for (var i = 0; i < Sprites.Count; i++)
+            bounds = Rect.Union(bounds, Sprites[i].Bounds);
+        
         Bounds = bounds.Expand(BoundsPadding);
     }
 
@@ -597,8 +553,13 @@ public class SkeletonDocument : Document
             for (var i = 0; i < BoneCount; i++)
                 boneTransforms[i] = Bones[i].LocalToWorld;
             Graphics.SetBones(boneTransforms);
-            for (var i = 0; i < SkinCount; i++)
-                Skins[i].Sprite?.DrawSprite();
+
+            for (var i = 0; i < Sprites.Count; i++)
+            {
+                Debug.Assert(Sprites[i] != null);
+                Debug.Assert(Sprites[i].Binding.IsBoundTo(this));
+                Sprites[i].DrawSprite(bone: Sprites[i].Binding.BoneIndex);
+            }
         }
     }
 
@@ -639,8 +600,15 @@ public class SkeletonDocument : Document
 
         File.WriteAllText(fullPath, defaultSkel);
 
-        var doc = DocumentManager.Load(fullPath) as SkeletonDocument;
+        var doc = DocumentManager.Add(fullPath) as SkeletonDocument;
         doc?.Load();
         return doc;
+    }
+
+    public void UpdateSprites()
+    {
+        Sprites = [.. DocumentManager.Documents
+            .OfType<SpriteDocument>()
+            .Where(d => d.Binding.IsBoundTo(this) && d.ShowInSkeleton)];
     }
 }

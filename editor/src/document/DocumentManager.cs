@@ -71,7 +71,7 @@ public static class DocumentManager
                 yield return def;
     }
     
-    public static Document? Load(string path)
+    public static Document? Add(string path)
     {
         string ext = Path.GetExtension(path);
         var def = GetDef(ext);
@@ -139,7 +139,7 @@ public static class DocumentManager
             def.NewFile(writer);
         }
 
-        var doc = Load(path);
+        var doc = Add(path);
         if (doc == null) return null;
 
         doc.LoadMetadata();
@@ -287,28 +287,18 @@ public static class DocumentManager
 
             foreach (var filePath in Directory.EnumerateFiles(sourcePath, "*.*", SearchOption.AllDirectories))
             {
-                string ext = Path.GetExtension(filePath);
+                var ext = Path.GetExtension(filePath);
+                if (ext == ".meta") continue;
+                if (GetDef(ext) == null) continue;
 
-                // Skip meta files
-                if (ext == ".meta")
-                    continue;
+                var name = MakeCanonicalName(filePath);
+                if (Find(name) != null) continue;
 
-                // Skip Luau definition files
-                string filename = Path.GetFileName(filePath);
-                if (filename.EndsWith(".d.luau") || filename.EndsWith(".d.lua"))
-                    continue;
-
-                // Skip if no document def for this extension
-                if (GetDef(ext) == null)
-                    continue;
-
-                // Skip if document with this name already exists
-                string name = MakeCanonicalName(filePath);
-                if (Find(name) != null)
-                    continue;
-
-                Load(filePath)?.LoadMetadata();
+                Add(filePath);
             }
+
+            for (int i=0; i< _documents.Count; i++)
+                _documents[i]?.LoadMetadata();
         }
     }
 
@@ -376,7 +366,7 @@ public static class DocumentManager
         if (File.Exists(metaPath))
             File.Copy(metaPath, newPath + ".meta");
 
-        var doc = Load(newPath);
+        var doc = Add(newPath);
         if (doc == null)
             return null;
 

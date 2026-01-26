@@ -11,7 +11,33 @@ struct Globals {
 @group(0) @binding(0) var<uniform> globals: Globals;
 @group(0) @binding(1) var texture_array: texture_2d_array<f32>;  // Slot 0: Main atlas texture
 @group(0) @binding(2) var texture_sampler: sampler;
-// TODO: Add bone texture (Slot 1) and custom texture (Slot 2) later when needed
+@group(0) @binding(3) var bone_texture: texture_2d<f32>;  // Slot 1: Bone transforms (RGBA32F, unfilterable)
+
+// Bone texture layout:
+// - Width: 128 texels (64 bones * 2 texels per bone)
+// - Height: 1024 rows (one row per entity per frame)
+// - Each bone uses 2 consecutive texels:
+//   - Texel 0: M11, M12, M31, _ (column 0 and translation X)
+//   - Texel 1: M21, M22, M32, _ (column 1 and translation Y)
+// - Bone index encodes: row * 64 + localBoneIndex
+// - Row 0, bone 0 contains identity transform
+
+fn get_bone_transform(bone: i32) -> mat3x2<f32> {
+    let row = bone / 64;
+    let local_bone = bone % 64;
+    let texel_x = local_bone * 2;
+
+    let t0 = textureLoad(bone_texture, vec2<i32>(texel_x, row), 0);
+    let t1 = textureLoad(bone_texture, vec2<i32>(texel_x + 1, row), 0);
+
+    // Reconstruct 3x2 transform matrix (for 2D affine transform)
+    // mat3x2 in WGSL is 3 columns, 2 rows: result = M * vec3(x, y, 1)
+    return mat3x2<f32>(
+        vec2<f32>(t0.x, t0.y),  // column 0: M11, M12
+        vec2<f32>(t1.x, t1.y),  // column 1: M21, M22
+        vec2<f32>(t0.z, t1.z)   // column 2: M31, M32 (translation)
+    );
+}
 
 // Vertex input
 struct VertexInput {
@@ -39,9 +65,12 @@ struct VertexOutput {
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
 
-    // TODO: Add bone transformations later when slot 1 is bound
-    // For now, just use position directly
+    // Apply bone transform if bone index is non-zero
     var pos = input.position;
+    if (input.bone != 0) {
+        let bone_transform = get_bone_transform(input.bone);
+        pos = bone_transform * vec3<f32>(input.position, 1.0);
+    }
 
     // Calculate UV with animation
     var uv = input.uv;

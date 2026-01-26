@@ -19,7 +19,8 @@ public enum ShaderBindingType : byte
     UniformBuffer = 0,
     Texture2D = 1,
     Texture2DArray = 2,
-    Sampler = 3
+    Sampler = 3,
+    Texture2DUnfilterable = 4  // For RGBA32F textures that use textureLoad
 }
 
 public struct ShaderBinding

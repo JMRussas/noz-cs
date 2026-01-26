@@ -2,6 +2,7 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
 
@@ -662,11 +663,11 @@ internal class AnimationDocument : Document
                 Gizmos.DrawBone(p0, p1, EditorStyle.Skeleton.BoneColor);
             }
 
-            DrawSkin();
+            DrawSprites();
         }
     }
 
-    public void DrawSkin()
+    public void DrawSprites()
     {
         if (Skeleton == null) return;
 
@@ -675,8 +676,14 @@ internal class AnimationDocument : Document
             Graphics.SetLayer(EditorLayer.Document);
             Graphics.SetTransform(Transform);
             Graphics.SetBones(AnimatorBones);
-            for (var i = 0; i < Skeleton.SkinCount; i++)
-                Skeleton.Skins[i].Sprite?.DrawSprite();
+
+            for (var i = 0; i < Skeleton.Sprites.Count; i++)
+            {
+                var sprite = Skeleton.Sprites[i];
+                Debug.Assert(sprite != null);
+                Debug.Assert(sprite.Binding.IsBoundTo(Skeleton));
+                sprite.DrawSprite(bone: sprite.Binding.BoneIndex);
+            }
         }
     }
 
@@ -830,7 +837,7 @@ internal class AnimationDocument : Document
         var contents = $"s \"{skeleton.Name}\"\n";
         File.WriteAllText(fullPath, contents);
 
-        var doc = DocumentManager.Load(fullPath) as AnimationDocument;
+        var doc = DocumentManager.Add(fullPath) as AnimationDocument;
         doc?.Load();
         return doc;
     }

@@ -149,7 +149,8 @@ public static class EditorStyle
         public const float BorderRadius = 6.0f;
         public const float Spacing = 5.0f;
         public static Color TextColor => _colors.ControlTextColor;
-        public static Color IconColor => _colors.ControlIconColor;
+        public static readonly Color IconColor = Color.FromRgb(0xe6e6e6);
+        public static readonly Color SelectedIconColor = Color.White;
         public static Color FillColor => _colors.ControlFillColor;
         public static Color SelectedFillColor => _colors.ControlSelectedFillColor;
         public static Color PlaceholderTextColor => _colors.ControlPlaceholderTextColor;
@@ -188,8 +189,7 @@ public static class EditorStyle
         public static readonly ContainerStyle Fill = new()
         {
             Border = new BorderStyle { Radius = Control.BorderRadius },
-            Color = Color.FromRgb(0x545454),
-            Padding = EdgeInsets.LeftRight(6)
+            Color = Color.FromRgb(0x545454)
         };
 
         public static readonly ContainerStyle HoverFill = Fill with { Color = Color.FromRgb(0x656565) };
@@ -203,11 +203,13 @@ public static class EditorStyle
         };
         public static readonly ContainerStyle IconContent = new()
         {
-            Padding = EdgeInsets.Symmetric(3, 3)
+            Width = Control.Height,
+            Height = Control.Height,
+            Padding = EdgeInsets.All(3)
         };
         public static readonly ContainerStyle Content = new()
         {
-            Padding = EdgeInsets.Symmetric(3, 3)
+            Padding = EdgeInsets.LeftRight(3)
         };
         public static readonly LabelStyle Text = new()
         {
@@ -217,7 +219,8 @@ public static class EditorStyle
             AlignY = Align.Center
         };
         public static readonly LabelStyle DisabledText = Text with { Color = Color.FromRgb(0x929292) };
-        public static readonly ImageStyle Icon = new() { };
+        public static readonly ImageStyle Icon = new() { Color = Control.IconColor, AlignX = Align.Center, AlignY = Align.Center };
+        public static readonly ImageStyle SelectedIcon = Icon with { Color = Control.SelectedIconColor };
         public static readonly ImageStyle DisabledIcon = Icon with { Color = Color.FromRgb(0x585858) };
     }
 
