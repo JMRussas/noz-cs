@@ -18,12 +18,12 @@ public static unsafe partial class Graphics
         public Shader? Shader;
         public Matrix3x2 Transform;
         public fixed ulong Textures[MaxTextures];
+        public fixed byte TextureFilters[MaxTextures];
         public ushort SortLayer;
         public ushort SortGroup;
         public ushort SortIndex;
         public ushort BoneIndex;
         public BlendMode BlendMode;
-        public TextureFilter TextureFilter;
         public RectInt Viewport;
         public bool ScissorEnabled;
         public RectInt Scissor;
@@ -58,16 +58,16 @@ public static unsafe partial class Graphics
 
         var shaderChanged = current.Shader != prev.Shader;
         var blendChanged = current.BlendMode != prev.BlendMode;
-        var filterChanged = current.TextureFilter != prev.TextureFilter;
         var texturesChanged = false;
         for (var i = 0; i < MaxTextures && !texturesChanged; i++)
-            texturesChanged = current.Textures[i] != prev.Textures[i];
+            texturesChanged = current.Textures[i] != prev.Textures[i] ||
+                              current.TextureFilters[i] != prev.TextureFilters[i];
         var viewportChanged = current.Viewport != prev.Viewport;
         var scissorChanged = current.ScissorEnabled != prev.ScissorEnabled ||
                              current.Scissor != prev.Scissor;
         var meshChanged = current.Mesh != prev.Mesh;
 
-        if (shaderChanged || blendChanged || filterChanged || texturesChanged || viewportChanged || scissorChanged || meshChanged)
+        if (shaderChanged || blendChanged || texturesChanged || viewportChanged || scissorChanged || meshChanged)
             _batchStateDirty = true;
     }
 
@@ -81,10 +81,12 @@ public static unsafe partial class Graphics
         CurrentState.Color = Color.White;
         CurrentState.Shader = null;
         CurrentState.BlendMode = default;
-        CurrentState.TextureFilter = TextureFilter.Point;
         CurrentState.BoneIndex = 0;
         for (var i = 0; i < MaxTextures; i++)
+        {
             CurrentState.Textures[i] = 0;
+            CurrentState.TextureFilters[i] = (byte)TextureFilter.Point;
+        }
 
         CurrentState.ScissorEnabled = false;
         CurrentState.Scissor = RectInt.Zero;
@@ -146,20 +148,24 @@ public static unsafe partial class Graphics
         _batchStateDirty = true;
     }
 
-    public static void SetTexture(nuint texture, int slot = 0)
+    public static void SetTexture(nuint texture, int slot = 0, TextureFilter filter = TextureFilter.Point)
     {
         Debug.Assert(slot is >= 0 and < MaxTextures);
-        if (CurrentState.Textures[slot] == texture) return;
+        var filterByte = (byte)filter;
+        if (CurrentState.Textures[slot] == texture && CurrentState.TextureFilters[slot] == filterByte) return;
         CurrentState.Textures[slot] = texture;
+        CurrentState.TextureFilters[slot] = filterByte;
         _batchStateDirty = true;
     }
 
-    public static void SetTexture(Texture texture, int slot = 0)
+    public static void SetTexture(Texture? texture, int slot = 0, TextureFilter filter = TextureFilter.Point)
     {
         Debug.Assert(slot is >= 0 and < MaxTextures);
         var handle = texture?.Handle ?? nuint.Zero;
-        if (CurrentState.Textures[slot] == handle) return;
+        var filterByte = (byte)filter;
+        if (CurrentState.Textures[slot] == handle && CurrentState.TextureFilters[slot] == filterByte) return;
         CurrentState.Textures[slot] = handle;
+        CurrentState.TextureFilters[slot] = filterByte;
         _batchStateDirty = true;
     }
 
@@ -175,9 +181,12 @@ public static unsafe partial class Graphics
         CurrentState.SortLayer = layer;
     }
 
-    public static void SetTextureFilter(TextureFilter filter)
+    public static void SetTextureFilter(TextureFilter filter, int slot = 0)
     {
-        CurrentState.TextureFilter = filter;
+        Debug.Assert(slot is >= 0 and < MaxTextures);
+        var filterByte = (byte)filter;
+        if (CurrentState.TextureFilters[slot] == filterByte) return;
+        CurrentState.TextureFilters[slot] = filterByte;
         _batchStateDirty = true;
     }
 

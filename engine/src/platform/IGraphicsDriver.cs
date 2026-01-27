@@ -54,7 +54,7 @@ public interface IGraphicsDriver
     void UpdateTexture(nuint handle, in Vector2Int size, ReadOnlySpan<byte> data);
     void UpdateTextureRegion(nuint handle, in RectInt region, ReadOnlySpan<byte> data, int srcWidth = -1);
     void DestroyTexture(nuint handle);
-    void BindTexture(nuint handle, int slot);
+    void BindTexture(nuint handle, int slot, TextureFilter filter = TextureFilter.Point);
 
     nuint CreateTextureArray(int width, int height, int layers);
     nuint CreateTextureArray(int width, int height, byte[][] layerData, TextureFormat format, TextureFilter filter, string? name=null);

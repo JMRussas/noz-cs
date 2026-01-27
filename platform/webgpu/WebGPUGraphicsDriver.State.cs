@@ -243,7 +243,9 @@ public unsafe partial class WebGPUGraphicsDriver
 
                 case ShaderBindingType.Sampler:
                 {
-                    var sampler = _state.TextureFilter == TextureFilter.Point ? _nearestSampler : _linearSampler;
+                    int textureSlot = GetTextureSlotForBinding(binding.Binding, ref shader);
+                    var slotFilter = textureSlot >= 0 ? (TextureFilter)_state.TextureFilters[textureSlot] : TextureFilter.Point;
+                    var sampler = slotFilter == TextureFilter.Point ? _nearestSampler : _linearSampler;
                     entries[validEntryCount++] = new BindGroupEntry
                     {
                         Binding = binding.Binding,

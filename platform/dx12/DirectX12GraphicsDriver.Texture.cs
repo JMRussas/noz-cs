@@ -154,10 +154,12 @@ public unsafe partial class DirectX12GraphicsDriver
             ResourceStates.PixelShaderResource);
     }
 
-    public void BindTexture(nuint handle, int slot)
+    public void BindTexture(nuint handle, int slot, TextureFilter filter = TextureFilter.Point)
     {
         ref var textureInfo = ref _textures[(int)handle];
         if (textureInfo.Resource.Handle == null) return;
+
+        // TODO: Handle per-slot filter for DX12 (requires sampler state changes)
 
         // Get GPU handle for the SRV
         var gpuHandle = _cbvSrvUavHeap.GetGPUDescriptorHandleForHeapStart();

@@ -122,6 +122,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public TextureFilter TextureFilter;
         public nuint BoundMesh;
         public fixed ulong BoundTextures[8];
+        public fixed byte TextureFilters[8];
         public fixed ulong BoundUniformBuffers[4];
         public bool PipelineDirty;
         public bool BindGroupDirty;

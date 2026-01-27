@@ -388,7 +388,7 @@ public unsafe partial class WebGPUGraphicsDriver
         }
     }
 
-    public void BindTexture(nuint handle, int slot)
+    public void BindTexture(nuint handle, int slot, TextureFilter filter = TextureFilter.Point)
     {
         if (slot < 0 || slot >= 8)
         {
@@ -396,10 +396,12 @@ public unsafe partial class WebGPUGraphicsDriver
             return;
         }
 
-        if (_state.BoundTextures[slot] == handle)
+        var filterByte = (byte)filter;
+        if (_state.BoundTextures[slot] == handle && _state.TextureFilters[slot] == filterByte)
             return;
 
         _state.BoundTextures[slot] = handle;
+        _state.TextureFilters[slot] = filterByte;
         _state.BindGroupDirty = true;
     }
 

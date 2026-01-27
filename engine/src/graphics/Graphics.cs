@@ -33,8 +33,8 @@ public static unsafe partial class Graphics
     {
         public nuint Shader;
         public fixed ulong Textures[MaxTextures];
+        public fixed byte TextureFilters[MaxTextures];
         public BlendMode BlendMode;
-        public TextureFilter TextureFilter;
         public RectInt Viewport;
         public RectInt Scissor;
         public nuint Mesh;
@@ -315,7 +315,6 @@ public static unsafe partial class Graphics
             GlobalsIndex = GetOrAddGlobals(currentProjection),
             Shader = CurrentState.Shader?.Handle ?? nuint.Zero,
             BlendMode = CurrentState.BlendMode,
-            TextureFilter = CurrentState.TextureFilter,
             Viewport = CurrentState.Viewport,
             ScissorEnabled = CurrentState.ScissorEnabled,
             Scissor = CurrentState.Scissor,
@@ -323,7 +322,10 @@ public static unsafe partial class Graphics
         };
 
         for (int t = 0; t < MaxTextures; t++)
+        {
             candidate.Textures[t] = CurrentState.Textures[t];
+            candidate.TextureFilters[t] = CurrentState.TextureFilters[t];
+        }
 
         var candidateSpan = new ReadOnlySpan<byte>(&candidate, sizeof(BatchState));
         for (int i = 0; i < _batchStates.Length; i++)
@@ -557,11 +559,14 @@ public static unsafe partial class Graphics
         var lastScissor = RectInt.Zero;
         var lastShader = nuint.Zero;
         var lastTextures = stackalloc nuint[MaxTextures];
+        var lastTextureFilters = stackalloc byte[MaxTextures];
         for (int i = 0; i < MaxTextures; i++)
+        {
             lastTextures[i] = nuint.Zero;
+            lastTextureFilters[i] = 0xFF; // Invalid value to force initial bind
+        }
         var lastMesh = nuint.Zero;
         var lastBlendMode = BlendMode.None;
-        var lastTextureFilter = TextureFilter.Point;
         var lastGlobalsIndex = ushort.MaxValue;
 
         if (_vertices.Length > 0 || _indices.Length > 0)
@@ -573,11 +578,8 @@ public static unsafe partial class Graphics
             Driver.BindMesh(_mesh);
             Driver.UpdateMesh(_mesh, _vertices.AsByteSpan(), _sortedIndices.AsSpan());
             Driver.SetBlendMode(BlendMode.None);
-            Driver.SetTextureFilter(TextureFilter.Linear);
             lastMesh = _mesh;
         }
-
-        Driver.SetTextureFilter(TextureFilter.Point);
 
         UploadBones();
         Driver.BindTexture(_boneTexture, BoneTextureSlot);
@@ -615,9 +617,11 @@ public static unsafe partial class Graphics
                     lastMesh = nuint.Zero;
                     lastBlendMode = BlendMode.None;
                     lastGlobalsIndex = ushort.MaxValue;
-                    lastTextureFilter = TextureFilter.Point;
                     for (int i = 0; i < MaxTextures; i++)
+                    {
                         lastTextures[i] = nuint.Zero;
+                        lastTextureFilters[i] = 0xFF;
+                    }
 
                     LogGraphics($"  BeginPass: UI");
                 }
@@ -662,13 +666,14 @@ public static unsafe partial class Graphics
 
             for (int t = 0; t < MaxTextures; t++)
             {
-                if (lastTextures[t] != (nuint)batchState.Textures[t])
+                if (lastTextures[t] != (nuint)batchState.Textures[t] || lastTextureFilters[t] != batchState.TextureFilters[t])
                 {
                     lastTextures[t] = (nuint)batchState.Textures[t];
+                    lastTextureFilters[t] = batchState.TextureFilters[t];
                     if (batchState.Textures[t] != 0)
                     {
-                        Driver.BindTexture((nuint)batchState.Textures[t], t);
-                        LogGraphics($"    BindTexture: Slot={t} Handle=0x{batchState.Textures[t]:X} ({Asset.Get<Texture>(AssetType.Texture, (nuint)batchState.Textures[t])?.Name ?? "???"})");
+                        Driver.BindTexture((nuint)batchState.Textures[t], t, (TextureFilter)batchState.TextureFilters[t]);
+                        LogGraphics($"    BindTexture: Slot={t} Handle=0x{batchState.Textures[t]:X} Filter={(TextureFilter)batchState.TextureFilters[t]} ({Asset.Get<Texture>(AssetType.Texture, (nuint)batchState.Textures[t])?.Name ?? "???"})");
                     }
                 }
             }
@@ -678,13 +683,6 @@ public static unsafe partial class Graphics
                 lastBlendMode = batchState.BlendMode;
                 Driver.SetBlendMode(batchState.BlendMode);
                 LogGraphics($"    SetBlendMode: {batchState.BlendMode}");
-            }
-
-            if (lastTextureFilter != batchState.TextureFilter)
-            {
-                lastTextureFilter = batchState.TextureFilter;
-                Driver.SetTextureFilter(batchState.TextureFilter);
-                LogGraphics($"    SetTextureFilter: {batchState.TextureFilter}");
             }
 
             if (lastMesh != batchState.Mesh)

@@ -36,7 +36,10 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         public int Layers;
         public bool IsArray;
         public TextureFormat Format;
+        public TextureFilter Filter;
     }
+
+    private TextureFilter _currentFilter = TextureFilter.Point;
 
     private readonly uint[] _buffers = new uint[MaxBuffers];
     private readonly TextureInfo[] _textures = new TextureInfo[MaxTextures];
@@ -364,7 +367,8 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
             Height = height,
             Layers = 0,
             IsArray = false,
-            Format = format
+            Format = format,
+            Filter = filter
         };
 
         if (!string.IsNullOrEmpty(name))
@@ -405,16 +409,32 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
         }
     }
 
-    public void BindTexture(nuint handle, int slot)
+    public void BindTexture(nuint handle, int slot, TextureFilter filter = TextureFilter.Point)
     {
         ref var info = ref _textures[(int)handle];
         if (info.GlTexture == 0) return;
 
         _gl.ActiveTexture(TextureUnit.Texture0 + slot);
         if (info.IsArray)
+        {
             _gl.BindTexture(TextureTarget.Texture2DArray, info.GlTexture);
+            if (info.Filter != filter)
+            {
+                info.Filter = filter;
+                _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMinFilter, (int)ToTextureMinFilter(filter));
+                _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMagFilter, (int)ToTextureMaxFilter(filter));
+            }
+        }
         else
+        {
             _gl.BindTexture(TextureTarget.Texture2D, info.GlTexture);
+            if (info.Filter != filter)
+            {
+                info.Filter = filter;
+                _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)ToTextureMinFilter(filter));
+                _gl.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)ToTextureMaxFilter(filter));
+            }
+        }
     }
 
     // === Texture Array Management ===
@@ -441,7 +461,8 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
             Width = width,
             Height = height,
             Layers = layers,
-            IsArray = true
+            IsArray = true,
+            Filter = TextureFilter.Linear
         };
         return (nuint)handle;
     }
@@ -490,8 +511,8 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
             }
         }
 
-        var minFilter = filter == TextureFilter.Nearest ? TextureMinFilter.Nearest : TextureMinFilter.Linear;
-        var magFilter = filter == TextureFilter.Nearest ? TextureMagFilter.Nearest : TextureMagFilter.Linear;
+        var minFilter = filter == TextureFilter.Point ? TextureMinFilter.Nearest : TextureMinFilter.Linear;
+        var magFilter = filter == TextureFilter.Point ? TextureMagFilter.Nearest : TextureMagFilter.Linear;
 
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMinFilter, (int)minFilter);
         _gl.TexParameter(TextureTarget.Texture2DArray, TextureParameterName.TextureMagFilter, (int)magFilter);
@@ -505,7 +526,8 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
             Width = width,
             Height = height,
             Layers = layers,
-            IsArray = true
+            IsArray = true,
+            Filter = filter
         };
         return (nuint)handle;
     }
@@ -595,7 +617,7 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
 
     public void SetTextureFilter(TextureFilter filter)
     {
-        // OpenGL sets filter per-texture, not globally - handled in texture creation/binding
+        _currentFilter = filter;
     }
 
     public void SetUniform(string name, ReadOnlySpan<byte> data)
@@ -649,13 +671,13 @@ public unsafe class OpenGLGraphicsDriver : IGraphicsDriver
 
     private static TextureMinFilter ToTextureMinFilter(TextureFilter filter) => filter switch
     {
-        TextureFilter.Nearest => TextureMinFilter.Nearest,
+        TextureFilter.Point => TextureMinFilter.Nearest,
         _ => TextureMinFilter.Linear
     };
 
     private static TextureMagFilter ToTextureMaxFilter(TextureFilter filter) => filter switch
     {
-        TextureFilter.Nearest => TextureMagFilter.Nearest,
+        TextureFilter.Point => TextureMagFilter.Nearest,
         _ => TextureMagFilter.Linear
     };
     
