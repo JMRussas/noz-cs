@@ -18,12 +18,7 @@ internal class AnimationEditor : DocumentEditor
     private const int PlayButtonId = 2;
     private const int RootMotionButtonId = 3;
     private const int LoopButtonId = 3;
-
     private const int FirstFrameId = 64;
-
-
-    public new AnimationDocument Document => (AnimationDocument)base.Document;
-
 
     private AnimationEditorState _state = AnimationEditorState.Default;
     private bool _clearSelectionOnUp;
@@ -31,18 +26,17 @@ internal class AnimationEditor : DocumentEditor
     private Vector2 _selectionCenter;
     private Vector2 _selectionCenterWorld;
     private bool _onionSkin;
-    private AnimationFrameData _clipboard = new();
     private Vector2 _rootMotionDelta;
     private bool _rootMotion = true;
     private float _playSpeed = 1f;
 
-    private readonly Command[] _commands;
+    public new AnimationDocument Document => (AnimationDocument)base.Document;
 
     public AnimationEditor(AnimationDocument document) : base(document)
     {
         var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
 
-        _commands =
+        Commands =
         [
             exitEditCommand,
             new Command { Name = "Toggle Playback", Handler = TogglePlayback, Key = InputCode.KeySpace },
@@ -78,7 +72,6 @@ internal class AnimationEditor : DocumentEditor
             ]
         };
 
-        Commands = _commands;
         ClearSelection();
         Document.UpdateTransforms();
     }
@@ -110,7 +103,7 @@ internal class AnimationEditor : DocumentEditor
                 {
                     using (UI.BeginContainer(FirstFrameId + frameIndex, EditorStyle.AnimationEditor.Frame))
                     {
-
+                        UI.Container(EditorStyle.AnimationEditor.FrameDot);
                     }
                 }
                 else
@@ -266,7 +259,7 @@ internal class AnimationEditor : DocumentEditor
 
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
         using (UI.BeginContainer(EditorStyle.AnimationEditor.Root))
-        using (UI.BeginColumn())
+        using (UI.BeginColumn(ContainerStyle.Fit))
         {
             using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
             {
@@ -751,19 +744,25 @@ internal class AnimationEditor : DocumentEditor
 
     private void CopyKeys()
     {
+        var frameData = new AnimationFrameData();
         for (var boneIndex = 0; boneIndex < Skeleton.MaxBones; boneIndex++)
-            _clipboard.Transforms[boneIndex] = Document.Frames[Document.CurrentFrame].Transforms[boneIndex];
+            frameData.Transforms[boneIndex] = Document.Frames[Document.CurrentFrame].Transforms[boneIndex];
+        Clipboard.Copy(frameData);
     }
 
     private void PasteKeys()
     {
+        var frameData = Clipboard.Get<AnimationFrameData>();
+        if (frameData == null)
+            return;
+
         Undo.Record(Document);
 
         for (var boneIndex = 0; boneIndex < Skeleton.MaxBones; boneIndex++)
         {
             if (!IsBoneSelected(boneIndex))
                 continue;
-            Document.Frames[Document.CurrentFrame].Transforms[boneIndex] = _clipboard.Transforms[boneIndex];
+            Document.Frames[Document.CurrentFrame].Transforms[boneIndex] = frameData.Transforms[boneIndex];
         }
 
         Document.MarkModified();

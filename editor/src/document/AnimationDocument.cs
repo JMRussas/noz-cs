@@ -31,7 +31,7 @@ public class AnimationBoneData
 
 public class AnimationFrameData
 {
-    public BoneTransform[] Transforms = new BoneTransform[NoZ.Skeleton.MaxBones];
+    public BoneTransform[] Transforms = new BoneTransform[Skeleton.MaxBones];
     public string? EventName;
     public int Hold;
 

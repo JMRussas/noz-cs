@@ -89,8 +89,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     private TextureView* _offscreenResolveTextureView;
     private WGPUTexture* _offscreenDepthTexture;
     private TextureView* _offscreenDepthTextureView;
-    private int _offscreenWidth;
-    private int _offscreenHeight;
+    private Vector2Int _offscreenSize;
     private int _msaaSamples = 1;
 
     // Bind group management

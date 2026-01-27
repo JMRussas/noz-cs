@@ -75,6 +75,8 @@ public class SpriteEditor : DocumentEditor
             new Command { Name = "Rectangle Tool", Handler = BeginRectangleTool, Key = InputCode.KeyR, Ctrl = true },
             new Command { Name = "Circle Tool", Handler = BeginCircleTool, Key = InputCode.KeyO, Ctrl = true },
             new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true },
+            new Command { Name = "Copy", Handler = CopySelected, Key = InputCode.KeyC, Ctrl = true },
+            new Command { Name = "Paste", Handler = PasteSelected, Key = InputCode.KeyV, Ctrl = true },
         ];
 
         bool HasSelection() => Document.GetFrame(_currentFrame).Shape.HasSelection();
@@ -651,6 +653,40 @@ public class SpriteEditor : DocumentEditor
         BeginMoveTool();
     }
 
+    private void CopySelected()
+    {
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        if (!shape.HasSelection())
+            return;
+
+        var data = new PathClipboardData(shape);
+        if (data.Paths.Length == 0)
+            return;
+
+        Clipboard.Copy(data);
+    }
+
+    private void PasteSelected()
+    {
+        var clipboardData = Clipboard.Get<PathClipboardData>();
+        if (clipboardData == null)
+            return;
+
+        Undo.Record(Document);
+
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        shape.ClearAnchorSelection();
+
+        clipboardData.PasteInto(shape);
+
+        Document.MarkModified();
+        Document.UpdateBounds();
+        MarkRasterDirty();
+        UpdateSelectionColor();
+
+        BeginMoveTool();
+    }
+
     private void CenterShape()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
@@ -752,8 +788,7 @@ public class SpriteEditor : DocumentEditor
         Workspace.BeginTool(new MoveTool(
             update: delta =>
             {
-                var snap = Input.IsCtrlDown();
-                shape.TranslateAnchors(delta, _savedPositions, snap);
+                shape.TranslateAnchors(delta, _savedPositions, Input.IsCtrlDown());
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 MarkRasterDirty();

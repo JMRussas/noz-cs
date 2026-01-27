@@ -468,12 +468,12 @@ public static class EditorStyle
     public static class AnimationEditor
     {
         public const int MinFrames = 24;
-        public const float FrameWidth = 11;
-        public const float FrameHeight = 20f;
+        public const float FrameWidth = 13f;
+        public const float FrameHeight = 26f;
         public const float FrameSpacerWidth = 1.0f;
         public const float Padding = 8f;
         public const float BorderWidth = 1f;
-        public const float FrameDotSize = 5f;
+        public const float FrameDotSize = 4f;
         public const float TickHeight = FrameHeight * 0.4f;
         public const float ShortTickHeight = TickHeight;
 
@@ -542,7 +542,8 @@ public static class EditorStyle
             AlignX = Align.Center,
             AlignY = Align.Max,
             Margin = EdgeInsets.Bottom(5f),
-            Color = FrameDotColor
+            Color = FrameDotColor,
+            Border = { Radius = 3 }
         };
 
         public static readonly LabelStyle FrameLabel = new()

@@ -73,7 +73,7 @@ public static partial class UI
 
     public static Vector2Int GetRefSize()
     {
-        var screenSize = Application.WindowSize;
+        var screenSize = Application.WindowSize.ToVector2();
         var scale = GetUIScale();
         return new Vector2Int(
             (int)(screenSize.X / scale),
@@ -339,7 +339,7 @@ public static partial class UI
     }
 
     public static Vector2 ScreenToUI(Vector2 screenPos) =>
-        screenPos / Application.WindowSize * _size;
+        screenPos / Application.WindowSize.ToVector2() * _size;
 
     public static Vector2 ScreenToElement(Vector2 screen)
     {
@@ -404,7 +404,7 @@ public static partial class UI
         _hotCanvasId = CanvasId.None;
         _currentCanvasId = CanvasId.None;
 
-        var screenSize = Application.WindowSize;
+        var screenSize = Application.WindowSize.ToVector2();
         var rw = (float)_refSize.X;
         var rh = (float)_refSize.Y;
         var sw = screenSize.X;

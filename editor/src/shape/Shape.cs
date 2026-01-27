@@ -1003,10 +1003,7 @@ public sealed unsafe partial class Shape : IDisposable
             if (!_anchors[i].IsSelected) continue;
 
             var newPos = savedPositions[i] + delta;
-            if (snap)
-                newPos = Grid.SnapToGrid(newPos);
-            else
-                newPos = Grid.SnapToPixelGrid(newPos);
+            newPos = Grid.SnapToPixelGrid(newPos);
             _anchors[i].Position = newPos;
         }
     }

@@ -2,11 +2,7 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System.Text;
-using Silk.NET.Core.Native;
 using Silk.NET.WebGPU;
-using WGPUTexture = Silk.NET.WebGPU.Texture;
-using WGPUTextureFormat = Silk.NET.WebGPU.TextureFormat;
 
 namespace NoZ.Platform.WebGPU;
 
@@ -14,15 +10,14 @@ public unsafe partial class WebGPUGraphicsDriver
 {
     public void ResizeOffscreenTarget(Vector2Int size, int msaaSamples)
     {
-        var width = size.X;
-        var height = size.Y;
-        if (_offscreenWidth == width && _offscreenHeight == height && _msaaSamples == msaaSamples && _offscreenMsaaTexture != null)
+        if (_offscreenSize == size && _msaaSamples == msaaSamples && _offscreenMsaaTexture != null)
             return;
 
         DestroyOffscreenTarget();
 
-        _offscreenWidth = width;
-        _offscreenHeight = height;
+        var width = size.X;
+        var height = size.Y;
+        _offscreenSize = size;
         _msaaSamples = Math.Max(1, msaaSamples);
 
         var viewDesc = new TextureViewDescriptor
