@@ -14,10 +14,13 @@ internal enum AnimationEditorState
 
 internal class AnimationEditor : DocumentEditor
 {
+    private static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
+
     private const int OnionSkinButtonId = 1;
     private const int PlayButtonId = 2;
     private const int RootMotionButtonId = 3;
-    private const int LoopButtonId = 3;
+    private const int LoopButtonId = 4;
+    private const int AddFrameButtonId = 5;
     private const int FirstFrameId = 64;
 
     private AnimationEditorState _state = AnimationEditorState.Default;
@@ -35,10 +38,14 @@ internal class AnimationEditor : DocumentEditor
     public AnimationEditor(AnimationDocument document) : base(document)
     {
         var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
+        var copyCommand = new Command { Name = "Copy", Handler = CopyKeys, Key = InputCode.KeyC, Ctrl = true };
+        var pasteCommand = new Command { Name = "Paste", Handler = PasteKeys, Key = InputCode.KeyV, Ctrl = true };
 
         Commands =
         [
             exitEditCommand,
+            copyCommand,
+            pasteCommand,
             new Command { Name = "Toggle Playback", Handler = TogglePlayback, Key = InputCode.KeySpace },
             new Command { Name = "Previous Frame", Handler = PreviousFrame, Key = InputCode.KeyQ },
             new Command { Name = "Next Frame", Handler = NextFrame, Key = InputCode.KeyE },
@@ -53,8 +60,6 @@ internal class AnimationEditor : DocumentEditor
             new Command { Name = "Delete Frame", Handler = DeleteFrame, Key = InputCode.KeyX },
             new Command { Name = "Add Hold", Handler = AddHoldFrame, Key = InputCode.KeyH },
             new Command { Name = "Remove Hold", Handler = RemoveHoldFrame, Key = InputCode.KeyH, Shift = true },
-            new Command { Name = "Copy Keys", Handler = CopyKeys, Key = InputCode.KeyC, Ctrl = true },
-            new Command { Name = "Paste Keys", Handler = PasteKeys, Key = InputCode.KeyV, Ctrl = true },
             new Command { Name = "Toggle Onion Skin", Handler = ToggleOnionSkin, Key = InputCode.KeyO, Shift = true },
             new Command { Name = "Toggle Root Motion", Handler = ToggleRootMotion, Key = InputCode.KeyM, Shift = true },
             new Command { Name = "Toggle Loop", Handler = ToggleLoop, Key = InputCode.KeyL },
@@ -63,11 +68,16 @@ internal class AnimationEditor : DocumentEditor
             new Command { Name = "Mirror Pose", Handler = MirrorPose, Key = InputCode.KeyM },
         ];
 
+        bool HasSelection() => Document.SelectedBoneCount > 0;
+
         ContextMenu = new ContextMenuDef
         {
             Title = "Animation",
             Items =
             [
+                ContextMenuItem.FromCommand(copyCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(pasteCommand, enabled: Clipboard.Is<AnimationFrameData>),
+                ContextMenuItem.Separator(),
                 ContextMenuItem.FromCommand(exitEditCommand),
             ]
         };
@@ -90,20 +100,45 @@ internal class AnimationEditor : DocumentEditor
 
     private void TimelineUI(int currentFrame, bool isPlaying)
     {
-        using (UI.BeginContainer(EditorStyle.AnimationEditor.TickContainer))
+        using (UI.BeginRow(EditorStyle.AnimationEditor.TickContainer))
         {
+            UI.Spacer(EditorStyle.AnimationEditor.FrameSpacerWidth);
+            var blockCount = AnimationDocument.MaxFrames / 4;
+            for (var blockIndex = 0; blockIndex < blockCount; blockIndex++)
+            {
+                using (UI.BeginContainer(EditorStyle.AnimationEditor.FrameBlock))
+                    UI.Label(FrameTimeStrings[blockIndex], EditorStyle.AnimationEditor.FrameBlockText);
+
+                UI.Container(EditorStyle.AnimationEditor.FrameBlockSeparator);
+            }
         }
 
         using (UI.BeginContainer(EditorStyle.AnimationEditor.FrameContainer))
         using (UI.BeginRow())
         {
+            UI.Container(EditorStyle.AnimationEditor.FrameSeparator);
+
             for (var frameIndex = 0; frameIndex < AnimationDocument.MaxFrames; frameIndex++)
             {
                 if (frameIndex < Document.FrameCount)
                 {
-                    using (UI.BeginContainer(FirstFrameId + frameIndex, EditorStyle.AnimationEditor.Frame))
+                    var selected = Document.CurrentFrame == frameIndex;
+                    using (UI.BeginContainer(
+                        FirstFrameId + frameIndex,
+                        selected
+                            ? EditorStyle.AnimationEditor.SelectedFrame
+                            : EditorStyle.AnimationEditor.Frame))
                     {
-                        UI.Container(EditorStyle.AnimationEditor.FrameDot);
+                        UI.Container(selected
+                            ? EditorStyle.AnimationEditor.SelectedFrameDot
+                            : EditorStyle.AnimationEditor.FrameDot);
+
+                        if (UI.WasPressed())
+                        {
+                            Document.CurrentFrame = frameIndex;
+                            Document.UpdateTransforms();
+                            SetDefaultState();
+                        }
                     }
                 }
                 else
@@ -116,8 +151,7 @@ internal class AnimationEditor : DocumentEditor
                     }
                 }
 
-                if (frameIndex != AnimationDocument.MaxFrames - 1)
-                    UI.Container(EditorStyle.AnimationEditor.FrameSeparator);
+                UI.Container(EditorStyle.AnimationEditor.FrameSeparator);
             }
         }
 
@@ -263,16 +297,32 @@ internal class AnimationEditor : DocumentEditor
         {
             using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
             {
-                EditorUI.Button(PlayButtonId, EditorAssets.Sprites.IconPublish);
-                EditorUI.Button(OnionSkinButtonId, EditorAssets.Sprites.IconOnion);
-                EditorUI.Button(RootMotionButtonId, EditorAssets.Sprites.IconRootMotion);
-                EditorUI.Button(LoopButtonId, EditorAssets.Sprites.IconLoop);
+                using (UI.BeginFlex())
+                using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
+                {
+                    if (EditorUI.Button(AddFrameButtonId, EditorAssets.Sprites.IconKeyframe, toolbar: true))
+                        InsertFrameAfter();
+                }
 
-                //DopeSheetButton("M", false, MirrorPose);
-                //UI.Flex();
-                //DopeSheetButton("L", Document.IsLooping, ToggleLoop);
-                //DopeSheetButton("R", _rootMotion, ToggleRootMotion);
-                //DopeSheetButton("O", _onionSkin, ToggleOnionSkin);
+                if (EditorUI.Button(PlayButtonId, EditorAssets.Sprites.IconPlay, selected: Document.IsPlaying, toolbar: true))
+                    TogglePlayback();
+
+                using (UI.BeginFlex())
+                using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
+                {
+                    UI.Flex();
+
+                    if (EditorUI.Button(LoopButtonId, EditorAssets.Sprites.IconLoop, selected: Document.IsLooping, toolbar: true))
+                    {
+                        Undo.Record(Document);
+                        Document.IsLooping = !Document.IsLooping;
+                    }
+
+                    EditorUI.Button(RootMotionButtonId, EditorAssets.Sprites.IconRootMotion, selected: Document.IsRootMotion, toolbar: true);
+
+                    if (EditorUI.Button(OnionSkinButtonId, EditorAssets.Sprites.IconOnion, selected: _onionSkin, toolbar: true))
+                        _onionSkin = !_onionSkin;
+                }
             }
 
             using (UI.BeginColumn(EditorStyle.Overlay.UnpaddedContent with { Spacing = 0.0f}))
@@ -858,6 +908,9 @@ internal class AnimationEditor : DocumentEditor
 
         var baseTransform = GetBaseTransform();
 
+        Document.Draw();
+
+#if false
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
             Graphics.SetTransform(baseTransform);
@@ -899,6 +952,7 @@ internal class AnimationEditor : DocumentEditor
                 Gizmos.DrawCircle(p0, boneRadius);
             }
         }
+#endif
     }
 
     private void DrawDopeSheet()

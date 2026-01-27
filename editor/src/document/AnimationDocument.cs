@@ -67,7 +67,17 @@ internal class AnimationDocument : Document
 
     public override bool IsPlaying => _isPlaying;
     public override bool CanPlay => true;
-    public bool IsLooping => (Flags & AnimationFlags.Looping) != 0;
+    public bool IsLooping
+    {
+        get => (Flags & AnimationFlags.Looping) != 0;
+        set
+        {
+            if (value)
+                Flags |= AnimationFlags.Looping;
+            else
+                Flags &= ~AnimationFlags.Looping;
+        }
+    }
     public bool IsRootMotion => (Flags & AnimationFlags.RootMotion) != 0;
 
     public AnimationDocument()
@@ -654,26 +664,34 @@ internal class AnimationDocument : Document
 
         using (Gizmos.PushState(EditorLayer.Document))
         {
-            var transform = Transform;
-            if (!IsEditing)
-            {
-                ref var rootTransform = ref GetFrameTransform(0, CurrentFrame);
-                transform = Matrix3x2.CreateTranslation(-rootTransform.Position) * transform;
-            }
-
-            Graphics.SetTransform(transform);
-            Gizmos.SetColor(EditorStyle.Skeleton.BoneColor);
-
-            for (var boneIndex = 0; boneIndex < Skeleton.BoneCount; boneIndex++)
-            {
-                var b = Skeleton.Bones[boneIndex];
-                ref readonly var boneTransform = ref LocalToWorld[boneIndex];
-                var p0 = Vector2.Transform(Vector2.Zero, boneTransform);
-                var p1 = Vector2.Transform(new Vector2(b.Length, 0), boneTransform);
-                Gizmos.DrawBone(p0, p1, EditorStyle.Skeleton.BoneColor);
-            }
-
+            DrawBones();
+            Graphics.SetSortGroup(0);
             DrawSprites();
+        }
+    }
+
+    private void DrawBones()
+    {
+        if (Skeleton == null) return;
+
+        var transform = Transform;
+        if (!IsEditing)
+        {
+            ref var rootTransform = ref GetFrameTransform(0, CurrentFrame);
+            transform = Matrix3x2.CreateTranslation(-rootTransform.Position) * transform;
+        }
+
+        Graphics.SetTransform(transform);
+        Graphics.SetSortGroup(1);
+        Gizmos.SetColor(EditorStyle.Skeleton.BoneColor);
+
+        for (var boneIndex = 0; boneIndex < Skeleton.BoneCount; boneIndex++)
+        {
+            var b = Skeleton.Bones[boneIndex];
+            ref readonly var boneTransform = ref LocalToWorld[boneIndex];
+            var p0 = Vector2.Transform(Vector2.Zero, boneTransform);
+            var p1 = Vector2.Transform(new Vector2(b.Length, 0), boneTransform);
+            Gizmos.DrawBone(p0, p1, EditorStyle.Skeleton.BoneColor);
         }
     }
 

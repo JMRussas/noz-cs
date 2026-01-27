@@ -36,6 +36,7 @@ public static class EditorAssets
         public const string IconEdit = "icon_edit";
         public const string IconExpandDown = "icon_expand_down";
         public const string IconExpandUp = "icon_expand_up";
+        public const string IconKeyframe = "icon_keyframe";
         public const string IconLoop = "icon_loop";
         public const string IconMirror = "icon_mirror";
         public const string IconMove = "icon_move";
@@ -43,6 +44,7 @@ public static class EditorAssets
         public const string IconOpacity = "icon_opacity";
         public const string IconOpacityOverlay = "icon_opacity_overlay";
         public const string IconPalette = "icon_palette";
+        public const string IconPlay = "icon_play";
         public const string IconPreview = "icon_preview";
         public const string IconPublish = "icon_publish";
         public const string IconRootMotion = "icon_root_motion";
@@ -131,6 +133,7 @@ public static class EditorAssets
         public static Sprite IconEdit { get; private set; } = null!;
         public static Sprite IconExpandDown { get; private set; } = null!;
         public static Sprite IconExpandUp { get; private set; } = null!;
+        public static Sprite IconKeyframe { get; private set; } = null!;
         public static Sprite IconLoop { get; private set; } = null!;
         public static Sprite IconMirror { get; private set; } = null!;
         public static Sprite IconMove { get; private set; } = null!;
@@ -138,6 +141,7 @@ public static class EditorAssets
         public static Sprite IconOpacity { get; private set; } = null!;
         public static Sprite IconOpacityOverlay { get; private set; } = null!;
         public static Sprite IconPalette { get; private set; } = null!;
+        public static Sprite IconPlay { get; private set; } = null!;
         public static Sprite IconPreview { get; private set; } = null!;
         public static Sprite IconPublish { get; private set; } = null!;
         public static Sprite IconRootMotion { get; private set; } = null!;
@@ -167,6 +171,7 @@ public static class EditorAssets
             IconEdit = (Sprite)Asset.Load(AssetType.Sprite, Names.IconEdit)!;
             IconExpandDown = (Sprite)Asset.Load(AssetType.Sprite, Names.IconExpandDown)!;
             IconExpandUp = (Sprite)Asset.Load(AssetType.Sprite, Names.IconExpandUp)!;
+            IconKeyframe = (Sprite)Asset.Load(AssetType.Sprite, Names.IconKeyframe)!;
             IconLoop = (Sprite)Asset.Load(AssetType.Sprite, Names.IconLoop)!;
             IconMirror = (Sprite)Asset.Load(AssetType.Sprite, Names.IconMirror)!;
             IconMove = (Sprite)Asset.Load(AssetType.Sprite, Names.IconMove)!;
@@ -174,6 +179,7 @@ public static class EditorAssets
             IconOpacity = (Sprite)Asset.Load(AssetType.Sprite, Names.IconOpacity)!;
             IconOpacityOverlay = (Sprite)Asset.Load(AssetType.Sprite, Names.IconOpacityOverlay)!;
             IconPalette = (Sprite)Asset.Load(AssetType.Sprite, Names.IconPalette)!;
+            IconPlay = (Sprite)Asset.Load(AssetType.Sprite, Names.IconPlay)!;
             IconPreview = (Sprite)Asset.Load(AssetType.Sprite, Names.IconPreview)!;
             IconPublish = (Sprite)Asset.Load(AssetType.Sprite, Names.IconPublish)!;
             IconRootMotion = (Sprite)Asset.Load(AssetType.Sprite, Names.IconRootMotion)!;
@@ -204,6 +210,7 @@ public static class EditorAssets
             IconEdit?.Dispose();
             IconExpandDown?.Dispose();
             IconExpandUp?.Dispose();
+            IconKeyframe?.Dispose();
             IconLoop?.Dispose();
             IconMirror?.Dispose();
             IconMove?.Dispose();
@@ -211,6 +218,7 @@ public static class EditorAssets
             IconOpacity?.Dispose();
             IconOpacityOverlay?.Dispose();
             IconPalette?.Dispose();
+            IconPlay?.Dispose();
             IconPreview?.Dispose();
             IconPublish?.Dispose();
             IconRootMotion?.Dispose();
