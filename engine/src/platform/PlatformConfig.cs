@@ -11,6 +11,8 @@ public class PlatformConfig
     public string Title { get; init; } = "Noz";
     public int Width { get; init; } = 1280;
     public int Height { get; init; } = 720;
+    public int MinWidth { get; init; } = 800;
+    public int MinHeight { get; init; } = 600;
     public int X { get; init; } = WindowPositionCentered;
     public int Y { get; init; } = WindowPositionCentered;
     public bool VSync { get; init; } = true;

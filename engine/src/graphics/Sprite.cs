@@ -16,11 +16,12 @@ public class Sprite : Asset
     public Vector2Int Size => Bounds.Size;
     public int FrameCount { get; private set; }
     public int AtlasIndex { get; private set; }
+    public int BoneIndex { get; private set; }
     public float PixelsPerUnit { get; private set; } = 64.0f;
     public float PixelsPerUnitInv { get; private set; }
     public TextureFilter TextureFilter { get; set; } = TextureFilter.Point;
     public ushort Order { get; private set; }
-    public Vector2 Offset { get; private set; }
+    public Vector2 BoneOffset { get; private set; }
 
     private Sprite(string name) : base(AssetType.Sprite, name) { }
 
@@ -41,33 +42,23 @@ public class Sprite : Asset
         var ub = reader.ReadSingle();
         var ppu = reader.ReadSingle();
         var filter = (TextureFilter)reader.ReadByte();
-
-        // Version 2+: read Order (backwards compatible - check if more data available)
-        ushort order = 0;
-        if (stream.Position + 2 <= stream.Length)
-            order = reader.ReadUInt16();
-
-        // Version 3+: read Offset
-        var offset = Vector2.Zero;
-        if (stream.Position + 8 <= stream.Length)
-        {
-            offset.X = reader.ReadSingle();
-            offset.Y = reader.ReadSingle();
-        }
+        var order = reader.ReadUInt16();
+        var boneIndex = reader.ReadInt16();
+        var boneOffset = new Vector2(
+            reader.ReadSingle(),
+            reader.ReadSingle());
 
         sprite.Bounds = RectInt.FromMinMax(l, t, r, b);
         sprite.UV = Rect.FromMinMax(ul, ut, ur, ub);
         sprite.FrameCount = frameCount;
         sprite.AtlasIndex = atlasIndex;
+        sprite.BoneIndex = boneIndex;
         sprite.PixelsPerUnit = ppu;
         sprite.PixelsPerUnitInv = 1.0f / ppu;
         sprite.TextureFilter = filter;
         sprite.Order = order;
-        sprite.Offset = offset;
-
-        // todo: fix
-        sprite.TextureFilter = TextureFilter.Point;
-
+        sprite.BoneIndex = boneIndex;
+        sprite.BoneOffset = boneOffset;
         return sprite;
     }
 

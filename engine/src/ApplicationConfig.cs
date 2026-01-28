@@ -23,6 +23,8 @@ public class ApplicationConfig
     public string Title { get; init; } = "NoZ";
     public int Width { get; set; } = 1280;
     public int Height { get; set; } = 720;
+    public int MinWidth { get; init; } = 800;
+    public int MinHeight { get; init; } = 600;
     public int X { get; set; } = PlatformConfig.WindowPositionCentered;
     public int Y { get; set; } = PlatformConfig.WindowPositionCentered;
     public bool VSync { get; init; } = true;

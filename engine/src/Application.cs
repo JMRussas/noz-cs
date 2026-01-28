@@ -55,6 +55,8 @@ public static class Application
             Title = config.Title,
             Width = config.Width,
             Height = config.Height,
+            MinWidth = config.MinWidth,
+            MinHeight = config.MinHeight,
             X = config.X,
             Y = config.Y,
             VSync = config.VSync,

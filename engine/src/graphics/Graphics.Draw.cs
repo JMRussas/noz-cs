@@ -104,7 +104,7 @@ public static partial class Graphics
         AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order: order, bone: bone);
     }
 
-    public static void Draw(Sprite sprite) => Draw(sprite, order: sprite.Order, bone: -1);
+    public static void Draw(Sprite sprite) => Draw(sprite, order: sprite.Order, bone: sprite.BoneIndex);
 
     public static void Draw(Sprite sprite, ushort order, int bone = -1)
     {
@@ -113,7 +113,7 @@ public static partial class Graphics
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
         if (bone >= 0)
-            bounds = new Rect(bounds.X + sprite.Offset.X, bounds.Y + sprite.Offset.Y, bounds.Width, bounds.Height);
+            bounds = new Rect(bounds.X + sprite.BoneOffset.X, bounds.Y + sprite.BoneOffset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);
@@ -145,7 +145,7 @@ public static partial class Graphics
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
         if (bone >= 0)
-            bounds = new Rect(bounds.X + sprite.Offset.X, bounds.Y + sprite.Offset.Y, bounds.Width, bounds.Height);
+            bounds = new Rect(bounds.X + sprite.BoneOffset.X, bounds.Y + sprite.BoneOffset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);

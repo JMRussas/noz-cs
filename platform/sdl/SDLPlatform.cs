@@ -89,6 +89,9 @@ public unsafe partial class SDLPlatform : IPlatform
             SDL_SetWindowPosition(_window, x, y);
         }
 
+        if (config.MinWidth > 0 && config.MinHeight > 0)
+            SDL_SetWindowMinimumSize(_window, config.MinWidth, config.MinHeight);
+
         _glContext = SDL_GL_CreateContext(_window);
         if (_glContext == null)
         {

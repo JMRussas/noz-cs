@@ -240,18 +240,6 @@ public static unsafe partial class Graphics
         Driver.Clear(color);
     }
 
-
-
-
-
-
-
-    
-
-
-
-
-
     private static void UploadBones()
     {
         Driver.UpdateTextureRegion(

@@ -1,6 +1,7 @@
 w 4096
 h 4096
 d 128
+p 2
 
 r "asset_icon_atlas" 1 1 118 118
 r "asset_icon_bin" 1 119 88 106
@@ -24,18 +25,16 @@ r "icon_expand_up" 235 1 126 34
 r "icon_keyframe" 235 35 42 42
 r "icon_loop" 277 35 54 43
 r "icon_mirror" 331 35 52 46
-r "icon_move" 235 78 39 39
+r "icon_move" 235 78 38 38
 r "icon_onion" 361 1 55 33
-r "icon_opacity" 93 478 115 115
-r "icon_opacity_overlay" 210 197 115 115
+r "icon_opacity" 93 478 117 117
+r "icon_opacity_overlay" 210 197 117 117
 r "icon_palette" 249 151 40 41
 r "icon_play" 289 151 26 40
-r "icon_preview" 274 81 63 31
+r "icon_preview" 210 314 63 31
 r "icon_publish" 1 722 108 126
 r "icon_root_motion" 1 848 112 116
 r "icon_search" 315 151 38 41
 r "icon_submenu" 338 81 23 42
-r "icon_subtract" 109 722 40 39
-r "icon_tiling" 210 312 37 37
-r "new" 119 117 2 2
-r "icon_move" 109 761 40 39
+r "icon_subtract" 273 78 40 39
+r "icon_tiling" 109 722 37 37

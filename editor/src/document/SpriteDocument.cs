@@ -429,6 +429,7 @@ public class SpriteDocument : Document
         writer.Write((float)EditorApplication.Config.PixelsPerUnit);
         writer.Write((byte)(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point));
         writer.Write(Order);
+        writer.Write((short)Binding.BoneIndex);
         writer.Write(Binding.Offset.X);
         writer.Write(Binding.Offset.Y);
     }
