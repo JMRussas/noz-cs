@@ -658,8 +658,7 @@ public static unsafe partial class Graphics
                     lastTextureFilters[t] = batchState.TextureFilters[t];
                     if (batchState.Textures[t] != 0)
                     {
-                        //Driver.BindTexture((nuint)batchState.Textures[t], t, (TextureFilter)batchState.TextureFilters[t]);
-                        Driver.BindTexture((nuint)batchState.Textures[t], t, TextureFilter.Linear);
+                        Driver.BindTexture((nuint)batchState.Textures[t], t, (TextureFilter)batchState.TextureFilters[t]);
                         LogGraphics($"    BindTexture: Slot={t} Handle=0x{batchState.Textures[t]:X} Filter={(TextureFilter)batchState.TextureFilters[t]} ({Asset.Get<Texture>(AssetType.Texture, (nuint)batchState.Textures[t])?.Name ?? "???"})");
                     }
                 }
