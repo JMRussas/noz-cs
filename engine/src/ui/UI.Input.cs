@@ -79,6 +79,18 @@ public static partial class UI
         HandleMouseWheelScroll(mouse);
     }
 
+    private static bool IsInsidePopup(int elementIndex)
+    {
+        for (var i = 0; i < _popupCount; i++)
+        {
+            var popupIndex = _popups[i];
+            ref var popup = ref _elements[popupIndex];
+            if (elementIndex >= popupIndex && elementIndex < popup.NextSiblingIndex)
+                return true;
+        }
+        return false;
+    }
+
     private static void HandleCanvasInput(CanvasId canvasId, Vector2 mouse, bool isHotCanvas)
     {
         ref var cs = ref _canvasStates[canvasId];
@@ -91,12 +103,20 @@ public static partial class UI
 
             Debug.Assert(e.CanvasId == c.CanvasId);
 
-            if (e.Type == ElementType.TextBox)
-                HandleTextBoxInput(ref e);
-
             ref var es = ref cs.ElementStates[e.Id];
             es.Rect = e.Rect;
             es.LocalToWorld = e.LocalToWorld;
+
+            // When popups are open, only process input for elements inside popups
+            if (_popupCount > 0 && !IsInsidePopup(elementIndex))
+            {
+                es.SetFlags(ElementFlags.Hovered | ElementFlags.Down | ElementFlags.Pressed | ElementFlags.DoubleClick | ElementFlags.RightClick, ElementFlags.None);
+                continue;
+            }
+
+            if (e.Type == ElementType.TextBox)
+                HandleTextBoxInput(ref e);
+
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
             var mouseOver = e.Rect.Contains(localMouse);
 
@@ -172,6 +192,10 @@ public static partial class UI
                 ref var e = ref _elements[i - 1];
                 if (e.Type == ElementType.Scrollable && e.Id != ElementId.None && e.CanvasId == _hotCanvasId)
                 {
+                    // When popups are open, only allow starting scroll inside popups
+                    if (_popupCount > 0 && !IsInsidePopup(i - 1))
+                        continue;
+
                     ref var cs = ref _canvasStates[e.CanvasId];
                     ref var state = ref cs.ElementStates[e.Id];
                     if ((state.Flags & ElementFlags.Pressed) != 0)
@@ -194,6 +218,10 @@ public static partial class UI
         {
             ref var e = ref _elements[i - 1];
             if (e.Type != ElementType.Scrollable || e.Id == ElementId.None || e.CanvasId == ElementId.None)
+                continue;
+
+            // When popups are open, only allow scrolling inside popups
+            if (_popupCount > 0 && !IsInsidePopup(i - 1))
                 continue;
 
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);

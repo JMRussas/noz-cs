@@ -388,10 +388,7 @@ public sealed unsafe partial class Shape : IDisposable
     {
         for (var i = 0; i < AnchorCount; i++)
             _anchors[i].Flags &= ~AnchorFlags.Selected;
-    }
 
-    public void ClearPathSelection()
-    {
         for (var i = 0; i < PathCount; i++)
             _paths[i].Flags &= ~PathFlags.Selected;
     }
@@ -401,10 +398,19 @@ public sealed unsafe partial class Shape : IDisposable
         if (pathIndex >= PathCount)
             return;
 
+        ref var path = ref _paths[pathIndex];
+        for (ushort a = 0; a < path.AnchorCount; a++)
+        {
+            if (selected)
+                _anchors[path.AnchorStart + a].Flags |= AnchorFlags.Selected;
+            else
+                _anchors[path.AnchorStart + a].Flags &= ~AnchorFlags.Selected;
+        }
+
         if (selected)
-            _paths[pathIndex].Flags |= PathFlags.Selected;
+            path.Flags |= PathFlags.Selected;
         else
-            _paths[pathIndex].Flags &= ~PathFlags.Selected;
+            path.Flags &= ~PathFlags.Selected;
     }
 
     public bool IsPathSelected(ushort pathIndex) =>
@@ -447,6 +453,7 @@ public sealed unsafe partial class Shape : IDisposable
                 if (rect.Contains(_anchors[anchorIdx].Position))
                     _anchors[anchorIdx].Flags |= AnchorFlags.Selected;
             }
+            UpdatePathSelected(p);
         }
     }
 
@@ -984,6 +991,21 @@ public sealed unsafe partial class Shape : IDisposable
             _anchors[anchorIndex].Flags |= AnchorFlags.Selected;
         else
             _anchors[anchorIndex].Flags &= ~AnchorFlags.Selected;
+
+        UpdatePathSelected(_anchors[anchorIndex].Path);
+    }
+
+    private void UpdatePathSelected(ushort pathIndex)
+    {
+        ref var path = ref _paths[pathIndex];
+        var allSelected = path.AnchorCount > 0;
+        for (ushort a = 0; a < path.AnchorCount && allSelected; a++)
+            allSelected = _anchors[path.AnchorStart + a].IsSelected;
+
+        if (allSelected)
+            path.Flags |= PathFlags.Selected;
+        else
+            path.Flags &= ~PathFlags.Selected;
     }
 
     private static float ClampCurve(float curve) =>
@@ -1038,6 +1060,66 @@ public sealed unsafe partial class Shape : IDisposable
                 offset.X * sin + offset.Y * cos
             );
             _anchors[i].Position = pivot + rotated;
+        }
+    }
+
+    public Vector2? GetSelectedPathsCenter()
+    {
+        var min = new Vector2(float.MaxValue, float.MaxValue);
+        var max = new Vector2(float.MinValue, float.MinValue);
+        var hasSelection = false;
+
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            hasSelection = true;
+            ref var path = ref _paths[p];
+            for (ushort a = 0; a < path.AnchorCount; a++)
+            {
+                var pos = _anchors[path.AnchorStart + a].Position;
+                min = Vector2.Min(min, pos);
+                max = Vector2.Max(max, pos);
+            }
+        }
+
+        return hasSelection ? (min + max) * 0.5f : null;
+    }
+
+    public void FlipSelectedPathsHorizontal(Vector2 pivot)
+    {
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            ref var path = ref _paths[p];
+            for (ushort a = 0; a < path.AnchorCount; a++)
+            {
+                var i = path.AnchorStart + a;
+                var offset = _anchors[i].Position - pivot;
+                _anchors[i].Position = Grid.SnapToPixelGrid(new Vector2(pivot.X - offset.X, pivot.Y + offset.Y));
+                _anchors[i].Curve = ClampCurve(-_anchors[i].Curve);
+            }
+        }
+    }
+
+    public void FlipSelectedPathsVertical(Vector2 pivot)
+    {
+        for (ushort p = 0; p < PathCount; p++)
+        {
+            if (!_paths[p].IsSelected)
+                continue;
+
+            ref var path = ref _paths[p];
+            for (ushort a = 0; a < path.AnchorCount; a++)
+            {
+                var i = path.AnchorStart + a;
+                var offset = _anchors[i].Position - pivot;
+                _anchors[i].Position = Grid.SnapToPixelGrid(new Vector2(pivot.X + offset.X, pivot.Y - offset.Y));
+                _anchors[i].Curve = ClampCurve(-_anchors[i].Curve);
+            }
         }
     }
 
@@ -1269,6 +1351,18 @@ public sealed unsafe partial class Shape : IDisposable
         RasterBounds = RectInt.Zero;
     }
 
+    public void SetOrigin(Vector2 newOrigin)
+    {
+        if (AnchorCount == 0)
+            return;
+
+        for (ushort i = 0; i < AnchorCount; i++)
+            _anchors[i].Position -= newOrigin;
+
+        UpdateSamples();
+        UpdateBounds();
+    }
+
     public void CenterOnOrigin()
     {
         if (AnchorCount == 0)
@@ -1284,18 +1378,11 @@ public sealed unsafe partial class Shape : IDisposable
         var dpi = EditorApplication.Config.PixelsPerUnit;
         var invDpi = 1f / dpi;
 
-        // compute center of raster bounds in pixel coordinates, then round to nearest pixel
         var centerPixelX = (int)MathF.Round((rb.X + rb.Width * 0.5f));
         var centerPixelY = (int)MathF.Round((rb.Y + rb.Height * 0.5f));
+        var center = new Vector2(centerPixelX * invDpi, centerPixelY * invDpi);
 
-        // convert pixel offset to world units
-        var offset = new Vector2(centerPixelX * invDpi, centerPixelY * invDpi);
-
-        for (ushort i = 0; i < AnchorCount; i++)
-            _anchors[i].Position -= offset;
-
-        UpdateSamples();
-        UpdateBounds();
+        SetOrigin(center);
     }
 
     public void SplitPathAtAnchors(

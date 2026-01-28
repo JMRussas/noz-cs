@@ -51,25 +51,40 @@ public class SpriteEditor : DocumentEditor
         var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
         var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
         var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
+        var moveBoneOriginCommand = new Command { Name = "Move Bone Origin", Handler = BeginMoveBoneOrigin, Key = InputCode.KeyG, Shift = true };
+        var boneOriginToOriginCommand = new Command { Name = "Bone Origin to Origin", Handler = BoneOriginToOrigin, Key = InputCode.KeyB, Alt = true };
+        var boneOriginToBoneCommand = new Command { Name = "Bone Origin to Bone", Handler = BoneOriginToBone, Key = InputCode.KeyB, Alt = true, Shift = true };
+        var originToBoneOriginCommand = new Command { Name = "Origin to Bone Origin", Handler = OriginToBoneOrigin };
+        var originToCenterCommand = new Command { Name = "Origin to Center", Handler = CenterShape, Key = InputCode.KeyC, Shift = true };
         var rotateCommand = new Command { Name = "Rotate", Handler = BeginRotateTool, Key = InputCode.KeyR };
         var scaleCommand = new Command { Name = "Scale", Handler = BeginScaleTool, Key = InputCode.KeyS };
+        var flipHorizontalCommand = new Command { Name = "Flip Horizontal", Handler = FlipHorizontal };
+        var flipVerticalCommand = new Command { Name = "Flip Vertical", Handler = FlipVertical };
         var bindCommand = new Command { Name = "Select Bone", Handler = HandleSelectBone, Key = InputCode.KeyB };
-        var unbindCommand = new Command { Name = "Clear Bone", Handler = ClearBoneBinding, Key = InputCode.KeyB, Alt = true };
-     
+        var copyCommand = new Command { Name = "Copy", Handler = CopySelected, Key = InputCode.KeyC, Ctrl = true };
+        var pasteCommand = new Command { Name = "Paste", Handler = PasteSelected, Key = InputCode.KeyV, Ctrl = true };
+
         Commands =
         [
             deleteCommand,
             exitEditCommand,
             moveCommand,
+            moveBoneOriginCommand,
+            boneOriginToOriginCommand,
+            boneOriginToBoneCommand,
+            originToBoneOriginCommand,
+            originToCenterCommand,
             rotateCommand,
             scaleCommand,
+            flipHorizontalCommand,
+            flipVerticalCommand,
             bindCommand,
-            unbindCommand,
+            copyCommand,
+            pasteCommand,
             new Command { Name = "Toggle Playback", Handler = TogglePlayback, Key = InputCode.KeySpace },
             new Command { Name = "Previous Frame", Handler = PreviousFrame, Key = InputCode.KeyQ },
             new Command { Name = "Next Frame", Handler = NextFrame, Key = InputCode.KeyE },
             new Command { Name = "Curve", Handler = BeginCurveTool, Key = InputCode.KeyC },
-            new Command { Name = "Center", Handler = CenterShape, Key = InputCode.KeyC, Shift = true },
             new Command { Name = "Select All", Handler = SelectAll, Key = InputCode.KeyA },
             new Command { Name = "Insert Anchor", Handler = InsertAnchorAtHover, Key = InputCode.KeyV },
             new Command { Name = "Pen Tool", Handler = BeginPenTool, Key = InputCode.KeyP },
@@ -82,18 +97,32 @@ public class SpriteEditor : DocumentEditor
         ];
 
         bool HasSelection() => Document.GetFrame(_currentFrame).Shape.HasSelection();
+        bool HasSelectedPaths() => Document.GetFrame(_currentFrame).Shape.HasSelectedPaths();
 
         ContextMenu = new ContextMenuDef
         {
             Title = "Sprite",
             Items = [
-                ContextMenuItem.FromCommand(deleteCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(copyCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(pasteCommand, enabled: () => Clipboard.Is<PathClipboardData>()),
+                ContextMenuItem.Separator(),
+
                 ContextMenuItem.FromCommand(moveCommand, enabled: HasSelection),
                 ContextMenuItem.FromCommand(rotateCommand, enabled: HasSelection),
                 ContextMenuItem.FromCommand(scaleCommand, enabled: HasSelection),
+                ContextMenuItem.FromCommand(flipHorizontalCommand, enabled: HasSelectedPaths),
+                ContextMenuItem.FromCommand(flipVerticalCommand, enabled: HasSelectedPaths),
                 ContextMenuItem.Separator(),
-                ContextMenuItem.FromCommand(bindCommand),
-                ContextMenuItem.FromCommand(unbindCommand, enabled: () => Document.Binding.IsBound),
+
+                ContextMenuItem.Submenu("Set Origin"),
+                ContextMenuItem.FromCommand(originToCenterCommand, level: 1),
+                ContextMenuItem.FromCommand(originToBoneOriginCommand, enabled: () => Document.Binding.IsBound, level: 1),
+                ContextMenuItem.Submenu("Set Bone Origin"),
+                ContextMenuItem.FromCommand(moveBoneOriginCommand, enabled: () => Document.Binding.IsBound, level: 1),
+                ContextMenuItem.FromCommand(boneOriginToOriginCommand, enabled: () => Document.Binding.IsBound, level: 1),
+                ContextMenuItem.FromCommand(boneOriginToBoneCommand, enabled: () => Document.Binding.IsBound, level: 1),
+                ContextMenuItem.Separator(),
+                ContextMenuItem.FromCommand(deleteCommand, enabled: HasSelection),
                 ContextMenuItem.Separator(),
                 ContextMenuItem.FromCommand(exitEditCommand),
             ]
@@ -140,12 +169,16 @@ public class SpriteEditor : DocumentEditor
 
         var shape = Document.GetFrame(_currentFrame).Shape;
 
+        Graphics.SetSortGroup(0);
         DrawRaster(shape);
 
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
             Graphics.SetTransform(Document.Transform);
+            Graphics.SetSortGroup(2);
             Document.DrawOrigin();
+            DrawBoneOrigin();
+            Graphics.SetSortGroup(1);
             DrawSegments(shape);
             DrawAnchors(shape);
         }
@@ -720,14 +753,49 @@ public class SpriteEditor : DocumentEditor
 
     private void CenterShape()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        if (shape.AnchorCount == 0)
+        if (Document.FrameCount == 0)
             return;
 
         Undo.Record(Document);
-        shape.CenterOnOrigin();
-        Document.MarkModified();
+
+        for (ushort fi = 0; fi < Document.FrameCount; fi++)
+            Document.Frames[fi].Shape.CenterOnOrigin();
+
         Document.UpdateBounds();
+        Document.MarkModified();
+        MarkRasterDirty();
+        Notifications.Add("origin → center");
+    }
+
+    private void FlipHorizontal()
+    {
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        var pivot = shape.GetSelectedPathsCenter();
+        if (!pivot.HasValue)
+            return;
+
+        Undo.Record(Document);
+        shape.FlipSelectedPathsHorizontal(pivot.Value);
+        shape.UpdateSamples();
+        shape.UpdateBounds();
+        Document.UpdateBounds();
+        Document.MarkModified();
+        MarkRasterDirty();
+    }
+
+    private void FlipVertical()
+    {
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        var pivot = shape.GetSelectedPathsCenter();
+        if (!pivot.HasValue)
+            return;
+
+        Undo.Record(Document);
+        shape.FlipSelectedPathsVertical(pivot.Value);
+        shape.UpdateSamples();
+        shape.UpdateBounds();
+        Document.UpdateBounds();
+        Document.MarkModified();
         MarkRasterDirty();
     }
 
@@ -766,10 +834,11 @@ public class SpriteEditor : DocumentEditor
         var shape = Document.GetFrame(_currentFrame).Shape;
         var shift = Input.IsShiftDown();
 
-        // Prioritize anchors/segments in focused paths over path selection
         Matrix3x2.Invert(Document.Transform, out var invTransform);
+        var localMousePos = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
+
         var hit = shape.HitTest(
-            Vector2.Transform(Workspace.MouseWorldPosition, invTransform),
+            localMousePos,
             EditorStyle.Shape.AnchorHitSize / Workspace.Zoom,
             EditorStyle.Shape.SegmentHitSize / Workspace.Zoom);
 
@@ -785,7 +854,6 @@ public class SpriteEditor : DocumentEditor
             return;
         }
 
-        // Click empty: clear anchor selection only, keep focus
         if (!shift)
             shape.ClearAnchorSelection();
     }
@@ -836,6 +904,30 @@ public class SpriteEditor : DocumentEditor
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 Undo.Cancel();
+            }
+        ));
+    }
+
+    private void BeginMoveBoneOrigin()
+    {
+        if (!Document.Binding.IsBound) return;
+
+        var savedOffset = Document.Binding.Offset;
+
+        Workspace.BeginTool(new MoveTool(
+            update: delta =>
+            {
+                // Moving the bone origin gizmo changes the offset
+                // Offset is where the sprite origin should be in skeleton space
+                Document.Binding.Offset = savedOffset + delta;
+            },
+            commit: _ =>
+            {
+                Document.MarkMetaModified();
+            },
+            cancel: () =>
+            {
+                Document.Binding.Offset = savedOffset;
             }
         ));
     }
@@ -1384,16 +1476,16 @@ public class SpriteEditor : DocumentEditor
         if (skeleton == null)
             return;
 
+        // Calculate offset to position skeleton so bound bone aligns with bone origin gizmo
+        var skeletonOffset = Document.Binding.Offset;
+
         using (Graphics.PushState())
         {
             Graphics.SetLayer(EditorLayer.DocumentEditor);
-            Graphics.SetTransform(Document.Transform);
-
             foreach (var sprite in skeleton.Sprites)
             {
-                if (sprite == Document)
-                    continue;
-
+                if (sprite == Document) continue;
+                Graphics.SetTransform(Matrix3x2.CreateTranslation(skeletonOffset - sprite.Binding.Offset) * Document.Transform);
                 Graphics.SetColor(Color.White.WithAlpha(0.3f));
                 sprite.DrawSprite();
             }
@@ -1401,7 +1493,7 @@ public class SpriteEditor : DocumentEditor
 
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
-            Graphics.SetTransform(Document.Transform);
+            Graphics.SetTransform(Document.Transform * Matrix3x2.CreateTranslation(skeletonOffset));
 
             for (var boneIndex = 0; boneIndex < skeleton.BoneCount; boneIndex++)
             {
@@ -1422,6 +1514,14 @@ public class SpriteEditor : DocumentEditor
 
     #region Bone Binding
 
+    private void DrawBoneOrigin()
+    {
+        if (!Document.Binding.IsBound) return;
+        using var _ = Graphics.PushState();
+        Graphics.SetTransform(Document.Transform * Matrix3x2.CreateTranslation(Document.Binding.Offset));
+        Gizmos.DrawOrigin(EditorStyle.SpriteEditor.BoneOriginColor);
+    }
+
     private void HandleSelectBone()
     {
         Workspace.BeginTool(new BoneSelectTool(CommitBoneBinding));
@@ -1430,7 +1530,17 @@ public class SpriteEditor : DocumentEditor
     private void CommitBoneBinding(SkeletonDocument skeleton, int boneIndex)
     {
         Undo.Record(Document);
+
+        // Calculate offset to preserve visual position
+        // Bone position in world space
+        var boneWorldPos = Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[boneIndex]);
+        // Sprite position in world space (relative to skeleton)
+        var spriteWorldPos = Document.Position - skeleton.Position;
+        // Offset = where sprite origin is relative to bone
+        var offset = spriteWorldPos - boneWorldPos;
+
         Document.SetBoneBinding(skeleton, boneIndex);
+        Document.Binding.Offset = offset;
         skeleton.UpdateSprites();
         var boneName = skeleton.Bones[boneIndex].Name;
         Notifications.Add($"bound to {skeleton.Name}:{boneName}");
@@ -1443,10 +1553,49 @@ public class SpriteEditor : DocumentEditor
             Notifications.Add("sprite has no bone binding");
             return;
         }
-        
-        Undo.Record(Document); 
+
+        Undo.Record(Document);
         Document.ClearBoneBinding();
         Notifications.Add("bone binding cleared");
+    }
+
+    private void BoneOriginToOrigin()
+    {
+        if (!Document.Binding.IsBound) return;
+        Undo.Record(Document);
+        Document.Binding.Offset = Vector2.Zero;
+        Document.MarkMetaModified();
+        Notifications.Add("bone origin → origin");
+    }
+
+    private void BoneOriginToBone()
+    {
+        var skeleton = Document.Binding.Skeleton;
+        if (skeleton == null) return;
+        Undo.Record(Document);
+        var bonePos = Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[Document.Binding.BoneIndex]);
+        Document.Binding.Offset = -bonePos;
+        Document.MarkMetaModified();
+        Notifications.Add("bone origin → bone");
+    }
+
+    private void OriginToBoneOrigin()
+    {
+        if (!Document.Binding.IsBound) return;
+        var boneOriginPos = Document.Binding.Offset;
+        if (boneOriginPos == Vector2.Zero) return;
+
+        Undo.Record(Document);
+
+        for (ushort fi = 0; fi < Document.FrameCount; fi++)
+            Document.Frames[fi].Shape.SetOrigin(boneOriginPos);
+
+        Document.Binding.Offset = Vector2.Zero;
+        Document.UpdateBounds();
+        Document.MarkModified();
+        Document.MarkMetaModified();
+        MarkRasterDirty();
+        Notifications.Add("origin → bone origin");
     }
 
     #endregion

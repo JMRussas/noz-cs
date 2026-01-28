@@ -195,7 +195,7 @@ internal class AnimationDocument : Document
         for (var i = 0; i < sprites.Count; i++)
         {
             var sprite = sprites[i];
-            var spriteBounds = sprite.Bounds;
+            var spriteBounds = sprite.Bounds.Translate(-sprite.Binding.Offset);
             var boneTransform = Skeleton.WorldToLocal[sprite.Binding.BoneIndex] * LocalToWorld[sprite.Binding.BoneIndex];
             bounds = ExpandBounds(bounds, Vector2.Transform(spriteBounds.TopLeft, boneTransform));
             bounds = ExpandBounds(bounds, Vector2.Transform(spriteBounds.TopRight, boneTransform));
@@ -687,12 +687,6 @@ internal class AnimationDocument : Document
         if (Skeleton == null) return;
 
         var transform = Transform;
-        //if (!IsEditing)
-        //{
-        //    ref var rootTransform = ref GetFrameTransform(0, CurrentFrame);
-        //    transform = Matrix3x2.CreateTranslation(-rootTransform.Position) * transform;
-        //}
-
         Graphics.SetTransform(transform);
         Graphics.SetSortGroup(1);
         Gizmos.SetColor(EditorStyle.Skeleton.BoneColor);
@@ -714,15 +708,17 @@ internal class AnimationDocument : Document
         using (Graphics.PushState())
         {
             Graphics.SetLayer(EditorLayer.Document);
-            Graphics.SetTransform(Transform);
-            Graphics.SetBones(Skeleton.WorldToLocal, LocalToWorld);
 
             for (var i = 0; i < Skeleton.Sprites.Count; i++)
             {
                 var sprite = Skeleton.Sprites[i];
                 Debug.Assert(sprite != null);
                 Debug.Assert(sprite.Binding.IsBoundTo(Skeleton));
-                sprite.DrawSprite(bone: sprite.Binding.BoneIndex);
+
+                ref readonly var bindPose = ref Skeleton.WorldToLocal[sprite.Binding.BoneIndex];
+                ref readonly var animatedPose = ref LocalToWorld[sprite.Binding.BoneIndex];
+                Graphics.SetTransform(bindPose * animatedPose * Transform);
+                sprite.DrawSprite(-sprite.Binding.Offset);
             }
         }
     }

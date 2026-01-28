@@ -26,6 +26,7 @@ public class SpriteDocument : Document
         public string BoneName = "";
         public SkeletonDocument? Skeleton;
         public int BoneIndex = -1;
+        public Vector2 Offset;
 
         public bool IsBound => Skeleton != null && BoneIndex >= 0;
         public bool IsBoundTo(SkeletonDocument skeleton) =>
@@ -51,6 +52,7 @@ public class SpriteDocument : Document
             SkeletonName = "";
             BoneName = "";
             BoneIndex = -1;
+            Offset = Vector2.Zero;
         }
 
         public void CopyFrom(BoneBinding src)
@@ -59,6 +61,7 @@ public class SpriteDocument : Document
             BoneName = src.BoneName;
             Skeleton = src.Skeleton;
             BoneIndex = src.BoneIndex;
+            Offset = src.Offset;
         }
 
         public void Resolve()
@@ -319,7 +322,7 @@ public class SpriteDocument : Document
         DrawSprite();
     }
 
-    public void DrawSprite(int bone=-1)
+    public void DrawSprite(in Vector2 offset = default)
     {
         if (Atlas == null) return;
 
@@ -328,12 +331,14 @@ public class SpriteDocument : Document
             Graphics.SetTexture(Atlas.Texture);
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetColor(Color.White);
-            Graphics.SetTextureFilter(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point);
+            // todo: fix
+            //Graphics.SetTextureFilter(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point);
+            Graphics.SetTextureFilter(TextureFilter.Point);
+            var bounds = RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv);
             Graphics.Draw(
-                RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv),
+                bounds.Translate(offset),
                 AtlasUV,
-                order: Order,
-                bone: bone);
+                order: Order);
         }
     }
 
@@ -361,6 +366,7 @@ public class SpriteDocument : Document
     {
         Binding.SkeletonName = meta.GetString("bone", "skeleton", "");
         Binding.BoneName = meta.GetString("bone", "name", "");
+        Binding.Offset = meta.GetVector2("bone", "offset", Vector2.Zero);
         ShowInSkeleton = meta.GetBool("sprite", "show_in_skeleton", false);
         ShowTiling = meta.GetBool("sprite", "show_tiling", false);
         ShowSkeletonOverlay = meta.GetBool("sprite", "show_skeleton_overlay", false);
@@ -375,6 +381,7 @@ public class SpriteDocument : Document
         {
             meta.SetString("bone", "skeleton", Binding.SkeletonName);
             meta.SetString("bone", "name", Binding.BoneName);
+            meta.SetVec2("bone", "offset", Binding.Offset);
         }
         else
         {
@@ -420,6 +427,8 @@ public class SpriteDocument : Document
         writer.Write((float)EditorApplication.Config.PixelsPerUnit);
         writer.Write((byte)(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point));
         writer.Write(Order);
+        writer.Write(Binding.Offset.X);
+        writer.Write(Binding.Offset.Y);
     }
 
     public override void OnUndoRedo()

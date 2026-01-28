@@ -112,6 +112,8 @@ public static partial class Graphics
 
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
+        if (bone >= 0)
+            bounds = new Rect(bounds.X + sprite.Offset.X, bounds.Y + sprite.Offset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);
@@ -142,6 +144,8 @@ public static partial class Graphics
 
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
+        if (bone >= 0)
+            bounds = new Rect(bounds.X + sprite.Offset.X, bounds.Y + sprite.Offset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);

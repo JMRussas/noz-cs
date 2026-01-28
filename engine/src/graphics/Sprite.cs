@@ -2,11 +2,13 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Numerics;
+
 namespace NoZ;
 
 public class Sprite : Asset
 {
-    public const ushort Version = 2;
+    public const ushort Version = 3;
     public const int MaxFrames = 64;
 
     public RectInt Bounds { get; private set; }
@@ -18,6 +20,7 @@ public class Sprite : Asset
     public float PixelsPerUnitInv { get; private set; }
     public TextureFilter TextureFilter { get; set; } = TextureFilter.Point;
     public ushort Order { get; private set; }
+    public Vector2 Offset { get; private set; }
 
     private Sprite(string name) : base(AssetType.Sprite, name) { }
 
@@ -44,6 +47,14 @@ public class Sprite : Asset
         if (stream.Position + 2 <= stream.Length)
             order = reader.ReadUInt16();
 
+        // Version 3+: read Offset
+        var offset = Vector2.Zero;
+        if (stream.Position + 8 <= stream.Length)
+        {
+            offset.X = reader.ReadSingle();
+            offset.Y = reader.ReadSingle();
+        }
+
         sprite.Bounds = RectInt.FromMinMax(l, t, r, b);
         sprite.UV = Rect.FromMinMax(ul, ut, ur, ub);
         sprite.FrameCount = frameCount;
@@ -52,6 +63,10 @@ public class Sprite : Asset
         sprite.PixelsPerUnitInv = 1.0f / ppu;
         sprite.TextureFilter = filter;
         sprite.Order = order;
+        sprite.Offset = offset;
+
+        // todo: fix
+        sprite.TextureFilter = TextureFilter.Point;
 
         return sprite;
     }

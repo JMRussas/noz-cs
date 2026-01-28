@@ -211,7 +211,11 @@ public static class DocumentManager
         foreach (var doc in _documents)
         {
             if (doc.IsModified || doc.IsMetaModified)
-                count++;
+            {
+                if (doc.IsVisible)
+                    count++;
+                doc.SilentImport = true;
+            }
 
             if (doc.IsModified)
                 doc.Save();

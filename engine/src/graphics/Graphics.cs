@@ -27,8 +27,6 @@ public static unsafe partial class Graphics
     private const int PassShift = 60;   // bits 60-63 (4 bits)
     private const long SortKeyMergeMask = 0x7FFFFFFFFFFF0000;
 
-
-
     private struct BatchState()
     {
         public nuint Shader;

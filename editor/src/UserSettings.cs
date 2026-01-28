@@ -16,8 +16,8 @@ public static class UserSettings
         if (props == null)
             return;
 
-        Workspace.LoadUserSettings(props);
         CollectionManager.LoadUserSettings(props);
+        Workspace.LoadUserSettings(props);
     }
 
     public static void Save()

@@ -26,7 +26,7 @@ public static class Workspace
         var doc = DocumentManager.New(assetType, null, position);
         if (doc != null)
         {
-            doc.CollectionId = CollectionManager.GetFirstVisibleId();
+            doc.CollectionId = CollectionManager.GetVisibleId();
             doc.MarkMetaModified();
             ClearSelection();
             SetSelected(doc, true);
@@ -67,20 +67,19 @@ public static class Workspace
             deleteCommand,
             duplicateCommand,
             moveCommand,
-            new Command { Name = "Frame", Handler = FrameSelected, Key = InputCode.KeyF },
-            new Command { Name = "Reimport All", Handler = ReimportAll },
-            new Command { Name = "Play/Stop", Handler = Play, Key = InputCode.KeySpace },
-            new Command { Name = "Show/Hide Hidden Assets", Handler = ToggleShowHidden },
-            new Command { Name = "Rebuild Atlas", Handler = RebuildAtlas },
-            new Command { Name = "Bring Forward", Handler = BringForward, Key = InputCode.KeyRightBracket },
-            new Command { Name = "Send Backward", Handler = SendBackward, Key = InputCode.KeyLeftBracket },
+            new() { Name = "Frame", Handler = FrameSelected, Key = InputCode.KeyF },
+            new() { Name = "Reimport All", Handler = ReimportAll },
+            new() { Name = "Play/Stop", Handler = Play, Key = InputCode.KeySpace },
+            new() { Name = "Show/Hide Hidden Assets", Handler = ToggleShowHidden },
+            new() { Name = "Rebuild Atlas", Handler = RebuildAtlas },
+            new() { Name = "Bring Forward", Handler = BringForward, Key = InputCode.KeyRightBracket },
+            new() { Name = "Send Backward", Handler = SendBackward, Key = InputCode.KeyLeftBracket },
         };
 
         for (var i = 1; i <= 9; i++)
         {
             var index = i;
-            workspaceCommands.Add(new Command { Name = $"Collection {i}", Handler = () => SetCollectionExclusive(index), Key = InputCode.Key0 + i });
-            workspaceCommands.Add(new Command { Name = $"Toggle Collection {i}", Handler = () => ToggleCollection(index), Key = InputCode.Key0 + i, Shift = true });
+            workspaceCommands.Add(new Command { Name = $"Collection {i}", Handler = () => SetCollection(index), Key = InputCode.Key0 + i });
             workspaceCommands.Add(new Command { Name = $"Move to Collection {i}", Handler = () => MoveSelectedToCollection(index), Key = InputCode.Key0 + i, Ctrl = true });
         }
 
@@ -217,19 +216,31 @@ public static class Workspace
 
     public static void LoadUserSettings(PropertySet props)
     {
-        _camera.Position = props.GetVector2("workspace", "camera_position", Vector2.Zero);
-        _zoom = props.GetFloat("workspace", "camera_zoom", ZoomDefault);
         _showGrid = props.GetBool("workspace", "show_grid", true);
         _showNames = props.GetBool("workspace", "show_names", false);
         _userUIScale = props.GetFloat("workspace", "ui_scale", 1f);
+
+        // Restore camera position and zoom from visible collection
+        var collection = CollectionManager.VisibleCollection;
+        if (collection != null)
+        {
+            _camera.Position = collection.CameraPosition;
+            _zoom = collection.CameraZoom;
+        }
 
         UpdateCamera();
     }
 
     public static void SaveUserSettings(PropertySet props)
     {
-        props.SetVec2("workspace", "camera_position", _camera.Position);
-        props.SetFloat("workspace", "camera_zoom", _zoom);
+        // Save camera position and zoom to current collection before saving
+        var collection = CollectionManager.VisibleCollection;
+        if (collection != null)
+        {
+            collection.CameraPosition = _camera.Position;
+            collection.CameraZoom = _zoom;
+        }
+
         props.SetBool("workspace", "show_grid", _showGrid);
         props.SetBool("workspace", "show_names", _showNames);
         props.SetFloat("workspace", "ui_scale", _userUIScale);
@@ -811,7 +822,7 @@ public static class Workspace
         ShowHidden = !ShowHidden;
     }
 
-    private static void SetCollectionExclusive(int index)
+    private static void SetCollection(int index)
     {
         var collection = CollectionManager.GetByIndex(index);
         if (collection == null)
@@ -819,21 +830,26 @@ public static class Workspace
             Notifications.AddError($"Collection {index} not defined");
             return;
         }
-        CollectionManager.SetExclusive(index);
-        Notifications.Add($"Collection: {collection.Name}");
-    }
 
-    private static void ToggleCollection(int index)
-    {
-        var collection = CollectionManager.GetByIndex(index);
-        if (collection == null)
-        {
-            Notifications.AddError($"Collection {index} not defined");
+        if (CollectionManager.VisibleIndex == index)
             return;
+
+        // Save current camera position and zoom to current collection
+        var current = CollectionManager.VisibleCollection;
+        if (current != null)
+        {
+            current.CameraPosition = _camera.Position;
+            current.CameraZoom = _zoom;
         }
-        CollectionManager.Toggle(index);
-        var visible = CollectionManager.IsVisible(index);
-        Notifications.Add($"{collection.Name}: {(visible ? "visible" : "hidden")}");
+
+        CollectionManager.SetVisible(index);
+
+        // Restore camera position and zoom from new collection
+        _camera.Position = collection.CameraPosition;
+        _zoom = collection.CameraZoom;
+        UpdateCamera();
+
+        Notifications.Add($"Collection: {collection.Name}");
     }
 
     private static void MoveSelectedToCollection(int index)

@@ -666,6 +666,8 @@ public static class EditorStyle
         public const float ColorPickerWidth = ColorSize * 64 + ColorPickerBorderWidth * 2;
         public const float ColorPickerHeight = ColorSize + ColorPickerBorderWidth * 2;
         public const float ColorPickerSelectionBorderWidth = 3f;
+        public static readonly Color BoneOriginColor = Color.White;
+        public static readonly Color SelectedOriginColor = Shape.SelectedAnchorColor;
 
         public static readonly ContainerStyle Root = Overlay.Root with
         {

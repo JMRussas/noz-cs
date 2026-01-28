@@ -9,7 +9,7 @@ public static class Importer
     private static readonly HashSet<Document> _pendingDocuments = [];
     private static readonly List<Task> _activeTasks = [];
     private static readonly Lock _lock = new();
-    private static FileSystemWatcher? _watcher;
+    private static readonly List<FileSystemWatcher> _watchers = [];
     private static PropertySet? _config;
     private static bool _running;
 
@@ -38,8 +38,9 @@ public static class Importer
     public static void Shutdown()
     {
         _running = false;
-        _watcher?.Dispose();
-        _watcher = null;
+        foreach (var watcher in _watchers)
+            watcher.Dispose();
+        _watchers.Clear();
 
         WaitForAllTasks();
 
@@ -120,6 +121,9 @@ public static class Importer
 
     private static void ExecuteImport(Document doc)
     {
+        var silent = doc.SilentImport;
+        doc.SilentImport = false;
+
         try
         {
             if (!File.Exists(doc.Path))
@@ -134,7 +138,8 @@ public static class Importer
             doc.Import(targetDir, _config ?? new PropertySet(), meta);
 
             Log.Info($"Imported {doc.Def.Type.ToString().ToLowerInvariant()}/{doc.Name}");
-            OnImported?.Invoke(doc);
+            if (!silent)
+                OnImported?.Invoke(doc);
         }
         catch (Exception ex)
         {
@@ -164,17 +169,18 @@ public static class Importer
 
     private static void StartWatching(string path)
     {
-        _watcher = new FileSystemWatcher(path)
+        var watcher = new FileSystemWatcher(path)
         {
             IncludeSubdirectories = true,
             NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.CreationTime
         };
 
-        _watcher.Changed += OnFileChanged;
-        _watcher.Created += OnFileChanged;
-        _watcher.Renamed += OnFileRenamed;
+        watcher.Changed += OnFileChanged;
+        watcher.Created += OnFileChanged;
+        watcher.Renamed += OnFileRenamed;
 
-        _watcher.EnableRaisingEvents = true;
+        watcher.EnableRaisingEvents = true;
+        _watchers.Add(watcher);
     }
 
     private static void OnFileChanged(object sender, FileSystemEventArgs e)

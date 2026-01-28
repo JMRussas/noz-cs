@@ -214,6 +214,15 @@ public static partial class UI
         // Child position relative to parent's LocalToWorld origin
         var childPos = new Vector2(e.Rect.X, e.Rect.Y) - parentPivotOffset;
 
+        // Clamp popup to screen bounds if requested
+        if (e.Type == ElementType.Popup && e.Data.Popup.ClampToScreen)
+        {
+            var popupWorldPos = Vector2.Transform(childPos, p.LocalToWorld);
+            var clampedX = Math.Clamp(popupWorldPos.X, 0, ScreenSize.X - e.Rect.Width);
+            var clampedY = Math.Clamp(popupWorldPos.Y, 0, ScreenSize.Y - e.Rect.Height);
+            childPos = Vector2.Transform(new Vector2(clampedX, clampedY), p.WorldToLocal);
+        }
+
         Matrix3x2 localTransform;
         if (e.Type == ElementType.Transform)
         {

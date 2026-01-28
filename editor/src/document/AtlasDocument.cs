@@ -351,9 +351,14 @@ internal class AtlasDocument : Document
             // Bleed colors from non-transparent pixels into transparent neighbors
             // This prevents black fringing with linear filtering on AA sprites
             if (rect.Sprite.IsAntiAliased)
+            {
                 _image.BleedColors(innerRect);
-
-            _image.ExtrudeEdges(innerRect);
+                _image.ExtrudeEdges(innerRect.Expand(-1));
+            }
+            else
+            {
+                _image.ExtrudeEdges(innerRect);
+            }
 
             rect.Sprite.AtlasUV = ToUV(rect);
         }
