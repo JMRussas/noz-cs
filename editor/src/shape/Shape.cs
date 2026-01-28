@@ -32,6 +32,7 @@ public sealed unsafe partial class Shape : IDisposable
 {
     public const int MaxAnchors = 1024;
     public const int MaxPaths = 256;
+    public const int MaxAnchorsPerPath = 128;
     public const int MaxSegmentSamples = 8;
     public const float MinCurve = 0.0001f;
     

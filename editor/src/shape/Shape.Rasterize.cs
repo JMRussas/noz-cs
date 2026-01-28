@@ -31,8 +31,7 @@ public sealed partial class Shape
             return;
         }
 
-        const int maxPolyVerts = 256;
-        Span<Vector2> polyVerts = stackalloc Vector2[maxPolyVerts];
+        Span<Vector2> polyVerts = stackalloc Vector2[MaxAnchorsPerPath];
         var dpi = EditorApplication.Config.PixelsPerUnit;
 
         for (ushort pIdx = 0; pIdx < PathCount; pIdx++)
@@ -42,9 +41,9 @@ public sealed partial class Shape
 
             var vertexCount = 0;
 
-            for (ushort aIdx = 0; aIdx < path.AnchorCount && vertexCount < maxPolyVerts; aIdx++)
+            for (ushort anchorIndex = 0; anchorIndex < path.AnchorCount && vertexCount < MaxAnchorsPerPath; anchorIndex++)
             {
-                var anchorIdx = (ushort)(path.AnchorStart + aIdx);
+                var anchorIdx = (ushort)(path.AnchorStart + anchorIndex);
                 ref var anchor = ref _anchors[anchorIdx];
 
                 var worldPos = anchor.Position;
@@ -53,7 +52,7 @@ public sealed partial class Shape
                 if (MathF.Abs(anchor.Curve) > 0.0001f)
                 {
                     var samples = GetSegmentSamples(anchorIdx);
-                    for (var s = 0; s < MaxSegmentSamples && vertexCount < maxPolyVerts; s++)
+                    for (var s = 0; s < MaxSegmentSamples && vertexCount < MaxAnchorsPerPath; s++)
                     {
                         var sampleWorld = samples[s];
                         polyVerts[vertexCount++] = sampleWorld * dpi;
@@ -173,8 +172,8 @@ public sealed partial class Shape
         var dpi = EditorApplication.Config.PixelsPerUnit;
         var rb = RasterBounds;
 
-        const int maxPolyVerts = 256;
-        Span<Vector2> polyVerts = stackalloc Vector2[maxPolyVerts];
+        Span<Vector2> polyVerts = stackalloc Vector2[MaxAnchorsPerPath];
+        Span<float> intersections = stackalloc float[MaxAnchorsPerPath];
 
         // Process each path independently, compositing in order
         for (ushort pIdx = 0; pIdx < PathCount; pIdx++)
@@ -182,54 +181,38 @@ public sealed partial class Shape
             ref var path = ref _paths[pIdx];
             if (path.AnchorCount < 3) continue;
 
-            // Build polygon vertices and compute path bounds
+            // Build polygon vertices in pixel space and compute bounds
             var vertCount = 0;
-            var minX = float.MaxValue;
             var minY = float.MaxValue;
-            var maxX = float.MinValue;
             var maxY = float.MinValue;
 
-            for (ushort aIdx = 0; aIdx < path.AnchorCount && vertCount < maxPolyVerts; aIdx++)
+            for (ushort aIdx = 0; aIdx < path.AnchorCount && vertCount < MaxAnchorsPerPath; aIdx++)
             {
                 var anchorIdx = (ushort)(path.AnchorStart + aIdx);
                 ref var anchor = ref _anchors[anchorIdx];
-                polyVerts[vertCount++] = anchor.Position;
-
-                minX = MathF.Min(minX, anchor.Position.X);
-                minY = MathF.Min(minY, anchor.Position.Y);
-                maxX = MathF.Max(maxX, anchor.Position.X);
-                maxY = MathF.Max(maxY, anchor.Position.Y);
+                var pixelPos = anchor.Position * dpi;
+                polyVerts[vertCount++] = pixelPos;
+                minY = MathF.Min(minY, pixelPos.Y);
+                maxY = MathF.Max(maxY, pixelPos.Y);
 
                 if (MathF.Abs(anchor.Curve) > 0.0001f)
                 {
                     var samples = GetSegmentSamples(anchorIdx);
-                    for (var s = 0; s < MaxSegmentSamples && vertCount < maxPolyVerts; s++)
+                    for (var s = 0; s < MaxSegmentSamples && vertCount < MaxAnchorsPerPath; s++)
                     {
-                        polyVerts[vertCount++] = samples[s];
-                        minX = MathF.Min(minX, samples[s].X);
-                        minY = MathF.Min(minY, samples[s].Y);
-                        maxX = MathF.Max(maxX, samples[s].X);
-                        maxY = MathF.Max(maxY, samples[s].Y);
+                        pixelPos = samples[s] * dpi;
+                        polyVerts[vertCount++] = pixelPos;
+                        minY = MathF.Min(minY, pixelPos.Y);
+                        maxY = MathF.Max(maxY, pixelPos.Y);
                     }
                 }
             }
 
             if (vertCount < 3) continue;
 
-            // Convert path bounds to pixel coordinates with AA margin
-            var aaMargin = 1f / dpi;
-            var pathMinX = (int)MathF.Floor((minX - aaMargin) * dpi) - rb.X;
-            var pathMinY = (int)MathF.Floor((minY - aaMargin) * dpi) - rb.Y;
-            var pathMaxX = (int)MathF.Ceiling((maxX + aaMargin) * dpi) - rb.X;
-            var pathMaxY = (int)MathF.Ceiling((maxY + aaMargin) * dpi) - rb.Y;
-
-            // Clamp to raster bounds
-            pathMinX = Math.Max(0, pathMinX);
-            pathMinY = Math.Max(0, pathMinY);
-            pathMaxX = Math.Min(rb.Width - 1, pathMaxX);
-            pathMaxY = Math.Min(rb.Height - 1, pathMaxY);
-
-            if (pathMinX > pathMaxX || pathMinY > pathMaxY) continue;
+            // Compute scanline range with AA margin
+            var startY = Math.Max(0, (int)MathF.Floor(minY - rb.Y - 1));
+            var endY = Math.Min(rb.Height - 1, (int)MathF.Ceiling(maxY - rb.Y + 1));
 
             var pathVerts = polyVerts[..vertCount];
             var isHole = (path.Flags & PathFlags.Subtract) != 0;
@@ -237,86 +220,136 @@ public sealed partial class Shape
                 ? Color32.Transparent
                 : palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
 
-            // Render only within this path's bounds
-            for (var y = pathMinY; y <= pathMaxY; y++)
+            // Process each scanline
+            for (var y = startY; y <= endY; y++)
             {
                 var py = offset.Y + rb.Y + y;
                 if (py < 0 || py >= pixels.Height) continue;
 
-                var pixelY = (rb.Y + y + 0.5f) / dpi;
+                var scanlineY = rb.Y + y + 0.5f;
 
-                for (var x = pathMinX; x <= pathMaxX; x++)
+                // Find all edge intersections with this scanline
+                var intersectionCount = 0;
+                for (var i = 0; i < vertCount; i++)
                 {
-                    var px = offset.X + rb.X + x;
-                    if (px < 0 || px >= pixels.Width) continue;
+                    var p0 = pathVerts[i];
+                    var p1 = pathVerts[(i + 1) % vertCount];
 
-                    var pixelX = (rb.X + x + 0.5f) / dpi;
-                    var worldPoint = new Vector2(pixelX, pixelY);
-
-                    // Compute signed distance to this path's edge
-                    var signedDist = GetSignedDistanceToPolygon(worldPoint, pathVerts);
-                    var pixelDist = signedDist * dpi;
-                    var coverage = DistanceToAlpha(pixelDist);
-
-                    if (coverage <= 0f) continue;
-
-                    ref var dst = ref pixels[px, py];
-
-                    if (isHole)
+                    // Check if edge crosses scanline (either direction)
+                    if ((p0.Y <= scanlineY && p1.Y > scanlineY) || (p1.Y <= scanlineY && p0.Y > scanlineY))
                     {
-                        // Subtract: reduce alpha of existing pixel
-                        if (dst.A > 0)
-                        {
-                            var newAlpha = (byte)(dst.A * (1f - coverage));
-                            dst = new Color32(dst.R, dst.G, dst.B, newAlpha);
-                        }
+                        var t = (scanlineY - p0.Y) / (p1.Y - p0.Y);
+                        intersections[intersectionCount++] = p0.X + t * (p1.X - p0.X);
                     }
-                    else
-                    {
-                        // Composite this path's color with coverage
-                        var srcAlpha = (byte)(fillColor.A * coverage);
-                        if (srcAlpha == 0) continue;
+                }
 
-                        if (dst.A == 0)
+                if (intersectionCount == 0) continue;
+
+                // Sort intersections
+                var intersectionSpan = intersections[..intersectionCount];
+                intersectionSpan.Sort();
+
+                // Process pairs of intersections (entry/exit)
+                for (var i = 0; i + 1 < intersectionCount; i += 2)
+                {
+                    var entryX = intersections[i];
+                    var exitX = intersections[i + 1];
+
+                    // Convert to local pixel coordinates
+                    var entryLocalX = entryX - rb.X;
+                    var exitLocalX = exitX - rb.X;
+
+                    // Pixel range for this span
+                    var xStart = (int)MathF.Floor(entryLocalX - 0.5f);
+                    var xEnd = (int)MathF.Ceiling(exitLocalX + 0.5f);
+                    xStart = Math.Max(0, xStart);
+                    xEnd = Math.Min(rb.Width - 1, xEnd);
+
+                    // Interior pixel range (fully covered, > 0.5 pixels from edge)
+                    var interiorStart = (int)MathF.Floor(entryLocalX) + 1;
+                    var interiorEnd = (int)MathF.Floor(exitLocalX) - 1;
+
+                    for (var x = xStart; x <= xEnd; x++)
+                    {
+                        var px = offset.X + rb.X + x;
+                        if (px < 0 || px >= pixels.Width) continue;
+
+                        float coverage;
+                        if (x >= interiorStart && x <= interiorEnd)
                         {
-                            dst = new Color32(fillColor.R, fillColor.G, fillColor.B, srcAlpha);
+                            // Interior pixel - full coverage
+                            coverage = 1f;
                         }
                         else
                         {
-                            // Alpha compositing: src over dst
-                            var srcA = srcAlpha / 255f;
-                            var dstA = dst.A / 255f;
-                            var outA = srcA + dstA * (1f - srcA);
-
-                            if (outA > 0f)
-                            {
-                                var r = (fillColor.R * srcA + dst.R * dstA * (1f - srcA)) / outA;
-                                var g = (fillColor.G * srcA + dst.G * dstA * (1f - srcA)) / outA;
-                                var b = (fillColor.B * srcA + dst.B * dstA * (1f - srcA)) / outA;
-                                dst = new Color32((byte)r, (byte)g, (byte)b, (byte)(outA * 255f));
-                            }
+                            // Edge pixel - compute SDF coverage
+                            var worldPoint = new Vector2((rb.X + x + 0.5f) / dpi, scanlineY / dpi);
+                            var signedDist = GetSignedDistanceToPolygon(worldPoint, pathVerts, dpi);
+                            coverage = DistanceToAlpha(signedDist);
+                            if (coverage <= 0f) continue;
                         }
+
+                        ref var dst = ref pixels[px, py];
+                        CompositePixel(ref dst, fillColor, coverage, isHole);
                     }
                 }
             }
         }
     }
 
-    private static float GetSignedDistanceToPolygon(Vector2 point, Span<Vector2> verts)
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    private static void CompositePixel(ref Color32 dst, Color32 fillColor, float coverage, bool isHole)
     {
-        var vertCount = verts.Length;
+        if (isHole)
+        {
+            if (dst.A > 0)
+            {
+                var newAlpha = (byte)(dst.A * (1f - coverage));
+                dst = new Color32(dst.R, dst.G, dst.B, newAlpha);
+            }
+            return;
+        }
+
+        var srcAlpha = (byte)(fillColor.A * coverage);
+        if (srcAlpha == 0) return;
+
+        if (dst.A == 0)
+        {
+            dst = new Color32(fillColor.R, fillColor.G, fillColor.B, srcAlpha);
+        }
+        else
+        {
+            var srcA = srcAlpha / 255f;
+            var dstA = dst.A / 255f;
+            var outA = srcA + dstA * (1f - srcA);
+
+            if (outA > 0f)
+            {
+                var r = (fillColor.R * srcA + dst.R * dstA * (1f - srcA)) / outA;
+                var g = (fillColor.G * srcA + dst.G * dstA * (1f - srcA)) / outA;
+                var b = (fillColor.B * srcA + dst.B * dstA * (1f - srcA)) / outA;
+                dst = new Color32((byte)r, (byte)g, (byte)b, (byte)(outA * 255f));
+            }
+        }
+    }
+
+    private static float GetSignedDistanceToPolygon(Vector2 worldPoint, Span<Vector2> pixelVerts, float dpi)
+    {
+        var vertCount = pixelVerts.Length;
         if (vertCount < 3) return float.MaxValue;
+
+        var pixelPoint = worldPoint * dpi;
 
         // Find minimum distance to polygon edges
         var minDistSqr = float.MaxValue;
         for (var i = 0; i < vertCount; i++)
         {
-            var distSqr = PointToSegmentDistSqrFast(point, verts[i], verts[(i + 1) % vertCount]);
+            var distSqr = PointToSegmentDistSqrFast(pixelPoint, pixelVerts[i], pixelVerts[(i + 1) % vertCount]);
             if (distSqr < minDistSqr)
                 minDistSqr = distSqr;
         }
 
-        var inside = IsPointInPolygonFast(point, verts);
+        var inside = IsPointInPolygonFast(pixelPoint, pixelVerts);
         return inside ? -MathF.Sqrt(minDistSqr) : MathF.Sqrt(minDistSqr);
     }
 

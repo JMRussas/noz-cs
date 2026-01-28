@@ -117,7 +117,7 @@ public class SpriteDocument : Document
 
     private static void NewFile(StreamWriter writer)
     {
-        // empty
+        writer.WriteLine("c 0 a");
     }
 
     public override void Load()

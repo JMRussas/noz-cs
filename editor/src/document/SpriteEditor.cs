@@ -550,8 +550,6 @@ public class SpriteEditor : DocumentEditor
             return;
         }
 
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
         var offset = new Vector2Int(-bounds.X, -bounds.Y) + Vector2Int.One;
         _pixelData.Clear(new RectInt(0,0,size.X+2, size.Y + 2));
         var palette = PaletteManager.GetPalette(Document.Palette);
