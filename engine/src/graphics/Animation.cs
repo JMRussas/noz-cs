@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace NoZ;
 
@@ -19,17 +20,20 @@ public struct AnimationBone
     public byte Index;
 }
 
+[StructLayout(LayoutKind.Sequential)]
 public struct AnimationFrame
 {
     public byte Transform0;
     public byte Transform1;
     public byte Event;
+    public byte Padding0;
     public float Fraction0;
     public float Fraction1;
     public float RootMotion0;
     public float RootMotion1;
 }
 
+[StructLayout(LayoutKind.Sequential)]
 public struct AnimationTransform
 {
     public Vector2 Position;

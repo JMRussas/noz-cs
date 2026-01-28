@@ -113,7 +113,7 @@ public static partial class Graphics
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
         if (bone >= 0)
-            bounds = new Rect(bounds.X + sprite.BoneOffset.X, bounds.Y + sprite.BoneOffset.Y, bounds.Width, bounds.Height);
+            bounds = new Rect(bounds.X - sprite.BoneOffset.X, bounds.Y - sprite.BoneOffset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);

@@ -25,6 +25,7 @@ public class Animator
     public float NormalizedTime => _animation != null && _animation.Duration > 0 ? _time / _animation.Duration : 0f;
     public bool IsPlaying => _animation != null;
     public bool IsBlending => _blendFromAnimation != null && _blendElapsed < _blendDuration;
+    public ReadOnlySpan<Matrix3x2> BoneTransforms => _boneTransforms;
 
     public Animator(Skeleton skeleton)
     {
@@ -116,7 +117,7 @@ public class Animator
             SampleAnimation(_blendFromAnimation, _blendFromTime, _poseB);
 
             var blendT = _blendElapsed / _blendDuration;
-            blendT = SmoothStep(blendT);
+            blendT = MathEx.SmoothStep(blendT);
 
             for (var i = 0; i < _skeleton.BoneCount; i++)
                 _poseA[i] = AnimationTransform.Lerp(_poseB[i], _poseA[i], blendT);
@@ -125,7 +126,7 @@ public class Animator
         CalculateBoneMatrices(_poseA);
     }
 
-    private void SampleAnimation(Animation animation, float time, AnimationTransform[] outPose)
+    private static void SampleAnimation(Animation animation, float time, AnimationTransform[] outPose)
     {
         var frameFloat = time * animation.FrameRate;
         var frameIndex = (int)frameFloat;
@@ -161,16 +162,6 @@ public class Animator
             else
                 _boneTransforms[boneIndex] = localMatrix;
         }
-    }
-
-    private static float SmoothStep(float t)
-    {
-        return t * t * (3f - 2f * t);
-    }
-
-    public ReadOnlySpan<Matrix3x2> GetBoneTransforms()
-    {
-        return _boneTransforms;
     }
 
     public ref readonly Matrix3x2 GetBoneTransform(int boneIndex)

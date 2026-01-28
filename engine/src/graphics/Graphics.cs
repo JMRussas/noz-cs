@@ -47,8 +47,6 @@ public static unsafe partial class Graphics
         public int IndexCount;
         public ushort State;
     }
-    
-
 
     [StructLayout(LayoutKind.Sequential)]
     private struct GlobalsSnapshot
