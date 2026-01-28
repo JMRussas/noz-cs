@@ -208,29 +208,41 @@ public static partial class UI
 
     private static void UpdateTransforms(ref Element e, ref readonly Element p)
     {
+        // Parent's pivot offset - distance from parent's top-left to parent's LocalToWorld origin
+        var parentPivotOffset = new Vector2(p.Rect.Width * p.Pivot.X, p.Rect.Height * p.Pivot.Y);
+
+        // Child position relative to parent's LocalToWorld origin
+        var childPos = new Vector2(e.Rect.X, e.Rect.Y) - parentPivotOffset;
+
         Matrix3x2 localTransform;
-
-        // Child rect is relative to parent's top-left, but parent's LocalToWorld is at parent's center
-        // So offset child's center by half parent size to get position relative to parent's center
-        var childCenter = new Vector2(e.Rect.X + e.Rect.Width * 0.5f, e.Rect.Y + e.Rect.Height * 0.5f);
-        var parentHalfSize = new Vector2(p.Rect.Width * 0.5f, p.Rect.Height * 0.5f);
-        var offset = childCenter - parentHalfSize;
-
         if (e.Type == ElementType.Transform)
         {
             ref var t = ref e.Data.Transform;
+            e.Pivot = t.Pivot;
+
+            // Pivot point offset from element's top-left
+            var pivot = new Vector2(e.Rect.Width * e.Pivot.X, e.Rect.Height * e.Pivot.Y);
+
+            // LocalToWorld positions at the pivot point, with scale/rotate applied
+            // Children use -parentPivotOffset which maps them to top-left relative positions
             localTransform =
                 Matrix3x2.CreateScale(t.Scale) *
                 Matrix3x2.CreateRotation(MathEx.Deg2Rad * t.Rotate) *
-                Matrix3x2.CreateTranslation(t.Translate + offset);
+                Matrix3x2.CreateTranslation(childPos + pivot + t.Translate);
         }
         else
         {
-            localTransform = Matrix3x2.CreateTranslation(offset);
+            e.Pivot = Vector2.Zero;
+            localTransform = Matrix3x2.CreateTranslation(childPos);
         }
 
         e.LocalToWorld = localTransform * p.LocalToWorld;
         Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
+
+        // Adjust Rect to be element-local (relative to LocalToWorld origin which is at pivot)
+        // This allows draw/hit-test code to use Rect directly without pivot calculations
+        e.Rect.X = -e.Rect.Width * e.Pivot.X;
+        e.Rect.Y = -e.Rect.Height * e.Pivot.Y;
 
         var elementIndex = e.Index + 1;
         for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
@@ -250,8 +262,9 @@ public static partial class UI
 
         e.Rect = new Rect(0, 0, ScreenSize.X, ScreenSize.Y);
         e.ContentRect = e.Rect;
-        e.LocalToWorld = Matrix3x2.CreateTranslation(ScreenSize * 0.5f);
-        Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
+        e.Pivot = Vector2.Zero;
+        e.LocalToWorld = Matrix3x2.Identity;
+        e.WorldToLocal = Matrix3x2.Identity;
 
         for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
         {

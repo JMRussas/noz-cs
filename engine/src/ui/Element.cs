@@ -91,6 +91,7 @@ internal struct Element
     public Vector2 AllocatedSize;
     public Matrix3x2 LocalToWorld;
     public Matrix3x2 WorldToLocal;
+    public Vector2 Pivot;
     public ElementData Data;
     public Font? Font;
     public Sprite? Sprite;

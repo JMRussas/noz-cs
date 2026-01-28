@@ -235,13 +235,9 @@ public static partial class UI
         if (elementId == ElementId.None || canvasId == CanvasId.None)
             return Rect.Zero;
 
-        ref var state = ref GetElementState(canvasId, elementId);
-
-        // LocalToWorld positions at center - transform corners relative to center
-        var halfSize = new Vector2(state.Rect.Width * 0.5f, state.Rect.Height * 0.5f);
-        var topLeft = Vector2.Transform(-halfSize, state.LocalToWorld);
-        var bottomRight = Vector2.Transform(halfSize, state.LocalToWorld);
-
+        ref var es = ref GetElementState(canvasId, elementId);
+        var topLeft = Vector2.Transform(es.Rect.Position, es.LocalToWorld);
+        var bottomRight = Vector2.Transform(es.Rect.Position + es.Rect.Size, es.LocalToWorld);
         return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
     }
 
@@ -256,10 +252,8 @@ public static partial class UI
 
         ref var sourceState = ref GetElementState(canvasId, elementId);
 
-        // LocalToWorld positions at center - transform corners relative to center
-        var halfSize = new Vector2(sourceState.Rect.Width * 0.5f, sourceState.Rect.Height * 0.5f);
-        var topLeft = Vector2.Transform(-halfSize, sourceState.LocalToWorld);
-        var bottomRight = Vector2.Transform(halfSize, sourceState.LocalToWorld);
+        var topLeft = Vector2.Transform(sourceState.Rect.Position, sourceState.LocalToWorld);
+        var bottomRight = Vector2.Transform(sourceState.Rect.Position + sourceState.Rect.Size, sourceState.LocalToWorld);
 
         // If no relative element specified, return canvas-space rect
         if (relativeToElementId == ElementId.None || relativeToCanvasId == CanvasId.None)
