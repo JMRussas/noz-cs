@@ -115,11 +115,11 @@ public class PenTool : Tool
         }
 
         _snappingToGrid = false;
-        if (!_hoveringFirstPoint && !_hoveringExistingAnchor && !_hoveringSegment)
+        if (!_hoveringFirstPoint && !_hoveringExistingAnchor && !_hoveringSegment && Input.IsCtrlDown())
         {
             _snappingToGrid = true;
             var worldPos = Vector2.Transform(mouseLocal, _editor.Document.Transform);
-            var snapped = Input.IsCtrlDown() ? Grid.SnapToGrid(worldPos) : Grid.SnapToPixelGrid(worldPos);
+            var snapped = Grid.SnapToPixelGrid(worldPos);
             Matrix3x2.Invert(_editor.Document.Transform, out var invTransform);
             _gridSnapPosition = Vector2.Transform(snapped, invTransform);
         }

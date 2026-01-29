@@ -32,13 +32,11 @@ r "icon_opacity" 210 209 117 117
 r "icon_opacity_overlay" 1 722 117 117
 r "icon_palette" 131 475 40 41
 r "icon_play" 311 115 68 68
-r "icon_edit" 1 839 68 68
-r "icon_edit" 1 907 68 68
-r "icon_play_4" 1 975 68 68
 r "icon_preview" 361 81 63 31
-r "icon_publish" 1 1043 108 126
-r "icon_root_motion" 69 839 112 116
+r "icon_publish" 1 839 108 126
+r "icon_root_motion" 1 965 112 116
 r "icon_search" 383 35 38 41
 r "icon_submenu" 421 1 23 42
-r "icon_subtract" 69 955 40 39
+r "icon_subtract" 109 839 40 39
 r "icon_tiling" 93 563 37 37
+r "test" 132 199 29 24

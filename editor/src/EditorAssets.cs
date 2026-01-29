@@ -53,6 +53,7 @@ public static class EditorAssets
         public const string IconSubmenu = "icon_submenu";
         public const string IconSubtract = "icon_subtract";
         public const string IconTiling = "icon_tiling";
+        public const string Test = "test";
         public const string EditorPalette = "editor_palette";
     }
 
@@ -151,6 +152,7 @@ public static class EditorAssets
         public static Sprite IconSubmenu { get; private set; } = null!;
         public static Sprite IconSubtract { get; private set; } = null!;
         public static Sprite IconTiling { get; private set; } = null!;
+        public static Sprite Test { get; private set; } = null!;
 
         public static void Load()
         {
@@ -190,6 +192,7 @@ public static class EditorAssets
             IconSubmenu = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubmenu)!;
             IconSubtract = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubtract)!;
             IconTiling = (Sprite)Asset.Load(AssetType.Sprite, Names.IconTiling)!;
+            Test = (Sprite)Asset.Load(AssetType.Sprite, Names.Test)!;
         }
 
         public static void Unload()
@@ -230,6 +233,7 @@ public static class EditorAssets
             IconSubmenu?.Dispose();
             IconSubtract?.Dispose();
             IconTiling?.Dispose();
+            Test?.Dispose();
         }
     }
 

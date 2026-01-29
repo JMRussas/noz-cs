@@ -1,13 +1,9 @@
 [editor]
-position = (2.609375,-4.000000)
+position = (4.726562,-3.890625)
 collection = icons
-
-[mesh]
-palette = 0
 
 [sprite]
 show_in_skeleton = false
 show_tiling = false
 show_skeleton_overlay = false
-constrained_size = 64x64
 

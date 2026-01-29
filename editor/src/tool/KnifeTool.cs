@@ -593,18 +593,18 @@ public class KnifeTool : Tool
 
                 // Check from anchor0 to first sample
                 if (Physics.OverlapLine(from, to, a0.Position, samples[0], out var intersection))
-                    _points.Add(new KnifePoint { Position = Grid.SnapToPixelGrid(intersection), Intersection = true});
+                    _points.Add(new KnifePoint { Position = intersection, Intersection = true});
 
                 // Check between samples
                 for (var s = 0; s < Shape.MaxSegmentSamples - 1; s++)
                 {
                     if (Physics.OverlapLine(from, to, samples[s], samples[s + 1], out intersection))
-                        _points.Add(new KnifePoint { Position = Grid.SnapToPixelGrid(intersection), Intersection = true});
+                        _points.Add(new KnifePoint { Position = intersection, Intersection = true});
                 }
 
                 // Check from last sample to anchor1
                 if (Physics.OverlapLine(from, to, samples[Shape.MaxSegmentSamples - 1], a1.Position, out intersection))
-                    _points.Add(new KnifePoint { Position = Grid.SnapToPixelGrid(intersection), Intersection = true});
+                    _points.Add(new KnifePoint { Position = intersection, Intersection = true});
             }
         }
 

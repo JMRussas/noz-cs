@@ -441,13 +441,13 @@ public static class Workspace
         BeginTool(new MoveTool(
             update: delta =>
             {
-                var snap = Input.IsCtrlDown();
                 foreach (var doc in DocumentManager.Documents)
                 {
                     if (!doc.IsSelected)
                         continue;
                     var newPos = doc.SavedPosition + delta;
-                    newPos = snap ? Grid.SnapToGrid(newPos) : Grid.SnapToPixelGrid(newPos);
+                    if (Input.IsCtrlDown())
+                        newPos = Grid.SnapToPixelGrid(newPos);
                     doc.Position = newPos;
                 }
             },

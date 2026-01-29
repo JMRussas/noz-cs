@@ -243,7 +243,7 @@ public sealed unsafe partial class Shape : IDisposable
                 if (distSqr >= anchorRadiusSqr || distSqr >= result.AnchorDistSqr) continue;
                 result.AnchorIndex = (ushort)anchorIdx;
                 result.AnchorDistSqr = distSqr;
-                result.AnchorPosition = Grid.SnapToPixelGrid(worldPos);
+                result.AnchorPosition = worldPos;
                 result.PathIndex = p;
             }
 
@@ -325,7 +325,7 @@ public sealed unsafe partial class Shape : IDisposable
                         PathIndex = p,
                         AnchorIndex = a0Idx,
                         AnchorDistSqr = adistSqr,
-                        AnchorPosition = Grid.SnapToPixelGrid(a0.Position)
+                        AnchorPosition = a0.Position
                     };
                     continue;
                 }
@@ -618,13 +618,11 @@ public sealed unsafe partial class Shape : IDisposable
             }
         }
 
-        // Clamp t to avoid inserting too close to existing anchors
-        var clampedT = Math.Clamp(bestT, 0.1f, 0.9f);
+        var clampedT = Math.Clamp(bestT, 0.001f, 0.999f);
 
-        // Calculate split point using bezier formula and snap to pixel grid
+        // Calculate split point using bezier formula
         var oneMinusT = 1f - clampedT;
-        var splitPointRaw = oneMinusT * oneMinusT * p0 + 2f * oneMinusT * clampedT * cp + clampedT * clampedT * p1;
-        var splitPoint = Grid.SnapToPixelGrid(splitPointRaw);
+        var splitPoint = oneMinusT * oneMinusT * p0 + 2f * oneMinusT * clampedT * cp + clampedT * clampedT * p1;
 
         // Calculate new curve values using least-squares fit to original samples
         var mid1 = (p0 + splitPoint) * 0.5f;
@@ -844,7 +842,6 @@ public sealed unsafe partial class Shape : IDisposable
 
     public ushort AddAnchor(ushort pathIndex, Vector2 position, float curve = 0f)
     {
-        position = Grid.SnapToPixelGrid(position);
 
         if (pathIndex >= PathCount || AnchorCount >= MaxAnchors) return ushort.MaxValue;
 
@@ -1037,7 +1034,8 @@ public sealed unsafe partial class Shape : IDisposable
             if (!_anchors[i].IsSelected) continue;
 
             var newPos = savedPositions[i] + delta;
-            newPos = Grid.SnapToPixelGrid(newPos);
+            if (snap)
+                newPos = Grid.SnapToPixelGrid(newPos);
             _anchors[i].Position = newPos;
         }
     }
@@ -1110,7 +1108,7 @@ public sealed unsafe partial class Shape : IDisposable
             {
                 var i = path.AnchorStart + a;
                 var offset = _anchors[i].Position - pivot;
-                _anchors[i].Position = Grid.SnapToPixelGrid(new Vector2(pivot.X - offset.X, pivot.Y + offset.Y));
+                _anchors[i].Position = new Vector2(pivot.X - offset.X, pivot.Y + offset.Y);
                 _anchors[i].Curve = ClampCurve(-_anchors[i].Curve);
             }
         }
@@ -1128,7 +1126,7 @@ public sealed unsafe partial class Shape : IDisposable
             {
                 var i = path.AnchorStart + a;
                 var offset = _anchors[i].Position - pivot;
-                _anchors[i].Position = Grid.SnapToPixelGrid(new Vector2(pivot.X + offset.X, pivot.Y - offset.Y));
+                _anchors[i].Position = new Vector2(pivot.X + offset.X, pivot.Y - offset.Y);
                 _anchors[i].Curve = ClampCurve(-_anchors[i].Curve);
             }
         }
@@ -1274,14 +1272,14 @@ public sealed unsafe partial class Shape : IDisposable
         var correctedScale = new Vector2(scale.X * correction, scale.Y * correction);
         var correctedCurveScale = (MathF.Abs(correctedScale.X) + MathF.Abs(correctedScale.Y)) * 0.5f;
 
-        // re-apply with corrected scale and snap to pixel grid
+        // re-apply with corrected scale
         for (ushort i = 0; i < AnchorCount; i++)
         {
             if (!_anchors[i].IsSelected)
                 continue;
 
             var offset = savedPositions[i] - pivot;
-            _anchors[i].Position = Grid.SnapToPixelGrid(pivot + offset * correctedScale);
+            _anchors[i].Position = pivot + offset * correctedScale;
             _anchors[i].Curve = ClampCurve(savedCurves[i] * correctedCurveScale);
         }
     }

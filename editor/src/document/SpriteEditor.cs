@@ -1126,7 +1126,8 @@ public class SpriteEditor : DocumentEditor
             },
             commit: _ =>
             {
-                shape.SnapSelectedAnchorsToPixelGrid();
+                if (Input.IsCtrlDown())
+                    shape.SnapSelectedAnchorsToPixelGrid();
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 Document.MarkModified();
@@ -1404,10 +1405,9 @@ public class SpriteEditor : DocumentEditor
 
         Undo.Record(Document);
 
-        var localMousePos = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
         var shape = Document.GetFrame(_currentFrame).Shape;
         shape.ClearSelection();
-        shape.SplitSegmentAtPoint(hit.SegmentIndex, localMousePos);
+        shape.SplitSegmentAtPoint(hit.SegmentIndex, hit.SegmentPosition);
 
         var newAnchorIdx = (ushort)(hit.SegmentIndex + 1);
         if (newAnchorIdx < shape.AnchorCount)

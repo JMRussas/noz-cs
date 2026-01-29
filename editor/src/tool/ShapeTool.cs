@@ -58,8 +58,6 @@ public class ShapeTool : Tool
         var mouseLocal = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
 
         if (Input.IsCtrlDown())
-            mouseLocal = Grid.SnapToGrid(mouseLocal);
-        else
             mouseLocal = Grid.SnapToPixelGrid(mouseLocal);
 
         if (!_isDragging && Input.WasButtonPressed(InputCode.MouseLeft))

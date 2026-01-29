@@ -54,7 +54,7 @@ public sealed partial class Shape
             ref var path = ref _paths[pathIndex];
             if (path.AnchorCount < 3) continue;
 
-            var vertCount = GetPolyVerts(ref path, ref polyVerts, dpi, out var minY, out var maxY);
+            var vertCount = GetRasterVerts(ref path, ref polyVerts, dpi, out var minY, out var maxY);
             if (vertCount < 3) continue;
 
             var subtract = path.IsSubtract;
@@ -62,6 +62,8 @@ public sealed partial class Shape
                 ? Color32.Transparent
                 : palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
             var rb = RasterBounds;
+
+            Log.Info($"Path: {pathIndex}");
 
             RasterizePath(
                 target,
@@ -96,6 +98,13 @@ public sealed partial class Shape
 
             var intersectionCount = GetScanlineIntersections(verts, sy + 0.5f, intersections);
             if (intersectionCount == 0) continue;
+
+            if (y == 0)
+                for (int i = 0; i < intersectionCount; i++)
+                {
+                    Log.Info($"  {i}: X={intersections[i].X}, Dir={intersections[i].Direction}");
+                }
+
             RasterizeScanline(
                 target,
                 targetRect,
@@ -133,30 +142,66 @@ public sealed partial class Shape
             if (isInside)
             {
                 sourceMin = (int)MathF.Ceiling(intersections[i].X - 0.5f);
-                continue;
+                if (scanlineY == 0)
+                {
+                    Log.Info($"intersection.X0={intersections[i].X}");
+                }
+                    continue;
             }
 
-            var sourceMax = (int)MathF.Ceiling(intersections[i].X - 0.5f);
+            var sourceMax = (int)MathF.Floor(intersections[i].X + 0.5f);
             var targetMin = int.Max(targetRect.X, sourceOffset.X + sourceMin + targetRect.X);
             var targetMax = int.Min(targetRect.X + targetRect.Width, sourceOffset.X + sourceMax + targetRect.X);
             var targetWidth = targetMax - targetMin;
+
+            if (scanlineY == 0)
+            {
+                Log.Info($"intersection.X1={intersections[i].X}");
+                Log.Info($"sourceMin={sourceMin}");
+                Log.Info($"sourceMax={sourceMax}");
+                Log.Info($"sourceOffset={sourceOffset}");
+                Log.Info($"targetRect={targetRect}");
+                Log.Info($"targetMin={targetMin}");
+                Log.Info($"targetMax={targetMax}");
+                Log.Info($"targetWidth={targetWidth}");
+            }
+
+
             if (targetWidth <= 0)
                 continue;
 
             if (antiAlias)
             {
+                var sourceY = -sourceOffset.Y + scanlineY + 0.5f;
+                var sourceX = sourceMin + 0.5f;
+
+                if (scanlineY == 0)
+                {
+                    Log.Info($"sourceX0={sourceX}");
+                    Log.Info($"sourceY0={sourceY}");
+                    Log.Info($"alpha0={GetAntiAliasedAlpha(new Vector2(sourceX, sourceY), verts)}");
+                }
+
                 AntiAliasPixel(
                      ref target[targetMin, targetRect.Y + scanlineY],
                      color,
-                     GetAntiAliasedAlpha(new Vector2(sourceMin + 0.5f, -sourceOffset.Y + scanlineY + 0.5f), verts),
+                     GetAntiAliasedAlpha(new Vector2(sourceX, sourceY), verts),
                      subtract);
 
                 if (targetWidth == 1) continue;
 
+                sourceX = sourceMax - 1 + 0.5f;
+                if (scanlineY == 0)
+                {
+                    Log.Info($"sourceX1={sourceX}");
+                    Log.Info($"sourceY1={sourceY}");
+                    Log.Info($"alpha1={GetAntiAliasedAlpha(new Vector2(sourceX, sourceY), verts)}");
+                }
+
                 AntiAliasPixel(
                      ref target[targetMax - 1, targetRect.Y + scanlineY],
                      color,
-                     GetAntiAliasedAlpha(new Vector2(sourceMax - 0.5f, -sourceOffset.Y + scanlineY + 0.5f), verts),
+                     GetAntiAliasedAlpha(new Vector2(sourceX, sourceY), verts),
                      subtract);
 
                 if (targetWidth == 2) continue;
@@ -190,7 +235,7 @@ public sealed partial class Shape
                 intersections[intersectionCount++] = new ScanlineIntersection(p0.X + t * (p1.X - p0.X), 1);
                 continue;
             }
-            
+
             // Edge going downward (p0 above, p1 below)
             if (p1.Y <= scanlineY && p0.Y > scanlineY)
             {
@@ -207,9 +252,9 @@ public sealed partial class Shape
         return intersectionCount;
     }
 
-    private int GetPolyVerts(
+    private int GetRasterVerts(
         ref Path path,
-        ref Span<Vector2> polyVerts,
+        ref Span<Vector2> verts,
         float dpi,
         out float minY,
         out float maxY)
@@ -223,7 +268,7 @@ public sealed partial class Shape
             var anchorIdx = (ushort)(path.AnchorStart + aIdx);
             ref var anchor = ref _anchors[anchorIdx];
             var pixelPos = anchor.Position * dpi;
-            polyVerts[vertCount++] = pixelPos;
+            verts[vertCount++] = pixelPos;
             minY = MathF.Min(minY, pixelPos.Y);
             maxY = MathF.Max(maxY, pixelPos.Y);
 
@@ -233,7 +278,7 @@ public sealed partial class Shape
                 for (var s = 0; s < MaxSegmentSamples && vertCount < MaxAnchorsPerPath; s++)
                 {
                     pixelPos = samples[s] * dpi;
-                    polyVerts[vertCount++] = pixelPos;
+                    verts[vertCount++] = pixelPos;
                     minY = MathF.Min(minY, pixelPos.Y);
                     maxY = MathF.Max(maxY, pixelPos.Y);
                 }
