@@ -10,6 +10,20 @@ internal static class EditorUI
     private static bool _controlSelected = false;
     private static bool _controlDisabled = false;
 
+    private static void SetState(bool selected, bool disabled)
+    {
+        _controlHovered = UI.IsHovered();
+        _controlSelected = selected;
+        _controlDisabled = disabled;
+    }
+
+    private static void ClearState()
+    {
+        _controlDisabled = false;
+        _controlHovered = false;
+        _controlSelected = false;
+    }
+
     private static void ShortcutText(string text, bool selected = false)
     {
         UI.Label(text, style: selected ? EditorStyle.Control.Text : EditorStyle.Shortcut.Text);
@@ -58,7 +72,7 @@ internal static class EditorUI
         {
             ButtonFill(selected, UI.IsHovered(), disabled, toolbar: toolbar);
             using (UI.BeginContainer(EditorStyle.Button.TextContent))
-                UI.Label(text, disabled ? EditorStyle.Button.DisabledText : EditorStyle.Button.Text);
+                UI.Label(text, disabled ? EditorStyle.Control.DisabledText : EditorStyle.Control.Text);
             pressed = !disabled && UI.WasPressed();
         }
 
@@ -69,13 +83,13 @@ internal static class EditorUI
     {
         using var _ = UI.BeginContainer(EditorStyle.Button.IconContent);
         if (_controlDisabled)
-            UI.Image(icon, EditorStyle.Button.DisabledIcon);
+            UI.Image(icon, EditorStyle.Control.DisabledIcon);
         else if (_controlSelected)
-            UI.Image(icon, EditorStyle.Button.SelectedIcon);
+            UI.Image(icon, EditorStyle.Control.SelectedIcon);
         else if (_controlHovered)
-            UI.Image(icon, EditorStyle.Button.HoveredIcon);
+            UI.Image(icon, EditorStyle.Control.HoveredIcon);
         else
-            UI.Image(icon, EditorStyle.Button.Icon);
+            UI.Image(icon, EditorStyle.Control.Icon);
 
     }
 
@@ -110,28 +124,28 @@ internal static class EditorUI
         return pressed;
     }
 
-    public static void PopupItemFill(bool selected, bool hovered)
+    public static void PopupItemFill()
     {
-        if (selected && hovered)
+        if (_controlSelected && _controlHovered)
             UI.Container(EditorStyle.Button.SelectedHoverFill);
-        else if (selected)
+        else if (_controlSelected)
             UI.Container(EditorStyle.Button.SelectedFill);
-        else if (hovered)
+        else if (_controlHovered)
             UI.Container(EditorStyle.Button.HoverFill);
     }
 
     public static void PopupIcon(Sprite icon, bool hovered = false, bool selected = false, bool disabled = false)
     {
-        using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
+        using (UI.BeginContainer(EditorStyle.Control.IconContainer))
             UI.Image(
                 icon,
                 style: disabled
-                    ? EditorStyle.Popup.DisabledIcon
+                    ? EditorStyle.Control.DisabledIcon
                     : selected
-                        ? EditorStyle.Popup.SelectedIcon
+                        ? EditorStyle.Control.SelectedIcon
                         : hovered
-                            ? EditorStyle.Popup.HoveredIcon
-                            : EditorStyle.Popup.Icon);
+                            ? EditorStyle.Control.HoveredIcon
+                            : EditorStyle.Control.Icon);
     }
 
     public static void PopupText(string text, bool hovered = false, bool selected = false, bool disabled = false)
@@ -139,25 +153,57 @@ internal static class EditorUI
         UI.Label(
             text,
             style: disabled
-                ? EditorStyle.Popup.DisabledText
+                ? EditorStyle.Control.DisabledText
                 : selected
-                    ? EditorStyle.Popup.SelectedText
+                    ? EditorStyle.Control.SelectedText
                     : hovered
-                        ? EditorStyle.Popup.HoveredText
-                        : EditorStyle.Popup.Text);
+                        ? EditorStyle.Control.HoveredText
+                        : EditorStyle.Control.Text);
     }
 
-    public static void ControlFill(bool selected, bool hovered, bool disabled, bool toolbar = false)
+    public static bool PopupItem(ElementId id, string text, Action? content = null, bool selected = false, bool disabled = false) =>
+        PopupItem(id, null, text, content, selected, disabled, showIcon: false);
+
+    public static bool PopupItem(ElementId id, Sprite? icon, string text, Action? content = null, bool selected = false, bool disabled = false, bool showIcon=true)
     {
-        if (disabled)
+        var pressed = false;
+        using (UI.BeginContainer(id, EditorStyle.Popup.Item))
+        { 
+            SetState(selected, disabled);
+
+            ControlFill(ignoreDefaultFill: true);
+
+            using (UI.BeginRow(EditorStyle.Popup.ItemContent))
+            {
+                ControlIcon(EditorStyle.Popup.CheckContent, selected ? EditorAssets.Sprites.IconCheck : null);
+                if (showIcon) ControlIcon(icon);
+                ControlText(text);
+
+                if (content != null)
+                {
+                    UI.Spacer(EditorStyle.Control.Spacing);
+                    UI.Flex();
+                    content?.Invoke();
+                }
+            }
+
+            pressed = UI.WasPressed();
+        }
+
+        ClearState();
+
+        return pressed;
+    }
+
+    public static void ControlFill(bool ignoreDefaultFill = false)
+    {
+        if (_controlDisabled)
             UI.Container(EditorStyle.Control.DisabledFill);
-        else if (selected && hovered)
-            UI.Container(EditorStyle.Control.SelectedHoverFill);
-        else if (selected)
+        else if (_controlSelected)
             UI.Container(EditorStyle.Control.SelectedFill);
-        else if (hovered)
+        else if (_controlHovered)
             UI.Container(EditorStyle.Control.HoverFill);
-        else
+        else if (!ignoreDefaultFill)
             UI.Container(EditorStyle.Control.Fill);
     }
 
@@ -166,18 +212,29 @@ internal static class EditorUI
         bool pressed = false;
         using (UI.BeginContainer(id, EditorStyle.Control.Root))
         {
-            _controlHovered = UI.IsHovered();
-            _controlSelected = selected;
-            _controlDisabled = disabled;
-
-            ControlFill(_controlSelected, hovered: _controlHovered, _controlDisabled, toolbar: toolbar);
+            SetState(selected, disabled);
+            ControlFill(ignoreDefaultFill: toolbar);
 
             using (UI.BeginContainer(EditorStyle.Control.Content))
                 content.Invoke();
 
             pressed = !disabled && UI.WasPressed();
         }
+
+        ClearState();
+
         return pressed;
+    }
+
+    public static void ControlPlaceholderText(string text)
+    {
+        UI.Label(
+            text,
+            style: _controlSelected
+                ? EditorStyle.Control.PlaceholderSelectedText
+                : _controlHovered
+                    ? EditorStyle.Control.PlaceholderHoverText
+                    : EditorStyle.Control.PlaceholderText);
     }
 
     public static void ControlText(string text)
@@ -185,25 +242,35 @@ internal static class EditorUI
         UI.Label(
             text,
             style: _controlDisabled
-                ? EditorStyle.Popup.DisabledText
+                ? EditorStyle.Control.DisabledText
                 : _controlSelected
-                    ? EditorStyle.Popup.SelectedText
+                    ? EditorStyle.Control.SelectedText
                     : _controlHovered
-                        ? EditorStyle.Popup.HoveredText
-                        : EditorStyle.Popup.Text);
+                        ? EditorStyle.Control.HoveredText
+                        : EditorStyle.Control.Text);
     }
 
-    public static void ControlIcon(Sprite icon)
+    private static void ControlIcon (in ContainerStyle style, Sprite? icon)
     {
-        using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
-            UI.Image(
-                icon,
-                style: _controlDisabled
-                    ? EditorStyle.Popup.DisabledIcon
-                    : _controlSelected
-                        ? EditorStyle.Popup.SelectedIcon
-                        : _controlHovered
-                            ? EditorStyle.Popup.HoveredIcon
-                            : EditorStyle.Popup.Icon);
+        using var _ = UI.BeginContainer(style);
+        if (icon == null) return;
+
+        UI.Image(
+            icon,
+            style: _controlDisabled
+                ? EditorStyle.Control.DisabledIcon
+                : _controlSelected
+                    ? EditorStyle.Control.SelectedIcon
+                    : _controlHovered
+                        ? EditorStyle.Control.HoveredIcon
+                        : EditorStyle.Control.Icon);
+    }
+
+    public static void ControlIcon(Sprite? icon) =>
+        ControlIcon(EditorStyle.Control.IconContainer, icon);
+
+    public static void ToolbarSpacer()
+    {
+        UI.Container(EditorStyle.Toolbar.Spacer);
     }
 }

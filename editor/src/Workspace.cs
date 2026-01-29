@@ -446,8 +446,8 @@ public static class Workspace
                     if (!doc.IsSelected)
                         continue;
                     var newPos = doc.SavedPosition + delta;
-                    if (Input.IsCtrlDown())
-                        newPos = Grid.SnapToPixelGrid(newPos);
+                    if (Input.IsCtrlDown(InputScope.All))
+                        newPos = Grid.SnapToGrid(newPos);
                     doc.Position = newPos;
                 }
             },

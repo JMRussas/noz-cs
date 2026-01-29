@@ -98,8 +98,8 @@ public static class CommandPalette
             {
                 using (UI.BeginRow(EditorStyle.Popup.Item with { Spacing = 4.0f }))
                 {
-                    using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
-                        UI.Image(EditorAssets.Sprites.IconSearch, EditorStyle.Popup.Icon);
+                    using (UI.BeginContainer(EditorStyle.Control.IconContainer))
+                        UI.Image(EditorAssets.Sprites.IconSearch, EditorStyle.Control.Icon);
                    
                     using (UI.BeginFlex())
                         if (UI.TextBox(SearchId, style: EditorStyle.CommandPalette.SearchTextBox, placeholder: "Search..."))

@@ -28,6 +28,7 @@ public static class EditorAssets
         public const string IconAntialiasOff = "icon_antialias_off";
         public const string IconAntialiasOn = "icon_antialias_on";
         public const string IconBone = "icon_bone";
+        public const string IconCheck = "icon_check";
         public const string IconCircle = "icon_circle";
         public const string IconClose = "icon_close";
         public const string IconConstraint = "icon_constraint";
@@ -53,7 +54,6 @@ public static class EditorAssets
         public const string IconSubmenu = "icon_submenu";
         public const string IconSubtract = "icon_subtract";
         public const string IconTiling = "icon_tiling";
-        public const string Test = "test";
         public const string EditorPalette = "editor_palette";
     }
 
@@ -127,6 +127,7 @@ public static class EditorAssets
         public static Sprite IconAntialiasOff { get; private set; } = null!;
         public static Sprite IconAntialiasOn { get; private set; } = null!;
         public static Sprite IconBone { get; private set; } = null!;
+        public static Sprite IconCheck { get; private set; } = null!;
         public static Sprite IconCircle { get; private set; } = null!;
         public static Sprite IconClose { get; private set; } = null!;
         public static Sprite IconConstraint { get; private set; } = null!;
@@ -152,7 +153,6 @@ public static class EditorAssets
         public static Sprite IconSubmenu { get; private set; } = null!;
         public static Sprite IconSubtract { get; private set; } = null!;
         public static Sprite IconTiling { get; private set; } = null!;
-        public static Sprite Test { get; private set; } = null!;
 
         public static void Load()
         {
@@ -167,6 +167,7 @@ public static class EditorAssets
             IconAntialiasOff = (Sprite)Asset.Load(AssetType.Sprite, Names.IconAntialiasOff)!;
             IconAntialiasOn = (Sprite)Asset.Load(AssetType.Sprite, Names.IconAntialiasOn)!;
             IconBone = (Sprite)Asset.Load(AssetType.Sprite, Names.IconBone)!;
+            IconCheck = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCheck)!;
             IconCircle = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCircle)!;
             IconClose = (Sprite)Asset.Load(AssetType.Sprite, Names.IconClose)!;
             IconConstraint = (Sprite)Asset.Load(AssetType.Sprite, Names.IconConstraint)!;
@@ -192,7 +193,6 @@ public static class EditorAssets
             IconSubmenu = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubmenu)!;
             IconSubtract = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubtract)!;
             IconTiling = (Sprite)Asset.Load(AssetType.Sprite, Names.IconTiling)!;
-            Test = (Sprite)Asset.Load(AssetType.Sprite, Names.Test)!;
         }
 
         public static void Unload()
@@ -208,6 +208,7 @@ public static class EditorAssets
             IconAntialiasOff?.Dispose();
             IconAntialiasOn?.Dispose();
             IconBone?.Dispose();
+            IconCheck?.Dispose();
             IconCircle?.Dispose();
             IconClose?.Dispose();
             IconConstraint?.Dispose();
@@ -233,7 +234,6 @@ public static class EditorAssets
             IconSubmenu?.Dispose();
             IconSubtract?.Dispose();
             IconTiling?.Dispose();
-            Test?.Dispose();
         }
     }
 

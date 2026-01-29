@@ -159,6 +159,9 @@ public sealed partial class Shape
             {
                 var sourceY = -sourceOffset.Y + scanlineY + 0.5f;
 
+                var solidMin = (int)MathF.Ceiling(sourceMinXMax - 0.5f);
+                var solidMax = (int)MathF.Floor(sourceMaxXMin + 0.5f);
+
                 var leftAAStart = (int)MathF.Floor(sourceMinXMin - 0.5f);
                 var leftAAEnd = (int)MathF.Floor(sourceMinXMax + 0.5f);
                 for (var px = leftAAStart; px <= leftAAEnd; px++)
@@ -166,9 +169,20 @@ public sealed partial class Shape
                     var targetX = sourceOffset.X + px + targetRect.X;
                     if (targetX < targetRect.X || targetX >= targetRect.X + targetRect.Width)
                         continue;
+                    if (px >= solidMin && px < solidMax)
+                        continue;
                     var sourcePoint = new Vector2(px + 0.5f, sourceY);
                     var alpha = GetAntiAliasedAlpha(sourcePoint, verts);
-                    if (alpha > 0.001f && alpha < 0.999f)
+                    if (alpha <= 0.001f)
+                        continue;
+                    if (alpha >= 0.999f)
+                    {
+                        if (subtract)
+                            target[targetX, targetRect.Y + scanlineY] = Color32.Transparent;
+                        else
+                            target[targetX, targetRect.Y + scanlineY] = color;
+                    }
+                    else
                         AntiAliasPixel(ref target[targetX, targetRect.Y + scanlineY], color, alpha, subtract);
                 }
 
@@ -179,14 +193,23 @@ public sealed partial class Shape
                     var targetX = sourceOffset.X + px + targetRect.X;
                     if (targetX < targetRect.X || targetX >= targetRect.X + targetRect.Width)
                         continue;
+                    if (px >= solidMin && px < solidMax)
+                        continue;
                     var sourcePoint = new Vector2(px + 0.5f, sourceY);
                     var alpha = GetAntiAliasedAlpha(sourcePoint, verts);
-                    if (alpha > 0.001f && alpha < 0.999f)
+                    if (alpha <= 0.001f)
+                        continue;
+                    if (alpha >= 0.999f)
+                    {
+                        if (subtract)
+                            target[targetX, targetRect.Y + scanlineY] = Color32.Transparent;
+                        else
+                            target[targetX, targetRect.Y + scanlineY] = color;
+                    }
+                    else
                         AntiAliasPixel(ref target[targetX, targetRect.Y + scanlineY], color, alpha, subtract);
                 }
 
-                var solidMin = (int)MathF.Ceiling(sourceMinXMax - 0.5f);
-                var solidMax = (int)MathF.Floor(sourceMaxXMin + 0.5f);
                 var solidTargetMin = int.Max(targetRect.X, sourceOffset.X + solidMin + targetRect.X);
                 var solidTargetMax = int.Min(targetRect.X + targetRect.Width, sourceOffset.X + solidMax + targetRect.X);
                 var solidWidth = solidTargetMax - solidTargetMin;

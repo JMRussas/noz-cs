@@ -6,36 +6,33 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-public class MoveTool : Tool
+public class MoveTool(Action<Vector2> update, Action<Vector2> commit, Action cancel) : Tool
 {
-    private readonly Action<Vector2> _update;
-    private readonly Action<Vector2> _commit;
-    private readonly Action _cancel;
+    private readonly Action<Vector2> _update = update;
+    private readonly Action<Vector2> _commit = commit;
+    private readonly Action _cancel = cancel;
 
     private Vector2 _startWorld;
     private Vector2 _deltaScale = Vector2.One;
-
-    public MoveTool(Action<Vector2> update, Action<Vector2> commit, Action cancel)
-    {
-        _update = update;
-        _commit = commit;
-        _cancel = cancel;
-    }
+    private InputScope _inputScope;
 
     public override void Begin()
     {
         _startWorld = Workspace.MouseWorldPosition;
+        _inputScope = Input.PushScope();
     }
 
     public override void Update()
     {
-        if (Input.WasButtonPressed(InputCode.KeyEscape) || Input.WasButtonPressed(InputCode.MouseRight))
+        if (Input.WasButtonPressed(InputCode.KeyEscape, _inputScope) ||
+            Input.WasButtonPressed(InputCode.MouseRight, _inputScope))
         {
             Workspace.CancelTool();
             return;
         }
 
-        if (Input.WasButtonPressed(InputCode.MouseLeft) || Input.WasButtonPressed(InputCode.KeyEnter))
+        if (Input.WasButtonPressed(InputCode.MouseLeft, _inputScope) ||
+            Input.WasButtonPressed(InputCode.KeyEnter, _inputScope))
         {
             var delta = Workspace.MouseWorldPosition - _startWorld;
             delta *= _deltaScale;
@@ -45,9 +42,9 @@ public class MoveTool : Tool
             return;
         }
 
-        if (Input.WasButtonPressed(InputCode.KeyX))
+        if (Input.WasButtonPressed(InputCode.KeyX, _inputScope))
             _deltaScale = _deltaScale.X > 0 ? new Vector2(1, 0) : Vector2.One;
-        if (Input.WasButtonPressed(InputCode.KeyY))
+        if (Input.WasButtonPressed(InputCode.KeyY, _inputScope))
             _deltaScale = _deltaScale.Y > 0 ? new Vector2(0, 1) : Vector2.One;
 
         var updateDelta = Workspace.MouseWorldPosition - _startWorld;
@@ -79,5 +76,12 @@ public class MoveTool : Tool
     public override void Cancel()
     {
         _cancel();
+        base.Cancel();
+    }
+
+    public override void Dispose()
+    {
+        Input.PopScope(_inputScope);
+        base.Dispose();
     }
 }

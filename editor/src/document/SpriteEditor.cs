@@ -23,7 +23,7 @@ public class SpriteEditor : DocumentEditor
     private const byte PreviewButtonId = 11;
     private const byte PalettePopupId = 12;
     private const byte SkeletonOverlayButtonId = 13;
-    private const byte SizeButtonId = 24;
+    private const byte ConstraintsButtonId = 24;
     private const byte SizePopupId = 25;
     private const byte FirstSizeId = 26;
     private const byte FirstPaletteId = 64;
@@ -210,59 +210,59 @@ public class SpriteEditor : DocumentEditor
             HandleDoubleClick();
     }
 
+    private void ToolbarUI()
+    {
+        using var _ = UI.BeginRow(EditorStyle.Toolbar.Root);
+
+        UI.Flex();
+
+        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
+        {
+            BoneBindingUI();
+            EditorUI.ToolbarSpacer();
+
+            ConstraintsButtonUI();
+            EditorUI.ToolbarSpacer();
+
+            if (EditorUI.Button(
+                AntiAliasButtonId,
+                Document.IsAntiAliased ? EditorAssets.Sprites.IconAntialiasOn : EditorAssets.Sprites.IconAntialiasOff,
+                Document.IsAntiAliased,
+                toolbar: true))
+            {
+                Undo.Record(Document);
+                MarkRasterDirty();
+                Document.MarkModified();
+                Document.IsAntiAliased = !Document.IsAntiAliased;
+            }
+
+            if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))
+            {
+                Document.ShowTiling = !Document.ShowTiling;
+                Document.MarkMetaModified();
+            }
+
+            using (UI.BeginContainer(ContainerStyle.Fit))
+            {
+                if (EditorUI.Button(PaletteButtonId, EditorAssets.Sprites.IconPalette, _showPalettePopup, disabled: PaletteManager.Palettes.Count < 2, toolbar: true))
+                    _showPalettePopup = !_showPalettePopup;
+
+                PalettePopupUI();
+            }
+        }
+    }
+
     public override void UpdateUI()
     {
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
         using (UI.BeginColumn(RootId, EditorStyle.SpriteEditor.Root))
         {
-            // Toolbar
-            using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
-            {
-                UI.Flex();
+            ToolbarUI();
 
-                BoneBindingUI();
-
-                using (UI.BeginFlex())
-                using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
-                {
-                    UI.Flex();
-
-                    if (EditorUI.Button(
-                        AntiAliasButtonId,
-                        Document.IsAntiAliased ? EditorAssets.Sprites.IconAntialiasOn : EditorAssets.Sprites.IconAntialiasOff,
-                        Document.IsAntiAliased,
-                        toolbar: true))
-                    {
-                        Undo.Record(Document);
-                        MarkRasterDirty();
-                        Document.MarkModified();
-                        Document.IsAntiAliased = !Document.IsAntiAliased;
-                    }
-
-                    if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))
-                    {
-                        Document.ShowTiling = !Document.ShowTiling;
-                        Document.MarkMetaModified();
-                    }
-
-                    using (UI.BeginContainer(ContainerStyle.Fit))
-                    {
-                        if (EditorUI.Button(PaletteButtonId, EditorAssets.Sprites.IconPalette, _showPalettePopup, disabled: PaletteManager.Palettes.Count < 2, toolbar: true))
-                            _showPalettePopup = !_showPalettePopup;
-
-                        PalettePopupUI();
-                    }
-
-                    using (UI.BeginContainer(ContainerStyle.Fit))
-                    {
-                        SizeButtonUI();
-                        SizePopupUI();
-                    }
-                }
-            }
-
-            using (UI.BeginContainer(EditorStyle.Overlay.Content))
+            using (UI.BeginContainer(EditorStyle.Panel.Content))
                 ColorPickerUI();
+
+            UI.Spacer(EditorStyle.Control.Spacing);
         }
     }
 
@@ -271,39 +271,38 @@ public class SpriteEditor : DocumentEditor
         var binding = Document.Binding;
         var selected = Workspace.ActiveTool is BoneSelectTool;
 
-        if (EditorUI.Control(BoneBindButtonId, () =>
+        void BoneBindingContent()
         {
-            using (UI.BeginRow())
+            using var _ = UI.BeginRow();
+
+            EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
+
+            if (!binding.IsBound)
             {
-                EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
-
-                if (binding.IsBound)
-                {
-                    EditorUI.ControlText(binding.SkeletonName);
-                    EditorUI.ControlText(".");
-                    EditorUI.ControlText(binding.BoneName);
-
-                    UI.Spacer(EditorStyle.Control.Spacing);
-
-                    using (UI.BeginContainer(BoneUnbindButtonId, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4)}))
-                    {
-                        UI.Image(
-                            EditorAssets.Sprites.IconDelete,
-                            UI.IsHovered()
-                                ? EditorStyle.Button.SelectedIcon
-                                : EditorStyle.Button.Icon);
-
-                        if (UI.WasPressed())
-                            ClearBoneBinding();
-                    }
-                }
-                else
-                {
-                    UI.Label("Select Bone...", EditorStyle.Button.DisabledText);
-                    UI.Spacer(EditorStyle.Control.Spacing);
-                }                
+                EditorUI.ControlPlaceholderText("Select Bone...");
+                return;
             }
-        }, selected: selected))
+
+            EditorUI.ControlText(binding.SkeletonName);
+            EditorUI.ControlText(".");
+            EditorUI.ControlText(binding.BoneName);
+
+            UI.Spacer(EditorStyle.Control.Spacing);
+
+            using (UI.BeginContainer(BoneUnbindButtonId, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4) }))
+            {
+                UI.Image(
+                    EditorAssets.Sprites.IconDelete,
+                    UI.IsHovered()
+                        ? EditorStyle.Control.SelectedIcon
+                        : EditorStyle.Control.Icon);
+
+                if (UI.WasPressed())
+                    ClearBoneBinding();
+            }
+        }
+
+        if (EditorUI.Control(BoneBindButtonId, BoneBindingContent, selected: selected))
             HandleSelectBone();
 
         if (EditorUI.Button(PreviewButtonId, EditorAssets.Sprites.IconPreview, selected: Document.ShowInSkeleton, disabled: !Document.Binding.IsBound, toolbar: true))
@@ -435,14 +434,14 @@ public class SpriteEditor : DocumentEditor
                 {
                     if (_selectionSubtract)
                     {
-                        UI.Image(EditorAssets.Sprites.IconSubtract, EditorStyle.Button.Icon);
+                        UI.Image(EditorAssets.Sprites.IconSubtract, EditorStyle.Control.Icon);
                     }
                     else
                     {
-                        UI.Image(EditorAssets.Sprites.IconOpacity, EditorStyle.Button.Icon);
+                        UI.Image(EditorAssets.Sprites.IconOpacity, EditorStyle.Control.Icon);
                         UI.Image(
                             EditorAssets.Sprites.IconOpacityOverlay,
-                            EditorStyle.Button.Icon with { Color = Color.White.WithAlpha(_selectionOpacity / 10.0f) });
+                            EditorStyle.Control.Icon with { Color = Color.White.WithAlpha(_selectionOpacity / 10.0f) });
                     }
                 }
 
@@ -473,13 +472,13 @@ public class SpriteEditor : DocumentEditor
                 // Subtract
                 using (UI.BeginContainer(SubtractButtonId, EditorStyle.Popup.Item))
                 {
-                    EditorUI.PopupItemFill(_selectionSubtract, UI.IsHovered());
+                    //EditorUI.PopupItemFill(_selectionSubtract, UI.IsHovered());
                     using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing } ))
                     {
-                        using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
-                            UI.Image(EditorAssets.Sprites.IconSubtract, style: EditorStyle.Popup.Icon);
+                        using (UI.BeginContainer(EditorStyle.Control.IconContainer))
+                            UI.Image(EditorAssets.Sprites.IconSubtract, style: EditorStyle.Control.Icon);
 
-                        UI.Label("Subtract", EditorStyle.Popup.Text);
+                        UI.Label("Subtract", EditorStyle.Control.Text);
                         UI.Spacer(EditorStyle.Control.Spacing);
                     }
 
@@ -494,18 +493,18 @@ public class SpriteEditor : DocumentEditor
                 {
                     using (UI.BeginContainer(FirstOpacityId + i, EditorStyle.Popup.Item))
                     {
-                        EditorUI.PopupItemFill(_selectionOpacity == i, UI.IsHovered());
+                        //EditorUI.PopupItemFill(_selectionOpacity == i, UI.IsHovered());
                         using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
                         {
-                            using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
+                            using (UI.BeginContainer(EditorStyle.Control.IconContainer))
                             {
-                                UI.Image(EditorAssets.Sprites.IconOpacity, style: EditorStyle.Popup.Icon);
+                                UI.Image(EditorAssets.Sprites.IconOpacity, style: EditorStyle.Control.Icon);
                                 UI.Image(
                                     EditorAssets.Sprites.IconOpacityOverlay,
-                                    EditorStyle.Popup.Icon with { Color = Color.White.WithAlpha(i / 10.0f) });
+                                    EditorStyle.Control.Icon with { Color = Color.White.WithAlpha(i / 10.0f) });
                             }
 
-                            UI.Label(OpacityStrings[i], EditorStyle.Popup.Text);
+                            UI.Label(OpacityStrings[i], EditorStyle.Control.Text);
                             UI.Spacer(EditorStyle.Control.Spacing);
                         }
 
@@ -543,11 +542,11 @@ public class SpriteEditor : DocumentEditor
                     {
                         var selected = Document.Palette == i;
                         var hovered = UI.IsHovered();
-                        EditorUI.PopupItemFill(selected, UI.IsHovered());
+                        //EditorUI.PopupItemFill(selected, UI.IsHovered());
                         using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
                         {
                             EditorUI.PopupIcon(EditorAssets.Sprites.IconPalette, hovered, selected);
-                            UI.Label(PaletteManager.Palettes[i].Name, EditorStyle.Popup.Text);
+                            UI.Label(PaletteManager.Palettes[i].Name, EditorStyle.Control.Text);
                             UI.Spacer(EditorStyle.Control.Spacing);
                         }
 
@@ -565,95 +564,79 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
-    private void SizeButtonUI()
+    private void ConstraintsButtonUI()
     {
-        var sizes = EditorApplication.Config.SpriteSizes;
-        var constraint = Document.ConstrainedSize;
-        var label = constraint.HasValue
-            ? $"{constraint.Value.X}x{constraint.Value.Y}"
-            : "None";
-
-        void SizeButtonContent()
+        using (UI.BeginContainer(ContainerStyle.Fit))
         {
-            using (UI.BeginRow())
-            {
-                EditorUI.ControlIcon(EditorAssets.Sprites.IconMove);
-                EditorUI.ControlText(label);
-                UI.Spacer(EditorStyle.Control.Spacing);
-            }
-        }
+            var sizes = EditorApplication.Config.SpriteSizes;
+            var constraint = Document.ConstrainedSize;
 
-        if (EditorUI.Control(SizeButtonId, SizeButtonContent, selected: _showSizePopup, disabled: sizes.Length == 0))
-            _showSizePopup = !_showSizePopup;
+            void ConstraintsButtonContent()
+            {
+                using (UI.BeginRow())
+                {
+                    EditorUI.ControlIcon(EditorAssets.Sprites.IconConstraint);
+                    UI.Spacer(EditorStyle.Control.Spacing);
+                    if (constraint.HasValue)
+                        EditorUI.ControlText($"{constraint.Value.X}x{constraint.Value.Y}");
+                    else
+                        EditorUI.ControlPlaceholderText("None");
+                }
+            }
+
+            if (EditorUI.Control(
+                ConstraintsButtonId,
+                ConstraintsButtonContent,
+                selected: _showSizePopup,
+                disabled: sizes.Length == 0))
+                _showSizePopup = !_showSizePopup;
+
+            ConstraintsPopupUI();
+        }
     }
 
-    private void SizePopupUI()
+    private void ConstraintsPopupUI()
     {
         if (!_showSizePopup) return;
 
-        var buttonRect = UI.GetElementRect(EditorStyle.CanvasId.DocumentEditor, SizeButtonId);
+        var buttonRect = UI.GetElementRect(EditorStyle.CanvasId.DocumentEditor, ConstraintsButtonId);
         var sizes = EditorApplication.Config.SpriteSizes;
 
-        using (UI.BeginPopup(SizePopupId, EditorStyle.SpriteEditor.PalettePopup with { AnchorRect = buttonRect }))
+        using var _ = UI.BeginPopup(SizePopupId, EditorStyle.SpriteEditor.PalettePopup with { AnchorRect = buttonRect });
+        if (UI.IsClosed())
         {
-            if (UI.IsClosed())
+            _showSizePopup = false;
+            return;
+        }
+
+        using var __ = UI.BeginColumn(EditorStyle.SpriteEditor.ConstraintsPopupRoot with { Size = Size.Fit });
+        
+        for (int i = 0; i < sizes.Length; i++)
+        {
+            var size = sizes[i];
+
+            var selected = Document.ConstrainedSize.HasValue &&
+                            Document.ConstrainedSize.Value == size;
+            if (EditorUI.PopupItem(FirstSizeId + 1 + i, $"{size.X}x{size.Y}",  selected:selected))
             {
+                Undo.Record(Document);
+                Document.ConstrainedSize = size;
+                Document.UpdateBounds();
+                Document.MarkModified();
+                Document.MarkMetaModified();
+                MarkRasterDirty();
                 _showSizePopup = false;
-                return;
             }
+        }
 
-            using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityPopupRoot))
-            using (UI.BeginColumn(ContainerStyle.Fit with { Spacing = EditorStyle.Control.Spacing }))
-            {
-                using (UI.BeginContainer(FirstSizeId, EditorStyle.Popup.Item))
-                {
-                    var selected = !Document.ConstrainedSize.HasValue;
-                    EditorUI.PopupItemFill(selected, UI.IsHovered());
-                    using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
-                    {
-                        EditorUI.PopupIcon(EditorAssets.Sprites.IconMove, UI.IsHovered(), selected);
-                        UI.Label("None", EditorStyle.Popup.Text);
-                        UI.Spacer(EditorStyle.Control.Spacing);
-                    }
-
-                    if (UI.WasPressed())
-                    {
-                        Undo.Record(Document);
-                        Document.ConstrainedSize = null;
-                        Document.UpdateBounds();
-                        Document.MarkMetaModified();
-                        MarkRasterDirty();
-                        _showSizePopup = false;
-                    }
-                }
-
-                for (int i = 0; i < sizes.Length; i++)
-                {
-                    var size = sizes[i];
-                    using (UI.BeginContainer(FirstSizeId + 1 + i, EditorStyle.Popup.Item))
-                    {
-                        var selected = Document.ConstrainedSize.HasValue &&
-                                       Document.ConstrainedSize.Value == size;
-                        EditorUI.PopupItemFill(selected, UI.IsHovered());
-                        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
-                        {
-                            EditorUI.PopupIcon(EditorAssets.Sprites.IconMove, UI.IsHovered(), selected);
-                            UI.Label($"{size.X}x{size.Y}", EditorStyle.Popup.Text);
-                            UI.Spacer(EditorStyle.Control.Spacing);
-                        }
-
-                        if (UI.WasPressed())
-                        {
-                            Undo.Record(Document);
-                            Document.ConstrainedSize = size;
-                            Document.UpdateBounds();
-                            Document.MarkMetaModified();
-                            MarkRasterDirty();
-                            _showSizePopup = false;
-                        }
-                    }
-                }
-            }
+        if (EditorUI.PopupItem(FirstSizeId, "None", selected: !Document.ConstrainedSize.HasValue))
+        {
+            Undo.Record(Document);
+            Document.ConstrainedSize = null;
+            Document.UpdateBounds();
+            Document.MarkMetaModified();
+            MarkRasterDirty();
+            _showSizePopup = false;
         }
     }
 
@@ -1046,7 +1029,7 @@ public class SpriteEditor : DocumentEditor
         Workspace.BeginTool(new MoveTool(
             update: delta =>
             {
-                shape.TranslateAnchors(delta, _savedPositions, Input.IsCtrlDown());
+                shape.TranslateAnchors(delta, _savedPositions, Input.IsCtrlDown(InputScope.All));
                 shape.UpdateSamples();
                 shape.UpdateBounds();
                 MarkRasterDirty();
@@ -1422,27 +1405,7 @@ public class SpriteEditor : DocumentEditor
         for (ushort i = 0; i < shape.AnchorCount; i++)
             _savedPositions[i] = shape.GetAnchor(i).Position;
 
-        Workspace.BeginTool(new MoveTool(
-            update: delta =>
-            {
-                var snap = Input.IsCtrlDown();
-                shape.TranslateAnchors(delta, _savedPositions, snap);
-                shape.UpdateSamples();
-                shape.UpdateBounds();
-                MarkRasterDirty();
-            },
-            commit: _ =>
-            {
-                Document.MarkModified();
-                Document.UpdateBounds();
-                MarkRasterDirty();
-            },
-            cancel: () =>
-            {
-                Undo.Cancel();
-                MarkRasterDirty();
-            }
-        ));
+        BeginMoveTool();
     }
 
     private void ApplyColorToSelection()

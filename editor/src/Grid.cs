@@ -26,7 +26,7 @@ public static class Grid
             pixelGridAlpha = MathF.Min((screenPixelsPerWorldPixel - 8f) / 32f, 1f) * EditorStyle.Workspace.GridAlpha;
 
         IsPixelGridVisible = pixelGridAlpha > float.Epsilon;
-        SnapSpacing = IsPixelGridVisible ? pixelSize : world.FineSpacing * 0.5f;
+        SnapSpacing = IsPixelGridVisible ? pixelSize : world.FineSpacing * 0.25f;
 
         using (Gizmos.PushState(EditorLayer.Grid))
         {

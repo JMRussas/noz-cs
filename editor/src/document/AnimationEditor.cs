@@ -297,7 +297,7 @@ internal class AnimationEditor : DocumentEditor
         using (UI.BeginContainer(EditorStyle.AnimationEditor.Root))
         using (UI.BeginColumn(ContainerStyle.Fit))
         {
-            using (UI.BeginRow(EditorStyle.Overlay.Toolbar))
+            using (UI.BeginRow(EditorStyle.Toolbar.Root))
             {
                 using (UI.BeginFlex())
                 using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
@@ -334,7 +334,7 @@ internal class AnimationEditor : DocumentEditor
                 }
             }
 
-            using (UI.BeginColumn(EditorStyle.Overlay.UnpaddedContent with { Spacing = 0.0f}))
+            using (UI.BeginColumn(EditorStyle.Panel.UnpaddedContent with { Spacing = 0.0f}))
             {
                 TimelineUI(currentFrame, isPlaying);
 

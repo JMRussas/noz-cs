@@ -229,24 +229,24 @@ public static class ContextMenu
 
                         using (UI.BeginRow(EditorStyle.ContextMenu.Item))
                         {
-                            using (UI.BeginContainer(EditorStyle.Popup.IconContainer))
+                            using (UI.BeginContainer(EditorStyle.Control.IconContainer))
                             {
                                 if (item.IsChecked)
-                                    UI.Label("\u2713", EditorStyle.Popup.Text);
+                                    UI.Label("\u2713", EditorStyle.Control.Text);
                                 else if (item.Icon != null)
-                                    UI.Image(item.Icon, style: EditorStyle.Popup.Icon);
+                                    UI.Image(item.Icon, style: EditorStyle.Control.Icon);
                             }
                             UI.Spacer(EditorStyle.Control.Spacing);
 
-                            UI.Label(item.Label, enabled ? EditorStyle.Popup.Text : EditorStyle.Popup.DisabledText);
+                            UI.Label(item.Label, enabled ? EditorStyle.Control.Text : EditorStyle.Control.DisabledText);
                             UI.Spacer(EditorStyle.Control.Spacing);
                             UI.Flex();
 
                             if (hasChildren)
                             {
                                 UI.Spacer(EditorStyle.Control.Spacing);
-                                using (UI.BeginContainer(EditorStyle.Popup.IconContainer with { Padding = EdgeInsets.TopBottom(EditorStyle.Popup.IconContainer.Padding.T * 2) }))
-                                    UI.Image(EditorAssets.Sprites.IconSubmenu, style: EditorStyle.Popup.Icon with { AlignX = Align.Max });
+                                using (UI.BeginContainer(EditorStyle.Control.IconContainer with { Padding = EdgeInsets.TopBottom(EditorStyle.Control.IconContainer.Padding.T * 2) }))
+                                    UI.Image(EditorAssets.Sprites.IconSubmenu, style: EditorStyle.Control.Icon with { AlignX = Align.Max });
                             }
                             else if (item.Key != InputCode.None)
                             {

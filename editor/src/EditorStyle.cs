@@ -71,8 +71,8 @@ public static class EditorStyle
     // :workspace
     public static class Workspace
     {
-        public static readonly Color FillColor = Color.FromRgb(0x3f3f3f);
-        public static readonly Color GridColor = Color.FromRgb(0x4e4e4e);
+        public static readonly Color FillColor = Color.FromRgb(0x464646);
+        public static readonly Color GridColor = Color.FromRgb(0x686868);
         public static readonly Color DocumentBoundsColor = Color.FromRgb(0x212121);
         public static readonly Color SelectedDocumentBoundsColor = Color.FromRgb(0xfd970e);
         public static readonly Color OriginColor = Color.FromRgb(0xff9f2c);
@@ -83,6 +83,100 @@ public static class EditorStyle
         public const float NamePadding = 0.26f;
         public const float GridAlpha = 0.4f;
         public const float GridZeroAlpha = 0.5f;
+    }
+
+    // :control
+    public static class Control
+    {
+        public const float TextSize = 16.0f;
+        public const float Height = 40.0f;
+        public const float BorderRadius = 10.0f;
+        public const float Spacing = 5.0f;
+
+        public static readonly ContainerStyle Root = new()
+        {
+            Height = Height
+        };
+
+        public static readonly ContainerStyle Fill = new()
+        {
+            Color = Color.FromRgb(0x1d1d1d),
+            Border = new BorderStyle { Radius = BorderRadius }
+        };
+
+        public static readonly ContainerStyle Content = new()
+        {
+            Padding = EdgeInsets.Symmetric(2,Spacing*2),
+            Spacing = Spacing
+        };
+
+        public static readonly ContainerStyle HoverFill = Fill with { Color = Color.FromRgb(0x454545) };
+        public static readonly ContainerStyle SelectedFill = Fill with { Color = Color.FromRgb(0x4772b3) };
+        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Color.FromRgb(0x628bca) };
+        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.FromRgb(0x484848) };
+
+        public readonly static LabelStyle Text = new()
+        {
+            FontSize = TextSize,
+            Color = Color.FromRgb(0xebebeb),
+            AlignX = Align.Min,
+            AlignY = Align.Center
+        };
+        public readonly static LabelStyle DisabledText = Text with { Color = Color.FromRgb(0x3e3e3e) };
+        public readonly static LabelStyle HoveredText = Text with { Color = Color.FromRgb(0xffffff) };
+        public readonly static LabelStyle SelectedText = Text with { Color = Color.FromRgb(0xffffff) };
+
+        public readonly static LabelStyle PlaceholderText = Text with { Color = Color.FromRgb(0x575757) };
+        public readonly static LabelStyle PlaceholderHoverText = Text with { Color = Color.FromRgb(0x888888) };
+        public readonly static LabelStyle PlaceholderSelectedText = Text with { Color = Color.FromRgb(0xcccccc) };
+
+        public static readonly ContainerStyle IconContainer = new()
+        {
+            Width = Height,
+            Height = Height,
+            Padding = EdgeInsets.All(2f),
+        };
+
+        public static readonly ImageStyle Icon = new()
+        {
+            Color = Color.FromRgb(0xebebeb),
+            AlignX = Align.Center,
+            AlignY = Align.Center,
+        };
+
+        public static readonly ImageStyle SelectedIcon = Icon with { Color = Color.FromRgb(0xffffff) };
+        public static readonly ImageStyle DisabledIcon = Icon with { Color = Color.FromRgb(0x3e3e3e) };
+        public static readonly ImageStyle HoveredIcon = Icon with { Color = Color.FromRgb(0xffffff) };
+    }
+
+    // :panel
+    public static class Panel
+    {
+        public const float BorderRadius = 14f;
+        public const float BorderWidth = 2.0f;
+        public const int TextSize = 12;
+        public const float ContentBorderRadius = 9f;
+        public const float VerticalSpacing = 4.0f;
+
+        public static readonly ContainerStyle Root = new()
+        {
+            Color = Color.FromRgb(0x323232),
+            Border = new BorderStyle { Radius = BorderRadius, Width = BorderWidth, Color = Color.Black10Pct },
+            Padding = EdgeInsets.All(BorderWidth)
+        };
+
+        public static readonly ContainerStyle Content = new()
+        {
+            //Color = Color.FromRgb(0x232323),
+            Spacing = Control.Spacing,
+            Margin = EdgeInsets.TopBottom(VerticalSpacing),
+            Padding = EdgeInsets.All(Control.Spacing)
+        };
+
+        public static readonly ContainerStyle UnpaddedContent = Content with
+        {
+            Padding = EdgeInsets.Zero
+        };
     }
 
     // :popup
@@ -98,12 +192,8 @@ public static class EditorStyle
             Color = Popup.FillColor,
             Border = new BorderStyle { Radius = Control.BorderRadius, Width = 1.0f, Color = BorderColor }
         };
-        public readonly static ContainerStyle Item = new()
-        {
-            Height = 19.0f,
-            Width = Size.Fit,
-            Spacing = Control.Spacing
-        };
+        public readonly static ContainerStyle Item = Control.Root;
+        public readonly static ContainerStyle ItemContent = Control.Content;
         public readonly static ContainerStyle TitleItem = Item with 
         {
             Padding = EdgeInsets.LeftRight(4.0f)
@@ -120,76 +210,13 @@ public static class EditorStyle
             AlignY = Align.Center,
             Color = Color.FromRgb(0x999999),
         };
-        public readonly static LabelStyle Text = new()
-        {
-            FontSize = Control.TextSize,
-            Color = Color.FromRgb(0xdcdcdc),
-            AlignX = Align.Min,
-            AlignY = Align.Center
-        };
-        public readonly static LabelStyle DisabledText = Text with { Color = Color.FromRgb(0x767676) };
-        public readonly static LabelStyle HoveredText = Text with { Color = Color.FromRgb(0xfdfdfd) };
-        public readonly static LabelStyle SelectedText = Text with { Color = Color.White };
 
-        public static readonly ContainerStyle IconContainer = new()
+        public readonly static ContainerStyle CheckContent = new()
         {
-            Width = Item.Height,
-            Height = Item.Height,
-            Padding = EdgeInsets.All(2f),
-        };
-
-        public static readonly ImageStyle Icon = new()
-        {
-            Color = Color.FromRgb(0x868686),
-            AlignX = Align.Center,
-            AlignY = Align.Center,
-        };
-        public static readonly ImageStyle SelectedIcon = Icon with { Color = Color.White };
-        public static readonly ImageStyle HoveredIcon = Icon with { Color = Color.FromRgb(0xdedede) };
-        public static readonly ImageStyle DisabledIcon = Icon with { Color = Color.FromRgb(0x5b5b5b) };
-    }
-
-    // :control
-    public static class Control
-    {
-        public const float TextSize = 11.0f;
-        public const float Height = 40.0f;
-        public const float BorderRadius = 6.0f;
-        public const float Spacing = 5.0f;
-        public static Color TextColor => _colors.ControlTextColor;
-        public static readonly Color IconColor = Color.FromRgb(0xe6e6e6);
-        public static readonly Color SelectedIconColor = Color.White;
-        public static Color FillColor => _colors.ControlFillColor;
-        public static Color SelectedFillColor => _colors.ControlSelectedFillColor;
-        public static Color PlaceholderTextColor => _colors.ControlPlaceholderTextColor;
-
-        public static readonly LabelStyle Text = new()
-        {
-            FontSize = TextSize,
-            Color = TextColor,
-            AlignX = Align.Min,
+            Width = Control.Height / 2,
             AlignY = Align.Center
         };
 
-        public static readonly ContainerStyle Root = new()
-        {
-        };
-
-        public static readonly ContainerStyle Fill = new()
-        {
-            Color = Color.FromRgb(0x282828),
-            Border = new BorderStyle { Radius = BorderRadius }
-        };
-
-        public static readonly ContainerStyle Content = new()
-        {
-            Padding = EdgeInsets.All(2)
-        };
-
-        public static readonly ContainerStyle HoverFill = Fill with { Color = Color.FromRgb(0x454545) };
-        public static readonly ContainerStyle SelectedFill = Fill with { Color = Color.FromRgb(0x4772b3) };
-        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Color.FromRgb(0x628bca) };
-        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.FromRgb(0x484848) };
     }
 
     // :button
@@ -217,7 +244,7 @@ public static class EditorStyle
         public static readonly ContainerStyle Fill = new()
         {
             Border = new BorderStyle { Radius = Control.BorderRadius },
-            Color = Color.FromRgb(0x545454)
+            Color = Color.FromRgb(0x262626)
         };
 
         public static readonly ContainerStyle HoverFill = Fill with { Color = Color.FromRgb(0x3f3f3f) };
@@ -239,18 +266,6 @@ public static class EditorStyle
         {
             Padding = EdgeInsets.LeftRight(3)
         };
-        public static readonly LabelStyle Text = new()
-        {
-            FontSize = EditorStyle.Control.TextSize,
-            Color = EditorStyle.Control.TextColor,
-            AlignX = Align.Center,
-            AlignY = Align.Center
-        };
-        public static readonly LabelStyle DisabledText = Text with { Color = Color.FromRgb(0x929292) };
-        public static readonly ImageStyle Icon = new() { Color = Color.FromRgb(0xebebeb), AlignX = Align.Center, AlignY = Align.Center };
-        public static readonly ImageStyle SelectedIcon = Icon with { Color = Color.FromRgb(0xffffff) };
-        public static readonly ImageStyle DisabledIcon = Icon with { Color = Color.FromRgb(0x3e3e3e) };
-        public static readonly ImageStyle HoveredIcon = Icon with { Color = Color.FromRgb(0xffffff) };
     }
 
     public static class List
@@ -288,9 +303,9 @@ public static class EditorStyle
         { 
             Height = Popup.Item.Height,
             FontSize = Control.TextSize,
-            TextColor = Control.TextColor,
+            TextColor = Control.Text.Color,
             SelectionColor = SelectionColor,
-            PlaceholderColor = Control.PlaceholderTextColor
+            PlaceholderColor = Control.PlaceholderText.Color
         };
 
         public static readonly ContainerStyle CommandList = new()
@@ -312,7 +327,7 @@ public static class EditorStyle
         };
 
         public static readonly ContainerStyle SelectedCommand = 
-            Command with { Color = Control.SelectedFillColor };
+            Command with { Color = Control.SelectedFill.Color };
     }
 
     // :shape
@@ -347,48 +362,23 @@ public static class EditorStyle
         public const float BoneOutlineWidth = 0.02f;
     }
 
-    // :overlay
-    public static class Overlay
+    // :toolbar
+    public static class Toolbar
     {
-        public const float BorderRadius = 10f;
-        public const float BorderWidth = 2.0f;
-        public const int TextSize = 12;
-        public const float ContentBorderRadius = 9f;
-        public const float VerticalSpacing = 4.0f;
-        public static Color FillColor => Color.FromRgb(0x323232);
-        public static readonly Color TextColor = Color.White;
-        public static Color AccentTextColor => _colors.Overlay.AccentText;
-        public static Color DisabledTextColor => _colors.Overlay.DisabledText;
-        public static Color IconColor => _colors.Overlay.Icon;
-        public static readonly Color ContentColor = Color.FromRgb(0x232323);
         public static readonly ContainerStyle Root = new()
         {
-            Color = FillColor,
-            Border = new BorderStyle { Radius = BorderRadius, Width = BorderWidth, Color = Color.Black10Pct },
-            Padding = EdgeInsets.All(BorderWidth)
-        };
-
-        public static readonly ContainerStyle Toolbar = new()
-        {
-            Padding = EdgeInsets.Symmetric(6, 2 + BorderWidth),
+            Padding = EdgeInsets.Symmetric(6, 2 + Panel.BorderWidth),
             Spacing = Control.Spacing,
             Height = Size.Fit,
-            Margin = EdgeInsets.Top(VerticalSpacing)
+            Margin = EdgeInsets.Top(Panel.VerticalSpacing)
         };
 
-        public static readonly ContainerStyle Content = new()
+        public static readonly ContainerStyle Spacer = new()
         {
-            Color = ContentColor,
-            Spacing = Control.Spacing,
-            Margin = EdgeInsets.TopBottom(VerticalSpacing),
-            Padding = EdgeInsets.All(Control.Spacing)
+            Width = 1,
+            Color = Color.FromRgb(0x545454),
+            Margin = EdgeInsets.LeftRight(2)
         };
-
-        public static readonly ContainerStyle UnpaddedContent = Content with
-        {
-            Padding = EdgeInsets.Zero
-        };
-
     }
 
     public static class Shortcut
@@ -411,7 +401,7 @@ public static class EditorStyle
             Border = new BorderStyle { Radius = 4f }
         };
 
-        public static readonly LabelStyle Text = Popup.Text with { Color = Color.FromRgb(0x767676) };
+        public static readonly LabelStyle Text = Control.Text with { Color = Color.FromRgb(0x767676) };
     }
 
     // :contextmenu
@@ -456,14 +446,14 @@ public static class EditorStyle
 
         public readonly static ContainerStyle Notification = new()
         {
-            Height = Popup.Item.Height.Value + 8,
+            Height = Control.Height + 8,
             Padding = EdgeInsets.Symmetric(4,8),
             Color = Popup.FillColor,
-            Border = new BorderStyle { Radius = Overlay.BorderRadius }
+            Border = new BorderStyle { Radius = Panel.BorderRadius }
         };
 
-        public readonly static LabelStyle NotificationText = EditorStyle.Popup.Text;
-        public readonly static LabelStyle NotificationErrorText = Popup.Text with { Color = EditorStyle.ErrorColor };
+        public readonly static LabelStyle NotificationText = Control.Text;
+        public readonly static LabelStyle NotificationErrorText = Control.Text with { Color = EditorStyle.ErrorColor };
     }
 
     // :confirm
@@ -477,13 +467,7 @@ public static class EditorStyle
             Spacing = 12
         };
 
-        public static readonly LabelStyle MessageLabel = new()
-        {
-            FontSize = Overlay.TextSize,
-            Color = Overlay.TextColor,
-            AlignX = Align.Center,
-            AlignY = Align.Center
-        };
+        public static readonly LabelStyle MessageLabel = Control.Text;
 
         public static readonly ContainerStyle ButtonContainer = new()
         {
@@ -521,7 +505,7 @@ public static class EditorStyle
         public static readonly Color ButtonBorderColor = BorderColor;
         public static readonly Color EventColor = Color.FromGrayscale(180);
 
-        public static readonly ContainerStyle Root = Overlay.Root with
+        public static readonly ContainerStyle Root = Panel.Root with
         {
             AlignX = Align.Center,
             AlignY = Align.Max,
@@ -600,13 +584,7 @@ public static class EditorStyle
             Color = Color.Black
         };
 
-        public static readonly LabelStyle FrameLabel = new()
-        {
-            FontSize = 10f,
-            Color = Control.TextColor,
-            AlignX = Align.Center,
-            AlignY = Align.Center
-        };
+        public static readonly LabelStyle FrameLabel = Control.Text;
 
         public static readonly ContainerStyle TickContainer = new()
         {
@@ -663,27 +641,27 @@ public static class EditorStyle
         public const float ButtonSize = 40f;
         public const float ButtonMarginY = 6f;
         public const float ColorPickerBorderWidth = 2.5f;
-        public const float ColorSize = 26f;
+        public const float ColorSize = Control.Height;
         public const float ColorPickerWidth = ColorSize * 64 + ColorPickerBorderWidth * 2;
         public const float ColorPickerHeight = ColorSize + ColorPickerBorderWidth * 2;
         public const float ColorPickerSelectionBorderWidth = 3f;
         public static readonly Color BoneOriginColor = Color.White;
         public static readonly Color SelectedOriginColor = Shape.SelectedAnchorColor;
 
-        public static readonly ContainerStyle Root = Overlay.Root with
+        public static readonly ContainerStyle Root = Panel.Root with
         {
             AlignX = Align.Center,
             AlignY = Align.Max,
             Width = Size.Fit,
             Height = Size.Fit,
-            Margin = EdgeInsets.Bottom(Workspace.Padding)
+            Margin = EdgeInsets.Bottom(-Panel.BorderRadius)
         };
 
         public static readonly ContainerStyle ColorPicker = new()
         {
             Padding = EdgeInsets.All(4f),
-            Color = Overlay.ContentColor,
-            Border = new BorderStyle { Radius = Overlay.ContentBorderRadius }
+            //Color = Panel.ContentColor,
+            Border = new BorderStyle { Radius = Panel.ContentBorderRadius }
         };
 
         public static readonly ContainerStyle Palette = new()
@@ -743,18 +721,15 @@ public static class EditorStyle
             ClampToScreen = true
         };
 
-        public readonly static ContainerStyle OpacityPopupRoot = new()
-        {
-            Padding = Popup.Root.Padding,
-            Color = Popup.Root.Color,
-            Border = Popup.Root.Border
-        };
+        public readonly static ContainerStyle OpacityPopupRoot = Popup.Root;
+
+        public readonly static ContainerStyle ConstraintsPopupRoot = Popup.Root;
     }
 
     // :atlaseditor
     public static class AtlasEditor
     {
-        public static readonly ContainerStyle Root = Overlay.Root with
+        public static readonly ContainerStyle Root = Panel.Root with
         {
             AlignX = Align.Center,
             AlignY = Align.Max,
@@ -806,7 +781,7 @@ public static class EditorStyle
         public static readonly TextBoxStyle Text = new()
         {
             FontSize = Control.TextSize,
-            TextColor = Control.TextColor,
+            TextColor = Control.Text.Color,
             SelectionColor = SelectionColor,
             Height = Control.Height
         };

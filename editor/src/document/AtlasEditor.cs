@@ -29,7 +29,7 @@ internal class AtlasEditor : DocumentEditor
     public override void UpdateUI()
     {
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
-        using (UI.BeginContainer(EditorStyle.Overlay.Root with
+        using (UI.BeginContainer(EditorStyle.Panel.Root with
         {
             AlignX = Align.Center,
             AlignY = Align.Max,
@@ -46,16 +46,7 @@ internal class AtlasEditor : DocumentEditor
             }
 
             using (UI.BeginContainer(ContainerStyle.Default with { AlignX = Align.Center }))
-            {
-                var stats = $"{Document.RectCount} sprites";
-                UI.Label(stats, new LabelStyle
-                {
-                    FontSize = EditorStyle.Overlay.TextSize,
-                    Color = EditorStyle.Overlay.TextColor,
-                    AlignX = Align.Center,
-                    AlignY = Align.Center
-                });
-            }
+                EditorUI.ControlText($"{Document.RectCount} sprites");
         }
     }
 

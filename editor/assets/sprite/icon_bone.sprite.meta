@@ -1,9 +1,10 @@
 [editor]
-position = (-4.671875,-3.867188)
+position = (-4.250000,-2.750000)
 collection = icons
 
 [sprite]
-show_in_skeleton = false
+show_in_skeleton = true
 show_tiling = false
 show_skeleton_overlay = false
+constrained_size = 64x64
 
