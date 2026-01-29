@@ -108,7 +108,8 @@ public static class DocumentManager
         if (_sourcePaths.Count == 0)
             return null;
 
-        name = GenerateUniqueName(assetType, name ?? "new");
+        name = name ?? MakeCanonicalName($"new_{assetType.ToString()}");
+        name = GenerateUniqueName(assetType, name);
 
         var canonicalName = MakeCanonicalName(name);
         if (Find(assetType, canonicalName) != null)

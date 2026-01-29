@@ -49,7 +49,8 @@ public class SkeletonDocument : Document
             AssetType.Skeleton,
             ".skel",
             () => new SkeletonDocument(),
-            doc => new SkeletonEditor((SkeletonDocument)doc)
+            doc => new SkeletonEditor((SkeletonDocument)doc),
+            newFile: NewFile
         ));
     }
 
@@ -140,10 +141,7 @@ public class SkeletonDocument : Document
 
     private static void ParseBoneLength(BoneData bone, ref Tokenizer tk)
     {
-        if (!tk.ExpectFloat(out var l))
-            throw new Exception("Missing bone length value");
-
-        bone.Length = l;
+        bone.Length = float.Max(0.05f, tk.ExpectFloat());
     }
 
     public override void Save(StreamWriter writer)
@@ -178,6 +176,7 @@ public class SkeletonDocument : Document
         var src = (SkeletonDocument)source;
         BoneCount = src.BoneCount;
         Opacity = src.Opacity;
+        SelectedBoneCount = src.SelectedBoneCount;
 
         LocalToWorld.Dispose();
         WorldToLocal.Dispose();
@@ -538,6 +537,7 @@ public class SkeletonDocument : Document
                 {
                     var parentTransform = GetParentLocalToWorld(b, m);
                     var pp = Vector2.Transform(Vector2.Zero, parentTransform);
+                    Graphics.SetSortGroup(1);
                     Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
                     Gizmos.DrawDashedLine(pp, p0, order: 1);
                 }
@@ -545,7 +545,7 @@ public class SkeletonDocument : Document
                 var boneColor = b.IsSelected
                     ? EditorStyle.Skeleton.SelectedBoneColor
                     : EditorStyle.Skeleton.BoneColor;
-                Graphics.SetSortGroup((ushort)(b.IsSelected ? 1 : 0));
+                Graphics.SetSortGroup((ushort)(b.IsSelected ? 2 : 1));
                 Gizmos.DrawBone(p0, p1, boneColor, order: (ushort)(boneIndex * 2 + 1));
             }
         }
@@ -559,6 +559,7 @@ public class SkeletonDocument : Document
         {
             Graphics.SetLayer(EditorLayer.Document);
             Graphics.SetTransform(Transform);
+            Graphics.SetSortGroup(0);
 
             for (var i = 0; i < Sprites.Count; i++)
             {
@@ -628,5 +629,10 @@ public class SkeletonDocument : Document
         LocalToWorld.Dispose();
         WorldToLocal.Dispose();
         base.Dispose();
+    }
+
+    private static void NewFile(StreamWriter writer)
+    {
+        writer.WriteLine("b \"root\" -1 p 0 0 r 0 l 0.1");
     }
 }

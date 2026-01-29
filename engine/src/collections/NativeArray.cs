@@ -61,8 +61,12 @@ public unsafe struct NativeArray<T> : IDisposable
     public NativeArray(NativeArray<T> other) : this(other.Capacity, other.Length)
     {
         Debug.Assert(IsCreated);
+
+        if (other.Length == 0)
+            return;
+
         fixed (T* otherPtr = other.AsSpan())
-            NativeMemory.Copy(otherPtr, Ptr, (nuint)(other.Length * sizeof(T)));
+            NativeMemory.Copy(otherPtr, Ptr, (nuint)(sizeof(Header) + other.Length * sizeof(T)));
     }
 
     public static implicit operator ReadOnlySpan<T>(NativeArray<T> a) => a.AsReadonlySpan();

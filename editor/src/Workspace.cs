@@ -388,8 +388,7 @@ public static class Workspace
 
     private static void DrawNames()
     {
-        // Get document being renamed (if any)
-        var renamingDoc = (ActiveTool as RenameTool)?.Document;
+        var renamingDoc = (ActiveTool as RenameTool)?.Target as Document;
 
         using (Graphics.PushState())
         {
@@ -397,9 +396,8 @@ public static class Workspace
             Graphics.SetLayer(EditorLayer.Names);
             Graphics.SetColor(EditorStyle.TextColor);
 
-            var scale = 1f / _zoom;
-            var fontSize = EditorStyle.Workspace.NameSize * scale;
-            var padding = EditorStyle.Workspace.NamePadding * scale;
+            var fontSize = EditorStyle.Workspace.NameSize * Gizmos.ZoomRefScale;
+            var padding = EditorStyle.Workspace.NamePadding * Gizmos.ZoomRefScale;
 
             foreach (var doc in DocumentManager.Documents)
             {
@@ -491,7 +489,27 @@ public static class Workspace
         if (doc == null)
             return;
 
-        BeginTool(new RenameTool(doc));
+        BeginTool(CreateRenameToolForDocument(doc));
+    }
+
+    private static RenameTool CreateRenameToolForDocument(Document doc)
+    {
+        return new RenameTool(
+            doc.Name,
+            () =>
+            {
+                var padding = EditorStyle.Workspace.NamePadding / Zoom;
+                var bounds = doc.Bounds.Translate(doc.Position);
+                return new Vector2(bounds.Center.X, bounds.Bottom + padding);
+            },
+            newName =>
+            {
+                if (DocumentManager.Rename(doc, newName))
+                    Notifications.Add($"renamed to '{newName}'");
+                else
+                    Notifications.AddError("rename failed");
+            }
+        ) { Target = doc };
     }
 
     private static void UpdateCamera()
@@ -992,7 +1010,7 @@ public static class Workspace
             {
                 ClearSelection();
                 SetSelected(hitDoc, true);
-                BeginTool(new RenameTool(hitDoc));
+                BeginTool(CreateRenameToolForDocument(hitDoc));
                 return;
             }
 

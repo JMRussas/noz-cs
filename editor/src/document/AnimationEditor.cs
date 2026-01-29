@@ -21,11 +21,15 @@ internal class AnimationEditor : DocumentEditor
     private const int RootMotionButtonId = 3;
     private const int LoopButtonId = 4;
     private const int AddFrameButtonId = 5;
+    private const int SkeletonButtonId = 6;
+    private const int SkeletonPopupId = 7;
     private const int FirstFrameId = 64;
+    private const int FirstPopupItemId = 128;
 
     private AnimationEditorState _state = AnimationEditorState.Default;
     private bool _clearSelectionOnUp;
     private bool _ignoreUp;
+    private bool _showSkeletonPopup;
     private Vector2 _selectionCenter;
     private Vector2 _selectionCenterWorld;
     private bool _onionSkin;
@@ -98,6 +102,55 @@ internal class AnimationEditor : DocumentEditor
             UpdatePlayState();
 
         DrawEditor();
+    }
+
+    private void SkeletonPopupUI()
+    {
+        if (!_showSkeletonPopup) return;
+
+        var anchorRect = UI.GetElementRect(EditorStyle.CanvasId.DocumentEditor, SkeletonButtonId);
+        using var _ = UI.BeginPopup(SkeletonPopupId, EditorStyle.AnimationEditor.SkeletonPopup with { AnchorRect = anchorRect });
+        if (UI.IsClosed())
+        {
+            _showSkeletonPopup = false;
+            return;
+        }
+
+        using var __ = UI.BeginColumn(EditorStyle.Popup.Root with { Size = Size.Fit });
+
+        for (int i=0; i<DocumentManager.Count; i++)
+        {
+            var doc = DocumentManager.Get(i);
+            if (doc.Def.Type != AssetType.Skeleton) continue;
+
+            if (EditorUI.PopupItem(FirstPopupItemId + i, doc.Name, selected: doc as SkeletonDocument == Document.Skeleton))
+            {
+                _showSkeletonPopup = false;
+                Undo.Record(Document);
+                Document.MarkModified();
+                Document.SetSkeleton(doc as SkeletonDocument);
+            }
+        }
+    }
+
+    private void SkeletonButtonUI()
+    {
+        void ButtonContent()
+        {
+            EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
+            if (Document.Skeleton == null)
+                EditorUI.ControlPlaceholderText("Select Skeleton...");
+            else
+                EditorUI.ControlPlaceholderText(Document.Skeleton.Name);
+        }
+
+        using (UI.BeginContainer(ContainerStyle.Fit))
+        {
+            if (EditorUI.Control(SkeletonButtonId, ButtonContent, false, false, false))
+                _showSkeletonPopup = true;
+
+            SkeletonPopupUI();
+        }
     }
 
     private void TimelineUI(int currentFrame, bool isPlaying)
@@ -285,11 +338,50 @@ internal class AnimationEditor : DocumentEditor
 #endif
     }
 
+    private void ToolbarUI()
+    {
+        using var _ = UI.BeginRow(EditorStyle.Toolbar.Root);
+
+        using (UI.BeginFlex())
+        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
+        {
+            if (EditorUI.Button(AddFrameButtonId, EditorAssets.Sprites.IconKeyframe, toolbar: true))
+                InsertFrameAfter();
+        }
+
+        if (EditorUI.Button(PlayButtonId, EditorAssets.Sprites.IconPlay, selected: Document.IsPlaying, toolbar: true))
+            TogglePlayback();
+
+        using (UI.BeginFlex())
+        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
+        {
+            UI.Flex();
+
+            if (EditorUI.Button(LoopButtonId, EditorAssets.Sprites.IconLoop, selected: Document.IsLooping, toolbar: true))
+            {
+                Undo.Record(Document);
+                Document.MarkMetaModified();
+                Document.IsLooping = !Document.IsLooping;
+            }
+
+            if (EditorUI.Button(RootMotionButtonId, EditorAssets.Sprites.IconRootMotion, selected: Document.IsRootMotion, toolbar: true))
+            {
+                Undo.Record(Document);
+                Document.MarkMetaModified();
+                Document.IsRootMotion = !Document.IsRootMotion;
+                _rootMotion = Document.IsRootMotion;
+            }
+
+            if (EditorUI.Button(OnionSkinButtonId, EditorAssets.Sprites.IconOnion, selected: _onionSkin, toolbar: true))
+                _onionSkin = !_onionSkin;
+        }
+
+        EditorUI.ToolbarSpacer();
+        SkeletonButtonUI(); 
+    }
+
     public override void UpdateUI()
     {
-        var frameCount = Math.Max(Document.GetFrameCountWithHolds(), EditorStyle.AnimationEditor.MinFrames);
-        var panelWidth = frameCount * EditorStyle.AnimationEditor.FrameWidth + EditorStyle.AnimationEditor.Padding * 2 + 1;
-
         var isPlaying = _state == AnimationEditorState.Play;
         var currentFrame = Document.CurrentFrame;
 
@@ -297,42 +389,7 @@ internal class AnimationEditor : DocumentEditor
         using (UI.BeginContainer(EditorStyle.AnimationEditor.Root))
         using (UI.BeginColumn(ContainerStyle.Fit))
         {
-            using (UI.BeginRow(EditorStyle.Toolbar.Root))
-            {
-                using (UI.BeginFlex())
-                using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
-                {
-                    if (EditorUI.Button(AddFrameButtonId, EditorAssets.Sprites.IconKeyframe, toolbar: true))
-                        InsertFrameAfter();
-                }
-
-                if (EditorUI.Button(PlayButtonId, EditorAssets.Sprites.IconPlay, selected: Document.IsPlaying, toolbar: true))
-                    TogglePlayback();
-
-                using (UI.BeginFlex())
-                using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
-                {
-                    UI.Flex();
-
-                    if (EditorUI.Button(LoopButtonId, EditorAssets.Sprites.IconLoop, selected: Document.IsLooping, toolbar: true))
-                    {
-                        Undo.Record(Document);
-                        Document.MarkMetaModified();
-                        Document.IsLooping = !Document.IsLooping;
-                    }
-
-                    if (EditorUI.Button(RootMotionButtonId, EditorAssets.Sprites.IconRootMotion, selected: Document.IsRootMotion, toolbar: true))
-                    {
-                        Undo.Record(Document);
-                        Document.MarkMetaModified();
-                        Document.IsRootMotion = !Document.IsRootMotion;
-                        _rootMotion = Document.IsRootMotion;
-                    }                        
-
-                    if (EditorUI.Button(OnionSkinButtonId, EditorAssets.Sprites.IconOnion, selected: _onionSkin, toolbar: true))
-                        _onionSkin = !_onionSkin;
-                }
-            }
+            ToolbarUI();
 
             using (UI.BeginColumn(EditorStyle.Panel.UnpaddedContent with { Spacing = 0.0f}))
             {

@@ -1,6 +1,32 @@
 
 
+# 1/30/2026
+- [ ] Generating game assets on every load
+- [ ] Sort the new menu by name
+- [ ] ctrl Snap bones from one to another when dragging in skeleton editor
+- [ ] Drag the end of bones to size them in skeleton editor
+- [ ] adding bones, renaming bones, and deleting bones causes animations to crash
+- [ ] Create new animation with skeleton skeelcton should use that skeleton for animation
+- [ ] Show animation origin
+- [ ] Animation editor toggle for hiding bones
+- [ ] Cancelling a rename seems to get you stuck so no input works
+- [ ] Block input when rotating boes in animation
+- [ ] cant see holds in the animation editor
+- [ ] frame dot is too small
+- [ ] animation got corrupted by messing with holds
+
 # 1/29/2026
+- [X] fixed native array bug copying array in constructor with 0 length
+- [X] fix bone movement bug in skeleton editor
+- [X] increased max animation frames to 64
+- [X] Create new animation
+- [X] Select skeleton for animation
+- [X] Bone rename
+- [X] Fixed display of bone names so they are the right color and position
+- [X] Fixed bug where cancelling a bone extrude resulted in a broken skeleton
+- [X] Skeleton document load now ensures bone length is at least a minimum value
+- [X] Can now create a new skeleton document
+- [X] new documents are now named "new_<type>" instead of just "new"
 - [X] Update UI sizing and colors
 - [X] Finished sprite constraints feature
 - [X] Better snapping of documents during move with ctrl key

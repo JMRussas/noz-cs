@@ -46,7 +46,7 @@ internal class SkeletonEditor : DocumentEditor
             scaleCommand,
             rotateCommand,
             renameCommand,
-            new Command { Name = "Extrude", Handler = BeginExtrudeTool, Key = InputCode.KeyE, Ctrl = true },
+            new Command { Name = "Create Bone", Handler = BeginCreateBone, Key = InputCode.KeyV },
         ];
 
         bool HasSelection() => Document.SelectedBoneCount > 0;
@@ -148,25 +148,11 @@ internal class SkeletonEditor : DocumentEditor
         for (var boneIndex = 0; boneIndex < Document.BoneCount; boneIndex++)
         {
             var src = Document.Bones[boneIndex];
-            var dst = _savedBones[boneIndex];
-            dst.Transform = src.Transform;
-            dst.Length = src.Length;
-            dst.LocalToWorld = Document.LocalToWorld[boneIndex];
+            ref var saved = ref _savedBones[boneIndex];
+            saved.Transform = src.Transform;
+            saved.Length = src.Length;
+            saved.LocalToWorld = Document.LocalToWorld[boneIndex];
         }
-    }
-
-    private void RevertToSavedState()
-    {
-        for (var boneIndex = 0; boneIndex < Document.BoneCount; boneIndex++)
-        {
-            var src = _savedBones[boneIndex];
-            var dst = Document.Bones[boneIndex];
-            dst.Transform = src.Transform;
-            dst.Length = src.Length;
-        }
-
-        Document.UpdateTransforms();
-        UpdateSelectionCenter();
     }
 
     private bool TrySelect()
@@ -232,16 +218,22 @@ internal class SkeletonEditor : DocumentEditor
         if (!Workspace.ShowNames)
             return;
 
+        var renamingBoneIndex = -1;
+        if (Workspace.ActiveTool is RenameTool && Document.SelectedBoneCount == 1)
+            renamingBoneIndex = GetFirstSelectedBoneIndex();
+
         using (Graphics.PushState())
         {
             var font = EditorAssets.Fonts.Seguisb;
             Graphics.SetLayer(EditorLayer.Names);
 
-            var scale = 1f / Workspace.Zoom;
-            var fontSize = EditorStyle.Workspace.NameSize * scale;
+            var fontSize = EditorStyle.Workspace.NameSize * Gizmos.ZoomRefScale;
 
             for (var i = 0; i < Document.BoneCount; i++)
             {
+                if (i == renamingBoneIndex)
+                    continue;
+
                 var b = Document.Bones[i];
                 var p = Vector2.Transform(new Vector2(b.Length * 0.5f, 0), Document.LocalToWorld[i]) + Document.Position;
 
@@ -294,7 +286,7 @@ internal class SkeletonEditor : DocumentEditor
         Workspace.BeginTool(new MoveTool(
             update: UpdateMoveTool,
             commit: _ => Document.MarkModified(),
-            cancel: CancelTool
+            cancel: Undo.Cancel
         ));
     }
 
@@ -310,7 +302,7 @@ internal class SkeletonEditor : DocumentEditor
         Workspace.BeginTool(new MoveTool(
             update: UpdateMoveTool,
             commit: _ => Document.MarkModified(),
-            cancel: CancelTool
+            cancel: Undo.Cancel
         ));
     }
 
@@ -322,11 +314,17 @@ internal class SkeletonEditor : DocumentEditor
                 continue;
 
             var b = Document.Bones[boneIndex];
-            var p = boneIndex > 0 ? Document.Bones[b.ParentIndex] : Document.Bones[0];
+            var p = boneIndex > 0
+                ? Document.Bones[b.ParentIndex]
+                : Document.Bones[0];
             var sb = _savedBones[boneIndex];
+
             b.Transform.Position = Vector2.Transform(
                 Vector2.Transform(Vector2.Zero, sb.LocalToWorld) + delta,
                 Document.WorldToLocal[int.Max(b.ParentIndex, 0)]);
+
+            if (Input.IsCtrlDown(InputScope.All))
+                b.Transform.Position = Grid.SnapToPixelGrid(b.Transform.Position);
         }
 
         Document.UpdateTransforms();
@@ -365,7 +363,7 @@ internal class SkeletonEditor : DocumentEditor
             invTransform,
             update: UpdateRotateTool,
             commit: _ => Document.MarkModified(),
-            cancel: CancelTool
+            cancel: Undo.Cancel
         ));
     }
 
@@ -425,7 +423,7 @@ internal class SkeletonEditor : DocumentEditor
             worldOrigin,
             update: UpdateScaleTool,
             commit: _ => Document.MarkModified(),
-            cancel: CancelTool
+            cancel: Undo.Cancel
         ));
     }
 
@@ -448,7 +446,7 @@ internal class SkeletonEditor : DocumentEditor
 
     #region Extrude Tool
 
-    private void BeginExtrudeTool()
+    private void BeginCreateBone()
     {
         if (Document.SelectedBoneCount != 1)
             return;
@@ -489,18 +487,14 @@ internal class SkeletonEditor : DocumentEditor
         if (Document.SelectedBoneCount <= 0)
             return;
 
-        Undo.BeginGroup();
         Undo.Record(Document);
 
         for (var i = Document.BoneCount - 1; i >= 0; i--)
         {
-            if (!IsBoneSelected(i))
-                continue;
-
+            if (!IsBoneSelected(i)) continue;
             Document.RemoveBone(i);
         }
 
-        Undo.EndGroup();
         ClearSelection();
         Document.MarkModified();
     }
@@ -512,27 +506,30 @@ internal class SkeletonEditor : DocumentEditor
     private void HandleRename()
     {
         var boneIndex = GetFirstSelectedBoneIndex();
-        if (boneIndex == -1)
+        if (boneIndex == -1 || Document.SelectedBoneCount != 1)
             return;
 
-        if (Document.SelectedBoneCount != 1)
-        {
-            Notifications.Add("Can only rename a single selected bone");
-            return;
-        }
+        var bone = Document.Bones[boneIndex];
 
-        // TODO: Implement proper text input dialog for bone rename
-        // For now, show the current bone name
-        Notifications.Add($"Selected bone: {Document.Bones[boneIndex].Name}");
+        Workspace.BeginTool(new RenameTool(
+            bone.Name,
+            () =>
+            {
+                var boneTransform = Document.LocalToWorld[boneIndex];
+                var boneCenter = Vector2.Transform(new Vector2(bone.Length * 0.5f, 0), boneTransform);
+                return boneCenter + Document.Position;
+            },
+            newName =>
+            {
+                Undo.Record(Document);
+                bone.Name = newName;
+                Document.MarkModified();
+                Notifications.Add($"renamed bone to '{newName}'");
+            }
+        ));
     }
 
     #endregion
-
-    private void CancelTool()
-    {
-        Undo.Cancel();
-        RevertToSavedState();
-    }
 
     private void DrawSkeleton()
     {

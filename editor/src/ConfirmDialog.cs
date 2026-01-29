@@ -85,7 +85,6 @@ public static class ConfirmDialog
             {
                 UI.Label(_message, EditorStyle.Confirm.MessageLabel);
 
-                using (UI.BeginContainer())
                 using (UI.BeginRow(EditorStyle.Confirm.ButtonContainer))
                 {
                     if (EditorUI.Button(YesButtonId, _yesText, selected: true))

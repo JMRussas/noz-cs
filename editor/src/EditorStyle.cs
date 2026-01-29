@@ -79,7 +79,7 @@ public static class EditorStyle
         public const float OriginSize = 0.06f;
         public const float DocumentBoundsLineWidth = 0.015f;
         public const float Padding = 16f;
-        public const float NameSize = 0.24f;
+        public const float NameSize = 0.34f;
         public const float NamePadding = 0.26f;
         public const float GridAlpha = 0.4f;
         public const float GridZeroAlpha = 0.5f;
@@ -110,10 +110,10 @@ public static class EditorStyle
             Spacing = Spacing
         };
 
-        public static readonly ContainerStyle HoverFill = Fill with { Color = Color.FromRgb(0x454545) };
-        public static readonly ContainerStyle SelectedFill = Fill with { Color = Color.FromRgb(0x4772b3) };
-        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Color.FromRgb(0x628bca) };
-        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.FromRgb(0x484848) };
+        public static readonly ContainerStyle HoverFill = Fill with { Color = Color.FromRgb(0x3f3f3f) };
+        public static readonly ContainerStyle SelectedFill = Fill with { Color = Color.FromRgb(0x545454) };
+        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Color.FromRgb(0x545454) };
+        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent };
 
         public readonly static LabelStyle Text = new()
         {
@@ -188,9 +188,9 @@ public static class EditorStyle
         {
             AlignX = Align.Center,
             AlignY = Align.Center,
-            Padding = EdgeInsets.Symmetric(8.0f, 4.0f),
-            Color = Popup.FillColor,
-            Border = new BorderStyle { Radius = Control.BorderRadius, Width = 1.0f, Color = BorderColor }
+            Padding = EdgeInsets.Symmetric(4.0f, 8.0f),
+            Color = FillColor,
+            Border = new BorderStyle { Radius = 14f, Width = 1.0f, Color = BorderColor }
         };
         public readonly static ContainerStyle Item = Control.Root;
         public readonly static ContainerStyle ItemContent = Control.Content;
@@ -216,7 +216,6 @@ public static class EditorStyle
             Width = Control.Height / 2,
             AlignY = Align.Center
         };
-
     }
 
     // :button
@@ -225,7 +224,7 @@ public static class EditorStyle
         public static readonly ContainerStyle Root = new()
         {
             Width = Size.Fit,
-            MinWidth = 80.0f,
+            MinWidth = 100.0f,
             Height = Control.Height
         };
 
@@ -252,10 +251,7 @@ public static class EditorStyle
         public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Color.FromRgb(0x545454) };
         public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent };
 
-        public static readonly ContainerStyle TextContent = new()
-        {
-            Padding = EdgeInsets.Symmetric(2, 4)
-        };
+        public static readonly ContainerStyle TextContent = Control.Content;
         public static readonly ContainerStyle IconContent = new()
         {
             Width = Control.Height,
@@ -356,9 +352,8 @@ public static class EditorStyle
         public static readonly Color BoneOutlineColor = Color.Black10Pct;
         public static readonly Color SelectedBoneColor = Color.FromRgb(0xfd970e);
         public static readonly Color ParentLineColor = Color.FromRgb(0x212121);
-        public const float BoneWidth = 0.14f;
-        public const float BoneSize = 0.12f;
-        public const float BoneOriginSize = 0.11f;
+        public const float BoneSize = 0.18f;
+        public const float BoneOriginSize = 0.15f;
         public const float BoneOutlineWidth = 0.02f;
     }
 
@@ -464,7 +459,8 @@ public static class EditorStyle
             AlignX = Align.Center,
             Width = Size.Fit,
             Height = Size.Fit,
-            Spacing = 12
+            Spacing = 24,
+            Padding = EdgeInsets.Symmetric(24, 36)
         };
 
         public static readonly LabelStyle MessageLabel = Control.Text;
@@ -474,7 +470,7 @@ public static class EditorStyle
             AlignX = Align.Center,
             Width = Size.Fit,
             Height = Control.Height,
-            Spacing = Control.Spacing
+            Spacing = 24
         };
     }
 
@@ -482,8 +478,8 @@ public static class EditorStyle
     public static class AnimationEditor
     {
         public const int MinFrames = 24;
-        public const float FrameWidth = 13f;
-        public const float FrameHeight = 26f;
+        public const float FrameWidth = Control.Height / 2;
+        public const float FrameHeight = Control.Height;
         public const float FrameSpacerWidth = 1.0f;
         public const float Padding = 8f;
         public const float BorderWidth = 1f;
@@ -498,7 +494,7 @@ public static class EditorStyle
         public static readonly Color EmptyFrameColor = Color.FromGrayscale(45);
         public static readonly Color TickBackgroundColor = Color.FromGrayscale(52);
         public static readonly Color TickColor = BorderColor;
-        public static readonly Color TickHoverColor = new Color(1f, 1f, 1f, 0.04f);
+        public static readonly Color TickHoverColor = new(1f, 1f, 1f, 0.04f);
         public static readonly Color ShortTickColor = Color.FromGrayscale(44);
         public static readonly Color ButtonColor = FrameColor;
         public static readonly Color ButtonCheckedColor = SelectionColor;
@@ -513,7 +509,6 @@ public static class EditorStyle
             Width = Size.Fit,
             Margin = EdgeInsets.Bottom(Workspace.Padding)
         };
-
 
         public static readonly ContainerStyle Tick = new()
         {
@@ -596,7 +591,7 @@ public static class EditorStyle
         {
             Color = Color.FromRgb(0x282828),
             Width = Size.Fit,
-            Height = 20.0f
+            Height = FrameHeight
         };
 
 
@@ -631,6 +626,16 @@ public static class EditorStyle
         {
             Height = FrameSpacerWidth,
             Color = Color.FromRgb(0x262626)
+        };
+
+        public static readonly PopupStyle SkeletonPopup = new()
+        {
+            AnchorX = Align.Min,
+            AnchorY = Align.Min,
+            PopupAlignX = Align.Min,
+            PopupAlignY = Align.Max,
+            Spacing = 2,
+            ClampToScreen = true
         };
     }
 

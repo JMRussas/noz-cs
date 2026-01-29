@@ -1636,8 +1636,8 @@ public class SpriteEditor : DocumentEditor
 
                 var isBoundBone = boneIndex == Document.Binding.BoneIndex;
                 var boneColor = isBoundBone
-                    ? EditorStyle.Skeleton.BoneColor.WithAlpha(0.4f)
-                    : Color.Transparent;
+                    ? EditorStyle.Skeleton.SelectedBoneColor
+                    : EditorStyle.Skeleton.BoneColor;
 
                 Gizmos.DrawBone(p0, p1, boneColor, order: 200);
             }
@@ -1663,13 +1663,19 @@ public class SpriteEditor : DocumentEditor
     {
         Undo.Record(Document);
 
-        // Calculate offset to preserve visual position
-        // Bone position in world space
-        var boneWorldPos = Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[boneIndex]);
-        // Sprite position in world space (relative to skeleton)
-        var spriteWorldPos = Document.Position - skeleton.Position;
-        // Offset = where sprite origin is relative to bone
-        var offset = spriteWorldPos - boneWorldPos;
+        var wasBound = Document.Binding.IsBound;
+
+        Vector2 offset;
+        if (wasBound)
+        {
+            var boneWorldPos = Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[boneIndex]);
+            var spriteWorldPos = Document.Position - skeleton.Position;
+            offset = spriteWorldPos - boneWorldPos;
+        }
+        else
+        {
+            offset = -Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[boneIndex]);
+        }
 
         Document.SetBoneBinding(skeleton, boneIndex);
         Document.Binding.Offset = offset;

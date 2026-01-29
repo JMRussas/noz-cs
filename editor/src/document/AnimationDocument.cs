@@ -44,7 +44,7 @@ public class AnimationFrameData
 
 internal class AnimationDocument : Document
 {
-    public const int MaxFrames = 32;
+    public const int MaxFrames = 64;
     private const float BoundsPadding = 0.1f;
     private const float BoneWidth = 0.15f;
 
@@ -106,7 +106,8 @@ internal class AnimationDocument : Document
             AssetType.Animation,
             ".anim",
             () => new AnimationDocument(),
-            doc => new AnimationEditor((AnimationDocument)doc)
+            doc => new AnimationEditor((AnimationDocument)doc),
+            newFile: NewFile
         ));
     }
 
@@ -843,16 +844,24 @@ internal class AnimationDocument : Document
     }
 
     public override void Import(string outputPath, PropertySet meta)
-    {
-        if (Skeleton == null)
-            throw new Exception("Invalid skeleton");
-
+    {           
         using var writer = new BinaryWriter(File.Create(outputPath));
 
         writer.WriteAssetHeader(AssetType.Animation, 1);
 
+        if (Skeleton == null)
+        {
+            writer.Write((byte)0);
+            writer.Write((byte)0);
+            writer.Write((byte)0);
+            writer.Write((byte)12);
+            writer.Write((byte)0);
+            return;
+        }
+
         var realFrameCount = GetFrameCountWithHolds();
         const int frameRate = 12;
+
 
         writer.Write((byte)Skeleton.BoneCount);
         writer.Write((byte)FrameCount);
@@ -949,5 +958,35 @@ internal class AnimationDocument : Document
         var doc = DocumentManager.Create(fullPath) as AnimationDocument;
         doc?.Load();
         return doc;
+    }
+
+    private static void NewFile(StreamWriter writer)
+    {
+        writer.WriteLine("s \"\"");
+    }
+
+    public void SetSkeleton(SkeletonDocument? skeleton)
+    {
+        Skeleton = skeleton;
+        SkeletonName = skeleton?.Name;
+        BoneCount = 0;
+        for (var i = 0; i < NoZ.Skeleton.MaxBones; i++)
+        {
+            Bones[i].Name = "";
+            Bones[i].Index = -1;
+        }
+        if (skeleton != null)
+        {
+            BoneCount = skeleton.BoneCount;
+            for (var i = 0; i < skeleton.BoneCount; i++)
+            {
+                var bone = skeleton.Bones[i];
+                Bones[i].Name = bone.Name;
+                Bones[i].Index = i;
+            }
+        }
+        UpdateTransforms();
+        UpdateBounds();
+        MarkMetaModified();
     }
 }

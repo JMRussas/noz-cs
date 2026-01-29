@@ -72,7 +72,7 @@ internal static class EditorUI
         {
             ButtonFill(selected, UI.IsHovered(), disabled, toolbar: toolbar);
             using (UI.BeginContainer(EditorStyle.Button.TextContent))
-                UI.Label(text, disabled ? EditorStyle.Control.DisabledText : EditorStyle.Control.Text);
+                UI.Label(text, (disabled ? EditorStyle.Control.DisabledText : EditorStyle.Control.Text) with { AlignX = Align.Center, AlignY = Align.Center});
             pressed = !disabled && UI.WasPressed();
         }
 
@@ -124,16 +124,6 @@ internal static class EditorUI
         return pressed;
     }
 
-    public static void PopupItemFill()
-    {
-        if (_controlSelected && _controlHovered)
-            UI.Container(EditorStyle.Button.SelectedHoverFill);
-        else if (_controlSelected)
-            UI.Container(EditorStyle.Button.SelectedFill);
-        else if (_controlHovered)
-            UI.Container(EditorStyle.Button.HoverFill);
-    }
-
     public static void PopupIcon(Sprite icon, bool hovered = false, bool selected = false, bool disabled = false)
     {
         using (UI.BeginContainer(EditorStyle.Control.IconContainer))
@@ -161,6 +151,12 @@ internal static class EditorUI
                         : EditorStyle.Control.Text);
     }
 
+    private static void PopupItemFill()
+    {
+        if (_controlHovered)
+            UI.Container(EditorStyle.Control.HoverFill);
+    }
+
     public static bool PopupItem(ElementId id, string text, Action? content = null, bool selected = false, bool disabled = false) =>
         PopupItem(id, null, text, content, selected, disabled, showIcon: false);
 
@@ -171,7 +167,7 @@ internal static class EditorUI
         { 
             SetState(selected, disabled);
 
-            ControlFill(ignoreDefaultFill: true);
+            PopupItemFill();
 
             using (UI.BeginRow(EditorStyle.Popup.ItemContent))
             {
@@ -215,7 +211,7 @@ internal static class EditorUI
             SetState(selected, disabled);
             ControlFill(ignoreDefaultFill: toolbar);
 
-            using (UI.BeginContainer(EditorStyle.Control.Content))
+            using (UI.BeginRow(EditorStyle.Control.Content))
                 content.Invoke();
 
             pressed = !disabled && UI.WasPressed();

@@ -10,19 +10,21 @@ public class RenameTool : Tool
 {
     private static readonly ElementId TextBoxId = new(1);
 
-    private readonly Document _document;
     private readonly string _originalName;
+    private readonly Func<Vector2> _getWorldPosition;
+    private readonly Action<string> _commit;
     private string _currentText;
     private bool _firstFrame = true;
     private InputScope _scope;
 
-    public Document Document => _document;
+    public object? Target { get; init; }
 
-    public RenameTool(Document document)
+    public RenameTool(string originalName, Func<Vector2> getWorldPosition, Action<string> commit)
     {
-        _document = document;
-        _originalName = document.Name;
-        _currentText = document.Name;
+        _originalName = originalName;
+        _currentText = originalName;
+        _getWorldPosition = getWorldPosition;
+        _commit = commit;
     }
 
     public override void Begin()
@@ -66,15 +68,8 @@ public class RenameTool : Tool
 
     public override void UpdateUI()
     {
-        // name world position
-        // todo: move to a workspace function (pass a world position and it returns the name center position)
-        var padding = EditorStyle.Workspace.NamePadding / Workspace.Zoom;
-        var bounds = _document.Bounds.Translate(_document.Position);
-        var worldX = bounds.Center.X;
-        var worldY = bounds.Bottom + padding;
-
-        // Convert world to screen position
-        var screenPos = Workspace.Camera.WorldToScreen(new Vector2(worldX, worldY));
+        var worldPos = _getWorldPosition();
+        var screenPos = Workspace.Camera.WorldToScreen(worldPos);
         var uiPos = UI.ScreenToUI(screenPos);
         uiPos.X -= EditorStyle.RenameTool.Root.Width.Value * 0.5f;
         uiPos.Y -= EditorStyle.RenameTool.Root.Height.Value * 0.5f;
@@ -98,12 +93,7 @@ public class RenameTool : Tool
         _currentText = new string(UI.GetTextBoxText(EditorStyle.CanvasId.Workspace, TextBoxId));
 
         if (!string.IsNullOrWhiteSpace(_currentText) && _currentText != _originalName)
-        {
-            if (DocumentManager.Rename(_document, _currentText))
-                Notifications.Add($"renamed to '{_currentText}'");
-            else
-                Notifications.AddError($"renamed failed");
-        }
+            _commit(_currentText);
     }
 
     public override void Cancel()
