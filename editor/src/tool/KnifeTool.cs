@@ -217,10 +217,8 @@ public class KnifeTool : Tool
         Span<KnifeSegment> knifeSegments = stackalloc KnifeSegment[MaxPoints / 2];
 
         var knifeSegmentCount = GetKnifeSegments(ref knifeSegments);
-        var anchorHitSize = EditorStyle.Shape.AnchorHitSize / Workspace.Zoom;
-        var segmentHitSize = EditorStyle.Shape.SegmentHitSize / Workspace.Zoom;
 
-        LogKnife($"Commit: {knifeSegmentCount} knife segments, anchorHitSize={anchorHitSize}, segmentHitSize={segmentHitSize}");
+        LogKnife($"Commit: {knifeSegmentCount} knife segments");
 
         for (int knifeSegmentIndex=0; knifeSegmentIndex < knifeSegmentCount; knifeSegmentIndex++)
         {
@@ -238,8 +236,8 @@ public class KnifeTool : Tool
 
             LogKnife($"Commit: headPos={headPos}, tailPos={tailPos}");
 
-            var headCount = _shape.HitTestAll(headPos, headHits, anchorHitSize, segmentHitSize);
-            var tailCount = _shape.HitTestAll(tailPos, tailHits, anchorHitSize, segmentHitSize);
+            var headCount = _shape.HitTestAll(headPos, headHits);
+            var tailCount = _shape.HitTestAll(tailPos, tailHits);
 
             LogKnife($"Commit: headCount={headCount}, tailCount={tailCount}");
             for (var i = 0; i < headCount; i++)
@@ -507,12 +505,9 @@ public class KnifeTool : Tool
             _hoverPosition = mouseLocal;
             _hoverPositionValid = !DoesIntersectSelf(_hoverPosition);
 
-            var anchorHitSize = EditorStyle.Shape.AnchorSize * AnchorHitScale / Workspace.Zoom;
-            var anchorHitSizeSqr = anchorHitSize * anchorHitSize;
-            var segmentHitSize = EditorStyle.Shape.SegmentLineWidth * SegmentHitScale / Workspace.Zoom;
-            var result = _shape.HitTest(_hoverPosition, anchorHitSize, segmentHitSize);
+            var result = _shape.HitTest(_hoverPosition);
 
-            _hoverIsClose = _points.Length > 0 && Vector2.DistanceSquared(_hoverPosition, _points[0].Position) < anchorHitSizeSqr;
+            _hoverIsClose = _points.Length > 0 && Shape.HitTestAnchor(_hoverPosition, _points[0].Position);
             _hoverIsIntersection = false;
             _hoverAnchorIndex = ushort.MaxValue;
             _hoverIsFree = result.PathIndex != ushort.MaxValue;

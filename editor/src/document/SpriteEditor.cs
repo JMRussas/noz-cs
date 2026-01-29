@@ -985,10 +985,7 @@ public class SpriteEditor : DocumentEditor
         Matrix3x2.Invert(Document.Transform, out var invTransform);
         var localMousePos = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
 
-        var hit = shape.HitTest(
-            localMousePos,
-            EditorStyle.Shape.AnchorHitSize / Workspace.Zoom,
-            EditorStyle.Shape.SegmentHitSize / Workspace.Zoom);
+        var hit = shape.HitTest(localMousePos);
 
         if (hit.AnchorIndex != ushort.MaxValue)
         {
@@ -1404,9 +1401,7 @@ public class SpriteEditor : DocumentEditor
     {
         Matrix3x2.Invert(Document.Transform, out var invTransform);
         var hit = Document.GetFrame(_currentFrame).Shape.HitTest(
-            Vector2.Transform(Workspace.MouseWorldPosition, invTransform),
-            EditorStyle.Shape.AnchorHitSize / Workspace.Zoom,
-            EditorStyle.Shape.SegmentHitSize / Workspace.Zoom);
+            Vector2.Transform(Workspace.MouseWorldPosition, invTransform));
 
         if (hit.SegmentIndex == ushort.MaxValue)
             return;

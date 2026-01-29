@@ -8,7 +8,6 @@ namespace NoZ.Editor;
 
 public class PenTool : Tool
 {
-    private const float HitTolerance = 0.25f;
     private const int MaxPoints = 64;
 
     private struct PenPoint
@@ -78,21 +77,15 @@ public class PenTool : Tool
 
     private void UpdateHover(Vector2 mouseLocal)
     {
-        var hitRadius = HitTolerance / Workspace.Zoom;
-
         _hoveringFirstPoint = false;
         if (_pointCount >= 3)
-        {
-            var distSq = Vector2.DistanceSquared(mouseLocal, _points[0].Position);
-            if (distSq < hitRadius * hitRadius)
-                _hoveringFirstPoint = true;
-        }
+            _hoveringFirstPoint = Shape.HitTestAnchor(mouseLocal, _points[0].Position);
 
         _hoveringExistingAnchor = false;
         _hoverAnchorIndex = ushort.MaxValue;
         if (!_hoveringFirstPoint)
         {
-            var hit = _shape.HitTest(mouseLocal, hitRadius, hitRadius);
+            var hit = _shape.HitTest(mouseLocal);
             if (hit.AnchorIndex != ushort.MaxValue)
             {
                 _hoveringExistingAnchor = true;
@@ -105,7 +98,7 @@ public class PenTool : Tool
         _hoverSegmentIndex = ushort.MaxValue;
         if (!_hoveringFirstPoint && !_hoveringExistingAnchor)
         {
-            var hit = _shape.HitTest(mouseLocal, float.MaxValue, hitRadius);
+            var hit = _shape.HitTest(mouseLocal);
             if (hit.SegmentIndex != ushort.MaxValue)
             {
                 _hoveringSegment = true;

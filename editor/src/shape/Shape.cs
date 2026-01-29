@@ -220,11 +220,20 @@ public sealed unsafe partial class Shape : IDisposable
         RasterBounds = new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
     }
 
-    public HitResult HitTest(Vector2 point, float anchorRadius = 5f, float segmentRadius = 3f)
+    public static bool HitTestAnchor(Vector2 anchor, Vector2 point)
     {
-        var result = HitResult.Empty;
+        var anchorHitSize = EditorStyle.Shape.AnchorHitSize / Workspace.Zoom;
+        var anchorHitSizeSqr = anchorHitSize * anchorHitSize;
+        return Vector2.DistanceSquared(anchor, point) < anchorHitSizeSqr;
+    }
+
+    public HitResult HitTest(Vector2 point)
+    {
+        var anchorRadius = EditorStyle.Shape.AnchorHitSize / Workspace.Zoom;
+        var segmentRadius = EditorStyle.Shape.SegmentHitSize / Workspace.Zoom;
         var anchorRadiusSqr = anchorRadius * anchorRadius;
         var segmentRadiusSqr = segmentRadius * segmentRadius;
+        var result = HitResult.Empty;
 
         // Track the topmost path that contains the point (higher index = drawn on top)
         var topmostContainingPath = ushort.MaxValue;
@@ -300,9 +309,11 @@ public sealed unsafe partial class Shape : IDisposable
         return result;
     }
 
-    public int HitTestAll(Vector2 point, Span<HitResult> results, float anchorRadius = 5f, float segmentRadius = 3f)
+    public int HitTestAll(Vector2 point, Span<HitResult> results)
     {
         var count = 0;
+        var anchorRadius = EditorStyle.Shape.AnchorHitSize / Workspace.Zoom;
+        var segmentRadius = EditorStyle.Shape.SegmentHitSize / Workspace.Zoom;
         var anchorRadiusSqr = anchorRadius * anchorRadius;
         var segmentRadiusSqr = segmentRadius * segmentRadius;
 

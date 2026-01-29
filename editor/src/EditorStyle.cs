@@ -323,7 +323,7 @@ public static class EditorStyle
         public static Color AnchorColor => _colors.Shape.Anchor;
         public static Color SelectedAnchorColor => _colors.Shape.SelectedAnchor;
         public const float AnchorSize = 0.10f;
-        public const float AnchorHitSize = AnchorSize * 2.0f;
+        public const float AnchorHitSize = AnchorSize * 4.0f;
         public const float SegmentLineWidth = 0.015f;
         public const float SegmentHitSize = SegmentLineWidth * 8.0f;
 
