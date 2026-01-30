@@ -54,7 +54,8 @@ public class SkeletonDocument : Document
             Extension = ".skel",
             Factory = () => new SkeletonDocument(),
             EditorFactory = doc => new SkeletonEditor((SkeletonDocument)doc),
-            NewFile = NewFile
+            NewFile = NewFile,
+            Icon = () => EditorAssets.Sprites.IconBone
         });
     }
 

@@ -14,6 +14,9 @@ public static class DocumentManager
     public static IReadOnlyList<string> SourcePaths => _sourcePaths;
     public static string OutputPath => _outputPath;
 
+    public static IEnumerable<Document> SelectedDocuments =>
+        _documents.Where(d => d.IsSelected);
+
     public delegate void DocumentAddedDelegate(Document doc);
 
     public static event DocumentAddedDelegate? DocumentAdded;

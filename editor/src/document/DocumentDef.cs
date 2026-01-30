@@ -12,4 +12,5 @@ public class DocumentDef
     public Action<StreamWriter>? NewFile { get; init; }
     public Func<Document, DocumentEditor>? EditorFactory { get; init; }
     public Func<Document, bool>? CanEdit { get; init; }
+    public Func<Sprite?>? Icon { get; init; }
 }

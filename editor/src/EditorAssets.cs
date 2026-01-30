@@ -17,6 +17,7 @@ public static class EditorAssets
         public const string Text = "text";
         public const string Texture = "texture";
         public const string Ui = "ui";
+        public const string AssetIconAnimation = "asset_icon_animation";
         public const string AssetIconAtlas = "asset_icon_atlas";
         public const string AssetIconBin = "asset_icon_bin";
         public const string AssetIconEvent = "asset_icon_event";
@@ -24,6 +25,7 @@ public static class EditorAssets
         public const string AssetIconLua = "asset_icon_lua";
         public const string AssetIconShader = "asset_icon_shader";
         public const string AssetIconSound = "asset_icon_sound";
+        public const string AssetIconSprite = "asset_icon_sprite";
         public const string AssetIconVfx = "asset_icon_vfx";
         public const string IconAntialiasOff = "icon_antialias_off";
         public const string IconAntialiasOn = "icon_antialias_on";
@@ -54,6 +56,7 @@ public static class EditorAssets
         public const string IconSubmenu = "icon_submenu";
         public const string IconSubtract = "icon_subtract";
         public const string IconTiling = "icon_tiling";
+        public const string NewSprite = "new_sprite";
         public const string EditorPalette = "editor_palette";
     }
 
@@ -116,6 +119,7 @@ public static class EditorAssets
 
     public static class Sprites
     {
+        public static Sprite AssetIconAnimation { get; private set; } = null!;
         public static Sprite AssetIconAtlas { get; private set; } = null!;
         public static Sprite AssetIconBin { get; private set; } = null!;
         public static Sprite AssetIconEvent { get; private set; } = null!;
@@ -123,6 +127,7 @@ public static class EditorAssets
         public static Sprite AssetIconLua { get; private set; } = null!;
         public static Sprite AssetIconShader { get; private set; } = null!;
         public static Sprite AssetIconSound { get; private set; } = null!;
+        public static Sprite AssetIconSprite { get; private set; } = null!;
         public static Sprite AssetIconVfx { get; private set; } = null!;
         public static Sprite IconAntialiasOff { get; private set; } = null!;
         public static Sprite IconAntialiasOn { get; private set; } = null!;
@@ -153,9 +158,11 @@ public static class EditorAssets
         public static Sprite IconSubmenu { get; private set; } = null!;
         public static Sprite IconSubtract { get; private set; } = null!;
         public static Sprite IconTiling { get; private set; } = null!;
+        public static Sprite NewSprite { get; private set; } = null!;
 
         public static void Load()
         {
+            AssetIconAnimation = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconAnimation)!;
             AssetIconAtlas = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconAtlas)!;
             AssetIconBin = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconBin)!;
             AssetIconEvent = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconEvent)!;
@@ -163,6 +170,7 @@ public static class EditorAssets
             AssetIconLua = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconLua)!;
             AssetIconShader = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconShader)!;
             AssetIconSound = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconSound)!;
+            AssetIconSprite = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconSprite)!;
             AssetIconVfx = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconVfx)!;
             IconAntialiasOff = (Sprite)Asset.Load(AssetType.Sprite, Names.IconAntialiasOff)!;
             IconAntialiasOn = (Sprite)Asset.Load(AssetType.Sprite, Names.IconAntialiasOn)!;
@@ -193,10 +201,12 @@ public static class EditorAssets
             IconSubmenu = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubmenu)!;
             IconSubtract = (Sprite)Asset.Load(AssetType.Sprite, Names.IconSubtract)!;
             IconTiling = (Sprite)Asset.Load(AssetType.Sprite, Names.IconTiling)!;
+            NewSprite = (Sprite)Asset.Load(AssetType.Sprite, Names.NewSprite)!;
         }
 
         public static void Unload()
         {
+            AssetIconAnimation?.Dispose();
             AssetIconAtlas?.Dispose();
             AssetIconBin?.Dispose();
             AssetIconEvent?.Dispose();
@@ -204,6 +214,7 @@ public static class EditorAssets
             AssetIconLua?.Dispose();
             AssetIconShader?.Dispose();
             AssetIconSound?.Dispose();
+            AssetIconSprite?.Dispose();
             AssetIconVfx?.Dispose();
             IconAntialiasOff?.Dispose();
             IconAntialiasOn?.Dispose();
@@ -234,6 +245,7 @@ public static class EditorAssets
             IconSubmenu?.Dispose();
             IconSubtract?.Dispose();
             IconTiling?.Dispose();
+            NewSprite?.Dispose();
         }
     }
 

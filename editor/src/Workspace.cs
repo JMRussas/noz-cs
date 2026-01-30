@@ -47,6 +47,8 @@ public static class Workspace
         var duplicateCommand = new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true, Icon = EditorAssets.Sprites.IconDuplicate };
         var editCommand = new Command { Name = "Edit", Handler = ToggleEdit, Key = InputCode.KeyTab, Icon = EditorAssets.Sprites.IconEdit };
         var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
+        var hideCommand = new Command { Name = "Hide", Handler = HandleHide, Key = InputCode.KeyH, Icon = EditorAssets.Sprites.IconPreview };
+        var unhideAllCommand = new Command { Name = "Unhide All", Handler = HandleUnhideAll, Key = InputCode.KeyH, Ctrl = true, Icon = EditorAssets.Sprites.IconPreview };
 
         CommandManager.RegisterCommon([
             new Command { Name = "Save All", Handler = DocumentManager.SaveAll, Key = InputCode.KeyS, Ctrl = true },
@@ -67,6 +69,8 @@ public static class Workspace
             deleteCommand,
             duplicateCommand,
             moveCommand,
+            hideCommand,
+            unhideAllCommand,
             new() { Name = "Select All", Handler = SelectAll, Key = InputCode.KeyA },
             new() { Name = "Frame", Handler = FrameSelected, Key = InputCode.KeyF },
             new() { Name = "Reimport All", Handler = ReimportAll },
@@ -94,18 +98,22 @@ public static class Workspace
             foreach (var def in creatableDefs.OrderBy(d => d.Type.ToString()))
             {
                 var assetType = def.Type;
-                items.Add(ContextMenuItem.Item(def.Type.ToString(), () => CreateNewDocument(assetType), level: 1));
+                items.Add(ContextMenuItem.Item(
+                    def.Type.ToString(),
+                    () => CreateNewDocument(assetType),
+                    level: 1,
+                    icon: def.Icon?.Invoke()));
             }
             items.Add(ContextMenuItem.Separator());
         }
 
         if (CollectionManager.Collections.Count > 0)
         {
-            items.Add(ContextMenuItem.Submenu("Move to Collection"));
+            items.Add(ContextMenuItem.Submenu("Move to Collection", showChecked: true, showIcons: false));
             foreach (var collection in CollectionManager.Collections)
             {
                 var idx = collection.Index;
-                items.Add(ContextMenuItem.Item(collection.Name, () => MoveSelectedToCollection(idx), level: 1));
+                items.Add(ContextMenuItem.Item(collection.Name, () => MoveSelectedToCollection(idx), level: 1, isChecked: () => idx == CollectionManager.VisibleIndex));
             }
             items.Add(ContextMenuItem.Separator());
         }
@@ -371,6 +379,8 @@ public static class Workspace
                 continue;
             if (!ShowHidden && !doc.IsVisible)
                 continue;
+            if (doc.IsHiddenInWorkspace)
+                continue;
             if (!CollectionManager.IsDocumentVisible(doc))
                 continue;
 
@@ -402,6 +412,8 @@ public static class Workspace
             foreach (var doc in DocumentManager.Documents)
             {
                 if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || (!ShowHidden && !doc.IsVisible))
+                    continue;
+                if (doc.IsHiddenInWorkspace)
                     continue;
                 if (!CollectionManager.IsDocumentVisible(doc))
                     continue;
@@ -763,13 +775,10 @@ public static class Workspace
         for (var i = DocumentManager.Documents.Count - 1; i >= 0; i--)
         {
             var doc = DocumentManager.Documents[i];
-            if (!doc.Loaded || !doc.PostLoaded)
-                continue;
-            if (!CollectionManager.IsDocumentVisible(doc))
-                continue;
-
-            if (!doc.Bounds.Translate(doc.Position).Contains(point))
-                continue;
+            if (!doc.Loaded || !doc.PostLoaded) continue;
+            if (doc.IsHiddenInWorkspace) continue;
+            if (!CollectionManager.IsDocumentVisible(doc)) continue;
+            if (!doc.Bounds.Translate(doc.Position).Contains(point)) continue;
 
             firstHit ??= doc;
             if (!doc.IsSelected)
@@ -791,10 +800,9 @@ public static class Workspace
         for (var i = DocumentManager.Documents.Count - 1; i >= 0; i--)
         {
             var doc = DocumentManager.Documents[i];
-            if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || !doc.IsVisible)
-                continue;
-            if (!CollectionManager.IsDocumentVisible(doc))
-                continue;
+            if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || !doc.IsVisible) continue;
+            if (doc.IsHiddenInWorkspace) continue;
+            if (!CollectionManager.IsDocumentVisible(doc)) continue;
 
             var bounds = doc.Bounds.Translate(doc.Position);
             var textSize = TextRender.Measure(doc.Name, font, fontSize);
@@ -1057,5 +1065,19 @@ public static class Workspace
         if (_activeEditor != null)
             return _activeEditor.ContextMenu;
         return _workspaceContextMenu;
+    }
+
+    private static void HandleHide()
+    {
+        foreach (var doc in DocumentManager.SelectedDocuments)
+            doc.IsHiddenInWorkspace = true;
+
+        ClearSelection();
+    }
+
+    private static void HandleUnhideAll()
+    {
+        foreach (var doc in DocumentManager.Documents)
+            doc.IsHiddenInWorkspace = false;
     }
 }

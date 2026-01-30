@@ -1,10 +1,9 @@
 
 
 # 1/30/2026
-- [ ] Sort the new menu by name
+- [ ] Select bone should just make a context menu with skeletons and bones as sub menus
 - [ ] ctrl Snap bones from one to another when dragging in skeleton editor
 - [ ] Drag the end of bones to size them in skeleton editor
-- [ ] adding bones, renaming bones, and deleting bones causes animations to crash
 - [ ] Create new animation with skeleton skeelcton should use that skeleton for animation
 - [ ] Animation editor toggle for hiding bones
 - [ ] Cancelling a rename seems to get you stuck so no input works
@@ -14,7 +13,15 @@
 - [ ] Factored out the dopesheet and reused in sprite
 - [ ] Added animated sprites
 - [ ] Added stroke rendering
-- [ ] Move to collection menu should show current as selected
+- [X] adding bones, renaming bones, and deleting bones causes animations to crash
+- [X] Cleanup refactor of contextmenu to use popup ui
+- [X] Sort the new menu by name
+- [X] Move to collection menu should show current as selected
+- [X] New menu now shows document icons
+- [X] Context menus now support checked items and hiding icons
+- [X] Added workspace hide/unhide
+- [X] fixed bug causig reference textures to be overwritten if the document got makred ismoodified
+- [X] TextureDocument now uses image sharp to load
 - [X] Exclusive input while scale tool is active
 - [X] TextureEditor that allows scaling textures
 - [X] improved documentdef registration

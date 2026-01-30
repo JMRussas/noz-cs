@@ -66,6 +66,7 @@ internal class AnimationDocument : Document
 
     public override bool IsPlaying => _isPlaying;
     public override bool CanPlay => true;
+
     public bool IsLooping
     {
         get => (Flags & AnimationFlags.Looping) != 0;
@@ -106,6 +107,19 @@ internal class AnimationDocument : Document
         SkeletonDocument.BoneRemoved += OnSkeletonBoneRemoved;
     }
 
+    public static void RegisterDef()
+    {
+        DocumentManager.RegisterDef(new DocumentDef
+        {
+            Type = AssetType.Animation,
+            Extension = ".anim",
+            Factory = () => new AnimationDocument(),
+            EditorFactory = doc => new AnimationEditor((AnimationDocument)doc),
+            NewFile = NewFile,
+            Icon = () => EditorAssets.Sprites.AssetIconAnimation
+        });
+    }
+
     private static void OnSkeletonBoneRenamed(SkeletonDocument skeleton, int boneIndex, string oldName, string newName)
     {
         foreach (var doc in DocumentManager.Documents.OfType<AnimationDocument>())
@@ -141,18 +155,6 @@ internal class AnimationDocument : Document
             doc.MarkModified();
             Notifications.Add($"Animation '{doc.Name}' updated (bone '{removedName}' removed)");
         }
-    }
-
-    public static void RegisterDef()
-    {
-        DocumentManager.RegisterDef(new DocumentDef
-        {
-            Type = AssetType.Animation,
-            Extension = ".anim",
-            Factory = () => new AnimationDocument(),
-            EditorFactory = doc => new AnimationEditor((AnimationDocument)doc),
-            NewFile = NewFile
-        });
     }
 
     public ref BoneTransform GetFrameTransform(int boneIndex, int frameIndex)

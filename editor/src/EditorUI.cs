@@ -175,13 +175,32 @@ internal static class EditorUI
     public static bool PopupItem(string text, Action? content = null, bool selected = false, bool disabled = false) =>
         PopupItem(_nextPopupItemId++, text, content, selected, disabled);
 
-    public static bool PopupItem(ElementId id, string text, Action? content = null, bool selected = false, bool disabled = false) =>
+    public static bool PopupItem(
+        ElementId id,
+        string text,
+        Action? content = null,
+        bool selected = false,
+        bool disabled = false) =>
         PopupItem(id, null, text, content, selected, disabled, showIcon: false);
 
-    public static bool PopupItem(Sprite? icon, string text, Action? content = null, bool selected = false, bool disabled = false, bool showIcon = true) =>
+    public static bool PopupItem(
+        Sprite? icon,
+        string text,
+        Action? content = null,
+        bool selected = false,
+        bool disabled = false,
+        bool showIcon = true) =>
         PopupItem(_nextPopupItemId++, icon, text, content, selected, disabled, showIcon);
 
-    public static bool PopupItem(ElementId id, Sprite? icon, string? text, Action? content = null, bool selected = false, bool disabled = false, bool showIcon=true)
+    public static bool PopupItem(
+        ElementId id,
+        Sprite? icon,
+        string? text,
+        Action? content = null,
+        bool selected = false,
+        bool disabled = false,
+        bool showIcon = true,
+        bool showChecked = true)
     {
         var pressed = false;
         using (UI.BeginContainer(id, EditorStyle.Popup.Item))
@@ -192,10 +211,10 @@ internal static class EditorUI
 
             using (UI.BeginRow(EditorStyle.Popup.ItemContent))
             {
-                ControlIcon(EditorStyle.Popup.CheckContent, selected ? EditorAssets.Sprites.IconCheck : null);
+                if (showChecked)
+                    ControlIcon(EditorStyle.Popup.CheckContent, selected ? EditorAssets.Sprites.IconCheck : null);
                 if (showIcon)
                     ControlIcon(icon);
-
                 if (text != null)
                     ControlText(text);
 

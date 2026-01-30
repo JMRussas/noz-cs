@@ -121,6 +121,19 @@ public class SpriteDocument : Document
         SkeletonDocument.BoneRemoved += OnSkeletonBoneRemoved;
     }
 
+    public static void RegisterDef()
+    {
+        DocumentManager.RegisterDef(new DocumentDef
+        {
+            Type = AssetType.Sprite,
+            Extension = ".sprite",
+            Factory = () => new SpriteDocument(),
+            EditorFactory = doc => new SpriteEditor((SpriteDocument)doc),
+            NewFile = NewFile,
+            Icon = () => EditorAssets.Sprites.AssetIconSprite
+        });
+    }
+
     private static void OnSkeletonBoneRenamed(SkeletonDocument skeleton, int boneIndex, string oldName, string newName)
     {
         foreach (var doc in DocumentManager.Documents.OfType<SpriteDocument>())
@@ -151,18 +164,6 @@ public class SpriteDocument : Document
                 doc.Binding.BoneIndex--;
             }
         }
-    }
-
-    public static void RegisterDef()
-    {
-        DocumentManager.RegisterDef(new DocumentDef
-        {
-            Type = AssetType.Sprite,
-            Extension = ".sprite",
-            Factory = () => new SpriteDocument(),
-            EditorFactory = doc => new SpriteEditor((SpriteDocument)doc),
-            NewFile = NewFile
-        });
     }
 
     public SpriteFrame GetFrame(ushort frameIndex) => Frames[frameIndex];

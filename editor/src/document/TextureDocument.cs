@@ -3,7 +3,9 @@
 //
 
 using System.Numerics;
-using StbImageSharp;
+using System.Runtime.CompilerServices;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
 
 namespace NoZ.Editor;
 
@@ -14,6 +16,8 @@ public class TextureDocument : Document
 
     public float Scale { get; set; } = 1f;
     public Texture? Texture { get; private set; }
+
+    public override bool CanSave => false;
 
     public static void RegisterDef()
     {
@@ -80,9 +84,7 @@ public class TextureDocument : Document
 
     public override void Import(string outputPath, PropertySet meta)
     {
-        using var stream = File.OpenRead(Path);
-        var image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-
+        var image = Image.Load<Rgba32>(Path);
         var filter = meta.GetString("texture", "filter", "linear");
         var clamp = meta.GetString("texture", "clamp", "clamp");
         Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath) ?? "");
@@ -100,6 +102,10 @@ public class TextureDocument : Document
         writer.Write((byte)clampEnum);
         writer.Write((uint)image.Width);
         writer.Write((uint)image.Height);
-        writer.Write(image.Data);
+
+        var dataLength = image.Width * image.Height * Unsafe.SizeOf<Rgba32>();
+        using var temp = new NativeArray<byte>(dataLength, dataLength);
+        image.CopyPixelDataTo(temp.AsSpan());
+        writer.Write(temp.AsSpan());
     }
 }

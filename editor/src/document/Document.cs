@@ -14,6 +14,7 @@ public abstract class Document : IDisposable
     public string CollectionId { get; set; } = "";
     public virtual bool IsPlaying { get; } = false;
     public virtual bool CanPlay => false;
+    public virtual bool CanSave => true;
 
     public Vector2 Position { get; set; }
     public Vector2 SavedPosition { get; set; }
@@ -21,6 +22,7 @@ public abstract class Document : IDisposable
 
     public Matrix3x2 Transform => Matrix3x2.CreateTranslation(Position);
     
+    public bool IsHiddenInWorkspace { get; set; }
     public bool IsQueuedForImport { get; internal set; }
     public bool IsDisposed { get; private set; }
     public bool IsVisible { get; set; } = true;
@@ -86,9 +88,13 @@ public abstract class Document : IDisposable
 
     public void Save() 
     {
+        IsModified = false;
+
+        if (!CanSave)
+            return;
+
         using var sw = new StreamWriter(Path);
         Save(sw);
-        IsModified = false;
     }
 
     public void MarkModified()
