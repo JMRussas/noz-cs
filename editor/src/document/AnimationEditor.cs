@@ -185,8 +185,8 @@ internal class AnimationEditor : DocumentEditor
                             : EditorStyle.AnimationEditor.Frame))
                     {
                         UI.Container(selected
-                            ? EditorStyle.AnimationEditor.SelectedFrameDot
-                            : EditorStyle.AnimationEditor.FrameDot);
+                            ? EditorStyle.Dopesheet.SelectedFrameDot
+                            : EditorStyle.Dopesheet.FrameDot);
 
                         if (UI.WasPressed())
                         {

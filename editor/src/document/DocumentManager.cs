@@ -35,8 +35,8 @@ public static class DocumentManager
 
         Directory.CreateDirectory(outputPath);
 
-        InitDocuments();
-        LoadAll();
+            InitDocuments();
+            LoadAll();
     }
 
     public static void Shutdown()
@@ -174,11 +174,13 @@ public static class DocumentManager
     {
         foreach (var doc in _documents)
         {
-            if (!doc.Loaded)
-            {
-                doc.Loaded = true;
-                doc.Load();
-            }
+            if (doc.Loaded) continue;
+            var sw = System.Diagnostics.Stopwatch.StartNew();
+            doc.Loaded = true;
+            doc.Load();
+            var elapsed = sw.ElapsedMilliseconds;
+            if (elapsed > 500)
+                Log.Info($"Loaded {doc.Name} in {elapsed} ms");
         }
     }
 

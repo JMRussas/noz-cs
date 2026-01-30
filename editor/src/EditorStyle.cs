@@ -474,6 +474,22 @@ public static class EditorStyle
         };
     }
 
+    public static class Dopesheet
+    {
+        public static readonly ContainerStyle FrameDot = new()
+        {
+            Width = 7f,
+            Height = 7f,
+            AlignX = Align.Center,
+            AlignY = Align.Max,
+            Margin = EdgeInsets.Bottom(3f),
+            Color = Color.FromRgb(0x282828),
+            Border = { Radius = 4 }
+        };
+
+        public static readonly ContainerStyle SelectedFrameDot = FrameDot with { Color = Color.Black };
+    }
+
     // :animationeditor
     public static class AnimationEditor
     {
@@ -483,7 +499,6 @@ public static class EditorStyle
         public const float FrameSpacerWidth = 1.0f;
         public const float Padding = 8f;
         public const float BorderWidth = 1f;
-        public const float FrameDotSize = 4f;
         public const float TickHeight = FrameHeight * 0.4f;
         public const float ShortTickHeight = TickHeight;
 
@@ -562,22 +577,6 @@ public static class EditorStyle
             FontSize = Control.TextSize
         };
 
-        public static readonly ContainerStyle FrameDot = new()
-        {
-            Width = FrameDotSize,
-            Height = FrameDotSize,
-            AlignX = Align.Center,
-            AlignY = Align.Max,
-            Margin = EdgeInsets.Bottom(3f),
-            Color = Color.FromRgb(0x282828),
-            Border = { Radius = 3 }
-        };
-
-
-        public static readonly ContainerStyle SelectedFrameDot = FrameDot with
-        {
-            Color = Color.Black
-        };
 
         public static readonly LabelStyle FrameLabel = Control.Text;
 

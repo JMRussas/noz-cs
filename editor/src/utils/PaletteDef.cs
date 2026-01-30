@@ -2,7 +2,10 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using StbImageSharp;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.ColorSpaces;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace NoZ.Editor;
 
@@ -24,26 +27,26 @@ public class PaletteDef
             Colors[i] = Color.Purple;
     }
 
-    public void SampleColors(byte[] pixels, int width, int height)
+    public void SampleColors(Image<Rgba32> image)
     {
-        int y = Id * CellSize + CellSize / 2;
-        if (y < 0 || y >= height)
-            return;
+        if (image.Width != 512 || image.Height != 512) return;
 
-        for (int c = 0; c < ColorCount; c++)
+        image.ProcessPixelRows(accessor =>
         {
-            int x = c * CellSize + CellSize / 2;
-            if (x >= width)
-                break;
+            int y = Id * CellSize + CellSize / 2;
+            Span<Rgba32> row = accessor.GetRowSpan(y);
 
-            int pixelIndex = (y * width + x) * 4;
-            Colors[c] = new Color(
-                pixels[pixelIndex + 0] / 255f,
-                pixels[pixelIndex + 1] / 255f,
-                pixels[pixelIndex + 2] / 255f,
-                pixels[pixelIndex + 3] / 255f
-            );
-        }
+            for (int c = 0; c < ColorCount; c++)
+            {
+                ref var p = ref row[c * CellSize + CellSize / 2];
+                Colors[c] = new Color(
+                    p.R / 255f,
+                    p.G / 255f,
+                    p.B / 255f,
+                    p.A / 255f
+                );
+            }
+        });
     }
 }
 
@@ -107,11 +110,9 @@ public static class PaletteManager
 
         try
         {
-            using var stream = File.OpenRead(_paletteTexture.Path);
-            var image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-
+            var image = Image.Load<Rgba32>(_paletteTexture.Path);
             foreach (var palette in _palettes)
-                palette.SampleColors(image.Data, image.Width, image.Height);
+                palette.SampleColors(image);
 
             Log.Info($"Loaded palette {_paletteTexture.Path}");
         }

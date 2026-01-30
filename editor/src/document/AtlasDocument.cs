@@ -313,7 +313,7 @@ internal class AtlasDocument : Document
         return true;
     }
 
-    public void Update()
+    private void UpdateInternal(bool rebuild)
     {
         var rects = CollectionsMarshal.AsSpan(_rects);
         RectInt? updateRect = null;
@@ -328,10 +328,11 @@ internal class AtlasDocument : Document
 
             rect.Dirty = false;
 
-            _image.Clear(rect.Rect);
+            if (!rebuild)
+                _image.Clear(rect.Rect);
 
             if (rect.Sprite == null) continue;
-            
+
             var palette = PaletteManager.GetPalette(rect.Sprite.Palette);
             if (palette == null) continue;
 
@@ -374,6 +375,8 @@ internal class AtlasDocument : Document
             _texture?.Update(_image.AsByteSpan(), updateRect.Value, _image.Width);
     }
 
+    public void Update() => UpdateInternal(false);
+
     public void Rebuild()
     {
         // Gather sprite names from existing rects
@@ -410,7 +413,7 @@ internal class AtlasDocument : Document
         }
 
         // Update texture
-        Update();
+        UpdateInternal(true);
         MarkModified();
     }
 

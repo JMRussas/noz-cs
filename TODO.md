@@ -7,13 +7,21 @@
 - [ ] Drag the end of bones to size them in skeleton editor
 - [ ] adding bones, renaming bones, and deleting bones causes animations to crash
 - [ ] Create new animation with skeleton skeelcton should use that skeleton for animation
-- [ ] Show animation origin
 - [ ] Animation editor toggle for hiding bones
 - [ ] Cancelling a rename seems to get you stuck so no input works
 - [ ] Block input when rotating boes in animation
 - [ ] cant see holds in the animation editor
-- [ ] frame dot is too small
 - [ ] animation got corrupted by messing with holds
+- [ ] Factored out the dopesheet and reused in sprite
+- [ ] Added animated sprites
+- [ ] Added stroke rendering
+- [ ] Rasterize is still slow at higher resolution sprites
+- [X] Switched to SixLabor.ImageSharp in editor
+- [X] Removed shader compiler
+- [X] Fixed bad performance in RectPacker
+- [X] Added sprite size clamping to prevent sprites > atlas size
+- [X] frame dot is too small
+- [X] Show animation origin
 
 # 1/29/2026
 - [X] fixed native array bug copying array in constructor with 0 length

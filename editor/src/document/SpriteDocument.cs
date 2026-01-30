@@ -283,7 +283,29 @@ public class SpriteDocument : Document
                 cs.Y);
         }
 
+        ClampToMaxSpriteSize();
         Bounds = RasterBounds.ToRect().Scale(1.0f / EditorApplication.Config.PixelsPerUnit);
+    }
+
+    private void ClampToMaxSpriteSize()
+    {
+        var maxSize = EditorApplication.Config.AtlasMaxSpriteSize;
+        var width = RasterBounds.Width;
+        var height = RasterBounds.Height;
+
+        if (width <= maxSize && height <= maxSize)
+            return;
+
+        var centerX = RasterBounds.X + width / 2;
+        var centerY = RasterBounds.Y + height / 2;
+        var clampedWidth = Math.Min(width, maxSize);
+        var clampedHeight = Math.Min(height, maxSize);
+
+        RasterBounds = new RectInt(
+            centerX - clampedWidth / 2,
+            centerY - clampedHeight / 2,
+            clampedWidth,
+            clampedHeight);
     }
 
     // :save

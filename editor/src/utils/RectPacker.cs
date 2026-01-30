@@ -26,14 +26,10 @@ namespace NoZ.Editor
                 packer._used.Add(rect);
 
                 var freeCount = packer._free.Count;
-                for (var i = 0; i < freeCount; ++i)
+                for (var i = freeCount - 1; i >= 0; --i)
                 {
                     if (packer.SplitFreeNode(packer._free[i], rect))
-                    {
-                        packer._free.RemoveAt(i);
-                        --i;
-                        --freeCount;
-                    }
+                        packer.SwapRemoveAt(i);
                 }
             }
 
@@ -71,14 +67,10 @@ namespace NoZ.Editor
         private int PlaceRect(in RectInt rect)
         {
             var freeCount = _free.Count;
-            for (var i = 0; i < freeCount; ++i)
+            for (var i = freeCount - 1; i >= 0; --i)
             {
                 if (SplitFreeNode(_free[i], rect))
-                {
-                    _free.RemoveAt(i);
-                    --i;
-                    --freeCount;
-                }
+                    SwapRemoveAt(i);
             }
 
             PruneFreeList();
@@ -162,30 +154,51 @@ namespace NoZ.Editor
             return true;
         }
 
-        private bool IsContainedIn(in RectInt a, in RectInt b)
+        private void SwapRemoveAt(int index)
+        {
+            var lastIndex = _free.Count - 1;
+            if (index < lastIndex)
+                _free[index] = _free[lastIndex];
+            _free.RemoveAt(lastIndex);
+        }
+
+        private static bool IsContainedIn(in RectInt a, in RectInt b)
         {
             return a.X >= b.X && a.Y >= b.Y && a.X + a.Width <= b.X + b.Width && a.Y + a.Height <= b.Y + b.Height;
         }
 
         private void PruneFreeList()
         {
-            for (var i = 0; i < _free.Count; ++i)
+            var count = _free.Count;
+            Span<bool> removed = count <= 256 ? stackalloc bool[count] : new bool[count];
+
+            for (var i = 0; i < count; ++i)
             {
-                for (var j = i + 1; j < _free.Count; ++j)
+                if (removed[i]) continue;
+
+                for (var j = i + 1; j < count; ++j)
                 {
+                    if (removed[j]) continue;
+
                     if (IsContainedIn(_free[i], _free[j]))
                     {
-                        _free.RemoveAt(i);
-                        --i;
+                        removed[i] = true;
                         break;
                     }
                     if (IsContainedIn(_free[j], _free[i]))
                     {
-                        _free.RemoveAt(j);
-                        --j;
+                        removed[j] = true;
                     }
                 }
             }
+
+            var writeIndex = 0;
+            for (var i = 0; i < count; ++i)
+            {
+                if (!removed[i])
+                    _free[writeIndex++] = _free[i];
+            }
+            _free.RemoveRange(writeIndex, count - writeIndex);
         }
     }
 }

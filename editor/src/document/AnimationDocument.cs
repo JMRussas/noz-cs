@@ -716,7 +716,10 @@ internal class AnimationDocument : Document
     public override void Draw()
     {
         if (Skeleton == null)
+        {
+            DrawOrigin();
             return;
+        }
 
         using (Gizmos.PushState(EditorLayer.Document))
         {
