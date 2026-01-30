@@ -2,9 +2,11 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Buffers;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Threading.Tasks;
 
 namespace NoZ.Editor;
 
@@ -49,42 +51,46 @@ public sealed partial class Shape
     {
         if (PathCount == 0) return;
 
-        Span<Vector2> polyVerts = stackalloc Vector2[MaxAnchorsPerPath];
-        Span<ScanlineIntersection> intersections = stackalloc ScanlineIntersection[MaxAnchorsPerPath];
-        var dpi = EditorApplication.Config.PixelsPerUnit;
-        var antiAlias = options.AntiAlias;
+        var sw = System.Diagnostics.Stopwatch.StartNew();
 
-        for (ushort pathIndex = 0; pathIndex < PathCount; pathIndex++)
+        var polyVerts = ArrayPool<Vector2>.Shared.Rent(MaxAnchorsPerPath);
+        try
         {
-            ref var path = ref _paths[pathIndex];
-            if (path.AnchorCount < 3) continue;
+            var dpi = EditorApplication.Config.PixelsPerUnit;
+            var antiAlias = options.AntiAlias;
 
-            var vertCount = GetRasterVerts(ref path, ref polyVerts, dpi, out var minY, out var maxY);
-            if (vertCount < 3) continue;
+            for (ushort pathIndex = 0; pathIndex < PathCount; pathIndex++)
+            {
+                ref var path = ref _paths[pathIndex];
+                if (path.AnchorCount < 3) continue;
 
-            var subtract = path.IsSubtract;
-            var fillColor = subtract
-                ? Color32.Transparent
-                : palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
-            var rb = RasterBounds;
+                var vertCount = GetRasterVerts(ref path, polyVerts, dpi, out var minY, out var maxY);
+                if (vertCount < 3) continue;
 
-            RasterizePath(
-                target,
-                targetRect,
-                sourceOffset,
-                polyVerts[..vertCount],
-                fillColor,
-                subtract,
-                antiAlias);
+                var subtract = path.IsSubtract;
+                var fillColor = subtract
+                    ? Color32.Transparent
+                    : palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
 
-            //RasterizeStroke(
-            //    target,
-            //    targetRect,
-            //    sourceOffset,
-            //    polyVerts[..vertCount],
-            //    DefaultStrokeColor,
-            //    DefaultStrokeWidth,
-            //    antiAlias);
+                RasterizePath(
+                    target,
+                    targetRect,
+                    sourceOffset,
+                    polyVerts,
+                    vertCount,
+                    fillColor,
+                    subtract,
+                    antiAlias);
+            }
+        }
+        finally
+        {
+            ArrayPool<Vector2>.Shared.Return(polyVerts);
+        }
+
+        if (sw.ElapsedMilliseconds > 16)
+        {
+            Log.Info($"Shape Rasterize took {sw.ElapsedMilliseconds} ms");
         }
     }
 
@@ -92,36 +98,42 @@ public sealed partial class Shape
         PixelData<Color32> target,
         RectInt targetRect,
         Vector2Int sourceOffset,
-        Span<Vector2> verts,
+        Vector2[] verts,
+        int vertCount,
         Color32 fillColor,
         bool subtract,
         bool antiAlias)
     {
-        var vertCount = verts.Length;
-
         if (fillColor.A == 0 && !subtract)
             return;
 
-        Span<ScanlineIntersection> intersections = stackalloc ScanlineIntersection[vertCount];
-        for (var y = 0; y < targetRect.Height; y++)
+        Parallel.For(0, targetRect.Height, y =>
         {
-            var ty = targetRect.Y + y;
-            var sy = -sourceOffset.Y + y;
+            var intersections = ArrayPool<ScanlineIntersection>.Shared.Rent(vertCount);
+            try
+            {
+                var sy = -sourceOffset.Y + y;
+                var vertsSpan = verts.AsSpan(0, vertCount);
 
-            var intersectionCount = GetScanlineIntersections(verts, sy + 0.5f, intersections);
-            if (intersectionCount == 0) continue;
+                var intersectionCount = GetScanlineIntersections(vertsSpan, sy + 0.5f, intersections.AsSpan(0, vertCount));
+                if (intersectionCount == 0) return;
 
-            RasterizeScanline(
-                target,
-                targetRect,
-                y,
-                sourceOffset,
-                intersections[..intersectionCount],
-                verts,
-                fillColor,
-                subtract,
-                antiAlias);
-        }
+                RasterizeScanline(
+                    target,
+                    targetRect,
+                    y,
+                    sourceOffset,
+                    intersections.AsSpan(0, intersectionCount),
+                    vertsSpan,
+                    fillColor,
+                    subtract,
+                    antiAlias);
+            }
+            finally
+            {
+                ArrayPool<ScanlineIntersection>.Shared.Return(intersections);
+            }
+        });
     }
 
     private static void RasterizeStroke(
@@ -386,7 +398,7 @@ public sealed partial class Shape
 
     private int GetRasterVerts(
         ref Path path,
-        ref Span<Vector2> verts,
+        Vector2[] verts,
         float dpi,
         out float minY,
         out float maxY)

@@ -1,7 +1,6 @@
 
 
 # 1/30/2026
-- [ ] Generating game assets on every load
 - [ ] Sort the new menu by name
 - [ ] ctrl Snap bones from one to another when dragging in skeleton editor
 - [ ] Drag the end of bones to size them in skeleton editor
@@ -15,7 +14,8 @@
 - [ ] Factored out the dopesheet and reused in sprite
 - [ ] Added animated sprites
 - [ ] Added stroke rendering
-- [ ] Rasterize is still slow at higher resolution sprites
+- [X] Stop Generating game assets on every load
+- [X] Improved performance of rasterization in sprite editor
 - [X] Switched to SixLabor.ImageSharp in editor
 - [X] Removed shader compiler
 - [X] Fixed bad performance in RectPacker

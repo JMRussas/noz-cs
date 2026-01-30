@@ -3,6 +3,8 @@
 //
 
 using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace NoZ.Editor;
 
@@ -137,22 +139,22 @@ public static class PixelDataExtensions
 
         for (var iter = 0; iter < iterations; iter++)
         {
-            var changed = false;
+            var changed = 0;
 
-            for (var y = y0; y < y1; y++)
+            Parallel.For(y0, y1, y =>
             {
+                var localChanged = false;
+
                 for (var x = x0; x < x1; x++)
                 {
                     ref var pixel = ref pixels[x, y];
                     if (pixel.A != 0) continue;
 
-                    // Find a neighboring pixel with alpha > 0 and copy its RGB
                     var sumR = 0;
                     var sumG = 0;
                     var sumB = 0;
                     var count = 0;
 
-                    // Check 8-connected neighbors
                     for (var dy = -1; dy <= 1; dy++)
                     {
                         var ny = y + dy;
@@ -181,12 +183,15 @@ public static class PixelDataExtensions
                             (byte)(sumG / count),
                             (byte)(sumB / count),
                             0);
-                        changed = true;
+                        localChanged = true;
                     }
                 }
-            }
 
-            if (!changed) break;
+                if (localChanged)
+                    Interlocked.Exchange(ref changed, 1);
+            });
+
+            if (changed == 0) break;
         }
     }
 }

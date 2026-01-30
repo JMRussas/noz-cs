@@ -8,8 +8,11 @@ public static class AssetManifest
 {
     public static bool IsModified { get; set; }
 
-    public static void Generate()
+    public static void Generate(bool force=false)
     {
+        if (!force && !IsModified)
+            return;
+
         IsModified = false;
 
         var config = EditorApplication.Config;
@@ -19,6 +22,8 @@ public static class AssetManifest
 
         if (config.GenerateLua != null)
             GenerateLua(config);
+
+        DocumentManager.DocumentAdded += doc => { IsModified = true; };
     }
 
     private static string Pluralize(string typeName)
