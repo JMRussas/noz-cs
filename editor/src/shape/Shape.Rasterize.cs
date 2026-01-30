@@ -13,6 +13,9 @@ public sealed partial class Shape
     private const float AntiAliasEdgeInner = -0.5f;
     private const float AntiAliasEdgeOuter = 0.5f;
 
+    private const float DefaultStrokeWidth = 0.0f;
+    private static readonly Color32 DefaultStrokeColor = Color32.Black;
+
     public struct RasterizeOptions
     {
         public bool AntiAlias;
@@ -73,6 +76,15 @@ public sealed partial class Shape
                 fillColor,
                 subtract,
                 antiAlias);
+
+            //RasterizeStroke(
+            //    target,
+            //    targetRect,
+            //    sourceOffset,
+            //    polyVerts[..vertCount],
+            //    DefaultStrokeColor,
+            //    DefaultStrokeWidth,
+            //    antiAlias);
         }
     }
 
@@ -109,6 +121,79 @@ public sealed partial class Shape
                 fillColor,
                 subtract,
                 antiAlias);
+        }
+    }
+
+    private static void RasterizeStroke(
+        PixelData<Color32> target,
+        RectInt targetRect,
+        Vector2Int sourceOffset,
+        ReadOnlySpan<Vector2> verts,
+        Color32 strokeColor,
+        float strokeWidth,
+        bool antiAlias)
+    {
+        if (strokeWidth <= 0f || strokeColor.A == 0)
+            return;
+
+        var halfWidth = strokeWidth * 0.5f;
+        var aaMargin = antiAlias ? 1f : 0f;
+        var maxDist = halfWidth + aaMargin;
+
+        for (var i = 0; i < verts.Length; i++)
+        {
+            var p0 = verts[i];
+            var p1 = verts[(i + 1) % verts.Length];
+
+            var minX = (int)MathF.Floor(MathF.Min(p0.X, p1.X) - maxDist);
+            var maxX = (int)MathF.Ceiling(MathF.Max(p0.X, p1.X) + maxDist);
+            var minY = (int)MathF.Floor(MathF.Min(p0.Y, p1.Y) - maxDist);
+            var maxY = (int)MathF.Ceiling(MathF.Max(p0.Y, p1.Y) + maxDist);
+
+            minX = int.Max(minX, -sourceOffset.X);
+            maxX = int.Min(maxX, -sourceOffset.X + targetRect.Width);
+            minY = int.Max(minY, -sourceOffset.Y);
+            maxY = int.Min(maxY, -sourceOffset.Y + targetRect.Height);
+
+            for (var sy = minY; sy < maxY; sy++)
+            {
+                for (var sx = minX; sx < maxX; sx++)
+                {
+                    var sourcePoint = new Vector2(sx + 0.5f, sy + 0.5f);
+                    var distSqr = PointToSegmentDistSqrFast(sourcePoint, p0, p1);
+                    var dist = MathF.Sqrt(distSqr);
+
+                    if (dist > maxDist)
+                        continue;
+
+                    var targetX = sourceOffset.X + sx + targetRect.X;
+                    var targetY = sourceOffset.Y + sy + targetRect.Y;
+
+                    if (targetX < targetRect.X || targetX >= targetRect.X + targetRect.Width)
+                        continue;
+                    if (targetY < targetRect.Y || targetY >= targetRect.Y + targetRect.Height)
+                        continue;
+
+                    if (antiAlias)
+                    {
+                        var signedDist = dist - halfWidth;
+                        var alpha = DistanceToAlpha(signedDist);
+
+                        if (alpha <= 0.001f)
+                            continue;
+
+                        if (alpha >= 0.999f)
+                            target[targetX, targetY] = Color32.Blend(target[targetX, targetY], strokeColor);
+                        else
+                            AntiAliasPixel(ref target[targetX, targetY], strokeColor, alpha, false);
+                    }
+                    else
+                    {
+                        if (dist <= halfWidth)
+                            target[targetX, targetY] = Color32.Blend(target[targetX, targetY], strokeColor);
+                    }
+                }
+            }
         }
     }
 

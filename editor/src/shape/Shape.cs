@@ -78,8 +78,9 @@ public sealed unsafe partial class Shape : IDisposable
         public ushort AnchorStart;
         public ushort AnchorCount;
         public byte FillColor;
-        public float FillOpacity;
+        public byte StrokeColor;
         public PathFlags Flags;
+        public float FillOpacity;
 
         public readonly bool IsSelected => (Flags & PathFlags.Selected) != 0;
         public readonly bool IsSubtract => (Flags & PathFlags.Subtract) != 0;
@@ -212,10 +213,11 @@ public sealed unsafe partial class Shape : IDisposable
 
         Bounds = Rect.FromMinMax(min, max);
 
-        var xMin = (int)MathF.Floor(min.X * dpi + 0.001f);
-        var yMin = (int)MathF.Floor(min.Y * dpi + 0.001f);
-        var xMax = (int)MathF.Ceiling(max.X * dpi - 0.001f);
-        var yMax = (int)MathF.Ceiling(max.Y * dpi - 0.001f);
+        var strokePadding = (int)MathF.Ceiling(DefaultStrokeWidth * 0.5f + 1f);
+        var xMin = (int)MathF.Floor(min.X * dpi + 0.001f) - strokePadding;
+        var yMin = (int)MathF.Floor(min.Y * dpi + 0.001f) - strokePadding;
+        var xMax = (int)MathF.Ceiling(max.X * dpi - 0.001f) + strokePadding;
+        var yMax = (int)MathF.Ceiling(max.Y * dpi - 0.001f) + strokePadding;
 
         RasterBounds = new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
     }
