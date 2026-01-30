@@ -21,14 +21,10 @@ public class SpriteEditor : DocumentEditor
     private const byte AntiAliasButtonId = 9;
     private const byte FirstOpacityId = 10;
     private const byte PreviewButtonId = 11;
-    private const byte PalettePopupId = 12;
     private const byte SkeletonOverlayButtonId = 13;
     private const byte ConstraintsButtonId = 24;
-    private const byte SizePopupId = 25;
-    private const byte FirstSizeId = 26;
-    private const byte FirstPaletteId = 64;
-    private const byte FirstPaletteColorId = 128;
-    private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
+    private const byte FillColorButtonId = 27;
+    private const byte StrokeColorButtonId = 28;
    
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
@@ -40,9 +36,6 @@ public class SpriteEditor : DocumentEditor
         EditorApplication.Config!.AtlasSize);
     private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
-    private bool _showOpacityPopup;
-    private bool _showPalettePopup;
-    private bool _showSizePopup;
 
     public SpriteEditor(SpriteDocument document) : base(document)
     {
@@ -144,9 +137,9 @@ public class SpriteEditor : DocumentEditor
     }
 
     // Selection
-    private byte _selectionColor;
-    private byte _selectionOpacity = 10;
-    private bool _selectionSubtract = false;
+    private byte _selectionFillColor;
+    private byte _selectionStrokeColor;
+    private float _selectionFillOpacity;
 
     // Tool state
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
@@ -154,8 +147,6 @@ public class SpriteEditor : DocumentEditor
 
     public ushort CurrentFrame => _currentFrame;
     public bool IsPlaying => _isPlaying;
-    public byte SelectionColor => _selectionColor;
-    public byte SelectionOpacity => _selectionOpacity;
 
     public override void Dispose()
     {
@@ -218,7 +209,31 @@ public class SpriteEditor : DocumentEditor
 
         using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
         {
-            BoneBindingUI();
+            var color = (int)_selectionFillColor;
+            if (EditorUI.ColorButton(FillColorButtonId, Document.Palette, ref color))
+                SetFillColor((byte)color);
+
+            var opacity = _selectionFillOpacity;
+            if (EditorUI.OpacityButton(OpacityButtonId, value: ref opacity, showSubtract: true))
+                SetOpacity(opacity);
+
+            // Palette 
+            if (EditorUI.Button(
+                PaletteButtonId,
+                EditorAssets.Sprites.IconPalette,
+                EditorUI.IsPopupOpen(PaletteButtonId),
+                toolbar: true))
+                EditorUI.TogglePopup(PaletteButtonId);
+
+            EditorUI.ToolbarSpacer();
+
+            var strokeColor = (int)_selectionStrokeColor;
+            if (EditorUI.ColorButton(StrokeColorButtonId, Document.Palette, ref strokeColor))
+                SetStrokeColor((byte)strokeColor);
+
+            EditorUI.ToolbarSpacer();
+
+            BoneBindingButton();
             EditorUI.ToolbarSpacer();
 
             ConstraintsButtonUI();
@@ -242,13 +257,7 @@ public class SpriteEditor : DocumentEditor
                 Document.MarkMetaModified();
             }
 
-            using (UI.BeginContainer(ContainerStyle.Fit))
-            {
-                if (EditorUI.Button(PaletteButtonId, EditorAssets.Sprites.IconPalette, _showPalettePopup, disabled: PaletteManager.Palettes.Count < 2, toolbar: true))
-                    _showPalettePopup = !_showPalettePopup;
-
-                PalettePopupUI();
-            }
+            PalettePopupUI();
         }
     }
 
@@ -259,35 +268,31 @@ public class SpriteEditor : DocumentEditor
         {
             ToolbarUI();
 
-            using (UI.BeginContainer(EditorStyle.Panel.Content))
-                ColorPickerUI();
+            // todo: dopesheet
 
             UI.Spacer(EditorStyle.Control.Spacing);
         }
     }
 
-    private void BoneBindingUI()
+    private void BoneBindingButton()
     {
         var binding = Document.Binding;
         var selected = Workspace.ActiveTool is BoneSelectTool;
 
         void BoneBindingContent()
         {
-            using var _ = UI.BeginRow();
-
             EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
 
             if (!binding.IsBound)
             {
                 EditorUI.ControlPlaceholderText("Select Bone...");
+                UI.Spacer(EditorStyle.Control.Spacing);
                 return;
             }
 
             EditorUI.ControlText(binding.SkeletonName);
             EditorUI.ControlText(".");
             EditorUI.ControlText(binding.BoneName);
-
-            UI.Spacer(EditorStyle.Control.Spacing);
 
             using (UI.BeginContainer(BoneUnbindButtonId, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4) }))
             {
@@ -300,6 +305,8 @@ public class SpriteEditor : DocumentEditor
                 if (UI.WasPressed())
                     ClearBoneBinding();
             }
+
+            UI.Spacer(EditorStyle.Control.Spacing);
         }
 
         if (EditorUI.Control(BoneBindButtonId, BoneBindingContent, selected: selected))
@@ -320,56 +327,20 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
-    private void ColorPickerUI()
-    {
-        var palette = PaletteManager.GetPalette(Document.Palette);
-        if (palette == null)
-            return;
-
-        using (UI.BeginColumn(EditorStyle.SpriteEditor.ColorPicker))
-        using (UI.BeginRow())
-        {
-            PaletteUI(palette, showSelection: !_isPlaying);
-            OpacityButtonUI();
-        }
-    }
-
-    private void GetSelectedColors(Span<bool> selectedColors)
-    {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        var hasSelectedPaths = false;
-
-        for (ushort p = 0; p < shape.PathCount; p++)
-        {
-            var path = shape.GetPath(p);
-            if (!PathHasSelectedAnchor(shape, path))
-                continue;
-
-            hasSelectedPaths = true;
-            if (path.FillColor < PaletteDef.ColorCount)
-                selectedColors[path.FillColor] = true;
-        }
-
-        if (!hasSelectedPaths)
-            selectedColors[_selectionColor] = true;
-    }
-
     private void UpdateSelectionColor()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        _selectionSubtract = false;
-        _selectionOpacity = 0;
+        _selectionFillOpacity = 0;
 
         for (ushort p = (ushort)(shape.PathCount - 1); p < shape.PathCount; p--)
         {
-            var path = shape.GetPath(p);
-            if (PathHasSelectedAnchor(shape, path))
-            {
-                _selectionColor = path.FillColor;
-                _selectionSubtract |= path.IsSubtract;
-                _selectionOpacity = Math.Max((byte)(path.FillOpacity * 10), _selectionOpacity);
-                return;
-            }
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+
+            _selectionFillColor = path.FillColor;
+            _selectionFillOpacity = path.FillOpacity;
+            _selectionStrokeColor = path.StrokeColor;
+            return;
         }
     }
 
@@ -384,184 +355,26 @@ public class SpriteEditor : DocumentEditor
         return false;
     }
 
-    private void PaletteUI(PaletteDef palette, bool showSelection)
-    {
-        Span<bool> selectedColors = stackalloc bool[PaletteDef.ColorCount];
-        if (showSelection)
-            GetSelectedColors(selectedColors);
-
-        using (UI.BeginColumn(EditorStyle.SpriteEditor.Palette))
-        {
-            const int columns = 32;
-            var rowCount = (PaletteDef.ColorCount + columns - 1) / columns;
-            for (var row = 0; row < rowCount; row++)
-            {
-                using var _ = UI.BeginRow();
-                for (var col = 0; col < columns; col++)
-                {
-                    var colorIndex = row * columns + col;
-                    var isSelected = showSelection && selectedColors[colorIndex];
-                    PaletteColorUI((byte)colorIndex, palette.Colors[colorIndex], isSelected);
-                }
-            }
-        }
-    }
-
-    private void PaletteColorUI(byte colorIndex, Color color, bool selected)
-    {
-        using (UI.BeginContainer((byte)(FirstPaletteColorId + colorIndex), EditorStyle.SpriteEditor.PaletteColor))
-        {
-            if (selected)
-                UI.Container(EditorStyle.SpriteEditor.PaletteSelectedColor);
-
-            var displayColor = color.A > 0 ? color : EditorStyle.SpriteEditor.UndefinedColor;
-            UI.Container(EditorStyle.SpriteEditor.PaletteDisplayColor with { Color = displayColor });
-
-            if (UI.WasPressed() && color.A > 0)
-                SetSelectionColor(colorIndex);
-        }
-    }
-
-    private void OpacityButtonUI()
-    {
-        using (UI.BeginContainer())
-        {
-            using (UI.BeginContainer(OpacityButtonId, EditorStyle.SpriteEditor.OpacityButtonRoot))
-            {
-                EditorUI.ButtonFill(_showOpacityPopup, UI.IsHovered(), false);
-
-                using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityButtonIconContainer))
-                {
-                    if (_selectionSubtract)
-                    {
-                        UI.Image(EditorAssets.Sprites.IconSubtract, EditorStyle.Control.Icon);
-                    }
-                    else
-                    {
-                        UI.Image(EditorAssets.Sprites.IconOpacity, EditorStyle.Control.Icon);
-                        UI.Image(
-                            EditorAssets.Sprites.IconOpacityOverlay,
-                            EditorStyle.Control.Icon with { Color = Color.White.WithAlpha(_selectionOpacity / 10.0f) });
-                    }
-                }
-
-                if (UI.WasPressed())
-                    _showOpacityPopup = !_showOpacityPopup;
-            }
-
-            if (_showOpacityPopup)
-                OpacityPopupUI();
-        }
-    }
-
-    private void OpacityPopupUI()
-    {
-        var buttonRect = UI.GetElementRect(EditorStyle.CanvasId.DocumentEditor, OpacityButtonId);
-
-        using (UI.BeginPopup(OpacityPopupId, EditorStyle.SpriteEditor.OpacityPopup with { AnchorRect = buttonRect }))
-        {
-            if (UI.IsClosed())
-            {
-                _showOpacityPopup = false;
-                return;
-            }
-
-            using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityPopupRoot))
-            using (UI.BeginColumn(ContainerStyle.Fit with { Spacing = EditorStyle.Control.Spacing }))
-            {
-                // Subtract
-                using (UI.BeginContainer(SubtractButtonId, EditorStyle.Popup.Item))
-                {
-                    //EditorUI.PopupItemFill(_selectionSubtract, UI.IsHovered());
-                    using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing } ))
-                    {
-                        using (UI.BeginContainer(EditorStyle.Control.IconContainer))
-                            UI.Image(EditorAssets.Sprites.IconSubtract, style: EditorStyle.Control.Icon);
-
-                        UI.Label("Subtract", EditorStyle.Control.Text);
-                        UI.Spacer(EditorStyle.Control.Spacing);
-                    }
-
-                    if (UI.WasPressed())
-                    {
-                        SetSubtract();
-                        _showOpacityPopup = false;
-                    }
-                }
-
-                for (int i=0; i<=10; i++)
-                {
-                    using (UI.BeginContainer(FirstOpacityId + i, EditorStyle.Popup.Item))
-                    {
-                        //EditorUI.PopupItemFill(_selectionOpacity == i, UI.IsHovered());
-                        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
-                        {
-                            using (UI.BeginContainer(EditorStyle.Control.IconContainer))
-                            {
-                                UI.Image(EditorAssets.Sprites.IconOpacity, style: EditorStyle.Control.Icon);
-                                UI.Image(
-                                    EditorAssets.Sprites.IconOpacityOverlay,
-                                    EditorStyle.Control.Icon with { Color = Color.White.WithAlpha(i / 10.0f) });
-                            }
-
-                            UI.Label(OpacityStrings[i], EditorStyle.Control.Text);
-                            UI.Spacer(EditorStyle.Control.Spacing);
-                        }
-
-                        if (UI.WasPressed())
-                        {
-                            SetOpacity(i / 10.0f);
-                            _showOpacityPopup = false;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
     private void PalettePopupUI()
     {
-        if (!_showPalettePopup) return;
-
-        var buttonRect = UI.GetElementRect(EditorStyle.CanvasId.DocumentEditor, PaletteButtonId);
-
-        using (UI.BeginPopup(PalettePopupId, EditorStyle.SpriteEditor.PalettePopup with { AnchorRect = buttonRect }))
+        void Content()
         {
-            if (UI.IsClosed())
+            for (int i=0; i<PaletteManager.Palettes.Count; i++)
             {
-                _showPalettePopup = false;
-                return;
-            }
-
-            using (UI.BeginContainer(EditorStyle.SpriteEditor.OpacityPopupRoot))
-            using (UI.BeginColumn(ContainerStyle.Fit with { Spacing = EditorStyle.Control.Spacing }))
-            {
-                for (int i=0; i<PaletteManager.Palettes.Count; i++)
+                if (EditorUI.PopupItem(
+                    PaletteManager.Palettes[i].Name,
+                    selected: i == Document.Palette))
                 {
-                    using (UI.BeginContainer(FirstPaletteId + i, EditorStyle.Popup.Item))
-                    {
-                        var selected = Document.Palette == i;
-                        var hovered = UI.IsHovered();
-                        //EditorUI.PopupItemFill(selected, UI.IsHovered());
-                        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
-                        {
-                            EditorUI.PopupIcon(EditorAssets.Sprites.IconPalette, hovered, selected);
-                            UI.Label(PaletteManager.Palettes[i].Name, EditorStyle.Control.Text);
-                            UI.Spacer(EditorStyle.Control.Spacing);
-                        }
-
-                        if (UI.WasPressed())
-                        {
-                            Undo.Record(Document);
-                            Document.Palette = (byte)i;
-                            Document.MarkModified();
-                            MarkRasterDirty();
-                            _showPalettePopup = false;
-                        }
-                    }
+                    Undo.Record(Document);
+                    Document.Palette = (byte)i;
+                    Document.MarkModified();
+                    MarkRasterDirty();
+                    EditorUI.ClosePopup();
                 }
             }
         }
+
+        EditorUI.Popup(PaletteButtonId, Content);
     }
 
     private void ConstraintsButtonUI()
@@ -573,71 +386,62 @@ public class SpriteEditor : DocumentEditor
 
             void ConstraintsButtonContent()
             {
-                using (UI.BeginRow())
-                {
-                    EditorUI.ControlIcon(EditorAssets.Sprites.IconConstraint);
+                EditorUI.ControlIcon(EditorAssets.Sprites.IconConstraint);
                     UI.Spacer(EditorStyle.Control.Spacing);
                     if (constraint.HasValue)
                         EditorUI.ControlText($"{constraint.Value.X}x{constraint.Value.Y}");
                     else
                         EditorUI.ControlPlaceholderText("None");
-                }
+                UI.Spacer(EditorStyle.Control.Spacing);
             }
 
             if (EditorUI.Control(
                 ConstraintsButtonId,
                 ConstraintsButtonContent,
-                selected: _showSizePopup,
+                selected: EditorUI.IsPopupOpen(ConstraintsButtonId),
                 disabled: sizes.Length == 0))
-                _showSizePopup = !_showSizePopup;
+                EditorUI.TogglePopup(ConstraintsButtonId);
 
             ConstraintsPopupUI();
+            
         }
     }
 
     private void ConstraintsPopupUI()
     {
-        if (!_showSizePopup) return;
-
-        var buttonRect = UI.GetElementRect(EditorStyle.CanvasId.DocumentEditor, ConstraintsButtonId);
-        var sizes = EditorApplication.Config.SpriteSizes;
-
-        using var _ = UI.BeginPopup(SizePopupId, EditorStyle.SpriteEditor.PalettePopup with { AnchorRect = buttonRect });
-        if (UI.IsClosed())
+        void Content()
         {
-            _showSizePopup = false;
-            return;
-        }
+            var sizes = EditorApplication.Config.SpriteSizes;
 
-        using var __ = UI.BeginColumn(EditorStyle.SpriteEditor.ConstraintsPopupRoot with { Size = Size.Fit });
-        
-        for (int i = 0; i < sizes.Length; i++)
-        {
-            var size = sizes[i];
+            for (int i = 0; i < sizes.Length; i++)
+            {
+                var size = sizes[i];
+                var selected = Document.ConstrainedSize.HasValue &&
+                                Document.ConstrainedSize.Value == size;
+                if (EditorUI.PopupItem($"{size.X}x{size.Y}", selected: selected))
+                {
+                    Undo.Record(Document);
+                    Document.ConstrainedSize = size;
+                    Document.UpdateBounds();
+                    Document.MarkModified();
+                    Document.MarkMetaModified();
+                    MarkRasterDirty();
+                    EditorUI.ClosePopup();
+                }
+            }
 
-            var selected = Document.ConstrainedSize.HasValue &&
-                            Document.ConstrainedSize.Value == size;
-            if (EditorUI.PopupItem(FirstSizeId + 1 + i, $"{size.X}x{size.Y}",  selected:selected))
+            if (EditorUI.PopupItem("None", selected: !Document.ConstrainedSize.HasValue))
             {
                 Undo.Record(Document);
-                Document.ConstrainedSize = size;
+                Document.ConstrainedSize = null;
                 Document.UpdateBounds();
-                Document.MarkModified();
                 Document.MarkMetaModified();
                 MarkRasterDirty();
-                _showSizePopup = false;
+                EditorUI.ClosePopup();
             }
         }
 
-        if (EditorUI.PopupItem(FirstSizeId, "None", selected: !Document.ConstrainedSize.HasValue))
-        {
-            Undo.Record(Document);
-            Document.ConstrainedSize = null;
-            Document.UpdateBounds();
-            Document.MarkMetaModified();
-            MarkRasterDirty();
-            _showSizePopup = false;
-        }
+        EditorUI.Popup(ConstraintsButtonId, Content);
     }
 
     private void SetOpacity(float value)
@@ -645,30 +449,14 @@ public class SpriteEditor : DocumentEditor
         var shape = Document.GetFrame(_currentFrame).Shape;
         Undo.Record(Document);
 
-        _selectionOpacity = (byte)(value * 10);
-        _selectionSubtract = false;
+        _selectionFillOpacity = value;
 
-        for (ushort p = 0; p < shape.PathCount; p++)
-            if (PathHasSelectedAnchor(shape, shape.GetPath(p)))
-            {
-                shape.SetPathSubtract(p, false);
-                shape.SetPathFillOpacity(p, value);
-            }                
-
-        Document.MarkModified();
-        MarkRasterDirty();
-    }
-
-    private void SetSubtract()
-    {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        Undo.Record(Document);
-
-        _selectionSubtract = true;
-
-        for (ushort p = 0; p < shape.PathCount; p++)
-            if (PathHasSelectedAnchor(shape, shape.GetPath(p)))
-                shape.SetPathSubtract(p, true);
+        for (ushort pathIndex = 0; pathIndex < shape.PathCount; pathIndex++)
+        {
+            ref readonly var path = ref shape.GetPath(pathIndex);
+            if (!path.IsSelected) continue;
+            shape.SetPathFillOpacity(pathIndex, value);
+        }                
 
         Document.MarkModified();
         MarkRasterDirty();
@@ -699,8 +487,6 @@ public class SpriteEditor : DocumentEditor
                 -Document.RasterBounds.Position,
                 palette.Colors,
                 options: new Shape.RasterizeOptions { AntiAlias = Document.IsAntiAliased });
-
-        _image.BleedColors(rasterRect);
 
         for (int p = Padding - 1; p >= 0; p--)
             _image.ExtrudeEdges(new RectInt(
@@ -751,10 +537,40 @@ public class SpriteEditor : DocumentEditor
         MarkRasterDirty();
     }
 
-    public void SetSelectionColor(byte color)
+    public void SetFillColor(byte color)
     {
-        _selectionColor = color;
-        ApplyColorToSelection();
+        _selectionFillColor = color;
+
+        Undo.Record(Document);
+
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort p = 0; p < shape.PathCount; p++)
+        {
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathFillColor(p, _selectionFillColor);
+        }
+
+        Document.MarkModified();
+        MarkRasterDirty();
+    }
+
+    public void SetStrokeColor(byte color)
+    {
+        _selectionFillColor = color;
+
+        Undo.Record(Document);
+
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort p = 0; p < shape.PathCount; p++)
+        {
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathFillColor(p, _selectionFillColor);
+        }
+
+        Document.MarkModified();
+        MarkRasterDirty();
     }
 
     public void DeleteSelected()
@@ -794,12 +610,12 @@ public class SpriteEditor : DocumentEditor
         for (var i = 0; i < pathCount; i++)
         {
             var srcPath = shape.GetPath(pathsToDuplicate[i]);
-            var newPathIndex = shape.AddPath(srcPath.FillColor);
+            var newPathIndex = shape.AddPath(
+                fillColor: srcPath.FillColor,
+                fillOpacity: srcPath.FillOpacity,
+                strokeColor: srcPath.StrokeColor);
             if (newPathIndex == ushort.MaxValue)
                 break;
-
-            if (srcPath.IsSubtract)
-                shape.SetPathSubtract(newPathIndex, true);
 
             for (ushort a = 0; a < srcPath.AnchorCount; a++)
             {
@@ -1342,7 +1158,7 @@ public class SpriteEditor : DocumentEditor
     private void BeginPenTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        Workspace.BeginTool(new PenTool(this, shape, _selectionColor));
+        Workspace.BeginTool(new PenTool(this, shape, _selectionFillColor));
     }
 
     private void BeginKnifeTool()
@@ -1362,10 +1178,9 @@ public class SpriteEditor : DocumentEditor
         Workspace.BeginTool(new ShapeTool(
             this,
             shape,
-            _selectionColor,
+            _selectionFillColor,
             ShapeType.Rectangle,
-            opacity: _selectionOpacity / 10.0f,
-            subtract: _selectionSubtract));
+            opacity: _selectionFillOpacity));
     }
 
     private void BeginCircleTool()
@@ -1374,10 +1189,9 @@ public class SpriteEditor : DocumentEditor
         Workspace.BeginTool(new ShapeTool(
             this,
             shape,
-            _selectionColor,
+            _selectionFillColor,
             ShapeType.Circle,
-            opacity: _selectionOpacity / 10.0f,
-            subtract: _selectionSubtract));
+            opacity: _selectionFillOpacity));
     }
 
     private void InsertAnchorAtHover()
@@ -1416,23 +1230,9 @@ public class SpriteEditor : DocumentEditor
 
         for (ushort p = 0; p < shape.PathCount; p++)
         {
-            var path = shape.GetPath(p);
-            var hasSelectedAnchor = false;
-
-            for (ushort a = 0; a < path.AnchorCount; a++)
-            {
-                var anchor = shape.GetAnchor((ushort)(path.AnchorStart + a));
-                if ((anchor.Flags & Shape.AnchorFlags.Selected) != 0)
-                {
-                    hasSelectedAnchor = true;
-                    break;
-                }
-            }
-
-            if (hasSelectedAnchor)
-            {
-                shape.SetPathFillColor(p, _selectionColor);
-            }
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathFillColor(p, _selectionFillColor);
         }
 
         Document.MarkModified();

@@ -2,13 +2,25 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Numerics;
+
 namespace NoZ.Editor;
 
 internal static class EditorUI
 {
+    public const int PopupId = 128;
+    public const int FirstPopupItemId = PopupId + 1;
+    private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
+
     private static bool _controlHovered = false;
     private static bool _controlSelected = false;
     private static bool _controlDisabled = false;
+    private static int _popupId = -1;
+    private static int _nextPopupItemId = FirstPopupItemId;
+
+    private static float _opacityValue;
+    private static int _colorValue;
+    private static int _colorPalette;
 
     private static void SetState(bool selected, bool disabled)
     {
@@ -104,7 +116,7 @@ internal static class EditorUI
 
             ButtonFill(selected, UI.IsHovered(), disabled, toolbar: toolbar);
             ButtonIcon(icon);
-            pressed = UI.WasPressed();
+            pressed = !disabled && UI.WasPressed();
         }
 
         return pressed;
@@ -157,10 +169,19 @@ internal static class EditorUI
             UI.Container(EditorStyle.Control.HoverFill);
     }
 
+    public static bool PopupItem(Action? content = null, bool selected = false, bool disabled = false, bool showIcon=false) =>
+        PopupItem(_nextPopupItemId++, null, null, content, selected, disabled, showIcon: showIcon);
+
+    public static bool PopupItem(string text, Action? content = null, bool selected = false, bool disabled = false) =>
+        PopupItem(_nextPopupItemId++, text, content, selected, disabled);
+
     public static bool PopupItem(ElementId id, string text, Action? content = null, bool selected = false, bool disabled = false) =>
         PopupItem(id, null, text, content, selected, disabled, showIcon: false);
 
-    public static bool PopupItem(ElementId id, Sprite? icon, string text, Action? content = null, bool selected = false, bool disabled = false, bool showIcon=true)
+    public static bool PopupItem(Sprite? icon, string text, Action? content = null, bool selected = false, bool disabled = false, bool showIcon = true) =>
+        PopupItem(_nextPopupItemId++, icon, text, content, selected, disabled, showIcon);
+
+    public static bool PopupItem(ElementId id, Sprite? icon, string? text, Action? content = null, bool selected = false, bool disabled = false, bool showIcon=true)
     {
         var pressed = false;
         using (UI.BeginContainer(id, EditorStyle.Popup.Item))
@@ -172,15 +193,14 @@ internal static class EditorUI
             using (UI.BeginRow(EditorStyle.Popup.ItemContent))
             {
                 ControlIcon(EditorStyle.Popup.CheckContent, selected ? EditorAssets.Sprites.IconCheck : null);
-                if (showIcon) ControlIcon(icon);
-                ControlText(text);
+                if (showIcon)
+                    ControlIcon(icon);
+
+                if (text != null)
+                    ControlText(text);
 
                 if (content != null)
-                {
-                    UI.Spacer(EditorStyle.Control.Spacing);
-                    UI.Flex();
                     content?.Invoke();
-                }
             }
 
             pressed = UI.WasPressed();
@@ -189,6 +209,59 @@ internal static class EditorUI
         ClearState();
 
         return pressed;
+    }
+
+    public static void OpenPopup(ElementId id)
+    {
+        _popupId = id;
+    }
+
+    public static void ClosePopup()
+    {
+        _popupId = -1;
+    }
+
+    public static void TogglePopup(ElementId id)
+    {
+        if (_popupId == id)
+            _popupId = -1;
+        else
+            _popupId = id;
+    }
+
+    public static bool IsPopupOpen(ElementId id) =>
+        _popupId == id;
+
+    public static bool Popup(ElementId id, Action content, PopupStyle? style = null, Vector2 offset = default)
+    {
+        if (_popupId != id) return false;
+
+        _nextPopupItemId = FirstPopupItemId;
+
+        using var _ = UI.BeginPopup(
+            PopupId,
+            style ?? new PopupStyle
+            {
+                AnchorX = Align.Min,
+                AnchorY = Align.Min,
+                PopupAlignX = Align.Min,
+                PopupAlignY = Align.Max,
+                Spacing = 2,
+                ClampToScreen = true,
+                AnchorRect = UI.GetElementCanvasRect(id).Translate(offset)
+            });
+
+        if (UI.IsClosed())
+        {
+            _popupId = -1;
+            return false;
+        }
+
+        using var __ = UI.BeginColumn(EditorStyle.Popup.Root);
+
+        content.Invoke();
+        
+        return _popupId == id;
     }
 
     public static void ControlFill(bool ignoreDefaultFill = false)
@@ -203,7 +276,13 @@ internal static class EditorUI
             UI.Container(EditorStyle.Control.Fill);
     }
 
-    public static bool Control(ElementId id, Action content, bool selected = false, bool disabled = false, bool toolbar = false)
+    public static bool Control(
+        ElementId id,
+        Action content,
+        bool selected = false,
+        bool disabled = false,
+        bool toolbar = false,
+        bool padding = true)
     {
         bool pressed = false;
         using (UI.BeginContainer(id, EditorStyle.Control.Root))
@@ -211,7 +290,7 @@ internal static class EditorUI
             SetState(selected, disabled);
             ControlFill(ignoreDefaultFill: toolbar);
 
-            using (UI.BeginRow(EditorStyle.Control.Content))
+            using (UI.BeginRow(padding ? EditorStyle.Control.Content : EditorStyle.Control.ContentNoPadding))
                 content.Invoke();
 
             pressed = !disabled && UI.WasPressed();
@@ -268,5 +347,167 @@ internal static class EditorUI
     public static void ToolbarSpacer()
     {
         UI.Container(EditorStyle.Toolbar.Spacer);
+    }
+
+    private static void ColorPopupContent()
+    {
+        using var _ = UI.BeginGrid(new GridStyle
+        {
+            CellHeight = EditorStyle.Control.Height,
+            CellWidth = EditorStyle.Control.Height,
+            Columns = 8,
+            Spacing = EditorStyle.Control.Spacing
+        });
+
+        for (var i = 0; i < 64; i++)
+        {
+            using (UI.BeginContainer(FirstPopupItemId + i))
+            {
+                var displayColor = PaletteManager.GetColor(_colorPalette, i);
+                if (displayColor.A <= float.Epsilon)
+                {
+                    UI.Container(new ContainerStyle { Color = Color.White2Pct });
+                    continue;
+                }
+
+                if (i == _colorValue)
+                {
+                    using var ____ = UI.BeginContainer(new ContainerStyle
+                    {
+                        Margin = EdgeInsets.All(-3),
+                        Padding = EdgeInsets.All(4),
+                        Border = new BorderStyle
+                        {
+                            Radius = EditorStyle.Control.BorderRadius,
+                            Width = 4.0f,
+                            Color = EditorStyle.SelectionColor
+                        }
+                    });
+
+                    UI.Container(new ContainerStyle
+                    {
+                        Color = displayColor,
+                        Border = new BorderStyle { Radius = EditorStyle.Control.BorderRadius - 2 }
+                    });
+                }
+                else
+                {
+                    UI.Container(new ContainerStyle
+                    {
+                        Color = displayColor,
+                        Border = new BorderStyle { Radius = EditorStyle.Control.BorderRadius }
+                    });
+                }
+
+                if (UI.WasPressed())
+                {
+                    _colorValue = i;
+                    ClosePopup();
+                }
+            }
+        }
+    }
+
+    private static int ColorPopup(ElementId id, int palette, int value)
+    {
+        _colorPalette = palette;
+        _colorValue = value;
+        Popup(id, ColorPopupContent);
+        value = _colorValue;
+        return value;
+    }
+
+    public static bool ColorButton(ElementId id, int paletteId, ref int colorId)
+    {
+        var oldValue = colorId;
+        void ButtonContent()
+        {
+            using var _ = UI.BeginContainer(new ContainerStyle
+            {
+                Width = EditorStyle.Control.ContentHeight,
+                Padding = EdgeInsets.All(2)
+            });
+            UI.Container(new ContainerStyle { Color = PaletteManager.GetColor(paletteId, oldValue) });
+        }
+
+        if (Control(id, ButtonContent, selected: false, disabled: false, toolbar: false))
+            TogglePopup(id); ;
+
+        colorId = ColorPopup(id: id, value: colorId, palette: paletteId);
+
+        return colorId != oldValue;
+    }
+
+    private static float OpacityPopup(ElementId id, float value, bool showSubtract)
+    {
+        void OpacityItem(float value)
+        {
+            using (UI.BeginContainer(EditorStyle.Control.IconContainer))
+            {
+                UI.Image(EditorAssets.Sprites.IconOpacity, style: EditorStyle.Control.Icon);
+                UI.Image(
+                    EditorAssets.Sprites.IconOpacityOverlay,
+                    EditorStyle.Control.Icon with { Color = Color.White.WithAlpha(value) });
+            }
+            ControlText(OpacityStrings[(int)(value * 10)]);
+        }
+
+        void SubtractIcon()
+        {
+            PopupIcon(EditorAssets.Sprites.IconSubtract);
+            ControlText("Subtract");
+        }
+
+        void Content()
+        {
+            if (showSubtract && PopupItem(SubtractIcon, selected: value <= float.MinValue))
+            {
+                ClosePopup();
+                _opacityValue = float.MinValue;
+                return;
+            }
+
+            for (int i = 0; i <= 10; i++)
+            {
+                var itemValue = i / 10.0f;
+                if (PopupItem(() => OpacityItem(itemValue), itemValue == value))
+                {
+                    _opacityValue = i / 10.0f;
+                    ClosePopup();
+                }
+            }
+        }
+
+        _opacityValue = value;
+        Popup(id, Content, offset: new Vector2(-34,0));
+        return _opacityValue;
+    }
+
+    public static bool OpacityButton(ElementId id, ref float value, bool showSubtract=false)
+    {
+        var oldValue = value;
+
+        void ControlContent()
+        {
+            if (showSubtract && oldValue <= float.MinValue)
+            {
+                ControlIcon(EditorAssets.Sprites.IconSubtract);
+            }
+            else
+            {
+                using var _ = UI.BeginContainer(EditorStyle.Control.IconContainer with { Padding = EdgeInsets.All(EditorStyle.Control.Spacing) });
+                UI.Image(EditorAssets.Sprites.IconOpacity, EditorStyle.Control.Icon);
+                UI.Image(
+                    EditorAssets.Sprites.IconOpacityOverlay,
+                    EditorStyle.Control.Icon with { Color = Color.White.WithAlpha(oldValue) });
+            }
+        }
+
+        if (Control(id, ControlContent, padding: false))
+            TogglePopup(id);
+
+        value = OpacityPopup(id, value: value, showSubtract: showSubtract);
+
+        return oldValue != value;
     }
 }

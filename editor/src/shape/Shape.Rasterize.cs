@@ -21,6 +21,7 @@ public sealed partial class Shape
     public struct RasterizeOptions
     {
         public bool AntiAlias;
+        public string Name;
 
         public static readonly RasterizeOptions Default = new() { AntiAlias = false };
     }
@@ -90,7 +91,7 @@ public sealed partial class Shape
 
         if (sw.ElapsedMilliseconds > 16)
         {
-            Log.Info($"Shape Rasterize took {sw.ElapsedMilliseconds} ms");
+            Log.Info($"Shape.Rasterize ({sw.ElapsedMilliseconds}ms):  name={(options.Name ?? "???")}  targetRect={targetRect}  pathCount={PathCount}  anchorCount={AnchorCount}");
         }
     }
 

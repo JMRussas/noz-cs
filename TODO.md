@@ -14,6 +14,13 @@
 - [ ] Factored out the dopesheet and reused in sprite
 - [ ] Added animated sprites
 - [ ] Added stroke rendering
+- [X] Added EditorUI.Popup interface to make popups easier
+- [X] Simplified subtraction to be opacity of float.MinValue
+- [X] Added EditorUI.ColorButton
+- [X] Added EditorUI.OpacityButton
+- [X] Replaced color selection with a color popup in sprite editor
+- [X] Simplified popup element rect logic
+- [X] Fixed popup's in rows/columns changing the row/column layout
 - [X] Stop Generating game assets on every load
 - [X] Improved performance of rasterization in sprite editor
 - [X] Switched to SixLabor.ImageSharp in editor

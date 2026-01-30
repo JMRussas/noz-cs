@@ -70,7 +70,7 @@ public sealed unsafe partial class Shape : IDisposable
         public AnchorFlags Flags;
         public ushort Path;
 
-        public bool IsSelected => (Flags & AnchorFlags.Selected) != 0;
+        public readonly bool IsSelected => (Flags & AnchorFlags.Selected) != 0;
     }
 
     public struct Path
@@ -802,20 +802,16 @@ public sealed unsafe partial class Shape : IDisposable
         _paths[pathIndex].FillColor = fillColor;
     }
 
-    public void SetPathSubtract(ushort pathIndex, bool value)
-    {
-        if (value)
-            _paths[pathIndex].Flags |= PathFlags.Subtract;
-        else
-            _paths[pathIndex].Flags &= ~PathFlags.Subtract;
-    }
-
     public void SetPathFillOpacity(ushort pathIndex, float value)
     {
-        _paths[pathIndex].FillOpacity = value;
+        ref var path = ref _paths[pathIndex];
+        path.FillOpacity = value;
+        path.Flags &= ~PathFlags.Subtract;
+        if (value <= float.MinValue)
+            path.Flags |= PathFlags.Subtract;
     }
 
-    public ushort AddPath(byte fillColor = 0, byte strokeColor = 0, float opacity=1.0f, bool subract = false)
+    public ushort AddPath(byte fillColor = 0, byte strokeColor = 0, float fillOpacity=1.0f)
     {
         if (PathCount >= MaxPaths) return ushort.MaxValue;
 
@@ -825,8 +821,8 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorStart = AnchorCount,
             AnchorCount = 0,
             FillColor = fillColor,
-            FillOpacity = opacity,
-            Flags = PathFlags.None | (subract ? PathFlags.Subtract : PathFlags.None),
+            FillOpacity = fillOpacity,
+            Flags = PathFlags.None | (fillOpacity <= float.MinValue ? PathFlags.Subtract : PathFlags.None),
         };
 
         return pathIndex;
@@ -1532,7 +1528,7 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorCount = (ushort)path2Count,
             FillColor = srcPath.FillColor,
             FillOpacity = srcPath.FillOpacity,            
-            Flags = srcPath.IsSubtract ? PathFlags.Subtract : PathFlags.None
+            Flags = srcPath.Flags & PathFlags.Subtract
         };
 
         // Copy path2 anchors to the end

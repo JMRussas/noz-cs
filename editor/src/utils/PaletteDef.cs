@@ -94,6 +94,14 @@ public static class PaletteManager
         return _palettes.FirstOrDefault(p => p.Name == name);
     }
 
+    public static Color GetColor(int paletteId, int colorId)
+    {
+        var palette = GetPalette(paletteId);
+        if (palette == null || colorId < 0 || colorId >= PaletteDef.ColorCount)
+            return Color.White;
+        return palette.Colors[colorId];
+    }
+
     public static void ReloadPaletteColors()
     {
         if (string.IsNullOrEmpty(_paletteTextureName))

@@ -222,9 +222,15 @@ public static partial class UI
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
-                if (child.Type == ElementType.Flex || child.Type == ElementType.Popup)
+                if (child.Type == ElementType.Flex)
                 {
                     prevWasNonFlex = false;
+                    elementIndex = child.NextSiblingIndex;
+                    continue;
+                }
+
+                if (child.Type == ElementType.Popup)
+                {
                     elementIndex = child.NextSiblingIndex;
                     continue;
                 }
@@ -245,9 +251,15 @@ public static partial class UI
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref readonly var child = ref GetElement(elementIndex);
-                if (child.Type == ElementType.Flex || child.Type == ElementType.Popup)
+                if (child.Type == ElementType.Flex)
                 {
                     prevWasNonFlex = false;
+                    elementIndex = child.NextSiblingIndex;
+                    continue;
+                }
+
+                if (child.Type == ElementType.Popup)
+                {
                     elementIndex = child.NextSiblingIndex;
                     continue;
                 }

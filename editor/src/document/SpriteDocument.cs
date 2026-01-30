@@ -185,25 +185,15 @@ public class SpriteDocument : Document
         while (!tk.IsEOF)
         {
             if (tk.ExpectIdentifier("c"))
-            {
                 fillColor = (byte)tk.ExpectInt();
-            }
             else if (tk.ExpectIdentifier("o"))
-            {
                 opacity = tk.ExpectFloat();
-            }
             else if (tk.ExpectIdentifier("h"))
-            {
-                f.Shape.SetPathSubtract(pathIndex, true);
-            }
+                opacity = float.MinValue;
             else if (tk.ExpectIdentifier("a"))
-            {
                 ParseAnchor(f.Shape, pathIndex, ref tk);
-            }
             else
-            {
                 break;
-            }
         }
 
         f.Shape.SetPathFillColor(pathIndex, fillColor);
@@ -344,9 +334,12 @@ public class SpriteDocument : Document
         for (ushort pIdx = 0; pIdx < shape.PathCount; pIdx++)
         {
             var path = shape.GetPath(pIdx);
-
-            var holeStr = path.IsSubtract ? " h" : "";
-            writer.WriteLine($"p c {path.FillColor}{holeStr} o {path.FillOpacity}");
+            var opacityStr = path.IsSubtract
+                ? " h"
+                : path.FillOpacity < 1
+                    ? $" o {path.FillOpacity}"
+                    : "";
+            writer.WriteLine($"p c {path.FillColor}{opacityStr}");
 
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {

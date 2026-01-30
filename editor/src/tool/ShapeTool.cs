@@ -12,34 +12,23 @@ public enum ShapeType
     Circle
 }
 
-public class ShapeTool : Tool
+public class ShapeTool(
+    SpriteEditor editor,
+    Shape shape,
+    byte fillColor,
+    ShapeType shapeType,
+    float opacity = 1.0f) : Tool
 {
-    private readonly SpriteEditor _editor;
-    private readonly Shape _shape;
-    private readonly byte _fillColor;
-    private readonly ShapeType _shapeType;
+    private readonly SpriteEditor _editor = editor;
+    private readonly Shape _shape = shape;
+    private readonly byte _fillColor = fillColor;
+    private readonly ShapeType _shapeType = shapeType;
 
     private Vector2 _startLocal;
     private Vector2 _currentLocal;
     private bool _isDragging;
-    private bool _isSubtract;
-    private float _opacity;
-
-    public ShapeTool(
-        SpriteEditor editor,
-        Shape shape,
-        byte fillColor,
-        ShapeType shapeType,
-        float opacity = 1.0f,
-        bool subtract = false)
-    {
-        _editor = editor;
-        _shape = shape;
-        _fillColor = fillColor;
-        _shapeType = shapeType;
-        _opacity = opacity;
-        _isSubtract = subtract;
-    }
+    private bool _isSubtract = opacity <= float.MinValue;
+    private float _opacity = opacity;
 
     public override void Begin()
     {
@@ -186,7 +175,7 @@ public class ShapeTool : Tool
         _shape.ClearAnchorSelection();
 
         var firstAnchor = _shape.AnchorCount;
-        var pathIndex = _shape.AddPath(_fillColor, opacity: _opacity, subract: _isSubtract);
+        var pathIndex = _shape.AddPath(_fillColor, fillOpacity: _opacity);
         if (pathIndex == ushort.MaxValue)
         {
             Finish();

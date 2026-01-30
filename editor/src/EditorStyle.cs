@@ -18,7 +18,7 @@ public static class EditorStyle
     }
     #endregion
 
-    public static readonly Color SelectionColor = Color.FromRgb(0x4772b3);
+    public static readonly Color SelectionColor = Color.FromRgb(0x54a3f6);
 
     // Toggle Button
     public const float ToggleButtonHeight = ButtonHeight;
@@ -92,6 +92,8 @@ public static class EditorStyle
         public const float Height = 40.0f;
         public const float BorderRadius = 10.0f;
         public const float Spacing = 5.0f;
+        public const float ContentPadding = 4.0f;
+        public const float ContentHeight = Height - ContentPadding * 2;
 
         public static readonly ContainerStyle Root = new()
         {
@@ -106,9 +108,11 @@ public static class EditorStyle
 
         public static readonly ContainerStyle Content = new()
         {
-            Padding = EdgeInsets.Symmetric(2,Spacing*2),
+            Padding = EdgeInsets.All(ContentPadding),
             Spacing = Spacing
         };
+
+        public static readonly ContainerStyle ContentNoPadding = Content with { Padding = EdgeInsets.Zero };
 
         public static readonly ContainerStyle HoverFill = Fill with { Color = Color.FromRgb(0x3f3f3f) };
         public static readonly ContainerStyle SelectedFill = Fill with { Color = Color.FromRgb(0x545454) };
@@ -188,7 +192,7 @@ public static class EditorStyle
         {
             AlignX = Align.Center,
             AlignY = Align.Center,
-            Padding = EdgeInsets.Symmetric(4.0f, 8.0f),
+            Padding = EdgeInsets.All(Control.Spacing),
             Color = FillColor,
             Border = new BorderStyle { Radius = 14f, Width = 1.0f, Color = BorderColor }
         };
@@ -658,7 +662,7 @@ public static class EditorStyle
             AlignY = Align.Max,
             Width = Size.Fit,
             Height = Size.Fit,
-            Margin = EdgeInsets.Bottom(-Panel.BorderRadius)
+            Margin = EdgeInsets.Bottom(-Panel.BorderRadius / 2)
         };
 
         public static readonly ContainerStyle ColorPicker = new()

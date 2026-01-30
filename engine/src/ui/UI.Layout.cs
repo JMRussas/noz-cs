@@ -70,6 +70,13 @@ public static partial class UI
                 continue;
             }
 
+            if (child.Type == ElementType.Popup)
+            {
+                LayoutElement(elementIndex, Vector2.Zero, AutoSize);
+                elementIndex = child.NextSiblingIndex;
+                continue;
+            }
+
             if (prevWasNonFlex)
                 offset[axis] += e.Data.Container.Spacing;
 
@@ -91,6 +98,12 @@ public static partial class UI
             for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
             {
                 ref var child = ref GetElement(elementIndex);
+                if (child.Type == ElementType.Popup)
+                {
+                    elementIndex = child.NextSiblingIndex;
+                    continue;
+                }
+
                 if (child.Type != ElementType.Flex)
                 {
                     if (prevWasNonFlex)
@@ -130,13 +143,12 @@ public static partial class UI
         e.Rect.X = align.X + offset.X + p.ContentRect.X;
         e.Rect.Y = align.Y + offset.Y + p.ContentRect.Y;
 
-        // Position popup relative to anchor (in parent-local space)
-        // Transform pass will convert to canvas space
+        // Position popup relative to anchor (in canvas space)
         if (e.Type == ElementType.Popup)
         {
             ref var popup = ref e.Data.Popup;
 
-            // Anchor rect is in parent-local space, position popup relative to it
+            // Anchor rect is in canvas space
             var anchorX = popup.AnchorRect.X + popup.AnchorRect.Width * popup.AnchorX.ToFactor();
             var anchorY = popup.AnchorRect.Y + popup.AnchorRect.Height * popup.AnchorY.ToFactor();
 
@@ -214,13 +226,11 @@ public static partial class UI
         // Child position relative to parent's LocalToWorld origin
         var childPos = new Vector2(e.Rect.X, e.Rect.Y) - parentPivotOffset;
 
-        // Clamp popup to screen bounds if requested
+        // Clamp popup to screen bounds if requested (popup rect is already in canvas space)
         if (e.Type == ElementType.Popup && e.Data.Popup.ClampToScreen)
         {
-            var popupWorldPos = Vector2.Transform(childPos, p.LocalToWorld);
-            var clampedX = Math.Clamp(popupWorldPos.X, 0, ScreenSize.X - e.Rect.Width);
-            var clampedY = Math.Clamp(popupWorldPos.Y, 0, ScreenSize.Y - e.Rect.Height);
-            childPos = Vector2.Transform(new Vector2(clampedX, clampedY), p.WorldToLocal);
+            e.Rect.X = Math.Clamp(e.Rect.X, 0, ScreenSize.X - e.Rect.Width);
+            e.Rect.Y = Math.Clamp(e.Rect.Y, 0, ScreenSize.Y - e.Rect.Height);
         }
 
         Matrix3x2 localTransform;
@@ -245,7 +255,15 @@ public static partial class UI
             localTransform = Matrix3x2.CreateTranslation(childPos);
         }
 
-        e.LocalToWorld = localTransform * p.LocalToWorld;
+        // Popups use canvas-space positioning, not parent-relative
+        if (e.Type == ElementType.Popup)
+        {
+            e.LocalToWorld = Matrix3x2.CreateTranslation(e.Rect.X, e.Rect.Y);
+        }
+        else
+        {
+            e.LocalToWorld = localTransform * p.LocalToWorld;
+        }
         Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
 
         // Adjust Rect to be element-local (relative to LocalToWorld origin which is at pivot)

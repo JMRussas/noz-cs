@@ -1,5 +1,5 @@
 [editor]
-position = (-7.500000,-4.500000)
+position = (-4.750000,-1.750000)
 collection = icons
 
 [mesh]
@@ -9,4 +9,5 @@ palette = 0
 show_in_skeleton = false
 show_tiling = false
 show_skeleton_overlay = false
+constrained_size = 64x64
 

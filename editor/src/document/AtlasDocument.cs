@@ -356,7 +356,7 @@ internal class AtlasDocument : Document
                     rasterRect,
                     -rect.Sprite.RasterBounds.Position,
                     palette.Colors,
-                    new Shape.RasterizeOptions { AntiAlias = rect.Sprite.IsAntiAliased });
+                    new Shape.RasterizeOptions { Name = rect.Sprite.Name, AntiAlias = rect.Sprite.IsAntiAliased });
 
                 _image.BleedColors(rasterRect);
                 for (int p = Padding - 1; p >= 0; p--)
