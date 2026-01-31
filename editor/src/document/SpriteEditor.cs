@@ -147,6 +147,7 @@ public class SpriteEditor : DocumentEditor
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
     private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
 
+
     public ushort CurrentFrame => _currentFrame;
     public bool IsPlaying => _isPlaying;
 
@@ -201,8 +202,6 @@ public class SpriteEditor : DocumentEditor
             HandleDragStart();
         else if (Input.WasButtonReleased(InputCode.MouseLeft))
             HandleLeftClick();
-        else if (Input.WasButtonPressed(InputCode.MouseLeftDoubleClick))
-            HandleDoubleClick();
     }
 
     private void ToolbarUI()
@@ -779,7 +778,7 @@ public class SpriteEditor : DocumentEditor
         Undo.Record(Document);
 
         var shape = Document.GetFrame(_currentFrame).Shape;
-        shape.ClearAnchorSelection();
+        shape.ClearSelection();
 
         clipboardData.PasteInto(shape);
 
@@ -787,8 +786,6 @@ public class SpriteEditor : DocumentEditor
         Document.UpdateBounds();
         MarkRasterDirty();
         UpdateSelectionColor();
-
-        BeginMoveTool();
     }
 
     private void CenterShape()
@@ -899,57 +896,136 @@ public class SpriteEditor : DocumentEditor
 
     private void HandleLeftClick()
     {
+        Matrix3x2.Invert(Document.Transform, out var invTransform);
+        var localMousePos = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
         var shape = Document.GetFrame(_currentFrame).Shape;
         var shift = Input.IsShiftDown();
 
-        Matrix3x2.Invert(Document.Transform, out var invTransform);
-        var localMousePos = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
+        Span<Shape.HitResult> hits = stackalloc Shape.HitResult[Shape.MaxAnchors];
+        var hitCount = shape.HitTestAll(localMousePos, hits);
 
-        var hit = shape.HitTest(localMousePos);
+        // Separate hits by type and sort by path index descending (back to front, higher = on top)
+        Span<ushort> anchorHits = stackalloc ushort[hitCount];
+        Span<ushort> segmentHits = stackalloc ushort[hitCount];
+        Span<ushort> pathHits = stackalloc ushort[Shape.MaxPaths];
+        var anchorCount = 0;
+        var segmentCount = 0;
+        var pathCount = shape.GetPathsContainingPoint(localMousePos, pathHits);
 
-        if (hit.AnchorIndex != ushort.MaxValue)
+        for (var i = 0; i < hitCount; i++)
         {
-            SelectAnchor(hit.AnchorIndex, shift);
+            if (hits[i].AnchorIndex != ushort.MaxValue)
+                anchorHits[anchorCount++] = hits[i].AnchorIndex;
+            else if (hits[i].SegmentIndex != ushort.MaxValue)
+                segmentHits[segmentCount++] = hits[i].SegmentIndex;
+        }
+
+        // Sort by path index descending (higher path index = drawn on top)
+        SortByPathIndexDescending(shape, anchorHits[..anchorCount]);
+        SortByPathIndexDescending(shape, segmentHits[..segmentCount]);
+        pathHits[..pathCount].Reverse();
+
+        // Priority: anchors > segments > paths
+        if (anchorCount > 0)
+        {
+            if (shift)
+                ShiftSelectNext(anchorHits[..anchorCount], shape.IsAnchorSelected, shape.SetAnchorSelected);
+            else
+            {
+                var nextIdx = FindNextInCycle(anchorHits[..anchorCount], shape.IsAnchorSelected);
+                SelectAnchor(anchorHits[nextIdx], toggle: false);
+            }
+        }
+        else if (segmentCount > 0)
+        {
+            if (shift)
+                ShiftSelectNextSegment(shape, segmentHits[..segmentCount]);
+            else
+            {
+                var nextIdx = FindNextInCycle(segmentHits[..segmentCount], shape.IsSegmentSelected);
+                SelectSegment(segmentHits[nextIdx], toggle: false);
+            }
+        }
+        else if (pathCount > 0)
+        {
+            if (shift)
+                ShiftSelectNext(pathHits[..pathCount], shape.IsPathSelected, i => shape.SetPathSelected(i, true), i => shape.SetPathSelected(i, false));
+            else
+            {
+                var nextIdx = FindNextInCycle(pathHits[..pathCount], shape.IsPathSelected);
+                SelectPath(pathHits[nextIdx], toggle: false);
+            }
+        }
+        else
+        {
+            if (!shift)
+                shape.ClearAnchorSelection();
             return;
         }
 
-        if (hit.SegmentIndex != ushort.MaxValue)
-        {
-            SelectSegment(hit.SegmentIndex, shift);
-            return;
-        }
-
-        if (hit.PathIndex != ushort.MaxValue)
-            return;
-
-        if (!shift)
-            shape.ClearAnchorSelection();
+        UpdateSelectionColor();
     }
 
-    private void HandleDoubleClick()
+    private static int FindNextInCycle(Span<ushort> items, Func<ushort, bool> isSelected)
     {
-        Input.ConsumeButton(InputCode.MouseLeft);
-
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        Matrix3x2.Invert(Document.Transform, out var invTransform);
-        var localPoint = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
-
-        Span<ushort> containingPaths = stackalloc ushort[Shape.MaxPaths];
-        var count = shape.GetPathsContainingPoint(localPoint, containingPaths);
-
-        if (count == 0)
-            return;
-        
-        for (int i=0; i<count; i++)
+        for (var i = 0; i < items.Length; i++)
         {
-            if (shape.IsPathSelected(containingPaths[i]))
+            if (isSelected(items[i]))
+                return (i + 1) % items.Length;
+        }
+        return 0;
+    }
+
+    private static void ShiftSelectNext(Span<ushort> items, Func<ushort, bool> isSelected, Action<ushort, bool> setSelected)
+    {
+        // Find first unselected and select it, or deselect all if all selected
+        for (var i = 0; i < items.Length; i++)
+        {
+            if (!isSelected(items[i]))
             {
-                SelectPath(containingPaths[((i - 1) + count) % count], false);
+                setSelected(items[i], true);
                 return;
             }
         }
+        for (var i = 0; i < items.Length; i++)
+            setSelected(items[i], false);
+    }
 
-        SelectPath(containingPaths[count-1], false);        
+    private static void ShiftSelectNext(Span<ushort> items, Func<ushort, bool> isSelected, Action<ushort> select, Action<ushort> deselect)
+    {
+        for (var i = 0; i < items.Length; i++)
+        {
+            if (!isSelected(items[i]))
+            {
+                select(items[i]);
+                return;
+            }
+        }
+        for (var i = 0; i < items.Length; i++)
+            deselect(items[i]);
+    }
+
+    private static void ShiftSelectNextSegment(Shape shape, Span<ushort> items)
+    {
+        for (var i = 0; i < items.Length; i++)
+        {
+            if (!shape.IsSegmentSelected(items[i]))
+            {
+                shape.SetAnchorSelected(items[i], true);
+                shape.SetAnchorSelected(shape.GetNextAnchorIndex(items[i]), true);
+                return;
+            }
+        }
+        for (var i = 0; i < items.Length; i++)
+        {
+            shape.SetAnchorSelected(items[i], false);
+            shape.SetAnchorSelected(shape.GetNextAnchorIndex(items[i]), false);
+        }
+    }
+
+    private static void SortByPathIndexDescending(Shape shape, Span<ushort> indices)
+    {
+        indices.Sort((a, b) => shape.GetAnchor(b).Path.CompareTo(shape.GetAnchor(a).Path));
     }
 
     private void BeginMoveTool()
@@ -1447,7 +1523,7 @@ public class SpriteEditor : DocumentEditor
     {
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
-            Gizmos.SetColor(EditorStyle.Shape.SegmentColor);
+            Gizmos.SetColor(EditorStyle.Workspace.LineColor);
             for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
             {
                 if (!shape.IsSegmentSelected(anchorIndex))
@@ -1458,7 +1534,7 @@ public class SpriteEditor : DocumentEditor
                 }
             }
 
-            Gizmos.SetColor(EditorStyle.Shape.SelectedSegmentColor);
+            Gizmos.SetColor(EditorStyle.Workspace.SelectionColor);
             for (ushort anchorIndex = 0; anchorIndex < shape.AnchorCount; anchorIndex++)
             {
                 if (shape.IsSegmentSelected(anchorIndex))
@@ -1473,13 +1549,13 @@ public class SpriteEditor : DocumentEditor
 
     private static void DrawAnchor(Vector2 worldPosition)
     {
-        Gizmos.SetColor(EditorStyle.Shape.AnchorColor);
+        Gizmos.SetColor(EditorStyle.Workspace.LineColor);
         Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize, order: 4);
     }
 
     private static void DrawSelectedAnchor(Vector2 worldPosition)
     {
-        Gizmos.SetColor(EditorStyle.Shape.SelectedAnchorColor);
+        Gizmos.SetColor(EditorStyle.Workspace.SelectionColor);
         Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize, order: 5);
     }
 

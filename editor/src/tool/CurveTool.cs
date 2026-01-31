@@ -103,7 +103,7 @@ public class CurveTool : Tool
 
         Graphics.SetTransform(_transform);
 
-        Gizmos.SetColor(EditorStyle.Shape.SegmentColor.WithAlpha(0.5f));
+        Gizmos.SetColor(EditorStyle.Workspace.SelectionColor.WithAlpha(0.5f));
         foreach (var segIdx in _selectedSegments)
         {
             var a0 = _shape.GetAnchor(segIdx);

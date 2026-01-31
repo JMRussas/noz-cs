@@ -76,6 +76,7 @@ public static class EditorStyle
         public static readonly Color GridColor = Color.FromRgb(0x686868);
         public static readonly Color BoundsColor = Color.FromRgb(0x212121);
         public static readonly Color OriginColor = Color.FromRgb(0xff9f2c);
+        public static readonly Color LineColor = Color.FromRgb(0x000000);
         public const float OriginSize = 0.1f;
         public const float DocumentBoundsLineWidth = 0.015f;
         public const float Padding = 16f;
@@ -338,14 +339,10 @@ public static class EditorStyle
     // :shape
     public static class Shape
     {
-        public static Color SegmentColor => _colors.Shape.Segment;
-        public static Color SelectedSegmentColor => _colors.Shape.SelectedSegment;
-        public static Color AnchorColor => _colors.Shape.Anchor;
-        public static Color SelectedAnchorColor => _colors.Shape.SelectedAnchor;
-        public const float AnchorSize = 0.10f;
-        public const float AnchorHitSize = AnchorSize * 4.0f;
-        public const float SegmentLineWidth = 0.015f;
-        public const float SegmentHitSize = SegmentLineWidth * 8.0f;
+        public const float AnchorSize = 0.14f;
+        public const float AnchorHitSize = AnchorSize * 2.0f;
+        public const float SegmentLineWidth = 0.02f;
+        public const float SegmentHitSize = SegmentLineWidth * 12.0f;
 
         public static Color ControlPointColor => _colors.Shape.SelectedAnchor;
         public static Color ControlPointLineColor => _colors.Shape.SelectedSegment;
@@ -524,7 +521,6 @@ public static class EditorStyle
         public const float ColorPickerHeight = ColorSize + ColorPickerBorderWidth * 2;
         public const float ColorPickerSelectionBorderWidth = 3f;
         public static readonly Color BoneOriginColor = Color.White;
-        public static readonly Color SelectedOriginColor = Shape.SelectedAnchorColor;
 
         public static readonly ContainerStyle ColorPicker = new()
         {

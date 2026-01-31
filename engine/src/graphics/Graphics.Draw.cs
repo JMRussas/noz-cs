@@ -169,6 +169,42 @@ public static partial class Graphics
     }
 
     /// <summary>
+    /// Draw all meshes of a sprite with a fixed order (ignores mesh sort orders).
+    /// Use this for UI rendering where sort groups should not separate meshes.
+    /// </summary>
+    public static void DrawFlat(Sprite sprite, ushort order = 0, int bone = -1)
+    {
+        if (sprite == null || SpriteAtlas == null) return;
+
+        var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
+        if (bone >= 0)
+            bounds = new Rect(bounds.X - sprite.BoneOffset.X, bounds.Y - sprite.BoneOffset.Y, bounds.Width, bounds.Height);
+        var p0 = new Vector2(bounds.Left, bounds.Top);
+        var p1 = new Vector2(bounds.Right, bounds.Top);
+        var p2 = new Vector2(bounds.Right, bounds.Bottom);
+        var p3 = new Vector2(bounds.Left, bounds.Bottom);
+
+        using (PushState())
+        {
+            SetTexture(SpriteAtlas);
+            SetShader(_spriteShader!);
+            SetTextureFilter(sprite.TextureFilter);
+
+            foreach (ref readonly var quad in sprite.Meshes.AsSpan())
+            {
+                var uv = quad.UV;
+                AddQuad(
+                    p0, p1, p2, p3,
+                    uv.TopLeft, new Vector2(uv.Right, uv.Top),
+                    uv.BottomRight, new Vector2(uv.Left, uv.Bottom),
+                    order: order,
+                    atlasIndex: sprite.AtlasIndex,
+                    bone: bone);
+            }
+        }
+    }
+
+    /// <summary>
     /// Draw a sprite using the currently bound shader (does not override shader/texture).
     /// Requires SetTexture and SetShader to be called before this.
     /// </summary>

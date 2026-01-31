@@ -204,7 +204,7 @@ public static partial class UI
             var transform = Matrix3x2.CreateScale(scale * sprite.PixelsPerUnit) * Matrix3x2.CreateTranslation(offset) * e.LocalToWorld;
             Graphics.SetTransform(transform);
             Graphics.SetColor(img.Color);
-            Graphics.Draw(e.Sprite, order: 0, bone: -1);
+            Graphics.DrawFlat(e.Sprite, order: 0, bone: -1);
         }
     }
 }

@@ -1,7 +1,8 @@
 # 1/31/2026
+- [ ] Fix the atlas editor
 - [ ] ctrl Snap bones from one to another when dragging in skeleton editor
 - [ ] Drag the end of bones to size them in skeleton editor
-- [ ] Create new animation with skeleton skeelcton should use that skeleton for animation
+- [ ] Create new animation with skeleton selected should use that skeleton for animation
 - [ ] Add animated sprites
 - [ ] Add stroke rendering
 - [ ] Atlas not always rebuilding when sprites change, sprite added i think
@@ -10,7 +11,10 @@
 - [ ] Refactor selection within sprite editor
 - [ ] Inital color when entering sprite editor is weird (first color in palette?)
 - [ ] Set bone per sprite layer
-- [ ] Fix the atlas editor
+- [ ] When anchor selected draw faded selection line along segment if other anchor isnt selected
+- [ ] Setting a color and then setting again seems to not work
+- [ ] sprites losing bone on import after atlas rebuild?
+- [X] Moved HitResult into Shape
 - [X] Add icons to color button
 - [X] Opacity in the color popup as a row
 - [X] Color button show color over grid with opacity

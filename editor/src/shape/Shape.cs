@@ -8,28 +8,29 @@ using System.Runtime.InteropServices;
 
 namespace NoZ.Editor;
 
-public struct HitResult
-{
-    public ushort AnchorIndex;
-    public ushort SegmentIndex;
-    public ushort PathIndex;
-    public float AnchorDistSqr;
-    public float SegmentDistSqr;
-    public Vector2 AnchorPosition;
-    public Vector2 SegmentPosition;
-
-    public static HitResult Empty => new()
-    {
-        AnchorIndex = ushort.MaxValue,
-        SegmentIndex = ushort.MaxValue,
-        PathIndex = ushort.MaxValue,
-        AnchorDistSqr = float.MaxValue,
-        SegmentDistSqr = float.MaxValue,
-    };
-}
-
 public sealed unsafe partial class Shape : IDisposable
 {
+    public struct HitResult
+    {
+        public ushort AnchorIndex;
+        public ushort SegmentIndex;
+        public ushort PathIndex;
+        public float AnchorDistSqr;
+        public float SegmentDistSqr;
+        public Vector2 AnchorPosition;
+        public Vector2 SegmentPosition;
+        public bool InPath;
+
+        public static HitResult Empty => new()
+        {
+            AnchorIndex = ushort.MaxValue,
+            SegmentIndex = ushort.MaxValue,
+            PathIndex = ushort.MaxValue,
+            AnchorDistSqr = float.MaxValue,
+            SegmentDistSqr = float.MaxValue,
+        };
+    }
+
     public const int MaxAnchors = 1024;
     public const int MaxPaths = 256;
     public const int MaxAnchorsPerPath = 128;
@@ -189,10 +190,12 @@ public sealed unsafe partial class Shape : IDisposable
         var dpi = EditorApplication.Config.PixelsPerUnit;
         var min = new Vector2(float.MaxValue, float.MaxValue);
         var max = new Vector2(float.MinValue, float.MinValue);
+        var stroke = false;
 
         for (ushort p = 0; p < PathCount; p++)
         {
             ref var path = ref _paths[p];
+            stroke |= path.StrokeOpacity > float.Epsilon;
 
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
@@ -218,7 +221,7 @@ public sealed unsafe partial class Shape : IDisposable
 
         Bounds = Rect.FromMinMax(min, max);
 
-        var strokePadding = (int)MathF.Ceiling(DefaultStrokeWidth * 0.5f + 1f);
+        var strokePadding = (int)(stroke ? MathF.Ceiling(DefaultStrokeWidth * 0.5f + 1f) : 0.0f);
         var xMin = (int)MathF.Floor(min.X * dpi + 0.001f) - strokePadding;
         var yMin = (int)MathF.Floor(min.Y * dpi + 0.001f) - strokePadding;
         var xMax = (int)MathF.Ceiling(max.X * dpi - 0.001f) + strokePadding;
@@ -341,6 +344,7 @@ public sealed unsafe partial class Shape : IDisposable
                         SegmentDistSqr = adistSqr,
                         SegmentPosition = a0.Position,
                         PathIndex = p,
+                        InPath = IsPointInPath(point, p),
                         AnchorIndex = a0Idx,
                         AnchorDistSqr = adistSqr,
                         AnchorPosition = a0.Position
@@ -384,6 +388,7 @@ public sealed unsafe partial class Shape : IDisposable
                     SegmentDistSqr = bestDistSqr,
                     SegmentPosition = bestClosest,
                     PathIndex = p,
+                    InPath = IsPointInPath(point, p),
                     AnchorIndex = ushort.MaxValue,
                     AnchorDistSqr = float.MaxValue,
                 };
@@ -458,6 +463,18 @@ public sealed unsafe partial class Shape : IDisposable
         }
 
         return count > 0 ? sum / count : null;
+    }
+
+    public void SelectPath(ushort pathIndex)
+    {
+        if (pathIndex >= PathCount) return;
+        ref var path = ref _paths[pathIndex];
+        for (ushort a = 0; a < path.AnchorCount; a++)
+        {
+            var anchorIdx = (ushort)(path.AnchorStart + a);
+            _anchors[anchorIdx].Flags |= AnchorFlags.Selected;
+        }
+        path.Flags |= PathFlags.Selected;
     }
 
     public void SelectAnchors(Rect rect)

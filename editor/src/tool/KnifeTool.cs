@@ -212,8 +212,8 @@ public class KnifeTool : Tool
 
         Undo.Record(_editor.Document);
 
-        Span<HitResult> headHits = stackalloc HitResult[Shape.MaxAnchors];
-        Span<HitResult> tailHits = stackalloc HitResult[Shape.MaxAnchors];
+        Span<Shape.HitResult> headHits = stackalloc Shape.HitResult[Shape.MaxAnchors];
+        Span<Shape.HitResult> tailHits = stackalloc Shape.HitResult[Shape.MaxAnchors];
         Span<KnifeSegment> knifeSegments = stackalloc KnifeSegment[MaxPoints / 2];
 
         var knifeSegmentCount = GetKnifeSegments(ref knifeSegments);
@@ -292,10 +292,10 @@ public class KnifeTool : Tool
     }
 
     private static ushort FindSharedPath(
-        ReadOnlySpan<HitResult> headHits,
-        ReadOnlySpan<HitResult> tailHits,
-        out HitResult headHit,
-        out HitResult tailHit)
+        ReadOnlySpan<Shape.HitResult> headHits,
+        ReadOnlySpan<Shape.HitResult> tailHits,
+        out Shape.HitResult headHit,
+        out Shape.HitResult tailHit)
     {
         // Find first matching path, but prefer hits with valid anchor indices
         for (var h = 0; h < headHits.Length; h++)
@@ -338,7 +338,7 @@ public class KnifeTool : Tool
         return ushort.MaxValue;
     }
 
-    private static ushort FindSegmentForPath(ReadOnlySpan<HitResult> hits, ushort pathIndex)
+    private static ushort FindSegmentForPath(ReadOnlySpan<Shape.HitResult> hits, ushort pathIndex)
     {
         for (var i = 0; i < hits.Length; i++)
         {
@@ -350,8 +350,8 @@ public class KnifeTool : Tool
 
     private void CutNotch(
         ushort pathIndex,
-        HitResult headHit,
-        HitResult tailHit,
+        Shape.HitResult headHit,
+        Shape.HitResult tailHit,
         ReadOnlySpan<KnifePoint> intermediatePoints)
     {
         LogKnife($"CutNotch: pathIndex={pathIndex}, headSegment={headHit.SegmentIndex}, tailSegment={tailHit.SegmentIndex}");
@@ -436,8 +436,8 @@ public class KnifeTool : Tool
     }
 
     private void CutPath(ushort pathIndex,
-        HitResult headHit,
-        HitResult tailHit,
+        Shape.HitResult headHit,
+        Shape.HitResult tailHit,
         ReadOnlySpan<KnifePoint> intermediatePoints)
     {
         ref readonly var path = ref _shape.GetPath(pathIndex);

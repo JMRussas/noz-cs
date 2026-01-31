@@ -229,11 +229,11 @@ public class PenTool : Tool
             {
                 var lastPoint = _points[_pointCount - 1].Position;
                 var firstPoint = _points[0].Position;
-                Gizmos.SetColor(EditorStyle.Shape.SegmentColor.WithAlpha(0.3f));
+                Gizmos.SetColor(EditorStyle.Workspace.SelectionColor.WithAlpha(0.3f));
                 Gizmos.DrawDashedLine(lastPoint, firstPoint);
             }
 
-            Gizmos.SetColor(EditorStyle.Shape.SelectedAnchorColor);
+            Gizmos.SetColor(EditorStyle.Workspace.SelectionColor);
             for (var i = 0; i < _pointCount; i++)
                 Gizmos.DrawRect(_points[i].Position, vertexSize);
 
