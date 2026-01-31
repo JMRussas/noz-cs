@@ -79,6 +79,7 @@ public static class EditorStyle
         public const float OriginSize = 0.1f;
         public const float DocumentBoundsLineWidth = 0.015f;
         public const float Padding = 16f;
+        public static readonly Color NameColor = Color.White;
         public const float NameSize = 0.36f;
         public const float NamePadding = 0.26f;
         public const float NameOutline = 0.1f;
@@ -163,6 +164,8 @@ public static class EditorStyle
         public const int TextSize = 12;
         public const float ContentBorderRadius = 9f;
         public const float VerticalSpacing = 4.0f;
+
+        public static readonly EdgeInsets BottomMargin = EdgeInsets.Bottom(-BorderRadius / 2);
 
         public static readonly ContainerStyle Root = new()
         {
@@ -370,7 +373,7 @@ public static class EditorStyle
     {
         public static readonly ContainerStyle Root = new()
         {
-            Padding = EdgeInsets.Symmetric(6, 2 + Panel.BorderWidth),
+            Padding = EdgeInsets.Symmetric(4, 2 + Panel.BorderWidth),
             Spacing = Control.Spacing,
             Height = Size.Fit,
             Margin = EdgeInsets.Top(Panel.VerticalSpacing)
@@ -482,135 +485,89 @@ public static class EditorStyle
         };
     }
 
-    public static class Dopesheet
-    {
-        public static readonly ContainerStyle FrameDot = new()
-        {
-            Width = 7f,
-            Height = 7f,
-            AlignX = Align.Center,
-            AlignY = Align.Max,
-            Margin = EdgeInsets.Bottom(3f),
-            Color = Color.FromRgb(0x282828),
-            Border = { Radius = 4 }
-        };
-
-        public static readonly ContainerStyle SelectedFrameDot = FrameDot with { Color = Color.Black };
-    }
-
     // :animationeditor
     public static class AnimationEditor
     {
-        public const int MinFrames = 24;
-        public const float FrameWidth = Control.Height / 2;
-        public const float FrameHeight = Control.Height;
-        public const float FrameSpacerWidth = 1.0f;
-        public const float Padding = 8f;
-        public const float BorderWidth = 1f;
-        public const float TickHeight = FrameHeight * 0.4f;
-        public const float ShortTickHeight = TickHeight;
-
-        public static readonly Color BorderColor = Color.FromGrayscale(10);
-        public static readonly Color FrameColor = Color.FromGrayscale(100);
-        public static readonly Color FrameDotColor = Color.FromGrayscale(20);
-        public static readonly Color SelectedFrameColor = SelectionColor;
-        public static readonly Color EmptyFrameColor = Color.FromGrayscale(45);
-        public static readonly Color TickBackgroundColor = Color.FromGrayscale(52);
-        public static readonly Color TickColor = BorderColor;
-        public static readonly Color TickHoverColor = new(1f, 1f, 1f, 0.04f);
-        public static readonly Color ShortTickColor = Color.FromGrayscale(44);
-        public static readonly Color ButtonColor = FrameColor;
-        public static readonly Color ButtonCheckedColor = SelectionColor;
-        public static readonly Color ButtonBorderColor = BorderColor;
-        public static readonly Color EventColor = Color.FromGrayscale(180);
-
         public static readonly ContainerStyle Root = Panel.Root with
         {
             AlignX = Align.Center,
             AlignY = Align.Max,
             Height = Size.Fit,
             Width = Size.Fit,
-            Margin = EdgeInsets.Bottom(Workspace.Padding)
+            Margin = Panel.BottomMargin,
+            Padding = EdgeInsets.Bottom(Control.Spacing * 3)
         };
+    }
 
-        public static readonly ContainerStyle Tick = new()
-        {
-            Width = FrameWidth,
-            Height = TickHeight,
-            Color = TickBackgroundColor
-        };
+    // :dopesheet
+    public static class Dopesheet
+    {
+        public const float FrameWidth = 18.0f;
+        public const float FrameHeight = 27.0f;
+        public const float FrameSpacerWidth = 1.0f;
 
-        public static readonly ContainerStyle FrameBorder = new()
+        public static readonly ContainerStyle FrameDot = new()
         {
-            Width = BorderWidth,
-            Height = FrameHeight,
-            Color = TickColor
-        };
-
-        public static readonly ContainerStyle TickBorder = new()
-        {
-            Width = BorderWidth,
-            Color = TickColor
-        };
-
-        public static readonly ContainerStyle ShortTick = new()
-        {
-            Width = BorderWidth,
-            Height = ShortTickHeight,
+            Width = 9f,
+            Height = 9f,
+            AlignX = Align.Center,
             AlignY = Align.Max,
-            Color = ShortTickColor
+            Margin = EdgeInsets.Bottom(6f),
+            Color = Color.FromRgb(0x252525),
+            Border = { Radius = 6 }
         };
 
-        public static readonly ContainerStyle HorizontalBorder = new()
+        public static readonly ContainerStyle SelectedFrameDot = FrameDot with { Color = Color.Black };
+
+        public static readonly ContainerStyle HeaderContainer = new()
         {
-            Height = BorderWidth,
-            Color = TickColor
+            Height = FrameHeight
         };
 
-        public static readonly ContainerStyle FrameBlock = new()
+        public static readonly ContainerStyle TimeBlock = new()
         {
             Width = FrameWidth * 4 + (FrameSpacerWidth * 3),
-            Padding = EdgeInsets.BottomLeft(3,3)
+            Padding = EdgeInsets.BottomLeft(3, 3)
         };
 
-        public static readonly ContainerStyle FrameBlockSeparator = new()
+        public static readonly LabelStyle TimeText = new()
         {
-            Width = FrameSpacerWidth,
-            Color = Color.FromRgb(0x282828)
-        };
-
-        public static readonly LabelStyle FrameBlockText = new()
-        {
-            Color = Color.FromRgb(0xa5a5a5),
-            FontSize = Control.TextSize
-        };
-
-
-        public static readonly LabelStyle FrameLabel = Control.Text;
-
-        public static readonly ContainerStyle TickContainer = new()
-        {
-            Color = Color.FromRgb(0x1d1d1d),
-            Height = Control.Height
+            Color = Color.FromRgb(0x949494),
+            FontSize = 15.0f
         };
 
         public static readonly ContainerStyle FrameContainer = new()
         {
-            Color = Color.FromRgb(0x282828),
-            Width = Size.Fit,
-            Height = FrameHeight
+            Height = FrameHeight,
+            Color = Color.FromRgb(0x2f2f2f)
         };
-
 
         public static readonly ContainerStyle Frame = new()
         {
             Width = FrameWidth,
-            Color = Color.FromRgb(0x747474)
+            Color = Color.FromRgb(0x909090)
         };
 
-        public static readonly ContainerStyle SelectedFrame = Frame with 
+        public static readonly ContainerStyle SelectedFrame = Frame with
         {
-            Color = Color.FromRgb(0xfd970e)
+            Color = SelectionColor
+        };
+
+        public static readonly ContainerStyle FrameSeparator = new()
+        {
+            Width = 1,
+            Color = Color.FromRgb(0x252525)
+        };
+
+        public static readonly ContainerStyle HoldSeparator = new()
+        {
+            Width = 1,
+            Color = Frame.Color
+        };
+
+        public static readonly ContainerStyle SelectedHoldSeparator = HoldSeparator with
+        {
+            Color = SelectedFrame.Color
         };
 
         public static readonly ContainerStyle EmptyFrame = Frame with
@@ -618,31 +575,15 @@ public static class EditorStyle
             Color = Color.Transparent
         };
 
-        public static readonly ContainerStyle FourthFrame = EmptyFrame with 
+        public static readonly ContainerStyle FourthEmptyFrame = EmptyFrame with
         {
-            Color = Color.FromRgb(0x2b2b2b)
-        };
-
-        public static readonly ContainerStyle FrameSeparator = new()
-        {
-            Width = 1,
-            Color = Color.FromRgb(0x262626)
+            Color = Color.FromRgb(0x3a3a3a)
         };
 
         public static readonly ContainerStyle LayerSeparator = new()
         {
             Height = FrameSpacerWidth,
-            Color = Color.FromRgb(0x262626)
-        };
-
-        public static readonly PopupStyle SkeletonPopup = new()
-        {
-            AnchorX = Align.Min,
-            AnchorY = Align.Min,
-            PopupAlignX = Align.Min,
-            PopupAlignY = Align.Max,
-            Spacing = 2,
-            ClampToScreen = true
+            Color = Color.FromRgb(0x252525)
         };
     }
 
@@ -666,7 +607,7 @@ public static class EditorStyle
             AlignY = Align.Max,
             Width = Size.Fit,
             Height = Size.Fit,
-            Margin = EdgeInsets.Bottom(-Panel.BorderRadius / 2)
+            Margin = Panel.BottomMargin
         };
 
         public static readonly ContainerStyle ColorPicker = new()

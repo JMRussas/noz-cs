@@ -11,6 +11,7 @@ internal static class EditorUI
     public const int PopupId = 128;
     public const int FirstPopupItemId = PopupId + 1;
     private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
+    private static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
 
     private static bool _controlHovered = false;
     private static bool _controlSelected = false;
@@ -534,5 +535,106 @@ internal static class EditorUI
         value = OpacityPopup(id, value: value, showSubtract: showSubtract);
 
         return oldValue != value;
+    }
+
+    public struct DopeSheetFrame
+    {
+        public int Hold;
+    }
+
+    public static bool DopeSheet(int baseId, ReadOnlySpan<DopeSheetFrame> frames, ref int currentFrame, int maxFrames, bool isPlaying)
+    {
+        int oldCurrentFrame = currentFrame;
+
+        using var _ = UI.BeginColumn();
+
+        UI.Container(EditorStyle.Dopesheet.LayerSeparator);
+
+        using (UI.BeginRow(EditorStyle.Dopesheet.HeaderContainer))
+        {
+            UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+            var blockCount = maxFrames / 4;
+            for (var blockIndex = 0; blockIndex < blockCount; blockIndex++)
+            {
+                using (UI.BeginContainer(EditorStyle.Dopesheet.TimeBlock))
+                    UI.Label(FrameTimeStrings[blockIndex], EditorStyle.Dopesheet.TimeText);
+
+                UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+            }
+        }
+
+        UI.Container(EditorStyle.Dopesheet.LayerSeparator);
+
+        using (UI.BeginRow(EditorStyle.Dopesheet.FrameContainer))
+        {
+            UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+
+            var slotIndex = 0;
+            var frameIndex = 0;
+            for (; frameIndex < frames.Length; frameIndex++)
+            {
+                var selected = oldCurrentFrame == frameIndex;
+                using (UI.BeginRow(baseId + frameIndex, ContainerStyle.Fit))
+                {
+                    if (UI.WasPressed())
+                        currentFrame = frameIndex;
+
+                    using (UI.BeginContainer(selected
+                        ? EditorStyle.Dopesheet.SelectedFrame
+                        : EditorStyle.Dopesheet.Frame))
+                    {
+                        UI.Container(selected
+                            ? EditorStyle.Dopesheet.SelectedFrameDot
+                            : EditorStyle.Dopesheet.FrameDot);
+
+                    }
+
+                    slotIndex++;
+
+                    int hold = frames[frameIndex].Hold;
+                    if (hold <= 0)
+                    {
+                        UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+                        continue;
+                    }
+
+                    for (int holdIndex = 0; holdIndex < hold && slotIndex < maxFrames; holdIndex++, slotIndex++)
+                    {
+                        using (UI.BeginContainer(selected
+                            ? EditorStyle.Dopesheet.SelectedFrame
+                            : EditorStyle.Dopesheet.Frame))
+                        {
+                            //UI.Container(selected
+                            //    ? EditorStyle.Dopesheet.SelectedFrameDot
+                            //    : EditorStyle.Dopesheet.FrameDot);
+                            //if (UI.WasPressed())
+                            //    currentFrame = slotIndex;
+                        }
+
+                        if (holdIndex < hold - 1)
+                        {
+                            UI.Container(selected
+                                ? EditorStyle.Dopesheet.SelectedHoldSeparator
+                                : EditorStyle.Dopesheet.HoldSeparator);
+                        }
+                    }
+
+                    UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+                }
+            }
+
+            for (; slotIndex < maxFrames; slotIndex++)
+            {
+                UI.Container(slotIndex % 4 == 0
+                    ? EditorStyle.Dopesheet.FourthEmptyFrame
+                    : EditorStyle.Dopesheet.EmptyFrame);
+
+                UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+            }
+        }
+
+        UI.Container(EditorStyle.Dopesheet.LayerSeparator);
+
+        return oldCurrentFrame != currentFrame;
     }
 }

@@ -71,6 +71,12 @@ internal class SkeletonEditor : DocumentEditor
         ClearSelection();
     }
 
+    public override void Dispose()
+    {        
+        ClearSelection();
+        base.Dispose();
+    }
+
     public override void OnUndoRedo()
     {
         Document.UpdateTransforms();
@@ -240,7 +246,7 @@ internal class SkeletonEditor : DocumentEditor
                 var textSize = TextRender.Measure(b.Name, font, fontSize);
                 var textOffset = new Vector2(b.NamePosition.X - textSize.X * 0.5f, b.NamePosition.Y - textSize.Y * 0.5f);
                 Graphics.SetTransform(Matrix3x2.CreateTranslation(textOffset));
-                Graphics.SetColor(b.IsSelected ? EditorStyle.Workspace.SelectionColor: EditorStyle.TextColor);
+                Graphics.SetColor(b.IsSelected ? EditorStyle.Workspace.SelectionColor: EditorStyle.Workspace.NameColor);
                 TextRender.Draw(b.Name, font, fontSize, order: (ushort)(b.IsSelected ? 1 : 0));
             }
         }

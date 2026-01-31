@@ -3,14 +3,18 @@
 - [ ] ctrl Snap bones from one to another when dragging in skeleton editor
 - [ ] Drag the end of bones to size them in skeleton editor
 - [ ] Create new animation with skeleton skeelcton should use that skeleton for animation
-- [ ] Block input when rotating boes in animation
-- [ ] cant see holds in the animation editor
+- [ ] Block input when rotating bones in animation
 - [ ] animation got corrupted by messing with holds
-- [ ] Factored out the dopesheet and reused in sprite
-- [ ] Added animated sprites
-- [ ] Added stroke rendering
+- [ ] Add animated sprites
+- [ ] Add stroke rendering
 - [ ] Atlas not always rebuilding when sprites change, sprite added i think
-- [ ] Clear selection when exiting skeleton editor
+- [ ] Add skeelton editor toolbar with button to hide / show the preview
+- [ ] toolbar button to add a bone in skeleton editor
+- [ ] Make sure you cant add too many holds or frames to animation (hold + frames < MAxFrames)>)
+- [X] Factored out the dopesheet and reused in sprite
+- [X] cant see holds in the animation editor
+- [X] Clear selection when exiting skeleton editor
+
 
 # 1/30/2026
 - [X] Animation editor toggle for hiding bones

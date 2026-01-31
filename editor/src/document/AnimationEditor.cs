@@ -65,7 +65,7 @@ internal class AnimationEditor : DocumentEditor
             new Command { Name = "Insert Frame Lerp", Handler = InsertFrameAfterLerp, Key = InputCode.KeyO, Alt = true },
             new Command { Name = "Delete Frame", Handler = DeleteFrame, Key = InputCode.KeyX },
             new Command { Name = "Add Hold", Handler = AddHoldFrame, Key = InputCode.KeyH },
-            new Command { Name = "Remove Hold", Handler = RemoveHoldFrame, Key = InputCode.KeyH, Shift = true },
+            new Command { Name = "Remove Hold", Handler = RemoveHoldFrame, Key = InputCode.KeyH, Ctrl = true },
             new Command { Name = "Toggle Onion Skin", Handler = ToggleOnionSkin, Key = InputCode.KeyO, Shift = true },
             new Command { Name = "Toggle Root Motion", Handler = ToggleRootMotion, Key = InputCode.KeyM, Shift = true },
             new Command { Name = "Toggle Loop", Handler = ToggleLoop, Key = InputCode.KeyL },
@@ -143,128 +143,21 @@ internal class AnimationEditor : DocumentEditor
         SkeletonPopupUI();
     }
 
-    private void TimelineUI(int currentFrame, bool isPlaying)
+    private void TimelineUI()
     {
-        using (UI.BeginRow(EditorStyle.AnimationEditor.TickContainer))
-        {
-            UI.Spacer(EditorStyle.AnimationEditor.FrameSpacerWidth);
-            var blockCount = AnimationDocument.MaxFrames / 4;
-            for (var blockIndex = 0; blockIndex < blockCount; blockIndex++)
-            {
-                using (UI.BeginContainer(EditorStyle.AnimationEditor.FrameBlock))
-                    UI.Label(FrameTimeStrings[blockIndex], EditorStyle.AnimationEditor.FrameBlockText);
+        var isPlaying = _state == AnimationEditorState.Play;
+        var currentFrame = Document.CurrentFrame;
 
-                UI.Container(EditorStyle.AnimationEditor.FrameBlockSeparator);
-            }
+        Span<EditorUI.DopeSheetFrame> frames = stackalloc EditorUI.DopeSheetFrame[Document.FrameCount];
+        for (var i = 0; i < Document.FrameCount; i++)
+            frames[i] = new EditorUI.DopeSheetFrame { Hold = Document.Frames[i].Hold };
+        
+        if (EditorUI.DopeSheet(FirstFrameId, frames, ref currentFrame, AnimationDocument.MaxFrames, isPlaying))
+        {
+            Document.CurrentFrame = currentFrame;
+            Document.UpdateTransforms();
+            SetDefaultState();
         }
-
-        using (UI.BeginContainer(EditorStyle.AnimationEditor.FrameContainer))
-        using (UI.BeginRow())
-        {
-            UI.Container(EditorStyle.AnimationEditor.FrameSeparator);
-
-            for (var frameIndex = 0; frameIndex < AnimationDocument.MaxFrames; frameIndex++)
-            {
-                if (frameIndex < Document.FrameCount)
-                {
-                    var selected = Document.CurrentFrame == frameIndex;
-                    using (UI.BeginContainer(
-                        FirstFrameId + frameIndex,
-                        selected
-                            ? EditorStyle.AnimationEditor.SelectedFrame
-                            : EditorStyle.AnimationEditor.Frame))
-                    {
-                        UI.Container(selected
-                            ? EditorStyle.Dopesheet.SelectedFrameDot
-                            : EditorStyle.Dopesheet.FrameDot);
-
-                        if (UI.WasPressed())
-                        {
-                            Document.CurrentFrame = frameIndex;
-                            Document.UpdateTransforms();
-                            SetDefaultState();
-                        }
-                    }
-                }
-                else
-                {
-                    using (UI.BeginContainer(frameIndex % 4 == 0
-                        ? EditorStyle.AnimationEditor.FourthFrame
-                        : EditorStyle.AnimationEditor.EmptyFrame))
-                    {
-
-                    }
-                }
-
-                UI.Container(EditorStyle.AnimationEditor.FrameSeparator);
-            }
-        }
-
-        UI.Container(EditorStyle.AnimationEditor.LayerSeparator);
-#if false
-
-        using (UI.BeginRow())
-        {
-            //var lastRealFrameIndex = -1;
-            for (var frameIndex = 0; frameIndex <= AnimationDocument.MaxFrames; frameIndex++)
-            {
-                using (UI.BeginContainer(EditorStyle.AnimationEditor.TickContainer))
-                {
-
-                }
-
-                var isLastTick = frameIndex == AnimationDocument.MaxFrames;
-                var tickStyle = isLastTick
-                    ? EditorStyle.AnimationEditor.Tick with { Width = EditorStyle.AnimationEditor.BorderWidth }
-                    : EditorStyle.AnimationEditor.Tick;
-
-                using (UI.BeginContainer(tickStyle))
-                {
-                    var realFrameIndex = Document.GetRealFrameIndex(frameIndex);
-
-                    if (UI.WasPressed() && realFrameIndex < Document.FrameCount)
-                    {
-                        Document.CurrentFrame = realFrameIndex;
-                        Document.UpdateTransforms();
-                        SetDefaultState();
-                    }
-
-                    if (UI.IsHovered())
-                        UI.Container(ContainerStyle.Default with { Color = EditorStyle.AnimationEditor.TickHoverColor });
-
-                    // Event indicator
-                    if (realFrameIndex < Document.FrameCount &&
-                        realFrameIndex != lastRealFrameIndex &&
-                        !string.IsNullOrEmpty(Document.Frames[realFrameIndex].EventName))
-                    {
-                        using (UI.BeginContainer(ContainerStyle.Default with { AlignX = Align.Center, AlignY = Align.Center }))
-                        {
-                            var eventColor = realFrameIndex == currentFrame ? Color.White : EditorStyle.AnimationEditor.EventColor;
-                            UI.Container(ContainerStyle.Default with
-                            {
-                                Width = EditorStyle.AnimationEditor.FrameDotSize * 2,
-                                Height = EditorStyle.AnimationEditor.FrameDotSize * 2,
-                                Color = eventColor
-                            });
-                        }
-                    }
-
-                    lastRealFrameIndex = realFrameIndex;
-
-                    // Tick mark
-                    if (frameIndex % 4 == 0 || (isPlaying && frameIndex == currentFrame))
-                    {
-                        var tickColor = isPlaying && frameIndex == currentFrame ? Color.White : EditorStyle.AnimationEditor.TickColor;
-                        UI.Container(EditorStyle.AnimationEditor.TickBorder with { Color = tickColor });
-                    }
-                    else
-                    {
-                        UI.Container(EditorStyle.AnimationEditor.ShortTick);
-                    }
-                }
-    }
-}
-#endif
     }
 
     private static void OtherUI()
@@ -375,20 +268,11 @@ internal class AnimationEditor : DocumentEditor
 
     public override void UpdateUI()
     {
-        var isPlaying = _state == AnimationEditorState.Play;
-        var currentFrame = Document.CurrentFrame;
-
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
-        using (UI.BeginContainer(EditorStyle.AnimationEditor.Root))
-        using (UI.BeginColumn(ContainerStyle.Fit))
+        using (UI.BeginColumn(EditorStyle.AnimationEditor.Root))
         {
             ToolbarUI();
-
-            using (UI.BeginColumn(EditorStyle.Panel.UnpaddedContent with { Spacing = 0.0f}))
-            {
-                TimelineUI(currentFrame, isPlaying);
-
-            }
+            TimelineUI();
         }
     }
 

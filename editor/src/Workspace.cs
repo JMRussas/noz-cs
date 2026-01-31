@@ -424,7 +424,7 @@ public static class Workspace
             var textX = bounds.Center.X - textSize.X * 0.5f;
             var textY = bounds.Bottom + padding - textSize.Y * 0.5f;
             Graphics.SetTransform(Matrix3x2.CreateTranslation(textX, textY));
-            Graphics.SetColor(doc.IsSelected ? EditorStyle.Workspace.SelectionColor : EditorStyle.TextColor);
+            Graphics.SetColor(doc.IsSelected ? EditorStyle.Workspace.SelectionColor : EditorStyle.Workspace.NameColor);
             TextRender.Draw(doc.Name, font, fontSize, order: doc.IsSelected ? 1 : 0);
         }
 

@@ -1,5 +1,5 @@
-w 4096
-h 4096
+w 1024
+h 1024
 d 128
 p 2
 
@@ -32,13 +32,13 @@ r "icon_mirror" 255 240 68 68
 r "icon_move" 368 1 68 68
 r "icon_onion" 1 873 68 68
 r "icon_opacity" 1 941 68 68
-r "icon_opacity_overlay" 1 1009 68 68
-r "icon_palette" 1 1077 68 68
-r "icon_play" 1 1145 68 68
-r "icon_preview" 1 1213 68 68
-r "icon_publish" 1 1281 110 128
-r "icon_root_motion" 69 873 114 118
-r "icon_search" 129 745 68 68
-r "icon_submenu" 137 621 68 68
+r "icon_opacity_overlay" 69 873 68 68
+r "icon_palette" 69 941 68 68
+r "icon_play" 129 745 68 68
+r "icon_preview" 137 621 68 68
+r "icon_publish" 137 813 110 128
+r "icon_root_motion" 197 689 114 118
+r "icon_search" 137 941 68 68
+r "icon_submenu" 205 941 68 68
 r "icon_subtract" 193 497 68 68
 r "icon_tiling" 205 419 68 68

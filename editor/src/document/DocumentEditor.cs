@@ -15,5 +15,8 @@ public abstract class DocumentEditor(Document document) : IDisposable
     public virtual void UpdateUI() { }
     public virtual void LateUpdate() { }
     public virtual void OnUndoRedo() { }
-    public virtual void Dispose() { }
+    public virtual void Dispose()
+    {
+        GC.SuppressFinalize(this);        
+    }
 }
