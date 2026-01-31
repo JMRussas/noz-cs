@@ -258,6 +258,7 @@ internal static class EditorUI
 
         _nextPopupItemId = FirstPopupItemId;
 
+        var anchorRect = UI.GetElementCanvasRect(id).Translate(offset);
         using var _ = UI.BeginPopup(
             PopupId,
             style ?? new PopupStyle
@@ -268,7 +269,8 @@ internal static class EditorUI
                 PopupAlignY = Align.Max,
                 Spacing = 2,
                 ClampToScreen = true,
-                AnchorRect = UI.GetElementCanvasRect(id).Translate(offset)
+                AnchorRect = anchorRect,
+                MinWidth = anchorRect.Width
             });
 
         if (UI.IsClosed())

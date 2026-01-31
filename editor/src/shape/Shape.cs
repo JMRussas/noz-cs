@@ -41,11 +41,14 @@ public sealed unsafe partial class Shape : IDisposable
     private UnsafeSpan<Vector2> _samples;
     private UnsafeSpan<Path> _paths;
     private bool _editing;
+    private BitMask256 _layers;
 
     public ushort AnchorCount { get; private set; }
     public ushort PathCount { get; private set; }
     public Rect Bounds { get; private set; }
     public RectInt RasterBounds { get; private set; }
+
+    public ref readonly BitMask256 Layers => ref _layers;
 
     [Flags]
     public enum AnchorFlags : ushort
@@ -55,7 +58,7 @@ public sealed unsafe partial class Shape : IDisposable
     }
 
     [Flags]
-    public enum PathFlags : ushort
+    public enum PathFlags : byte
     {
         None = 0,
         Selected = 1 << 0,
@@ -79,6 +82,7 @@ public sealed unsafe partial class Shape : IDisposable
         public ushort AnchorCount;
         public byte FillColor;
         public byte StrokeColor;
+        public byte Layer;
         public PathFlags Flags;
         public float FillOpacity;
 
@@ -811,7 +815,13 @@ public sealed unsafe partial class Shape : IDisposable
             path.Flags |= PathFlags.Subtract;
     }
 
-    public ushort AddPath(byte fillColor = 0, byte strokeColor = 0, float fillOpacity=1.0f)
+    public void SetPathLayer(ushort pathIndex, byte layer)
+    {
+        _paths[pathIndex].Layer = layer;
+        UpdateLayers();
+    }
+
+    public ushort AddPath(byte fillColor = 0, byte strokeColor = 0, float fillOpacity = 1.0f, byte layer = 0)
     {
         if (PathCount >= MaxPaths) return ushort.MaxValue;
 
@@ -822,8 +832,11 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorCount = 0,
             FillColor = fillColor,
             FillOpacity = fillOpacity,
+            Layer = layer,
             Flags = PathFlags.None | (fillOpacity <= float.MinValue ? PathFlags.Subtract : PathFlags.None),
         };
+
+        UpdateLayers();
 
         return pathIndex;
     }
@@ -1527,7 +1540,8 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorStart = AnchorCount,
             AnchorCount = (ushort)path2Count,
             FillColor = srcPath.FillColor,
-            FillOpacity = srcPath.FillOpacity,            
+            FillOpacity = srcPath.FillOpacity,
+            Layer = srcPath.Layer,
             Flags = srcPath.Flags & PathFlags.Subtract
         };
 
@@ -1538,6 +1552,8 @@ public sealed unsafe partial class Shape : IDisposable
             _anchors[AnchorCount].Path = newPathIndex;
             AnchorCount++;
         }
+
+        UpdateLayers();
     }
 
     public float GetPathSignedDistance(Vector2 point, ushort pathIndex)
@@ -1714,5 +1730,12 @@ public sealed unsafe partial class Shape : IDisposable
             return 2;
         }
         return 1;
+    }
+
+    private void UpdateLayers()
+    {
+        _layers.Clear();
+        for (ushort p = 0; p < PathCount; p++)
+            _layers[_paths[p].Layer] = true;
     }
 }

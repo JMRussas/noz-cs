@@ -22,16 +22,17 @@ public sealed partial class Shape
     {
         public bool AntiAlias;
         public string Name;
+        public byte? Layer;
 
-        public static readonly RasterizeOptions Default = new() { AntiAlias = false };
+        public static readonly RasterizeOptions Default = new() { AntiAlias = false, Layer = null };
     }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct ScanlineIntersection(float x, float xMin, float xMax, int dir)
     {
-        public float X = x;         // Intersection at row center (for winding/sorting)
-        public float XMin = xMin;   // Min X within this row (for AA)
-        public float XMax = xMax;   // Max X within this row (for AA)
+        public float X = x;
+        public float XMin = xMin;
+        public float XMax = xMax;
         public int Direction = dir;
     }
 
@@ -59,8 +60,10 @@ public sealed partial class Shape
         {
             var dpi = EditorApplication.Config.PixelsPerUnit;
             var antiAlias = options.AntiAlias;
+            Span<ushort> sortedPaths = stackalloc ushort[PathCount];
+            var pathCount = GetSortedPathIndicies(sortedPaths, options.Layer);
 
-            for (ushort pathIndex = 0; pathIndex < PathCount; pathIndex++)
+            foreach (var pathIndex in sortedPaths)
             {
                 ref var path = ref _paths[pathIndex];
                 if (path.AnchorCount < 3) continue;
@@ -93,6 +96,36 @@ public sealed partial class Shape
         {
             Log.Info($"Shape.Rasterize ({sw.ElapsedMilliseconds}ms):  name={(options.Name ?? "???")}  targetRect={targetRect}  pathCount={PathCount}  anchorCount={AnchorCount}");
         }
+    }
+
+    private int GetSortedPathIndicies(Span<ushort> results, byte? layer = null)
+    {
+        var count = 0;
+
+        if (layer != null)
+        {
+            for (ushort i = 0; i < PathCount; i++)
+                if (_paths[i].Layer == layer)
+                    results[count++] = i;
+
+            return count;
+        }
+        else
+        {
+            for (ushort i = 0; i < PathCount; i++)
+                results[count++] = i;
+        }
+
+        results[..count].Sort((a, b) =>
+        {
+            var orderA = _paths[a].Layer;
+            var orderB = _paths[b].Layer;
+            if (orderA == orderB)
+                return b - a;
+            return orderB - orderA;
+        });
+
+        return count;
     }
 
     private static void RasterizePath(

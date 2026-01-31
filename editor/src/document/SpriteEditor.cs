@@ -2,7 +2,6 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System.Collections.Generic;
 using System.Numerics;
 
 namespace NoZ.Editor;
@@ -26,6 +25,7 @@ public class SpriteEditor : DocumentEditor
     private const byte ConstraintsButtonId = 24;
     private const byte FillColorButtonId = 27;
     private const byte StrokeColorButtonId = 28;
+    private const byte LayerButtonId = 29;
    
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
@@ -140,6 +140,7 @@ public class SpriteEditor : DocumentEditor
     private byte _selectionFillColor = 0;
     private byte _selectionStrokeColor = 0;
     private float _selectionFillOpacity = 1.0f;
+    private byte _selectionLayer = 0;
 
     // Tool state
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
@@ -176,7 +177,7 @@ public class SpriteEditor : DocumentEditor
 
         var shape = Document.GetFrame(_currentFrame).Shape;
 
-        DrawRaster(shape);
+        DrawRaster();
 
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
@@ -227,6 +228,8 @@ public class SpriteEditor : DocumentEditor
                 toolbar: true))
                 EditorUI.TogglePopup(PaletteButtonId);
 
+            PalettePopupUI();
+
             EditorUI.ToolbarSpacer();
 
             var strokeColor = (int)_selectionStrokeColor;
@@ -235,15 +238,11 @@ public class SpriteEditor : DocumentEditor
 
             EditorUI.ToolbarSpacer();
 
-            BoneBindingButton();
-            EditorUI.ToolbarSpacer();
-
-            ConstraintsButtonUI();
-            EditorUI.ToolbarSpacer();
-
             if (EditorUI.Button(
                 AntiAliasButtonId,
-                Document.IsAntiAliased ? EditorAssets.Sprites.IconAntialiasOn : EditorAssets.Sprites.IconAntialiasOff,
+                Document.IsAntiAliased
+                    ? EditorAssets.Sprites.IconAntialiasOn
+                    : EditorAssets.Sprites.IconAntialiasOff,
                 Document.IsAntiAliased,
                 toolbar: true))
             {
@@ -259,14 +258,23 @@ public class SpriteEditor : DocumentEditor
                 Document.MarkMetaModified();
             }
 
-            PalettePopupUI();
+            EditorUI.ToolbarSpacer();
+
+            BoneBindingButton();
+            EditorUI.ToolbarSpacer();
+
+            ConstraintsButtonUI();
+            EditorUI.ToolbarSpacer();
+
+            LayerButtonUI();
+            EditorUI.ToolbarSpacer();
         }
     }
 
     public override void UpdateUI()
     {
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
-        using (UI.BeginColumn(RootId, EditorStyle.SpriteEditor.Root))
+        using (UI.BeginColumn(RootId, EditorStyle.DocumentEditor.Root))
         {
             ToolbarUI();
 
@@ -390,6 +398,7 @@ public class SpriteEditor : DocumentEditor
             _selectionFillColor = path.FillColor;
             _selectionFillOpacity = path.FillOpacity;
             _selectionStrokeColor = path.StrokeColor;
+            _selectionLayer = path.Layer;
             return;
         }
     }
@@ -437,11 +446,10 @@ public class SpriteEditor : DocumentEditor
             void ConstraintsButtonContent()
             {
                 EditorUI.ControlIcon(EditorAssets.Sprites.IconConstraint);
-                    UI.Spacer(EditorStyle.Control.Spacing);
-                    if (constraint.HasValue)
-                        EditorUI.ControlText($"{constraint.Value.X}x{constraint.Value.Y}");
-                    else
-                        EditorUI.ControlPlaceholderText("None");
+                if (constraint.HasValue)
+                    EditorUI.ControlText($"{constraint.Value.X}x{constraint.Value.Y}");
+                else
+                    EditorUI.ControlPlaceholderText("None");
                 UI.Spacer(EditorStyle.Control.Spacing);
             }
 
@@ -492,6 +500,66 @@ public class SpriteEditor : DocumentEditor
         }
 
         EditorUI.Popup(ConstraintsButtonId, Content);
+    }
+
+    private void LayerButtonUI()
+    {
+        var spriteLayers = EditorApplication.Config.SpriteLayers;
+        using (UI.BeginContainer(ContainerStyle.Fit))
+        {
+            void ButtonContent()
+            {
+                EditorUI.ControlIcon(EditorAssets.Sprites.IconSort);
+                if (EditorApplication.Config.TryGetSpriteLayer(_selectionLayer, out var spriteLayer))
+                    EditorUI.ControlText(spriteLayer.Label);
+                else
+                    EditorUI.ControlPlaceholderText("None");
+               UI.Spacer(EditorStyle.Control.Spacing);
+            }
+
+            if (EditorUI.Control(
+                LayerButtonId,
+                ButtonContent,
+                selected: EditorUI.IsPopupOpen(LayerButtonId)))
+                EditorUI.TogglePopup(LayerButtonId);
+
+            LayerPopupUI();
+        }
+    }
+
+    private void LayerPopupUI()
+    {
+        void Content()
+        {
+            var layers = EditorApplication.Config.SpriteLayers;
+            for (int i = 0; i < layers.Length; i++)
+            {
+                ref readonly var layerDef = ref layers[i];
+                var selected = _selectionLayer == layerDef.Layer;
+                var label = layerDef.Layer;
+                var layerLabel = layerDef.LayerLabel;
+
+                void ItemContent()
+                {
+                    EditorUI.ControlText($"{label}");
+                    EditorUI.ControlPlaceholderText($"{layerLabel}");
+                }
+
+                if (EditorUI.PopupItem(ItemContent, selected: selected))
+                {
+                    SetPathLayer(layerDef.Layer);
+                    EditorUI.ClosePopup();
+                }
+            }
+
+            if (EditorUI.PopupItem("None", selected: _selectionLayer == 0))
+            {
+                SetPathLayer(0);
+                EditorUI.ClosePopup();
+            }
+        }
+
+        EditorUI.Popup(LayerButtonId, Content);
     }
 
     private void SetOpacity(float value)
@@ -623,6 +691,25 @@ public class SpriteEditor : DocumentEditor
         MarkRasterDirty();
     }
 
+    public void SetPathLayer(byte layer)
+    {
+        _selectionLayer = layer;
+
+        Undo.Record(Document);
+
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort p = 0; p < shape.PathCount; p++)
+        {
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathLayer(p, layer);
+        }
+
+        Document.UpdateBounds();
+        Document.MarkModified();
+        MarkRasterDirty();
+    }
+
     public void DeleteSelected()
     {
         Undo.Record(Document);
@@ -663,7 +750,8 @@ public class SpriteEditor : DocumentEditor
             var newPathIndex = shape.AddPath(
                 fillColor: srcPath.FillColor,
                 fillOpacity: srcPath.FillOpacity,
-                strokeColor: srcPath.StrokeColor);
+                strokeColor: srcPath.StrokeColor,
+                layer: srcPath.Layer);
             if (newPathIndex == ushort.MaxValue)
                 break;
 
@@ -1300,7 +1388,7 @@ public class SpriteEditor : DocumentEditor
         return ushort.MaxValue;
     }
 
-    private void DrawRaster(Shape shape)
+    private void DrawRaster()
     {
         var rb = Document.RasterBounds;
         if (rb.Width <= 0 || rb.Height <= 0)
@@ -1431,22 +1519,19 @@ public class SpriteEditor : DocumentEditor
 
     private static void DrawAnchors(Shape shape)
     {
-        // default
-        using (Gizmos.PushState(EditorLayer.DocumentEditor))
+        using var _ = Gizmos.PushState(EditorLayer.DocumentEditor);
+        for (ushort i = 0; i < shape.AnchorCount; i++)
         {
-            for (ushort i = 0; i < shape.AnchorCount; i++)
-            {
-                ref readonly var anchor = ref shape.GetAnchor(i);
-                if (anchor.IsSelected) continue;
-                DrawAnchor(anchor.Position);
-            }
+            ref readonly var anchor = ref shape.GetAnchor(i);
+            if (anchor.IsSelected) continue;
+            DrawAnchor(anchor.Position);
+        }
 
-            for (ushort i = 0; i < shape.AnchorCount; i++)
-            {
-                ref readonly var anchor = ref shape.GetAnchor(i);
-                if (!anchor.IsSelected) continue;
-                DrawSelectedAnchor(anchor.Position);
-            }
+        for (ushort i = 0; i < shape.AnchorCount; i++)
+        {
+            ref readonly var anchor = ref shape.GetAnchor(i);
+            if (!anchor.IsSelected) continue;
+            DrawSelectedAnchor(anchor.Position);
         }
     }
 

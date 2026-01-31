@@ -4,6 +4,15 @@
 
 namespace NoZ.Editor;
 
+public struct SpriteLayerDef
+{
+    public string Id;
+    public byte Layer;
+    public string? DisplayName;
+    public string Label;
+    public string LayerLabel;
+}
+
 public class EditorConfig
 {
     private readonly PropertySet _props;
@@ -25,6 +34,7 @@ public class EditorConfig
     public string LuaClass { get; }
     public string[] SourcePaths { get; }
     public Vector2Int[] SpriteSizes { get; }
+    public SpriteLayerDef[] SpriteLayers { get; }
     public IEnumerable<string> Names => _props.GetKeys("names");
 
     public EditorConfig(PropertySet props)
@@ -55,6 +65,7 @@ public class EditorConfig
 
         SourcePaths = props.GetKeys("source").Select(ResolvePath).ToArray();
         SpriteSizes = ParseSpriteSizes(props);
+        SpriteLayers = ParseSpriteLayers(props);
     }
 
     private static Vector2Int[] ParseSpriteSizes(PropertySet props)
@@ -73,6 +84,33 @@ public class EditorConfig
         return sizes.ToArray();
     }
 
+    private static SpriteLayerDef[] ParseSpriteLayers(PropertySet props) =>
+        [.. props.GetKeys("sprite_layers")
+            .Select(id =>
+            {
+                var value = props.GetString("sprite_layers", id, "0");
+                var tk = new Tokenizer(value);
+
+                byte layer = 0;
+                string? displayName = null;
+
+                if (tk.ExpectInt(out var intVal))
+                    layer = (byte)intVal;
+
+                displayName = tk.ExpectQuotedString();
+
+                return new SpriteLayerDef
+                {
+                    Id = id,
+                    Layer = layer,
+                    DisplayName = displayName,
+                    Label = displayName ?? id,
+                    LayerLabel = $"({layer})"
+                };
+            })
+            .Where(def => def.Layer != 0)
+            .OrderByDescending(def => def.Layer)];
+
     public int GetPaletteIndex(string name) => _props.GetInt("palettes", name, 0);
 
     public IEnumerable<string> GetPaletteNames() => _props.GetKeys("palettes");
@@ -80,6 +118,32 @@ public class EditorConfig
     public string GetCollectionName(string id) => _props.GetString("collections", id, id);
 
     public IEnumerable<string> GetCollectionIds() => _props.GetKeys("collections");
+
+    public bool TryGetSpriteLayer(byte layer, out SpriteLayerDef layerDef)
+    {
+        foreach (var l in SpriteLayers)
+            if (l.Layer == layer)
+            {
+                layerDef = l;
+                return true;
+            }
+
+        layerDef = default;
+        return false;
+    }
+
+    public bool TryGetSpriteLayer(string? id, out SpriteLayerDef layerDef)
+    {
+        if (!string.IsNullOrEmpty(id))
+            foreach (var sg in SpriteLayers)
+                if (sg.Id == id)
+                {
+                    layerDef = sg;
+                    return true;
+                }
+        layerDef = default;
+        return false;
+    }
 
     private string ResolvePath(string path)
     {

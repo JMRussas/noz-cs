@@ -16,15 +16,15 @@ internal class AnimationEditor : DocumentEditor
 {
     private static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
 
-    private const int OnionSkinButtonId = 1;
-    private const int PlayButtonId = 2;
-    private const int RootMotionButtonId = 3;
-    private const int LoopButtonId = 4;
-    private const int AddFrameButtonId = 5;
-    private const int SkeletonButtonId = 6;
-    private const int ShowSkeletonButtonId = 7;
-    private const int FirstFrameId = 64;
-    private const int FirstPopupItemId = 128;
+    private const int RootId = 1;
+    private const int OnionSkinButtonId = 2;
+    private const int PlayButtonId = 3;
+    private const int RootMotionButtonId = 4;
+    private const int LoopButtonId = 5;
+    private const int AddFrameButtonId = 6;
+    private const int SkeletonButtonId = 7;
+    private const int ShowSkeletonButtonId = 8;
+    private const int FirstFrameId = 16;
 
     private AnimationEditorState _state = AnimationEditorState.Default;
     private bool _showSkeleton = true;
@@ -113,7 +113,7 @@ internal class AnimationEditor : DocumentEditor
                 var doc = DocumentManager.Get(i);
                 if (doc.Def.Type != AssetType.Skeleton) continue;
 
-                if (EditorUI.PopupItem(FirstPopupItemId + i, doc.Name, selected: doc as SkeletonDocument == Document.Skeleton))
+                if (EditorUI.PopupItem(doc.Name, selected: doc as SkeletonDocument == Document.Skeleton))
                 {
                     EditorUI.ClosePopup();
                     Undo.Record(Document);
@@ -158,67 +158,6 @@ internal class AnimationEditor : DocumentEditor
             Document.UpdateTransforms();
             SetDefaultState();
         }
-    }
-
-    private static void OtherUI()
-    {
-#if false
-
-            // Ticks row
-
-
-            UI.Container(EditorStyle.AnimationEditor.HorizontalBorder);
-
-            // Frames row
-            using (UI.BeginRow())
-            {
-                var frameIndexWithHolds = 0;
-
-                for (var frameIndex = 0; frameIndex < Document.FrameCount; frameIndex++)
-                {
-                    var frame = Document.Frames[frameIndex];
-                    var frameWidth = EditorStyle.AnimationEditor.FrameWidth + EditorStyle.AnimationEditor.FrameWidth * frame.Hold;
-                    var isSelected = frameIndex == currentFrame;
-
-                    var frameStyle = isSelected
-                        ? EditorStyle.AnimationEditor.SelectedFrame with { Width = frameWidth }
-                        : EditorStyle.AnimationEditor.Frame with { Width = frameWidth };
-
-                    using (UI.BeginContainer(frameStyle))
-                    {
-                        if (UI.IsHovered())
-                            UI.Container(ContainerStyle.Default with { Color = EditorStyle.AnimationEditor.TickHoverColor });
-
-                        if (UI.WasPressed())
-                        {
-                            Document.CurrentFrame = frameIndex;
-                            Document.UpdateTransforms();
-                            SetDefaultState();
-                        }
-
-                        UI.Container(EditorStyle.AnimationEditor.FrameBorder);
-                        UI.Container(EditorStyle.AnimationEditor.FrameDot);
-                    }
-
-                    frameIndexWithHolds += 1 + frame.Hold;
-                }
-
-                // Empty frames
-                for (; frameIndexWithHolds < frameCount; frameIndexWithHolds++)
-                {
-                    using (UI.BeginContainer(EditorStyle.AnimationEditor.EmptyFrame))
-                    {
-                        UI.Container(EditorStyle.AnimationEditor.FrameBorder);
-                    }
-                }
-
-                // Right border
-                UI.Container(EditorStyle.AnimationEditor.FrameBorder);
-            }
-
-            UI.Container(EditorStyle.AnimationEditor.HorizontalBorder);
-                //UI.Spacer(EditorStyle.AnimationEditor.ButtonMarginY);
-#endif
     }
 
     private void ToolbarUI()
@@ -269,7 +208,7 @@ internal class AnimationEditor : DocumentEditor
     public override void UpdateUI()
     {
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
-        using (UI.BeginColumn(EditorStyle.AnimationEditor.Root))
+        using (UI.BeginColumn(RootId, EditorStyle.DocumentEditor.Root))
         {
             ToolbarUI();
             TimelineUI();

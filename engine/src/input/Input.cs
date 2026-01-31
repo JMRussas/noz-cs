@@ -55,6 +55,15 @@ public static class Input
     {
         var scope = new InputScope(_nextScopeId++);
         _scopeStack.Push(scope._id);
+
+        // Inherit current button state by marking physically held buttons as pressed
+        // so the new scope sees them as initial presses
+        for (var i = 0; i < (int)InputCode.Count; i++)
+        {
+            if (Buttons[i].Physical && !Buttons[i].Consumed)
+                Buttons[i].Pressed = true;
+        }
+
         return scope;
     }
 

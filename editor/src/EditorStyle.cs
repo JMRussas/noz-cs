@@ -203,11 +203,11 @@ public static class EditorStyle
         };
         public readonly static ContainerStyle Item = Control.Root;
         public readonly static ContainerStyle ItemContent = Control.Content;
-        public readonly static ContainerStyle TitleItem = Item with 
+        public readonly static ContainerStyle TitleItem = Item with
         {
             Padding = EdgeInsets.LeftRight(4.0f)
         };
-        public readonly static ContainerStyle Separator = new() { 
+        public readonly static ContainerStyle Separator = new() {
             Height = 1,
             Margin = EdgeInsets.Symmetric(2, 4),
             Color = Color.FromRgb(0x2f2f2f)
@@ -242,7 +242,7 @@ public static class EditorStyle
             Width = Control.Height,
             Height = Control.Height
         };
-        
+
         public static readonly ContainerStyle RootWithContent = new()
         {
             Width = Size.Fit,
@@ -285,8 +285,8 @@ public static class EditorStyle
     }
 
 
-    
-    public static class BoxSelect 
+
+    public static class BoxSelect
     {
         public const float LineWidth = 0.02f;
         public static Color LineColor => _colors.BoxSelectLineColor;
@@ -305,7 +305,7 @@ public static class EditorStyle
         public static readonly ContainerStyle SearchContainer = Popup.Item;
 
         public static readonly TextBoxStyle SearchTextBox = new()
-        { 
+        {
             Height = Popup.Item.Height,
             FontSize = Control.TextSize,
             TextColor = Control.Text.Color,
@@ -331,7 +331,7 @@ public static class EditorStyle
             Padding = EdgeInsets.All(6f),
         };
 
-        public static readonly ContainerStyle SelectedCommand = 
+        public static readonly ContainerStyle SelectedCommand =
             Command with { Color = Control.SelectedFill.Color };
     }
 
@@ -421,7 +421,7 @@ public static class EditorStyle
         public static readonly ContainerStyle Menu = Popup.Root with {
             Size = Size2.Fit,
             AlignX = Align.Min,
-            AlignY = Align.Min,            
+            AlignY = Align.Min,
         };
 
         public static readonly ContainerStyle Item = Popup.Item with
@@ -442,7 +442,7 @@ public static class EditorStyle
     public static class Notifications
     {
         public readonly static ContainerStyle Root = new()
-        { 
+        {
             AlignX = Align.Max,
             AlignY = Align.Max,
             Width = 240.0f,
@@ -454,7 +454,7 @@ public static class EditorStyle
         public readonly static ContainerStyle Notification = new()
         {
             Height = Control.Height + 8,
-            Padding = EdgeInsets.Symmetric(4,12),
+            Padding = EdgeInsets.Symmetric(4, 12),
             Color = Popup.FillColor,
             Border = new BorderStyle { Radius = Panel.BorderRadius }
         };
@@ -486,8 +486,8 @@ public static class EditorStyle
         };
     }
 
-    // :animationeditor
-    public static class AnimationEditor
+    // :documenteditor
+    public static class DocumentEditor
     {
         public static readonly ContainerStyle Root = Panel.Root with
         {
@@ -495,9 +495,109 @@ public static class EditorStyle
             AlignY = Align.Max,
             Height = Size.Fit,
             Width = Size.Fit,
+            MinWidth = 100,
             Margin = Panel.BottomMargin,
             Padding = EdgeInsets.Bottom(Control.Spacing * 3)
         };
+    }
+
+    // :animationeditor
+    public static class AnimationEditor
+    {
+    }
+
+    // :skeletoneditor
+    public static class SkeletonEditor
+    {
+    }
+
+
+    // :spriteeditor
+    public static class SpriteEditor
+    {
+        public static readonly Color UndefinedColor = new(0f, 0f, 0f, 0.1f);
+        public const float ButtonSize = 40f;
+        public const float ButtonMarginY = 6f;
+        public const float ColorPickerBorderWidth = 2.5f;
+        public const float ColorSize = Control.Height;
+        public const float ColorPickerWidth = ColorSize * 64 + ColorPickerBorderWidth * 2;
+        public const float ColorPickerHeight = ColorSize + ColorPickerBorderWidth * 2;
+        public const float ColorPickerSelectionBorderWidth = 3f;
+        public static readonly Color BoneOriginColor = Color.White;
+        public static readonly Color SelectedOriginColor = Shape.SelectedAnchorColor;
+
+        public static readonly ContainerStyle ColorPicker = new()
+        {
+            Padding = EdgeInsets.All(4f),
+            //Color = Panel.ContentColor,
+            Border = new BorderStyle { Radius = Panel.ContentBorderRadius }
+        };
+
+        public static readonly ContainerStyle Palette = new()
+        {
+
+        };
+
+        public static readonly ContainerStyle PaletteColor = new()
+        {
+            Width = ColorSize,
+            Height = ColorSize,
+            Padding = EdgeInsets.All(1.0f),
+        };
+
+        public static readonly ContainerStyle PaletteSelectedColor = new()
+        {
+            Border = new BorderStyle { Radius = 8f },
+            Color = SelectionColor,
+            Margin = EdgeInsets.All(-1.5f),
+        };
+
+        public static readonly ContainerStyle PaletteDisplayColor = new()
+        {
+            Border = new BorderStyle { Radius = 6f }
+        };
+
+        public static readonly ContainerStyle OpacityButtonRoot = new()
+        {
+            Margin = EdgeInsets.Left(Control.Spacing),
+            Width = ColorSize * 2,
+            Height = ColorSize * 2,
+            AlignY = Align.Max
+        };
+
+        public static readonly ContainerStyle OpacityButtonIconContainer = new()
+        {
+            Padding = EdgeInsets.All(6)
+        };
+
+        public static readonly PopupStyle OpacityPopup = new()
+        {
+            AnchorX = Align.Min,
+            AnchorY = Align.Min,
+            PopupAlignX = Align.Min,
+            PopupAlignY = Align.Max,
+            Spacing = 2,
+            ClampToScreen = true
+        };
+
+        public static readonly PopupStyle PalettePopup = new()
+        {
+            AnchorX = Align.Max,
+            AnchorY = Align.Min,
+            PopupAlignX = Align.Max,
+            PopupAlignY = Align.Max,
+            Spacing = 2,
+            ClampToScreen = true
+        };
+
+        public readonly static ContainerStyle OpacityPopupRoot = Popup.Root;
+
+        public readonly static ContainerStyle ConstraintsPopupRoot = Popup.Root;
+    }
+
+    // :atlaseditor
+    public static class AtlasEditor
+    {
     }
 
     // :dopesheet
@@ -585,111 +685,6 @@ public static class EditorStyle
         {
             Height = FrameSpacerWidth,
             Color = Color.FromRgb(0x252525)
-        };
-    }
-
-    // :spriteeditor
-    public static class SpriteEditor
-    {
-        public static readonly Color UndefinedColor = new(0f, 0f, 0f, 0.1f);
-        public const float ButtonSize = 40f;
-        public const float ButtonMarginY = 6f;
-        public const float ColorPickerBorderWidth = 2.5f;
-        public const float ColorSize = Control.Height;
-        public const float ColorPickerWidth = ColorSize * 64 + ColorPickerBorderWidth * 2;
-        public const float ColorPickerHeight = ColorSize + ColorPickerBorderWidth * 2;
-        public const float ColorPickerSelectionBorderWidth = 3f;
-        public static readonly Color BoneOriginColor = Color.White;
-        public static readonly Color SelectedOriginColor = Shape.SelectedAnchorColor;
-
-        public static readonly ContainerStyle Root = Panel.Root with
-        {
-            AlignX = Align.Center,
-            AlignY = Align.Max,
-            Width = Size.Fit,
-            Height = Size.Fit,
-            Margin = Panel.BottomMargin
-        };
-
-        public static readonly ContainerStyle ColorPicker = new()
-        {
-            Padding = EdgeInsets.All(4f),
-            //Color = Panel.ContentColor,
-            Border = new BorderStyle { Radius = Panel.ContentBorderRadius }
-        };
-
-        public static readonly ContainerStyle Palette = new()
-        {
-
-        };
-
-        public static readonly ContainerStyle PaletteColor = new()
-        {
-            Width = ColorSize,
-            Height = ColorSize,
-            Padding = EdgeInsets.All(1.0f),
-        };
-
-        public static readonly ContainerStyle PaletteSelectedColor = new()
-        {
-            Border = new BorderStyle { Radius = 8f },
-            Color = SelectionColor,
-            Margin = EdgeInsets.All(-1.5f),
-        };
-
-        public static readonly ContainerStyle PaletteDisplayColor = new()
-        {
-            Border = new BorderStyle { Radius = 6f }
-        };
-
-        public static readonly ContainerStyle OpacityButtonRoot = new()
-        {
-            Margin = EdgeInsets.Left(Control.Spacing),
-            Width = ColorSize * 2,
-            Height = ColorSize * 2,
-            AlignY = Align.Max
-        };
-
-        public static readonly ContainerStyle OpacityButtonIconContainer = new()
-        {
-            Padding = EdgeInsets.All(6)
-        };
-
-        public static readonly PopupStyle OpacityPopup = new()
-        {
-            AnchorX = Align.Min,
-            AnchorY = Align.Min,
-            PopupAlignX = Align.Min,
-            PopupAlignY = Align.Max,
-            Spacing = 2,
-            ClampToScreen = true
-        };
-
-        public static readonly PopupStyle PalettePopup = new()
-        {
-            AnchorX = Align.Max,
-            AnchorY = Align.Min,
-            PopupAlignX = Align.Max,
-            PopupAlignY = Align.Max,
-            Spacing = 2,
-            ClampToScreen = true
-        };
-
-        public readonly static ContainerStyle OpacityPopupRoot = Popup.Root;
-
-        public readonly static ContainerStyle ConstraintsPopupRoot = Popup.Root;
-    }
-
-    // :atlaseditor
-    public static class AtlasEditor
-    {
-        public static readonly ContainerStyle Root = Panel.Root with
-        {
-            AlignX = Align.Center,
-            AlignY = Align.Max,
-            Width = Size.Fit,
-            Height = Size.Fit,
-            Margin = EdgeInsets.Bottom(20f)
         };
     }
 

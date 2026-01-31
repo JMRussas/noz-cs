@@ -727,7 +727,8 @@ public static partial class UI
             PopupAlignY = style.PopupAlignY,
             Spacing = style.Spacing,
             ClampToScreen = style.ClampToScreen,
-            AnchorRect = style.AnchorRect
+            AnchorRect = style.AnchorRect,
+            MinWidth = style.MinWidth
         };
         SetId(ref e, _currentCanvasId, id);
         PushElement(e.Index);

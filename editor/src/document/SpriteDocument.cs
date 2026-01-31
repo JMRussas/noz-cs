@@ -85,18 +85,25 @@ public class SpriteDocument : Document
         }
     }
 
+    private BitMask256 _layers = new();
+    private Rect[] _atlasUV = new Rect[255];
+
     public readonly SpriteFrame[] Frames = new SpriteFrame[Sprite.MaxFrames];
     public ushort FrameCount;
     public byte Palette;
     public float Depth;
     public ushort Order;
     public RectInt RasterBounds { get; private set; }
+
+    public ref readonly BitMask256 Layers => ref _layers;
+
     public Vector2Int AtlasSize
     {
         get
         {
             var padding2 = EditorApplication.Config.AtlasPadding * 2;
-            return new((RasterBounds.Size.X + padding2) * FrameCount, RasterBounds.Size.Y + padding2);
+            var layerCount = Math.Max(1, _layers.Count);
+            return new((RasterBounds.Size.X + padding2) * FrameCount * layerCount, RasterBounds.Size.Y + padding2);
         }
     }
     public bool ShowInSkeleton { get; set; }
@@ -105,9 +112,10 @@ public class SpriteDocument : Document
     public Vector2Int? ConstrainedSize { get; set; }
 
     internal AtlasDocument? Atlas;
-    internal Rect AtlasUV;
 
     public readonly BoneBinding Binding = new();
+
+    public Rect AtlasUV => _atlasUV[0];
 
     public SpriteDocument()
     {
@@ -218,9 +226,8 @@ public class SpriteDocument : Document
     {
         var pathIndex = f.Shape.AddPath();
         byte fillColor = 0;
-        var position = Vector2.Zero;
-        var scale = Vector2.One;
         var opacity = 1.0f;
+        byte layer = 0;
 
         while (!tk.IsEOF)
         {
@@ -230,6 +237,10 @@ public class SpriteDocument : Document
                 opacity = tk.ExpectFloat();
             else if (tk.ExpectIdentifier("h"))
                 opacity = float.MinValue;
+            else if (tk.ExpectIdentifier("l"))
+                layer = EditorApplication.Config.TryGetSpriteLayer(tk.ExpectQuotedString(), out var sg)
+                    ? sg.Layer
+                    : (byte)0;
             else if (tk.ExpectIdentifier("a"))
                 ParseAnchor(f.Shape, pathIndex, ref tk);
             else
@@ -238,6 +249,7 @@ public class SpriteDocument : Document
 
         f.Shape.SetPathFillColor(pathIndex, fillColor);
         f.Shape.SetPathFillOpacity(pathIndex, opacity);
+        f.Shape.SetPathLayer(pathIndex, layer);
     }
 
     private static void ParseAnchor(Shape shape, ushort pathIndex, ref Tokenizer tk)
@@ -250,6 +262,8 @@ public class SpriteDocument : Document
 
     public void UpdateBounds()
     {
+        UpdateLayers();
+
         if (ConstrainedSize.HasValue)
         {
             var cs = ConstrainedSize.Value;
@@ -338,6 +352,13 @@ public class SpriteDocument : Document
             clampedHeight);
     }
 
+    private void UpdateLayers()
+    {
+        _layers.Clear();
+        for (ushort fi = 0; fi < FrameCount; fi++)
+            _layers |= Frames[fi].Shape.Layers;
+    }
+
     // :save
     public override void Save(StreamWriter writer)
     {
@@ -374,12 +395,16 @@ public class SpriteDocument : Document
         for (ushort pIdx = 0; pIdx < shape.PathCount; pIdx++)
         {
             var path = shape.GetPath(pIdx);
-            var opacityStr = path.IsSubtract
+            var opacity = path.IsSubtract
                 ? " h"
                 : path.FillOpacity < 1
                     ? $" o {path.FillOpacity}"
                     : "";
-            writer.WriteLine($"p c {path.FillColor}{opacityStr}");
+
+            var layer = EditorApplication.Config.TryGetSpriteLayer(path.Layer, out var layerDef)
+                ? $" l \"{layerDef.Id}\""
+                : "";
+            writer.WriteLine($"p c {path.FillColor}{opacity}{layer}");
 
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {
@@ -513,6 +538,18 @@ public class SpriteDocument : Document
         MarkMetaModified();
     }
 
+    internal void ClearAtlasUVs()
+    {
+        for (int i = 0; i < _atlasUV.Length; i++)
+            _atlasUV[i] = Rect.Zero;
+    }
+
+    internal void SetAtlasUV(byte layer, Rect uv) =>
+        _atlasUV[layer] = uv;
+
+    internal Rect GetAtlasUV(byte layer) =>
+        _atlasUV[layer];
+
     public override void Import(string outputPath, PropertySet meta)
     {
         UpdateBounds();
@@ -525,16 +562,23 @@ public class SpriteDocument : Document
         writer.Write((short)RasterBounds.Top);
         writer.Write((short)RasterBounds.Right);
         writer.Write((short)RasterBounds.Bottom);
-        writer.Write(AtlasUV.Left);
-        writer.Write(AtlasUV.Top);
-        writer.Write(AtlasUV.Right);
-        writer.Write(AtlasUV.Bottom);
         writer.Write((float)EditorApplication.Config.PixelsPerUnit);
         writer.Write((byte)(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point));
-        writer.Write(Order);
         writer.Write((short)Binding.BoneIndex);
         writer.Write(Binding.Offset.X);
         writer.Write(Binding.Offset.Y);
+        writer.Write((byte)_layers.Count);
+
+        for (int i=0; i<255; i++)
+        {
+            if (!_layers[i]) continue;
+            var uv = _atlasUV[i];
+            writer.Write(uv.Left);
+            writer.Write(uv.Top);
+            writer.Write(uv.Right);
+            writer.Write(uv.Bottom);
+            writer.Write((byte)i);
+        }
     }
 
     public override void OnUndoRedo()

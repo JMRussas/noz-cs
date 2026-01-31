@@ -6,15 +6,10 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-public class BoxSelectTool : Tool
+public class BoxSelectTool(Action<Rect> callback) : Tool
 {
-    private readonly Action<Rect> _callback;
+    private readonly Action<Rect> _callback = callback;
     private Rect _selection;
-
-    public BoxSelectTool(Action<Rect> callback)
-    {
-        _callback = callback;
-    }
 
     public override void Update()
     {
@@ -29,6 +24,9 @@ public class BoxSelectTool : Tool
         var min = Vector2.Min(p0, p1);
         var max = Vector2.Max(p0, p1);
         _selection = Rect.FromMinMax(min, max);
+
+        if (Input.WasButtonReleased(InputCode.MouseLeft, Scope))
+            Commit();
     }
 
     public override void Draw()
@@ -44,6 +42,7 @@ public class BoxSelectTool : Tool
 
     private void Commit()
     {
+        Input.ConsumeButton(InputCode.MouseLeft);
         _callback(_selection);
         Workspace.EndTool();
         Input.ConsumeButton(InputCode.MouseLeft);

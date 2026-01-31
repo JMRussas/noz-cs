@@ -42,3 +42,5 @@ r "icon_search" 137 941 68 68
 r "icon_submenu" 205 941 68 68
 r "icon_subtract" 193 497 68 68
 r "icon_tiling" 205 419 68 68
+r "new_sprite" 119 243 4 4
+r "icon_sort" 205 565 68 68

@@ -104,12 +104,46 @@ public static partial class Graphics
         AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order: order, bone: bone);
     }
 
-    public static void Draw(Sprite sprite) => Draw(sprite, order: sprite.Order, bone: sprite.BoneIndex);
+    public static void Draw(Sprite sprite) => Draw(sprite, bone: sprite.BoneIndex);
+
+    public static void Draw(Sprite sprite, int bone = -1)
+    {
+        if (sprite == null || SpriteAtlas == null) return;
+
+        var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
+        if (bone >= 0)
+            bounds = new Rect(bounds.X - sprite.BoneOffset.X, bounds.Y - sprite.BoneOffset.Y, bounds.Width, bounds.Height);
+        var p0 = new Vector2(bounds.Left, bounds.Top);
+        var p1 = new Vector2(bounds.Right, bounds.Top);
+        var p2 = new Vector2(bounds.Right, bounds.Bottom);
+        var p3 = new Vector2(bounds.Left, bounds.Bottom);
+
+        using (PushState())
+        {
+            SetTexture(SpriteAtlas);
+            SetShader(_spriteShader!);
+            SetTextureFilter(sprite.TextureFilter);
+
+            // Draw all quads (one per sort group)
+            foreach (ref readonly var quad in sprite.Meshes.AsSpan())
+            {
+                var uv = quad.UV;
+                AddQuad(
+                    p0, p1, p2, p3,
+                    uv.TopLeft, new Vector2(uv.Right, uv.Top),
+                    uv.BottomRight, new Vector2(uv.Left, uv.Bottom),
+                    order: (ushort)quad.SortOrder,
+                    atlasIndex: sprite.AtlasIndex,
+                    bone: bone);
+            }
+        }
+    }
 
     public static void Draw(Sprite sprite, ushort order, int bone = -1)
     {
         if (sprite == null || SpriteAtlas == null) return;
 
+        // Draw with overridden order (uses first quad's UV for backwards compat)
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
         if (bone >= 0)

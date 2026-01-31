@@ -148,6 +148,9 @@ public static partial class UI
         {
             ref var popup = ref e.Data.Popup;
 
+            if (popup.MinWidth > 0 && e.Rect.Width < popup.MinWidth)
+                e.Rect.Width = popup.MinWidth;
+
             // Anchor rect is in canvas space
             var anchorX = popup.AnchorRect.X + popup.AnchorRect.Width * popup.AnchorX.ToFactor();
             var anchorY = popup.AnchorRect.Y + popup.AnchorRect.Height * popup.AnchorY.ToFactor();

@@ -8,16 +8,19 @@ namespace NoZ.Editor;
 
 internal class SkeletonEditor : DocumentEditor
 {
+    private const int RootId = 1;
+    private const int PreviewButtonId = 2;
+
+    private const int SortGroupSkin = 0;
+    private const int SortGroupBones = 1;
+    private const int SortGroupSelectedBones = 2;
+
     private struct SavedBone
     {
         public BoneTransform Transform;
         public Matrix3x2 LocalToWorld;
         public float Length;
     }
-
-    private const int SortGroupSkin = 0;
-    private const int SortGroupBones = 1;
-    private const int SortGroupSelectedBones = 2;
 
     public new SkeletonDocument Document => (SkeletonDocument)base.Document;
 
@@ -26,6 +29,7 @@ internal class SkeletonEditor : DocumentEditor
     private Vector2 _selectionCenterWorld;
     private bool _clearSelectionOnUp;
     private bool _ignoreUp;
+    private bool _showPreview = true;
 
     private readonly Command[] _commands;
 
@@ -86,12 +90,40 @@ internal class SkeletonEditor : DocumentEditor
     {
         UpdateDefaultState();
         DrawSkeleton();
-        using (Graphics.PushState())
-        {
-            Graphics.SetSortGroup(SortGroupSkin);
-            Document.DrawSprites();
-        }            
+
+        if (_showPreview)
+            using (Graphics.PushState())
+            {
+                Graphics.SetSortGroup(SortGroupSkin);
+                Document.DrawSprites();
+            }            
+
         DrawBoneNames();
+    }
+
+    private void ToolbarUI()
+    {
+        using var _ = UI.BeginRow(EditorStyle.Toolbar.Root);
+
+        UI.Flex();
+
+        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
+        {
+            if (EditorUI.Button(PreviewButtonId, EditorAssets.Sprites.IconPreview, toolbar: true))
+                _showPreview = !_showPreview;
+        }
+
+        UI.Flex();
+    }
+
+    public override void UpdateUI()
+    {
+        using (UI.BeginCanvas(id: EditorStyle.CanvasId.DocumentEditor))
+        using (UI.BeginColumn(RootId, EditorStyle.DocumentEditor.Root))
+        {
+            ToolbarUI();
+            UI.Spacer(EditorStyle.Control.Spacing);
+        }
     }
 
     private bool IsBoneSelected(int boneIndex) => Document.Bones[boneIndex].IsSelected;

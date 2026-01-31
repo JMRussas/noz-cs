@@ -538,7 +538,7 @@ public static class Workspace
 
     private static void UpdateMouseDrag()
     {
-        if (Input.WasButtonReleased(_dragButton))
+        if (Input.WasButtonReleased(_dragButton, InputScope.All))
         {
             EndDrag();
             return;
