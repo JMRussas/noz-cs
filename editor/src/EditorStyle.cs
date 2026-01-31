@@ -76,11 +76,13 @@ public static class EditorStyle
         public static readonly Color GridColor = Color.FromRgb(0x686868);
         public static readonly Color BoundsColor = Color.FromRgb(0x212121);
         public static readonly Color OriginColor = Color.FromRgb(0xff9f2c);
-        public const float OriginSize = 0.06f;
+        public const float OriginSize = 0.1f;
         public const float DocumentBoundsLineWidth = 0.015f;
         public const float Padding = 16f;
-        public const float NameSize = 0.34f;
+        public const float NameSize = 0.36f;
         public const float NamePadding = 0.26f;
+        public const float NameOutline = 0.1f;
+        public static readonly Color NameOutlineColor = Color.Black;
         public const float GridAlpha = 0.4f;
         public const float GridZeroAlpha = 0.5f;
     }
@@ -354,11 +356,13 @@ public static class EditorStyle
         public static readonly Color BoneColor = Color.White;
         public static readonly Color BoneOriginColor = Color.Black;
         public static readonly Color BoneOutlineColor = Color.Black10Pct;
-        public static readonly Color SelectedBoneColor = Color.FromRgb(0xfd970e);
+        public static readonly Color SelectedBoneColor = Workspace.SelectionColor;
         public static readonly Color ParentLineColor = Color.FromRgb(0x212121);
         public const float BoneSize = 0.18f;
         public const float BoneOriginSize = 0.15f;
         public const float BoneOutlineWidth = 0.02f;
+        public const float BoneHitThreshold = 0.05f;
+        public const float BoneHitThresholdSqr = BoneHitThreshold * BoneHitThreshold;
     }
 
     // :toolbar
@@ -772,23 +776,22 @@ public static class EditorStyle
             AlignX = Align.Min,
             AlignY = Align.Min,
             Width = 200.0f,
-            Height = 60.0f
+            Height = Control.Height + Control.ContentPadding * 2
         };
 
-        public static readonly ContainerStyle TextContainer = new()
+        public readonly static ContainerStyle Content = new()
         {
             Width = Size.Fit,
-            Height = Control.Height + 4f,
             AlignX = Align.Center,
             AlignY = Align.Center,
-            Border = new BorderStyle { Radius = Control.BorderRadius, Width = 1f, Color = Popup.BorderColor },
-            Padding = EdgeInsets.Symmetric(2f, 8f),
             Color = Popup.FillColor,
+            Padding = EdgeInsets.Symmetric(Control.ContentPadding, Control.ContentPadding * 2),
+            Border = Popup.Root.Border
         };
 
         public static readonly TextBoxStyle Text = new()
         {
-            FontSize = Control.TextSize,
+            FontSize = 17.0f,
             TextColor = Control.Text.Color,
             SelectionColor = SelectionColor,
             Height = Control.Height

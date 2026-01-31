@@ -16,6 +16,7 @@ public class BoneData
     public BoneTransform Transform;
     public float Length = 0.25f;
     public bool IsSelected;
+    public Vector2 NamePosition;
 
     public BoneData()
     {
@@ -273,10 +274,10 @@ public class SkeletonDocument : Document
         return -1;
     }
 
-    public int HitTestBones(Matrix3x2 transform, Vector2 position, Span<int> bones, int maxBones = Skeleton.MaxBones)
+    public int HitTestBones(Matrix3x2 transform, Vector2 position, Span<int> bones)
     {
         var hitCount = 0;
-        for (var boneIndex = BoneCount - 1; boneIndex >= 0 && hitCount < maxBones; boneIndex--)
+        for (var boneIndex = BoneCount - 1; boneIndex >= 0 && hitCount < bones.Length; boneIndex--)
         {
             var b = Bones[boneIndex];
             var localToWorld = LocalToWorld[boneIndex] * transform;
@@ -325,9 +326,10 @@ public class SkeletonDocument : Document
     private static bool HitTestBoneShape(Vector2 point, Vector2 boneStart, Vector2 boneEnd)
     {
         var circleRadius = EditorStyle.Skeleton.BoneSize * Gizmos.ZoomRefScale;
+        var circleRadiusSqr = circleRadius * circleRadius + EditorStyle.Skeleton.BoneHitThresholdSqr * Gizmos.ZoomRefScale;
 
         // Check if within the origin circle
-        if (Vector2.Distance(point, boneStart) <= circleRadius)
+        if (Vector2.DistanceSquared(point, boneStart) <= circleRadiusSqr)
             return true;
 
         // Check if within the tapered body
@@ -337,13 +339,16 @@ public class SkeletonDocument : Document
             return false;
 
         var t = Vector2.Dot(point - boneStart, line) / (lineLength * lineLength);
-        if (t < 0 || t > 1)
+        if (t <= 0)
             return false;
+
+        t = MathF.Min(1f, t);
 
         // Threshold tapers from circleRadius at start to 0 at end
         var threshold = circleRadius * (1f - t);
+        var thresholdSqr = threshold * threshold + EditorStyle.Skeleton.BoneHitThresholdSqr * Gizmos.ZoomRefScale;
         var projection = boneStart + t * line;
-        return Vector2.Distance(point, projection) <= threshold;
+        return Vector2.DistanceSquared(point, projection) <= thresholdSqr;
     }
 
     private static float DistanceFromLine(Vector2 lineStart, Vector2 lineEnd, Vector2 point)

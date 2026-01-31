@@ -48,7 +48,7 @@ public class SpriteEditor : DocumentEditor
             "SpriteEditor");
 
         var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
-        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
+        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
         var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
         var moveBoneOriginCommand = new Command { Name = "Move Bone Origin", Handler = BeginMoveBoneOrigin, Key = InputCode.KeyG, Shift = true };
         var boneOriginToOriginCommand = new Command { Name = "Bone Origin to Origin", Handler = BoneOriginToOrigin, Key = InputCode.KeyB, Alt = true };

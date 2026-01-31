@@ -22,13 +22,14 @@ internal class AnimationEditor : DocumentEditor
     private const int LoopButtonId = 4;
     private const int AddFrameButtonId = 5;
     private const int SkeletonButtonId = 6;
+    private const int ShowSkeletonButtonId = 7;
     private const int FirstFrameId = 64;
     private const int FirstPopupItemId = 128;
 
     private AnimationEditorState _state = AnimationEditorState.Default;
+    private bool _showSkeleton = true;
     private bool _clearSelectionOnUp;
     private bool _ignoreUp;
-    private bool _showSkeletonPopup;
     private Vector2 _selectionCenter;
     private Vector2 _selectionCenterWorld;
     private bool _onionSkin;
@@ -40,7 +41,7 @@ internal class AnimationEditor : DocumentEditor
 
     public AnimationEditor(AnimationDocument document) : base(document)
     {
-        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
+        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
         var copyCommand = new Command { Name = "Copy", Handler = CopyKeys, Key = InputCode.KeyC, Ctrl = true };
         var pasteCommand = new Command { Name = "Paste", Handler = PasteKeys, Key = InputCode.KeyV, Ctrl = true };
 
@@ -114,7 +115,7 @@ internal class AnimationEditor : DocumentEditor
 
                 if (EditorUI.PopupItem(FirstPopupItemId + i, doc.Name, selected: doc as SkeletonDocument == Document.Skeleton))
                 {
-                    _showSkeletonPopup = false;
+                    EditorUI.ClosePopup();
                     Undo.Record(Document);
                     Document.MarkModified();
                     Document.SetSkeleton(doc as SkeletonDocument);
@@ -345,6 +346,9 @@ internal class AnimationEditor : DocumentEditor
         using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
         {
             UI.Flex();
+
+            if (EditorUI.Button(ShowSkeletonButtonId, EditorAssets.Sprites.IconPreview, selected: _showSkeleton, toolbar: true))
+                _showSkeleton = !_showSkeleton;
 
             if (EditorUI.Button(LoopButtonId, EditorAssets.Sprites.IconLoop, selected: Document.IsLooping, toolbar: true))
             {
@@ -963,6 +967,7 @@ internal class AnimationEditor : DocumentEditor
 
     private void DrawBones()
     {
+        if (!_showSkeleton) return;
         if (Document.Skeleton == null) return; 
 
         for (var boneIndex = 0; boneIndex < Document.Skeleton.BoneCount; boneIndex++)

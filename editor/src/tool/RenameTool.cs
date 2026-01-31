@@ -8,7 +8,8 @@ namespace NoZ.Editor;
 
 public class RenameTool : Tool
 {
-    private static readonly ElementId TextBoxId = new(1);
+    private const int RenameTextBoxId = 99;
+    private const int TextBoxId = 98;
 
     private readonly string _originalName;
     private readonly Func<Vector2> _getWorldPosition;
@@ -54,7 +55,7 @@ public class RenameTool : Tool
         // Click outside the TextBox commits the rename (skip on first frame)
         if (!_firstFrame && Input.WasButtonPressed(InputCode.MouseLeft))
         {
-            var textBoxRect = UI.GetElementRect(EditorStyle.CanvasId.Workspace, 99);
+            var textBoxRect = UI.GetElementRect(EditorStyle.CanvasId.Workspace, RenameTextBoxId);
             var mousePos = UI.ScreenToUI(Input.MousePosition);
             if (textBoxRect.Width > 0 && !textBoxRect.Contains(mousePos))
             {
@@ -74,8 +75,8 @@ public class RenameTool : Tool
         uiPos.X -= EditorStyle.RenameTool.Root.Width.Value * 0.5f;
         uiPos.Y -= EditorStyle.RenameTool.Root.Height.Value * 0.5f;
         using (UI.BeginCanvas(id: EditorStyle.CanvasId.Workspace))
-        using (UI.BeginContainer(99, EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
-        using (UI.BeginContainer(EditorStyle.RenameTool.TextContainer))
+        using (UI.BeginContainer(RenameTextBoxId, EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
+        using (UI.BeginContainer(EditorStyle.RenameTool.Content))
         {
             if (_firstFrame)
             {

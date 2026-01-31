@@ -14,7 +14,7 @@ internal class TextureEditor : DocumentEditor
     public TextureEditor(TextureDocument doc) : base(doc)
     {
         var scaleCommand = new Command { Name = "Scale", Handler = HandleScale, Key = InputCode.KeyS };
-        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
+        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
         
         Commands = 
         [

@@ -14,118 +14,6 @@ public enum WorkspaceState
 
 public static class Workspace
 {
-    private static void ReimportAll()
-    {
-        foreach (var doc in DocumentManager.Documents)
-            Importer.Queue(doc, true);
-    }
-
-    private static void CreateNewDocument(AssetType assetType)
-    {
-        var position = ContextMenu.WorldPosition;
-        var doc = DocumentManager.New(assetType, null, position);
-        if (doc != null)
-        {
-            doc.CollectionId = CollectionManager.GetVisibleId();
-            doc.MarkMetaModified();
-            ClearSelection();
-            SetSelected(doc, true);
-            Notifications.Add($"created {assetType.ToString().ToLowerInvariant()} '{doc.Name}'");
-        }
-    }
-
-    private static void RebuildAtlas()
-    {
-        AtlasManager.Rebuild();
-        DocumentManager.SaveAll();
-    }
-
-    private static void InitCommands()
-    {
-        var renameCommand = new Command { Name = "Rename", Handler = BeginRenameTool, Key = InputCode.KeyF2 };
-        var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
-        var duplicateCommand = new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true, Icon = EditorAssets.Sprites.IconDuplicate };
-        var editCommand = new Command { Name = "Edit", Handler = ToggleEdit, Key = InputCode.KeyTab, Icon = EditorAssets.Sprites.IconEdit };
-        var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
-        var hideCommand = new Command { Name = "Hide", Handler = HandleHide, Key = InputCode.KeyH, Icon = EditorAssets.Sprites.IconPreview };
-        var unhideAllCommand = new Command { Name = "Unhide All", Handler = HandleUnhideAll, Key = InputCode.KeyH, Ctrl = true, Icon = EditorAssets.Sprites.IconPreview };
-
-        CommandManager.RegisterCommon([
-            new Command { Name = "Save All", Handler = DocumentManager.SaveAll, Key = InputCode.KeyS, Ctrl = true },
-            new Command { Name = "Undo", Handler = () => Undo.DoUndo(), Key = InputCode.KeyZ, Ctrl = true },
-            new Command { Name = "Redo", Handler = () => Undo.DoRedo(), Key = InputCode.KeyY, Ctrl = true },
-            new Command { Name = "Increase UI Scale", Handler = IncreaseUIScale, Key = InputCode.KeyEquals, Ctrl = true },
-            new Command { Name = "Decrease UI Scale", Handler = DecreaseUIScale, Key = InputCode.KeyMinus, Ctrl = true },
-            new Command { Name = "Reset UI Scale", Handler = ResetUIScale, Key = InputCode.Key0, Ctrl = true },
-            new Command { Name = "Command Palette", Handler = CommandPalette.Open, Key = InputCode.KeyP, Ctrl = true, Shift = true },
-            new Command { Name = "Toggle Grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Ctrl = true },
-            new Command { Name = "Toggle Names", Handler = ToggleNames, Key = InputCode.KeyN, Alt = true },
-        ]);
-
-        var workspaceCommands = new List<Command>
-        {
-            editCommand,
-            renameCommand,
-            deleteCommand,
-            duplicateCommand,
-            moveCommand,
-            hideCommand,
-            unhideAllCommand,
-            new() { Name = "Select All", Handler = SelectAll, Key = InputCode.KeyA },
-            new() { Name = "Frame", Handler = FrameSelected, Key = InputCode.KeyF },
-            new() { Name = "Reimport All", Handler = ReimportAll },
-            new() { Name = "Play/Stop", Handler = Play, Key = InputCode.KeySpace },
-            new() { Name = "Show/Hide Hidden Assets", Handler = ToggleShowHidden },
-            new() { Name = "Rebuild Atlas", Handler = RebuildAtlas },
-            new() { Name = "Bring Forward", Handler = BringForward, Key = InputCode.KeyRightBracket },
-            new() { Name = "Send Backward", Handler = SendBackward, Key = InputCode.KeyLeftBracket },
-        };
-
-        for (var i = 1; i <= 9; i++)
-        {
-            var index = i;
-            workspaceCommands.Add(new Command { Name = $"Collection {i}", Handler = () => SetCollection(index), Key = InputCode.Key0 + i });
-            workspaceCommands.Add(new Command { Name = $"Move to Collection {i}", Handler = () => MoveSelectedToCollection(index), Key = InputCode.Key0 + i, Ctrl = true });
-        }
-
-        CommandManager.RegisterWorkspace([.. workspaceCommands]);
-
-        var items = new List<ContextMenuItem>();
-        var creatableDefs = DocumentManager.GetCreatableDefs().ToArray();
-        if (creatableDefs.Length > 0)
-        {
-            items.Add(ContextMenuItem.Submenu("New"));
-            foreach (var def in creatableDefs.OrderBy(d => d.Type.ToString()))
-            {
-                var assetType = def.Type;
-                items.Add(ContextMenuItem.Item(
-                    def.Type.ToString(),
-                    () => CreateNewDocument(assetType),
-                    level: 1,
-                    icon: def.Icon?.Invoke()));
-            }
-            items.Add(ContextMenuItem.Separator());
-        }
-
-        if (CollectionManager.Collections.Count > 0)
-        {
-            items.Add(ContextMenuItem.Submenu("Move to Collection", showChecked: true, showIcons: false));
-            foreach (var collection in CollectionManager.Collections)
-            {
-                var idx = collection.Index;
-                items.Add(ContextMenuItem.Item(collection.Name, () => MoveSelectedToCollection(idx), level: 1, isChecked: () => idx == CollectionManager.VisibleIndex));
-            }
-            items.Add(ContextMenuItem.Separator());
-        }
-
-        items.Add(ContextMenuItem.FromCommand(editCommand));
-        items.Add(ContextMenuItem.FromCommand(duplicateCommand));
-        items.Add(ContextMenuItem.FromCommand(renameCommand));
-        items.Add(ContextMenuItem.FromCommand(deleteCommand));
-        items.Add(ContextMenuItem.FromCommand(moveCommand));
-        _workspaceContextMenu = new ContextMenuDef([.. items], "Asset");
-    }
-
     private const float ZoomMin = 0.2f;
     private const float ZoomMax = 200f;
     private const float ZoomStep = 0.1f;
@@ -135,6 +23,8 @@ public static class Workspace
     private const float UIScaleMin = 0.5f;
     private const float UIScaleMax = 3f;
     private const float UIScaleStep = 0.1f;
+
+    public static DocumentEditor? ActiveEditor => _activeEditor;
 
     private static Camera _camera = null!;
 
@@ -224,6 +114,118 @@ public static class Workspace
     {
         _whiteTexture?.Dispose();
         _whiteTexture = null;
+    }
+
+    private static void ReimportAll()
+    {
+        foreach (var doc in DocumentManager.Documents)
+            Importer.Queue(doc, true);
+    }
+
+    private static void CreateNewDocument(AssetType assetType)
+    {
+        var position = ContextMenu.WorldPosition;
+        var doc = DocumentManager.New(assetType, null, position);
+        if (doc != null)
+        {
+            doc.CollectionId = CollectionManager.GetVisibleId();
+            doc.MarkMetaModified();
+            ClearSelection();
+            SetSelected(doc, true);
+            Notifications.Add($"created {assetType.ToString().ToLowerInvariant()} '{doc.Name}'");
+        }
+    }
+
+    private static void RebuildAtlas()
+    {
+        AtlasManager.Rebuild();
+        DocumentManager.SaveAll();
+    }
+
+    private static void InitCommands()
+    {
+        var renameCommand = new Command { Name = "Rename", Handler = BeginRenameTool, Key = InputCode.KeyF2 };
+        var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
+        var duplicateCommand = new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true, Icon = EditorAssets.Sprites.IconDuplicate };
+        var editCommand = new Command { Name = "Edit", Handler = BeginEdit, Key = InputCode.KeyTab, Icon = EditorAssets.Sprites.IconEdit };
+        var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
+        var hideCommand = new Command { Name = "Hide", Handler = HandleHide, Key = InputCode.KeyH, Icon = EditorAssets.Sprites.IconPreview };
+        var unhideAllCommand = new Command { Name = "Unhide All", Handler = HandleUnhideAll, Key = InputCode.KeyH, Ctrl = true, Icon = EditorAssets.Sprites.IconPreview };
+
+        CommandManager.RegisterCommon([
+            new Command { Name = "Save All", Handler = DocumentManager.SaveAll, Key = InputCode.KeyS, Ctrl = true },
+            new Command { Name = "Undo", Handler = () => Undo.DoUndo(), Key = InputCode.KeyZ, Ctrl = true },
+            new Command { Name = "Redo", Handler = () => Undo.DoRedo(), Key = InputCode.KeyY, Ctrl = true },
+            new Command { Name = "Increase UI Scale", Handler = IncreaseUIScale, Key = InputCode.KeyEquals, Ctrl = true },
+            new Command { Name = "Decrease UI Scale", Handler = DecreaseUIScale, Key = InputCode.KeyMinus, Ctrl = true },
+            new Command { Name = "Reset UI Scale", Handler = ResetUIScale, Key = InputCode.Key0, Ctrl = true },
+            new Command { Name = "Command Palette", Handler = CommandPalette.Open, Key = InputCode.KeyP, Ctrl = true, Shift = true },
+            new Command { Name = "Toggle Grid", Handler = ToggleGrid, Key = InputCode.KeyQuote, Ctrl = true },
+            new Command { Name = "Toggle Names", Handler = ToggleNames, Key = InputCode.KeyN, Alt = true },
+        ]);
+
+        var workspaceCommands = new List<Command>
+        {
+            editCommand,
+            renameCommand,
+            deleteCommand,
+            duplicateCommand,
+            moveCommand,
+            hideCommand,
+            unhideAllCommand,
+            new() { Name = "Select All", Handler = SelectAll, Key = InputCode.KeyA },
+            new() { Name = "Frame", Handler = FrameSelected, Key = InputCode.KeyF },
+            new() { Name = "Reimport All", Handler = ReimportAll },
+            new() { Name = "Play/Stop", Handler = Play, Key = InputCode.KeySpace },
+            new() { Name = "Show/Hide Hidden Assets", Handler = ToggleShowHidden },
+            new() { Name = "Rebuild Atlas", Handler = RebuildAtlas },
+            new() { Name = "Bring Forward", Handler = BringForward, Key = InputCode.KeyRightBracket },
+            new() { Name = "Send Backward", Handler = SendBackward, Key = InputCode.KeyLeftBracket },
+        };
+
+        for (var i = 1; i <= 9; i++)
+        {
+            var index = i;
+            workspaceCommands.Add(new Command { Name = $"Collection {i}", Handler = () => SetCollection(index), Key = InputCode.Key0 + i });
+            workspaceCommands.Add(new Command { Name = $"Move to Collection {i}", Handler = () => MoveSelectedToCollection(index), Key = InputCode.Key0 + i, Ctrl = true });
+        }
+
+        CommandManager.RegisterWorkspace([.. workspaceCommands]);
+
+        var items = new List<ContextMenuItem>();
+        var creatableDefs = DocumentManager.GetCreatableDefs().ToArray();
+        if (creatableDefs.Length > 0)
+        {
+            items.Add(ContextMenuItem.Submenu("New"));
+            foreach (var def in creatableDefs.OrderBy(d => d.Type.ToString()))
+            {
+                var assetType = def.Type;
+                items.Add(ContextMenuItem.Item(
+                    def.Type.ToString(),
+                    () => CreateNewDocument(assetType),
+                    level: 1,
+                    icon: def.Icon?.Invoke()));
+            }
+            items.Add(ContextMenuItem.Separator());
+        }
+
+        if (CollectionManager.Collections.Count > 0)
+        {
+            items.Add(ContextMenuItem.Submenu("Move to Collection", showChecked: true, showIcons: false));
+            foreach (var collection in CollectionManager.Collections)
+            {
+                var idx = collection.Index;
+                items.Add(ContextMenuItem.Item(collection.Name, () => MoveSelectedToCollection(idx), level: 1, isChecked: () => idx == CollectionManager.VisibleIndex));
+            }
+            items.Add(ContextMenuItem.Separator());
+        }
+
+        items.Add(ContextMenuItem.FromCommand(editCommand, enabled: () => SelectedCount == 1));
+        items.Add(ContextMenuItem.FromCommand(duplicateCommand));
+        items.Add(ContextMenuItem.FromCommand(renameCommand));
+        items.Add(ContextMenuItem.FromCommand(deleteCommand));
+        items.Add(ContextMenuItem.FromCommand(moveCommand));
+        _workspaceContextMenu = new ContextMenuDef([.. items], "Asset");
     }
 
     public static void LoadUserSettings(PropertySet props)
@@ -398,38 +400,35 @@ public static class Workspace
 
     private static void DrawNames()
     {
+        using var _ = Graphics.PushState();
+
+        var font = EditorAssets.Fonts.Seguisb;
+        var fontSize = EditorStyle.Workspace.NameSize * Gizmos.ZoomRefScale;
+        var padding = EditorStyle.Workspace.NamePadding * Gizmos.ZoomRefScale;
         var renamingDoc = (ActiveTool as RenameTool)?.Target as Document;
 
-        using (Graphics.PushState())
+        Graphics.SetLayer(EditorLayer.Names);
+        TextRender.SetOutline(EditorStyle.Workspace.NameOutlineColor, EditorStyle.Workspace.NameOutline, 0.5f); 
+
+        foreach (var doc in DocumentManager.Documents)
         {
-            var font = EditorAssets.Fonts.Seguisb;
-            Graphics.SetLayer(EditorLayer.Names);
-            Graphics.SetColor(EditorStyle.TextColor);
+            if (!doc.Loaded || !doc.PostLoaded) continue;
+            if (!ShowHidden && !doc.IsVisible) continue;
+            if (doc.IsClipped) continue;
+            if (doc.IsHiddenInWorkspace) continue;
+            if (!CollectionManager.IsDocumentVisible(doc)) continue;
+            if (doc == renamingDoc) continue;
 
-            var fontSize = EditorStyle.Workspace.NameSize * Gizmos.ZoomRefScale;
-            var padding = EditorStyle.Workspace.NamePadding * Gizmos.ZoomRefScale;
-
-            foreach (var doc in DocumentManager.Documents)
-            {
-                if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || (!ShowHidden && !doc.IsVisible))
-                    continue;
-                if (doc.IsHiddenInWorkspace)
-                    continue;
-                if (!CollectionManager.IsDocumentVisible(doc))
-                    continue;
-
-                // Skip if this document is being renamed (TextBox will show instead)
-                if (doc == renamingDoc)
-                    continue;
-
-                var bounds = doc.Bounds.Translate(doc.Position);
-                var textSize = TextRender.Measure(doc.Name, font, fontSize);
-                var textX = bounds.Center.X - textSize.X * 0.5f;
-                var textY = bounds.Bottom + padding - textSize.Y * 0.5f;
-                Graphics.SetTransform(Matrix3x2.CreateTranslation(textX, textY));
-                TextRender.Draw(doc.Name, font, fontSize);
-            }
+            var bounds = doc.Bounds.Translate(doc.Position);
+            var textSize = TextRender.Measure(doc.Name, font, fontSize);
+            var textX = bounds.Center.X - textSize.X * 0.5f;
+            var textY = bounds.Bottom + padding - textSize.Y * 0.5f;
+            Graphics.SetTransform(Matrix3x2.CreateTranslation(textX, textY));
+            Graphics.SetColor(doc.IsSelected ? EditorStyle.Workspace.SelectionColor : EditorStyle.TextColor);
+            TextRender.Draw(doc.Name, font, fontSize, order: doc.IsSelected ? 1 : 0);
         }
+
+        TextRender.ClearOutline();
     }
 
     private static void BeginMoveTool()
@@ -772,25 +771,6 @@ public static class Workspace
     public static Document? HitTestDocuments(Vector2 point)
     {
         Document? firstHit = null;
-        for (var i = DocumentManager.Documents.Count - 1; i >= 0; i--)
-        {
-            var doc = DocumentManager.Documents[i];
-            if (!doc.Loaded || !doc.PostLoaded) continue;
-            if (doc.IsHiddenInWorkspace) continue;
-            if (!CollectionManager.IsDocumentVisible(doc)) continue;
-            if (!doc.Bounds.Translate(doc.Position).Contains(point)) continue;
-
-            firstHit ??= doc;
-            if (!doc.IsSelected)
-                return doc;
-        }
-        return firstHit;
-    }
-
-    public static Document? HitTestDocumentNames(Vector2 point)
-    {
-        if (!ShowNames)
-            return null;
 
         var font = EditorAssets.Fonts.Seguisb;
         var scale = 1f / _zoom;
@@ -800,20 +780,28 @@ public static class Workspace
         for (var i = DocumentManager.Documents.Count - 1; i >= 0; i--)
         {
             var doc = DocumentManager.Documents[i];
-            if (!doc.Loaded || !doc.PostLoaded || doc.IsClipped || !doc.IsVisible) continue;
+            if (!doc.Loaded || !doc.PostLoaded) continue;
             if (doc.IsHiddenInWorkspace) continue;
             if (!CollectionManager.IsDocumentVisible(doc)) continue;
 
-            var bounds = doc.Bounds.Translate(doc.Position);
-            var textSize = TextRender.Measure(doc.Name, font, fontSize);
-            var textX = bounds.Center.X - textSize.X * 0.5f;
-            var textY = bounds.Bottom + padding - textSize.Y * 0.5f;
+            var hitBounds = doc.Bounds.Translate(doc.Position).Contains(point);
+            if (ShowNames && !hitBounds)
+            {
+                var bounds = doc.Bounds.Translate(doc.Position);
+                var textSize = TextRender.Measure(doc.Name, font, fontSize);
+                var textX = bounds.Center.X - textSize.X * 0.5f;
+                var textY = bounds.Bottom + padding - textSize.Y * 0.5f;
+                var nameRect = new Rect(textX, textY, textSize.X, textSize.Y);
+                hitBounds = nameRect.Contains(point);
+            }
 
-            var nameRect = new Rect(textX, textY, textSize.X, textSize.Y);
-            if (nameRect.Contains(point))
+            if (!hitBounds) continue;
+
+            firstHit ??= doc;
+            if (!doc.IsSelected)
                 return doc;
         }
-        return null;
+        return firstHit;
     }
 
     public static void ClearSelection()
@@ -925,8 +913,15 @@ public static class Workspace
         }
     }
 
-    public static void ToggleEdit()
+    public static void EndEdit()
     {
+        _pendingState = WorkspaceState.Default;
+    }
+
+    private static void BeginEdit()
+    {
+        if (SelectedCount != 1) return;
+
         _pendingState = State == WorkspaceState.Edit
             ? WorkspaceState.Default
             : WorkspaceState.Edit;
@@ -941,7 +936,19 @@ public static class Workspace
 
         if (State == WorkspaceState.Default)
         {
-            EndEdit();
+            if (_activeDocument == null)
+                return;
+
+            CancelTool();
+            CommandManager.RegisterEditor(null);
+
+            _activeEditor?.Dispose();
+            _activeEditor = null;
+            _activeDocument.IsEditing = false;
+            _activeDocument = null;
+            State = WorkspaceState.Default;
+
+            DocumentManager.SaveAll();
             return;
         }
 
@@ -965,25 +972,6 @@ public static class Workspace
 
         CommandManager.RegisterEditor(_activeEditor.Commands);
     }
-
-    public static void EndEdit()
-    {
-        if (_activeDocument == null)
-            return;
-
-        CancelTool();
-        CommandManager.RegisterEditor(null);
-
-        _activeEditor?.Dispose();
-        _activeEditor = null;
-        _activeDocument.IsEditing = false;
-        _activeDocument = null;
-        State = WorkspaceState.Default;
-
-        DocumentManager.SaveAll();
-    }
-
-    public static DocumentEditor? ActiveEditor => _activeEditor;
 
     public static void BeginTool(Tool tool)
     {
@@ -1017,19 +1005,6 @@ public static class Workspace
 
     public static void UpdateDefaultState()
     {
-        // Double-click on name to rename
-        if (Input.WasButtonPressed(InputCode.MouseLeftDoubleClick))
-        {
-            var hitDoc = HitTestDocumentNames(_mouseWorldPosition);
-            if (hitDoc != null)
-            {
-                ClearSelection();
-                SetSelected(hitDoc, true);
-                BeginTool(CreateRenameToolForDocument(hitDoc));
-                return;
-            }
-        }
-
         if (Input.WasButtonPressed(InputCode.MouseLeft))
         {
             var hitDoc = HitTestDocuments(_mouseWorldPosition);

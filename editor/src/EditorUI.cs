@@ -446,7 +446,11 @@ internal static class EditorUI
                 Width = EditorStyle.Control.ContentHeight,
                 Padding = EdgeInsets.All(2)
             });
-            UI.Container(new ContainerStyle { Color = PaletteManager.GetColor(paletteId, oldValue) });
+            UI.Container(new ContainerStyle 
+            {
+                Color = PaletteManager.GetColor(paletteId, oldValue),
+                Border = new BorderStyle { Radius = 5 }
+            });
         }
 
         if (Control(id, ButtonContent, selected: false, disabled: false, toolbar: false))
@@ -514,7 +518,9 @@ internal static class EditorUI
             }
             else
             {
-                using var _ = UI.BeginContainer(EditorStyle.Control.IconContainer with { Padding = EdgeInsets.All(EditorStyle.Control.Spacing) });
+                using var _ = UI.BeginContainer(EditorStyle.Control.IconContainer with { 
+                    Padding = EdgeInsets.All(EditorStyle.Control.Spacing + 1) 
+                });
                 UI.Image(EditorAssets.Sprites.IconOpacity, EditorStyle.Control.Icon);
                 UI.Image(
                     EditorAssets.Sprites.IconOpacityOverlay,

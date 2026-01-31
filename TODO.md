@@ -1,11 +1,8 @@
-
-
-# 1/30/2026
+# 1/31/2026
 - [ ] Select bone should just make a context menu with skeletons and bones as sub menus
 - [ ] ctrl Snap bones from one to another when dragging in skeleton editor
 - [ ] Drag the end of bones to size them in skeleton editor
 - [ ] Create new animation with skeleton skeelcton should use that skeleton for animation
-- [ ] Animation editor toggle for hiding bones
 - [ ] Block input when rotating boes in animation
 - [ ] cant see holds in the animation editor
 - [ ] animation got corrupted by messing with holds
@@ -13,6 +10,16 @@
 - [ ] Added animated sprites
 - [ ] Added stroke rendering
 - [ ] Atlas not always rebuilding when sprites change, sprite added i think
+- [ ] Clear selection when exiting skeleton editor
+
+# 1/30/2026
+- [X] Animation editor toggle for hiding bones
+- [X] Add outline around workspace names and bone names
+- [X] Incrase bone selection radius
+- [X] Selected document names should be cyan
+- [X] Single click on name should select document
+- [X] Increased the size of the origin dot
+- [x] Fixed but where entering edit mode with multiple documents selected would lock up input
 - [X] Cancelling a rename seems to get you stuck so no input works
 - [X] adding bones, renaming bones, and deleting bones causes animations to crash
 - [X] Cleanup refactor of contextmenu to use popup ui

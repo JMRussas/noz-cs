@@ -31,7 +31,7 @@ internal class SkeletonEditor : DocumentEditor
 
     public SkeletonEditor(SkeletonDocument document) : base(document)
     {
-        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.ToggleEdit, Key = InputCode.KeyTab };
+        var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
         var deleteCommand = new Command { Name = "Delete", Handler = HandleDelete, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
         var moveCommand = new Command { Name = "Move", Handler = HanleMove, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
         var rotateCommand = new Command { Name = "Rotate", Handler = HandleRotate, Key = InputCode.KeyR };
@@ -85,7 +85,7 @@ internal class SkeletonEditor : DocumentEditor
             Graphics.SetSortGroup(SortGroupSkin);
             Document.DrawSprites();
         }            
-        UpdateBoneNames();
+        DrawBoneNames();
     }
 
     private bool IsBoneSelected(int boneIndex) => Document.Bones[boneIndex].IsSelected;
@@ -213,7 +213,7 @@ internal class SkeletonEditor : DocumentEditor
             ClearSelection();
     }
 
-    private void UpdateBoneNames()
+    private void DrawBoneNames()
     {
         if (!Workspace.ShowNames)
             return;
@@ -221,6 +221,8 @@ internal class SkeletonEditor : DocumentEditor
         var renamingBoneIndex = -1;
         if (Workspace.ActiveTool is RenameTool && Document.SelectedBoneCount == 1)
             renamingBoneIndex = GetFirstSelectedBoneIndex();
+
+        TextRender.SetOutline(EditorStyle.Workspace.NameOutlineColor, EditorStyle.Workspace.NameOutline, 0.2f);
 
         using (Graphics.PushState())
         {
@@ -231,21 +233,19 @@ internal class SkeletonEditor : DocumentEditor
 
             for (var i = 0; i < Document.BoneCount; i++)
             {
-                if (i == renamingBoneIndex)
-                    continue;
+                if (i == renamingBoneIndex) continue;
 
-                var b = Document.Bones[i];
-                var p = Vector2.Transform(new Vector2(b.Length * 0.5f, 0), Document.LocalToWorld[i]) + Document.Position;
-
+                ref var b = ref Document.Bones[i];
+                b.NamePosition = Vector2.Transform(new Vector2(b.Length * 0.5f, 0), Document.LocalToWorld[i]) + Document.Position;
                 var textSize = TextRender.Measure(b.Name, font, fontSize);
-                var textX = p.X - textSize.X * 0.5f;
-                var textY = p.Y;
-
-                Graphics.SetTransform(Matrix3x2.CreateTranslation(textX, textY));
-                Graphics.SetColor(b.IsSelected ? EditorStyle.SelectionColor : EditorStyle.TextColor);
-                TextRender.Draw(b.Name, font, fontSize);
+                var textOffset = new Vector2(b.NamePosition.X - textSize.X * 0.5f, b.NamePosition.Y - textSize.Y * 0.5f);
+                Graphics.SetTransform(Matrix3x2.CreateTranslation(textOffset));
+                Graphics.SetColor(b.IsSelected ? EditorStyle.Workspace.SelectionColor: EditorStyle.TextColor);
+                TextRender.Draw(b.Name, font, fontSize, order: (ushort)(b.IsSelected ? 1 : 0));
             }
         }
+
+        TextRender.ClearOutline();
     }
 
     private void CounterActParentTransform(int parentIndex)
@@ -517,12 +517,7 @@ internal class SkeletonEditor : DocumentEditor
 
         Workspace.BeginTool(new RenameTool(
             bone.Name,
-            () =>
-            {
-                var boneTransform = Document.LocalToWorld[boneIndex];
-                var boneCenter = Vector2.Transform(new Vector2(bone.Length * 0.5f, 0), boneTransform);
-                return boneCenter + Document.Position;
-            },
+            () => Document.Bones[boneIndex].NamePosition,
             newName =>
             {
                 if (newName == oldName)

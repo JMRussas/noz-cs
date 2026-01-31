@@ -128,7 +128,8 @@ public class Animation : Asset
             animation.Frames[i].RootMotion1 = reader.ReadSingle();
         }
 
-        animation.Frames[frameCount] = animation.Frames[frameCount - 1];
+        if (frameCount > 0)
+            animation.Frames[frameCount] = animation.Frames[frameCount - 1];
 
         return animation;
     }
