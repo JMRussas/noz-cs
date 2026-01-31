@@ -12,6 +12,7 @@ internal static class EditorUI
     public const int FirstPopupItemId = PopupId + 1;
     private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
     private static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
+    private static readonly float[] OpacityValues = [0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f];
 
     private static bool _controlHovered = false;
     private static bool _controlSelected = false;
@@ -371,19 +372,38 @@ internal static class EditorUI
         UI.Container(EditorStyle.Toolbar.Spacer);
     }
 
+    private static UI.AutoContainer BeginColorContainer(ElementId id, bool selected)
+    {
+        var container = UI.BeginContainer(id, new ContainerStyle
+        {
+            Padding = EdgeInsets.All(3),
+            Color = selected ? EditorStyle.SelectionColor : Color.Transparent,
+            Border = new BorderStyle { Radius = EditorStyle.Control.BorderRadius }
+        });
+
+        if (!selected && UI.IsHovered())
+            UI.Container(EditorStyle.Control.HoverFill with
+            { 
+                Margin = EdgeInsets.All(-3)
+            });
+
+        return container;
+    }
+
     private static void ColorPopupContent()
     {
         using var _ = UI.BeginGrid(new GridStyle
         {
             CellHeight = EditorStyle.Control.Height,
             CellWidth = EditorStyle.Control.Height,
-            Columns = 8,
-            Spacing = EditorStyle.Control.Spacing
+            Columns = 8
         });
+
+        var nextItemId = FirstPopupItemId;
 
         for (var i = 0; i < 64; i++)
         {
-            using (UI.BeginContainer(FirstPopupItemId + i))
+            using (BeginColorContainer(nextItemId++, selected: i == _colorValue))
             {
                 var displayColor = PaletteManager.GetColor(_colorPalette, i);
                 if (displayColor.A <= float.Epsilon)
@@ -392,34 +412,11 @@ internal static class EditorUI
                     continue;
                 }
 
-                if (i == _colorValue)
+                UI.Container(new ContainerStyle
                 {
-                    using var ____ = UI.BeginContainer(new ContainerStyle
-                    {
-                        Margin = EdgeInsets.All(-3),
-                        Padding = EdgeInsets.All(4),
-                        Border = new BorderStyle
-                        {
-                            Radius = EditorStyle.Control.BorderRadius,
-                            Width = 4.0f,
-                            Color = EditorStyle.SelectionColor
-                        }
-                    });
-
-                    UI.Container(new ContainerStyle
-                    {
-                        Color = displayColor,
-                        Border = new BorderStyle { Radius = EditorStyle.Control.BorderRadius - 2 }
-                    });
-                }
-                else
-                {
-                    UI.Container(new ContainerStyle
-                    {
-                        Color = displayColor,
-                        Border = new BorderStyle { Radius = EditorStyle.Control.BorderRadius }
-                    });
-                }
+                    Color = displayColor,
+                    Border = new BorderStyle { Radius = EditorStyle.Control.BorderRadius - 2 }
+                });
 
                 if (UI.WasPressed())
                 {
@@ -428,27 +425,82 @@ internal static class EditorUI
                 }
             }
         }
+
+        using (BeginColorContainer(nextItemId++, selected: _opacityValue <= float.MinValue))
+        {
+            ControlIcon(EditorAssets.Sprites.IconSubtract);
+            if (UI.WasPressed())
+            {
+                _opacityValue = float.MinValue;
+                ClosePopup();
+            }
+        }
+
+        using (BeginColorContainer(nextItemId++, selected: MathEx.Approximately(0, _opacityValue)))
+        {
+            ControlIcon(EditorAssets.Sprites.IconDelete);
+            if (UI.WasPressed())
+            {
+                _opacityValue = 0.0f;
+                ClosePopup();
+            }
+        }
+
+        for (var i = 0; i < 6; i++)
+        {
+            var o = OpacityValues[i];
+            using (BeginColorContainer(nextItemId++, selected: MathEx.Approximately(o, _opacityValue)))
+            {
+                UI.Image(EditorAssets.Sprites.IconOpacity, style: EditorStyle.Control.Icon);
+                UI.Image(
+                    EditorAssets.Sprites.IconOpacityOverlay,
+                    EditorStyle.Control.Icon with { Color = Color.White.WithAlpha(o) });
+
+                if (UI.WasPressed())
+                {
+                    _opacityValue = o;
+                    ClosePopup();
+                }
+            }
+        }
     }
 
-    private static int ColorPopup(ElementId id, int palette, int value)
+    private static void ColorPopup(ElementId id, int palette, ref int value, ref float opacity)
     {
         _colorPalette = palette;
         _colorValue = value;
+        _opacityValue = opacity;
         Popup(id, ColorPopupContent);
         value = _colorValue;
-        return value;
+        opacity = _opacityValue;
     }
 
-    public static bool ColorButton(ElementId id, int paletteId, ref int colorId)
+    public static bool ColorButton(
+        ElementId id,
+        int paletteId,
+        ref int colorId,
+        ref float opacity,
+        Sprite? icon = null)
     {
         var oldValue = colorId;
+        var oldOpacity = opacity;
         void ButtonContent()
         {
+            if (icon != null)
+                ControlIcon(icon);
+
+            if (oldOpacity <= float.MinValue)
+            {
+                ControlIcon(EditorAssets.Sprites.IconSubtract);
+                return;
+            }
+
             using var _ = UI.BeginContainer(new ContainerStyle
             {
                 Width = EditorStyle.Control.ContentHeight,
                 Padding = EdgeInsets.All(2)
             });
+
             UI.Container(new ContainerStyle 
             {
                 Color = PaletteManager.GetColor(paletteId, oldValue),
@@ -459,9 +511,9 @@ internal static class EditorUI
         if (Control(id, ButtonContent, selected: false, disabled: false, toolbar: false))
             TogglePopup(id); ;
 
-        colorId = ColorPopup(id: id, value: colorId, palette: paletteId);
+        ColorPopup(id: id, palette: paletteId, value: ref colorId, opacity: ref opacity);
 
-        return colorId != oldValue;
+        return colorId != oldValue || oldOpacity != opacity;
     }
 
     private static float OpacityPopup(ElementId id, float value, bool showSubtract)

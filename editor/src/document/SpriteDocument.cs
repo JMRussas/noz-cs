@@ -87,6 +87,7 @@ public class SpriteDocument : Document
 
     private BitMask256 _layers = new();
     private Rect[] _atlasUV = new Rect[255];
+    private Sprite? _sprite;
 
     public readonly SpriteFrame[] Frames = new SpriteFrame[Sprite.MaxFrames];
     public ushort FrameCount;
@@ -116,6 +117,15 @@ public class SpriteDocument : Document
     public readonly BoneBinding Binding = new();
 
     public Rect AtlasUV => _atlasUV[0];
+
+    public Sprite? Sprite
+    {
+        get
+        {
+            if (_sprite == null) UpdateSprite();
+            return _sprite;
+        }
+    }
 
     public SpriteDocument()
     {
@@ -329,6 +339,7 @@ public class SpriteDocument : Document
 
         ClampToMaxSpriteSize();
         Bounds = RasterBounds.ToRect().Scale(1.0f / EditorApplication.Config.PixelsPerUnit);
+        MarkSpriteDirty();
     }
 
     private void ClampToMaxSpriteSize()
@@ -441,17 +452,22 @@ public class SpriteDocument : Document
     {
         if (Atlas == null) return;
 
+        var sprite = Sprite;
+        if (sprite == null) return;
+
         using (Graphics.PushState())
         {
             Graphics.SetTexture(Atlas.Texture);
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetColor(Color.White.WithAlpha(alpha));
-            Graphics.SetTextureFilter(TextureFilter.Point);
-            var bounds = RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv);
-            Graphics.Draw(
-                bounds.Translate(offset),
-                AtlasUV,
-                order: Order);
+            Graphics.SetTextureFilter(sprite.TextureFilter);
+
+            var bounds = RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv).Translate(offset);
+
+            foreach (ref readonly var mesh in sprite.Meshes.AsSpan())
+            {
+                Graphics.Draw(bounds, mesh.UV, order: (ushort)mesh.SortOrder);
+            }
         }
     }
 
@@ -527,6 +543,7 @@ public class SpriteDocument : Document
     public void SetBoneBinding(SkeletonDocument? skeleton, int boneIndex)
     {
         Binding.Set(skeleton, boneIndex);
+        MarkSpriteDirty();
         MarkMetaModified();
     }
 
@@ -534,6 +551,7 @@ public class SpriteDocument : Document
     {
         var skeleton = Binding.Skeleton;
         Binding.Clear();
+        MarkSpriteDirty();
         skeleton?.UpdateSprites();
         MarkMetaModified();
     }
@@ -542,13 +560,51 @@ public class SpriteDocument : Document
     {
         for (int i = 0; i < _atlasUV.Length; i++)
             _atlasUV[i] = Rect.Zero;
+        MarkSpriteDirty();
     }
 
-    internal void SetAtlasUV(byte layer, Rect uv) =>
+    internal void SetAtlasUV(byte layer, Rect uv)
+    {
         _atlasUV[layer] = uv;
+        MarkSpriteDirty();
+    }
 
     internal Rect GetAtlasUV(byte layer) =>
         _atlasUV[layer];
+
+    private void UpdateSprite()
+    {
+        if (Atlas == null || _layers.Count == 0)
+        {
+            _sprite = null;
+            return;
+        }
+
+        var meshes = new SpriteMesh[_layers.Count];
+        int idx = 0;
+
+        for (int layer = 0; layer < 255; layer++)
+        {
+            if (!_layers[layer]) continue;
+            var uv = _atlasUV[layer];
+            meshes[idx++] = new SpriteMesh(uv, (short)layer);
+        }
+
+        _sprite = Sprite.Create(
+            name: Name,
+            bounds: RasterBounds,
+            pixelsPerUnit: EditorApplication.Config.PixelsPerUnit,
+            filter: TextureFilter.Point,
+            boneIndex: Binding.BoneIndex,
+            boneOffset: Binding.Offset,
+            meshes: meshes);
+    }
+
+    internal void MarkSpriteDirty()
+    {
+        _sprite?.Dispose();
+        _sprite = null;
+    }
 
     public override void Import(string outputPath, PropertySet meta)
     {

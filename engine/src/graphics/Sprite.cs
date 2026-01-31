@@ -32,6 +32,29 @@ public class Sprite : Asset
 
     private Sprite(string name) : base(AssetType.Sprite, name) { }
 
+    internal static Sprite Create(
+        string name,
+        RectInt bounds,
+        float pixelsPerUnit,
+        TextureFilter filter,
+        int boneIndex,
+        Vector2 boneOffset,
+        SpriteMesh[] meshes)
+    {
+        return new Sprite(name)
+        {
+            Bounds = bounds,
+            FrameCount = 1,
+            AtlasIndex = 0,
+            PixelsPerUnit = pixelsPerUnit,
+            PixelsPerUnitInv = 1.0f / pixelsPerUnit,
+            TextureFilter = filter,
+            BoneIndex = boneIndex,
+            BoneOffset = boneOffset,
+            Meshes = meshes
+        };
+    }
+
     private static Asset Load(Stream stream, string name)
     {
         var sprite = new Sprite(name);

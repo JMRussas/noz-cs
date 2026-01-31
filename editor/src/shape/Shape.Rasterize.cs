@@ -120,9 +120,8 @@ public sealed partial class Shape
         {
             var orderA = _paths[a].Layer;
             var orderB = _paths[b].Layer;
-            if (orderA == orderB)
-                return b - a;
-            return orderB - orderA;
+            if (orderA == orderB) return a - b;
+            return orderA - orderB;
         });
 
         return count;

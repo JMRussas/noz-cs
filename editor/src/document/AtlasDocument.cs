@@ -43,7 +43,7 @@ internal class AtlasDocument : Document
             Type = AssetType.Atlas,
             Extension = ".atlas",
             Factory = () => new AtlasDocument(),
-            EditorFactory = doc => new AtlasEditor((AtlasDocument)doc),
+            //EditorFactory = doc => new AtlasEditor((AtlasDocument)doc),
             NewFile = NewFile,
             Icon = () => EditorAssets.Sprites.AssetIconAtlas
         });
@@ -371,23 +371,22 @@ internal class AtlasDocument : Document
             var palette = PaletteManager.GetPalette(rect.Sprite.Palette);
             if (palette == null) continue;
 
-            ref readonly var sortGroups = ref rect.Sprite.Layers;
-            var sortGroupCount = sortGroups.Count;
+            ref readonly var layers = ref rect.Sprite.Layers;
 
-            for (int sortOrder = 0; sortOrder < 255; sortOrder++)
+            for (int layer = 0, layerIndex = 0; layer < 255; layer++)
             {
-                if (!sortGroups[sortOrder]) continue;
+                if (!layers[layer]) continue;
 
                 for (int frameIndex = 0; frameIndex < rect.FrameCount; frameIndex++)
                 {
                     var frame = rect.Sprite.GetFrame((ushort)frameIndex);
 
-                    AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} SortGroup={sortOrder} Frame={frameIndex} Rect={rect.Rect} Size={rect.Sprite.AtlasSize}");
+                    AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} Layer={layer} Frame={frameIndex} Rect={rect.Rect} Size={rect.Sprite.AtlasSize}");
 
                     var rasterBounds = rect.Sprite.RasterBounds;
                     var padding2 = Padding * 2;
                     var frameStride = rasterBounds.Size.X + padding2;
-                    var slotIndex = sortOrder * rect.FrameCount + frameIndex;
+                    var slotIndex = layerIndex * rect.FrameCount + frameIndex;
                     var outerRect = new RectInt(
                         rect.Rect.Position + new Vector2Int(slotIndex * frameStride, 0),
                         new Vector2Int(frameStride, rasterBounds.Size.Y + padding2));
@@ -399,7 +398,7 @@ internal class AtlasDocument : Document
                         rasterRect,
                         -rect.Sprite.RasterBounds.Position,
                         palette.Colors,
-                        new Shape.RasterizeOptions { Name = rect.Sprite.Name, AntiAlias = rect.Sprite.IsAntiAliased, Layer = (byte)sortOrder });
+                        new Shape.RasterizeOptions { Name = rect.Sprite.Name, AntiAlias = rect.Sprite.IsAntiAliased, Layer = (byte)layer });
 
                     _image.BleedColors(rasterRect);
                     for (int p = Padding - 1; p >= 0; p--)
@@ -410,6 +409,8 @@ internal class AtlasDocument : Document
                         _image.ExtrudeEdges(padRect);
                     }
                 }
+
+                layerIndex++;
             }
 
             UpdateSpriteUVs(rect.Sprite);
