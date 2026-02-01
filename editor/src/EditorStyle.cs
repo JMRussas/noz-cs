@@ -355,16 +355,19 @@ public static class EditorStyle
     // :skeleton
     public static class Skeleton
     {
-        public static readonly Color BoneColor = Color.White;
+        public static readonly Color BoneColor = Color.Black;
         public static readonly Color BoneOriginColor = Color.Black;
         public static readonly Color BoneOutlineColor = Color.Black10Pct;
         public static readonly Color SelectedBoneColor = Workspace.SelectionColor;
         public static readonly Color ParentLineColor = Color.FromRgb(0x212121);
-        public const float BoneSize = 0.18f;
+        public const float BoneSize = 0.22f;
         public const float BoneOriginSize = 0.15f;
         public const float BoneOutlineWidth = 0.02f;
         public const float BoneHitThreshold = 0.05f;
         public const float BoneHitThresholdSqr = BoneHitThreshold * BoneHitThreshold;
+
+        public const float BoneLineWidth = 0.02f;
+        public const float TailSize = 0.10f;
     }
 
     // :toolbar

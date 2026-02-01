@@ -8,12 +8,12 @@
 - [ ] Atlas not always rebuilding when sprites change, sprite added i think
 - [ ] toolbar button to add a bone in skeleton editor
 - [ ] Make sure you cant add too many holds or frames to animation (hold + frames < MAxFrames)>)
-- [ ] Refactor selection within sprite editor
 - [ ] Inital color when entering sprite editor is weird (first color in palette?)
 - [ ] When anchor selected draw faded selection line along segment if other anchor isnt selected
-- [ ] Setting a color and then setting again seems to not work
 import to work, fix.
 - [ ] Merge importer into document manager and make Export method to export a document.
+- [ ] Animation editor onion skin
+- [X] Setting a color and then setting again seems to not work
 - [X] sprites losing bone on import after atlas rebuild?  This is because REsolveBinding is called too late for the - [X] added collection selector in workspace toolbar
 - [x] Add worksapce toolbar
 - [X] Fixed alpha compositing bug in shape rasterization
@@ -22,6 +22,7 @@ import to work, fix.
 
 
 # 1/31/2026
+- [X] Refactor selection within sprite editor
 - [X] Moved HitResult into Shape
 - [X] Add icons to color button
 - [X] Opacity in the color popup as a row

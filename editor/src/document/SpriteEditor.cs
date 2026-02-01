@@ -22,6 +22,7 @@ public class SpriteEditor : DocumentEditor
     private const byte FirstOpacityId = 10;
     private const byte PreviewButtonId = 11;
     private const byte SkeletonOverlayButtonId = 13;
+    private const byte DopeSheetId = 14;
     private const byte ConstraintsButtonId = 24;
     private const byte FillColorButtonId = 27;
     private const byte StrokeColorButtonId = 28;
@@ -214,63 +215,56 @@ public class SpriteEditor : DocumentEditor
     {
         using var _ = UI.BeginRow(EditorStyle.Toolbar.Root);
 
+        var color = (int)_currentFillColor;
+        var opacity = _currentFillOpacity;
+
+        if (EditorUI.ColorButton(FillColorButtonId, Document.Palette, ref color, ref opacity, EditorAssets.Sprites.IconFill))
+            SetFillColor((byte)color, opacity);
+
+        var strokeColor = (int)_currentStrokeColor;
+        var strokeOpacity = _currentStrokeOpacity;
+        if (EditorUI.ColorButton(StrokeColorButtonId, Document.Palette, ref strokeColor, ref strokeOpacity, EditorAssets.Sprites.IconStroke))
+            SetStrokeColor((byte)strokeColor, strokeOpacity);
+
+        // Palette 
+        if (EditorUI.Button(
+            PaletteButtonId,
+            EditorAssets.Sprites.IconPalette,
+            EditorUI.IsPopupOpen(PaletteButtonId),
+            toolbar: true))
+            EditorUI.TogglePopup(PaletteButtonId);
+
+        PalettePopupUI();
+
+        EditorUI.ToolbarSpacer();
+
+        LayerButtonUI();
+
+        BoneBindingButton();
+
         UI.Flex();
 
-        using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
+        if (EditorUI.Button(
+            AntiAliasButtonId,
+            Document.IsAntiAliased
+                ? EditorAssets.Sprites.IconAntialiasOn
+                : EditorAssets.Sprites.IconAntialiasOff,
+            Document.IsAntiAliased,
+            toolbar: true))
         {
-            var color = (int)_currentFillColor;
-            var opacity = _currentFillOpacity;
-
-            if (EditorUI.ColorButton(FillColorButtonId, Document.Palette, ref color, ref opacity, EditorAssets.Sprites.IconFill))
-                SetFillColor((byte)color, opacity);
-
-            var strokeColor = (int)_currentStrokeColor;
-            var strokeOpacity = _currentStrokeOpacity;
-            if (EditorUI.ColorButton(StrokeColorButtonId, Document.Palette, ref strokeColor, ref strokeOpacity, EditorAssets.Sprites.IconStroke))
-                SetStrokeColor((byte)strokeColor, strokeOpacity);
-
-            // Palette 
-            if (EditorUI.Button(
-                PaletteButtonId,
-                EditorAssets.Sprites.IconPalette,
-                EditorUI.IsPopupOpen(PaletteButtonId),
-                toolbar: true))
-                EditorUI.TogglePopup(PaletteButtonId);
-
-            PalettePopupUI();
-
-            EditorUI.ToolbarSpacer();
-
-            if (EditorUI.Button(
-                AntiAliasButtonId,
-                Document.IsAntiAliased
-                    ? EditorAssets.Sprites.IconAntialiasOn
-                    : EditorAssets.Sprites.IconAntialiasOff,
-                Document.IsAntiAliased,
-                toolbar: true))
-            {
-                Undo.Record(Document);
-                MarkRasterDirty();
-                Document.MarkModified();
-                Document.IsAntiAliased = !Document.IsAntiAliased;
-            }
-
-            if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))
-            {
-                Document.ShowTiling = !Document.ShowTiling;
-                Document.MarkMetaModified();
-            }
-
-            EditorUI.ToolbarSpacer();
-
-            BoneBindingButton();
-            EditorUI.ToolbarSpacer();
-
-            ConstraintsButtonUI();
-            EditorUI.ToolbarSpacer();
-
-            LayerButtonUI();
+            Undo.Record(Document);
+            MarkRasterDirty();
+            Document.MarkModified();
+            Document.IsAntiAliased = !Document.IsAntiAliased;
         }
+
+        if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))
+        {
+            Document.ShowTiling = !Document.ShowTiling;
+            Document.MarkMetaModified();
+        }
+
+        ConstraintsButtonUI();
     }
 
     public override void UpdateUI()
@@ -280,7 +274,14 @@ public class SpriteEditor : DocumentEditor
         {
             ToolbarUI();
 
-            // todo: dopesheet
+            using (UI.BeginContainer(new ContainerStyle { Padding = EdgeInsets.LeftRight(2) }))
+            {
+                Span<EditorUI.DopeSheetFrame> frames = stackalloc EditorUI.DopeSheetFrame[Document.FrameCount];
+                for (ushort i = 0; i < Document.FrameCount; i++)
+                    frames[i] = new EditorUI.DopeSheetFrame { Hold = Document.Frames[i].Hold, };
+                var currentFrame = 0;
+                EditorUI.DopeSheet(DopeSheetId, frames, ref currentFrame, Sprite.MaxFrames, false);
+            }
 
             UI.Spacer(EditorStyle.Control.Spacing);
         }
@@ -1614,19 +1615,7 @@ public class SpriteEditor : DocumentEditor
             Graphics.SetTransform(Document.Transform * Matrix3x2.CreateTranslation(skeletonOffset));
 
             for (var boneIndex = 0; boneIndex < skeleton.BoneCount; boneIndex++)
-            {
-                ref var m = ref skeleton.LocalToWorld[boneIndex];
-                var bone = skeleton.Bones[boneIndex];
-                var p0 = Vector2.Transform(Vector2.Zero, m);
-                var p1 = Vector2.Transform(new Vector2(bone.Length, 0), m);
-
-                var isBoundBone = boneIndex == Document.Binding.BoneIndex;
-                var boneColor = isBoundBone
-                    ? EditorStyle.Skeleton.SelectedBoneColor
-                    : EditorStyle.Skeleton.BoneColor;
-
-                Gizmos.DrawBone(p0, p1, boneColor, order: 200);
-            }
+                Gizmos.DrawBone(skeleton, boneIndex, selected: boneIndex == Document.Binding.BoneIndex);
         }
     }
 

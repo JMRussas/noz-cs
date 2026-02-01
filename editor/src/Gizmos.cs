@@ -147,14 +147,56 @@ public static class Gizmos
     public static float GetLineWidth(float width=1.0f)
     {
         return DefaultLineWidth * width;
+    }    
+
+    public static void DrawJoint(Vector2 position, bool selected=false)
+    {
+        SetColor(selected ? EditorStyle.Skeleton.SelectedBoneColor : EditorStyle.Skeleton.BoneColor );
+        DrawCircle(position, EditorStyle.Skeleton.BoneSize);
+    }
+
+    public static void DrawBone(SkeletonDocument skeleton, int boneIndex, bool selected=false)
+    {
+        ref var m = ref skeleton.LocalToWorld[boneIndex];
+        var bone = skeleton.Bones[boneIndex];
+        var p0 = Vector2.Transform(Vector2.Zero, m);
+        var p1 = Vector2.Transform(new Vector2(bone.Length, 0), m);
+        DrawBone(p0, p1, selected: selected);
+    }
+
+    public static void DrawBoneAndJoints(SkeletonDocument skeleton, int boneIndex, bool selected = false)
+    {
+        ref var m = ref skeleton.LocalToWorld[boneIndex];
+        var bone = skeleton.Bones[boneIndex];
+        var p0 = Vector2.Transform(Vector2.Zero, m);
+        var p1 = Vector2.Transform(new Vector2(bone.Length, 0), m);
+        DrawBone(p0, p1, selected: selected);
+        DrawJoint(p0, selected: selected);
+        DrawJoint(p1, selected: selected);
     }
 
     public static void DrawBone(
         Vector2 start,
         Vector2 end,
-        Color color,
-        ushort order = 0)
+        bool selected=false)
     {
+        var delta = end - start;
+        var length = delta.Length();
+        if (length < 0.0001f)
+            return;
+
+        SetColor(selected ? EditorStyle.Skeleton.SelectedBoneColor : EditorStyle.Skeleton.BoneColor);
+        DrawLine(start, end, EditorStyle.Skeleton.BoneLineWidth);
+
+        //using (Graphics.PushState())
+        //{
+        //    var dir = delta / length;
+        //    var angle = MathF.Atan2(dir.Y, dir.X);
+        //    Graphics.SetTransform(Matrix3x2.CreateRotation(MathEx.Deg2Rad * 45.0f + angle, start) * Graphics.Transform);
+        //    DrawRect(start, EditorStyle.Skeleton.BoneSize);
+        //}
+
+#if false
         const int CircleSegments = 16;
 
         var delta = end - start;
@@ -235,6 +277,7 @@ public static class Gizmos
             Graphics.SetColor(EditorStyle.Skeleton.BoneOriginColor);
             DrawCircle(start, EditorStyle.Skeleton.BoneOriginSize, (ushort)(order + 1));
         }
+#endif
     }
 
     public static void DrawDashedLine(Vector2 start, Vector2 end, ushort order=0)

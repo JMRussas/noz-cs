@@ -842,7 +842,7 @@ internal class AnimationDocument : Document
             ref readonly var boneTransform = ref LocalToWorld[boneIndex];
             var p0 = Vector2.Transform(Vector2.Zero, boneTransform);
             var p1 = Vector2.Transform(new Vector2(b.Length, 0), boneTransform);
-            Gizmos.DrawBone(p0, p1, EditorStyle.Skeleton.BoneColor);
+            Gizmos.DrawBone(p0, p1);
         }
     }
 

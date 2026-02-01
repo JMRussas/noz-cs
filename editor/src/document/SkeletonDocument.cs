@@ -15,13 +15,33 @@ public class BoneData
     public int ParentIndex = -1;
     public BoneTransform Transform;
     public float Length = 0.25f;
-    public bool IsSelected;
     public Vector2 NamePosition;
+
+    public bool IsHeadSelected;
+    public bool IsTailSelected;
+    public bool IsConnected;
+
+    public bool IsSelected => IsHeadSelected || IsTailSelected;
+    public bool IsFullySelected => IsHeadSelected && IsTailSelected;
 
     public BoneData()
     {
         Transform = BoneTransform.Identity;
     }
+}
+
+public enum BoneHitType
+{
+    None,
+    Head,
+    Tail,
+    Line
+}
+
+public struct BoneHitResult
+{
+    public int BoneIndex;
+    public BoneHitType HitType;
 }
 
 public class SkeletonDocument : Document
@@ -35,7 +55,9 @@ public class SkeletonDocument : Document
     public NativeArray<Matrix3x2> LocalToWorld = new(Skeleton.MaxBones);
     public NativeArray<Matrix3x2> WorldToLocal = new(Skeleton.MaxBones);
     public int BoneCount;
-    public int SelectedBoneCount;
+    public int SelectedHeadCount;
+    public int SelectedTailCount;
+    public int SelectedBoneCount => int.Max(SelectedHeadCount, SelectedTailCount);
     public float Opacity = 1f;
 
     public static event Action<SkeletonDocument, int, string, string>? BoneRenamed;
@@ -121,6 +143,10 @@ public class SkeletonDocument : Document
             {
                 ParseBoneLength(bone, ref tk);
             }
+            else if (tk.ExpectIdentifier("c"))
+            {
+                bone.IsConnected = true;
+            }
             else
             {
                 break;
@@ -156,14 +182,16 @@ public class SkeletonDocument : Document
         for (var i = 0; i < BoneCount; i++)
         {
             var bone = Bones[i];
+            var connected = bone.IsConnected ? " c" : "";
             writer.WriteLine(string.Format(CultureInfo.InvariantCulture,
-                "b \"{0}\" {1} p {2} {3} r {4} l {5}",
+                "b \"{0}\" {1} p {2} {3} r {4} l {5}{6}",
                 bone.Name,
                 bone.ParentIndex,
                 bone.Transform.Position.X,
                 bone.Transform.Position.Y,
                 bone.Transform.Rotation,
-                bone.Length));
+                bone.Length,
+                connected));
         }
     }
 
@@ -183,7 +211,8 @@ public class SkeletonDocument : Document
         var src = (SkeletonDocument)source;
         BoneCount = src.BoneCount;
         Opacity = src.Opacity;
-        SelectedBoneCount = src.SelectedBoneCount;
+        SelectedHeadCount = src.SelectedHeadCount;
+        SelectedTailCount = src.SelectedTailCount;
 
         LocalToWorld.Dispose();
         WorldToLocal.Dispose();
@@ -195,9 +224,11 @@ public class SkeletonDocument : Document
             Bones[i].Name = src.Bones[i].Name;
             Bones[i].Index = src.Bones[i].Index;
             Bones[i].ParentIndex = src.Bones[i].ParentIndex;
-            Bones[i].Transform = src.Bones[i].Transform;            
+            Bones[i].Transform = src.Bones[i].Transform;
             Bones[i].Length = src.Bones[i].Length;
-            Bones[i].IsSelected = src.Bones[i].IsSelected;
+            Bones[i].IsHeadSelected = src.Bones[i].IsHeadSelected;
+            Bones[i].IsTailSelected = src.Bones[i].IsTailSelected;
+            Bones[i].IsConnected = src.Bones[i].IsConnected;
         }
 
         Sprites = [.. src.Sprites];
@@ -243,9 +274,9 @@ public class SkeletonDocument : Document
             bounds = ExpandBounds(bounds, Vector2.Transform(new Vector2(boneWidth, -boneWidth), boneTransform));
         }
 
-        for (var i = 0; i < Sprites.Count; i++)
-            bounds = Rect.Union(bounds, Sprites[i].Bounds);
-        
+        //for (var i = 0; i < Sprites.Count; i++)
+        //    bounds = Rect.Union(bounds, Sprites[i].Bounds);
+
         Bounds = bounds.Expand(BoundsPadding);
     }
 
@@ -363,6 +394,59 @@ public class SkeletonDocument : Document
         return Vector2.Distance(point, projection);
     }
 
+    public BoneHitResult HitTestBoneEndpoints(Vector2 worldPos, bool cycle = false)
+    {
+        var transform = Matrix3x2.CreateTranslation(Position);
+        var headRadius = EditorStyle.Skeleton.BoneSize * Gizmos.ZoomRefScale;
+        var tailRadius = EditorStyle.Skeleton.TailSize * Gizmos.ZoomRefScale;
+        var lineThreshold = EditorStyle.Skeleton.BoneHitThreshold * Gizmos.ZoomRefScale;
+        var headRadiusSqr = headRadius * headRadius;
+        var tailRadiusSqr = tailRadius * tailRadius;
+
+        Span<BoneHitResult> hits = stackalloc BoneHitResult[Skeleton.MaxBones * 3];
+        var hitCount = 0;
+
+        for (var boneIndex = BoneCount - 1; boneIndex >= 0; boneIndex--)
+        {
+            var bone = Bones[boneIndex];
+            var localToWorld = LocalToWorld[boneIndex] * transform;
+            var headPos = Vector2.Transform(Vector2.Zero, localToWorld);
+            var tailPos = Vector2.Transform(new Vector2(bone.Length, 0), localToWorld);
+
+            if (Vector2.DistanceSquared(worldPos, headPos) <= headRadiusSqr)
+                hits[hitCount++] = new BoneHitResult { BoneIndex = boneIndex, HitType = BoneHitType.Head };
+
+            if (Vector2.DistanceSquared(worldPos, tailPos) <= tailRadiusSqr)
+                hits[hitCount++] = new BoneHitResult { BoneIndex = boneIndex, HitType = BoneHitType.Tail };
+
+            if (DistanceFromLine(headPos, tailPos, worldPos) <= lineThreshold)
+                hits[hitCount++] = new BoneHitResult { BoneIndex = boneIndex, HitType = BoneHitType.Line };
+        }
+
+        if (hitCount == 0)
+            return new BoneHitResult { BoneIndex = -1, HitType = BoneHitType.None };
+
+        if (!cycle)
+            return hits[0];
+
+        for (var i = 0; i < hitCount; i++)
+        {
+            var hit = hits[i];
+            var isSelected = hit.HitType switch
+            {
+                BoneHitType.Head => Bones[hit.BoneIndex].IsHeadSelected,
+                BoneHitType.Tail => Bones[hit.BoneIndex].IsTailSelected,
+                BoneHitType.Line => Bones[hit.BoneIndex].IsFullySelected,
+                _ => false
+            };
+
+            if (isSelected)
+                return hits[(i + 1) % hitCount];
+        }
+
+        return hits[0];
+    }
+
     private void ReparentBoneTransform(int boneIndex, int parentIndex)
     {
         var newLocal = LocalToWorld[boneIndex] * WorldToLocal[parentIndex];
@@ -425,7 +509,9 @@ public class SkeletonDocument : Document
             Bones[i].Index = i;
             Bones[i].Transform = nextBone.Transform;
             Bones[i].Length = nextBone.Length;
-            Bones[i].IsSelected = nextBone.IsSelected;
+            Bones[i].IsHeadSelected = nextBone.IsHeadSelected;
+            Bones[i].IsTailSelected = nextBone.IsTailSelected;
+            Bones[i].IsConnected = nextBone.IsConnected;
 
             if (nextBone.ParentIndex == boneIndex)
                 Bones[i].ParentIndex = parentIndex;
@@ -547,17 +633,16 @@ public class SkeletonDocument : Document
                 if (b.ParentIndex >= 0)
                 {
                     var parentTransform = GetParentLocalToWorld(b, m);
-                    var pp = Vector2.Transform(Vector2.Zero, parentTransform);
-                    Graphics.SetSortGroup(1);
-                    Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
-                    Gizmos.DrawDashedLine(pp, p0, order: 1);
+                    var pp = Vector2.Transform(new Vector2(Bones[b.ParentIndex].Length, 0), parentTransform);
+                    if (pp.LengthSquared() > 0.1f * 0.1f)
+                    {
+                        Graphics.SetSortGroup(1);
+                        Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
+                        Gizmos.DrawDashedLine(pp, p0, order: 1);
+                    }
                 }
 
-                var boneColor = b.IsSelected
-                    ? EditorStyle.Skeleton.SelectedBoneColor
-                    : EditorStyle.Skeleton.BoneColor;
-                Graphics.SetSortGroup((ushort)(b.IsSelected ? 2 : 1));
-                Gizmos.DrawBone(p0, p1, boneColor, order: (ushort)(boneIndex * 2 + 1));
+                Gizmos.DrawBone(p0, p1);
             }
         }
 

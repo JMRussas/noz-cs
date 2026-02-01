@@ -24,6 +24,7 @@ internal class AnimationEditor : DocumentEditor
     private const int AddFrameButtonId = 6;
     private const int SkeletonButtonId = 7;
     private const int ShowSkeletonButtonId = 8;
+    private const int MirrorButtonId = 9;
     private const int FirstFrameId = 16;
 
     private AnimationEditorState _state = AnimationEditorState.Default;
@@ -171,6 +172,8 @@ internal class AnimationEditor : DocumentEditor
         {
             if (EditorUI.Button(AddFrameButtonId, EditorAssets.Sprites.IconKeyframe, toolbar: true))
                 InsertFrameAfter();
+            if (EditorUI.Button(MirrorButtonId, EditorAssets.Sprites.IconMirror, toolbar: true))
+                MirrorPose();
         }
 
         if (EditorUI.Button(PlayButtonId, EditorAssets.Sprites.IconPlay, selected: Document.IsPlaying, toolbar: true))
@@ -219,7 +222,7 @@ internal class AnimationEditor : DocumentEditor
 
     private void UpdateDefaultState()
     {
-        if (Workspace.ActiveTool == null && Workspace.DragStarted)
+        if (Workspace.ActiveTool == null && Workspace.DragStarted && Workspace.DragButton == InputCode.MouseLeft)
         {
             Workspace.BeginTool(new BoxSelectTool(HandleBoxSelect));
             return;
@@ -804,10 +807,7 @@ internal class AnimationEditor : DocumentEditor
             var p1 = Vector2.Transform(new Vector2(bone.Length, 0), boneTransform);
 
             Graphics.SetSortGroup((ushort)(animationBone.IsSelected ? 2 : 1));
-            var boneColor = animationBone.IsSelected
-                ? EditorStyle.Skeleton.SelectedBoneColor
-                : EditorStyle.Skeleton.BoneColor; 
-            Gizmos.DrawBone(p0, p1, boneColor, order: (ushort)(boneIndex * 2 + 1));
+            Gizmos.DrawBone(p0, p1, selected: animationBone.IsSelected);
         }
     }
 
@@ -855,7 +855,7 @@ internal class AnimationEditor : DocumentEditor
             var p0 = Vector2.Transform(Vector2.Zero, boneTransform);
             var p1 = Vector2.Transform(new Vector2(bone.Length, 0), boneTransform);
 
-            Gizmos.DrawBone(p0, p1, prevColor);
+            Gizmos.DrawBone(p0, p1);
             Gizmos.SetColor(prevColor);
             Gizmos.DrawCircle(p0, boneRadius);
         }
@@ -871,7 +871,7 @@ internal class AnimationEditor : DocumentEditor
             var p0 = Vector2.Transform(Vector2.Zero, boneTransform);
             var p1 = Vector2.Transform(new Vector2(bone.Length, 0), boneTransform);
 
-            Gizmos.DrawBone(p0, p1, nextColor);
+            Gizmos.DrawBone(p0, p1);
             Gizmos.SetColor(nextColor);
             Gizmos.DrawCircle(p0, boneRadius);
         }
