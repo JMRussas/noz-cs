@@ -612,6 +612,7 @@ public class SpriteDocument : Document
 
     public override void Import(string outputPath, PropertySet meta)
     {
+        Binding.Resolve();
         UpdateBounds();
 
         using var writer = new BinaryWriter(File.Create(outputPath));
