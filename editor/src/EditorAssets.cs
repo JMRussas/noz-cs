@@ -33,6 +33,7 @@ public static class EditorAssets
         public const string IconCheck = "icon_check";
         public const string IconCircle = "icon_circle";
         public const string IconClose = "icon_close";
+        public const string IconCollection = "icon_collection";
         public const string IconConstraint = "icon_constraint";
         public const string IconDelete = "icon_delete";
         public const string IconDropdown = "icon_dropdown";
@@ -141,6 +142,7 @@ public static class EditorAssets
         public static Sprite IconCheck { get; private set; } = null!;
         public static Sprite IconCircle { get; private set; } = null!;
         public static Sprite IconClose { get; private set; } = null!;
+        public static Sprite IconCollection { get; private set; } = null!;
         public static Sprite IconConstraint { get; private set; } = null!;
         public static Sprite IconDelete { get; private set; } = null!;
         public static Sprite IconDropdown { get; private set; } = null!;
@@ -190,6 +192,7 @@ public static class EditorAssets
             IconCheck = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCheck)!;
             IconCircle = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCircle)!;
             IconClose = (Sprite)Asset.Load(AssetType.Sprite, Names.IconClose)!;
+            IconCollection = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCollection)!;
             IconConstraint = (Sprite)Asset.Load(AssetType.Sprite, Names.IconConstraint)!;
             IconDelete = (Sprite)Asset.Load(AssetType.Sprite, Names.IconDelete)!;
             IconDropdown = (Sprite)Asset.Load(AssetType.Sprite, Names.IconDropdown)!;
@@ -240,6 +243,7 @@ public static class EditorAssets
             IconCheck?.Dispose();
             IconCircle?.Dispose();
             IconClose?.Dispose();
+            IconCollection?.Dispose();
             IconConstraint?.Dispose();
             IconDelete?.Dispose();
             IconDropdown?.Dispose();

@@ -14,6 +14,10 @@ public enum WorkspaceState
 
 public static class Workspace
 {
+    private const int ToolbarId = 1;
+    private const int XrayButtonId = 2;
+    private const int CollectionButtonId = 3;
+
     private const float ZoomMin = 0.2f;
     private const float ZoomMax = 200f;
     private const float ZoomStep = 0.1f;
@@ -52,6 +56,8 @@ public static class Workspace
     private static PopupMenuDef _workspaceContextMenu;
 
     public static Camera Camera => _camera;
+    public static bool XrayMode { get; set; }
+    public static float XrayAlpha => XrayMode ? EditorStyle.Workspace.XrayAlpha : 1f;
     public static float Zoom => _zoom;
     public static bool ShowGrid => _showGrid;
     public static bool ShowNames => _showNames;
@@ -68,6 +74,8 @@ public static class Workspace
     public static WorkspaceState State { get; private set; } = WorkspaceState.Default;
     public static int SelectedCount { get; private set; }
     public static Tool? ActiveTool { get; private set; }
+
+    public static event Action<bool>? XrayModeChanged;
 
     public static Texture WhiteTexture => _whiteTexture!;
 
@@ -337,9 +345,89 @@ public static class Workspace
         }
     }
 
+    // :toolbar
+    private static void ToolbarUI()
+    {
+        using var _ = UI.BeginContainer(new ContainerStyle
+        {
+            Height = Size.Fit,
+            Color = EditorStyle.Panel.Root.Color
+        });
+        using var __ = UI.BeginRow(new ContainerStyle { 
+            Padding = EdgeInsets.Symmetric(4, EditorStyle.Control.Spacing),
+            Spacing = EditorStyle.Control.Spacing
+        });
+
+        CollectionUI();
+
+        UI.Flex();
+        if (EditorUI.Button(XrayButtonId, EditorAssets.Sprites.IconXray, toolbar: true, selected: XrayMode))
+        {
+            XrayMode = !XrayMode;
+            XrayModeChanged?.Invoke(XrayMode);
+        }
+    }
+
+    private static void CollectionUI()
+    {
+        static void OpenPopup()
+        {
+            var items = new List<PopupMenuItem>();
+            foreach (var collection in CollectionManager.Collections)
+            {
+                items.Add(PopupMenuItem.Item(
+                    collection.Name,
+                    handler: () => SetCollection(collection.Index),
+                    isChecked: () => CollectionManager.VisibleIndex == collection.Index));
+            }
+
+            if (items.Count == 0) return;
+
+            var buttonRect = UI.GetElementRectInCanvas(EditorStyle.CanvasId.Workspace, CollectionButtonId);
+            var popupStyle = new PopupStyle
+            {
+                AnchorX = Align.Min,
+                AnchorY = Align.Max,
+                PopupAlignX = Align.Min,
+                PopupAlignY = Align.Min,
+                ClampToScreen = true,
+                AnchorRect = buttonRect,
+                MinWidth = buttonRect.Width,
+            };
+
+            PopupMenu.Open([.. items], null, popupStyle, showChecked: true, showIcons: false);
+        }
+
+        static void Content()
+        {
+            using var _ = UI.BeginRow(new ContainerStyle{
+                Spacing = EditorStyle.Control.Spacing,
+                Padding = EdgeInsets.Right(EditorStyle.Control.Spacing),
+                MinWidth = 150
+            });
+            EditorUI.ControlIcon(EditorAssets.Sprites.IconCollection);
+            EditorUI.ControlText(CollectionManager.VisibleCollection?.Name ?? "None");
+            UI.Spacer(EditorStyle.Control.Spacing);
+        }
+
+        if (EditorUI.Control(
+            CollectionButtonId,
+            selected: EditorUI.IsPopupOpen(CollectionButtonId),
+            toolbar: false,
+            content: Content))
+            OpenPopup();
+    }
+
     public static void UpdateUI()
     {
-        Workspace.ActiveEditor?.UpdateUI();
+        using (UI.BeginCanvas(EditorStyle.CanvasId.Workspace))
+        using (UI.BeginColumn(ToolbarId, new ContainerStyle { Height = Size.Fit }))
+        {
+            ToolbarUI();
+            UI.Container(new ContainerStyle { Height = 1, Color = EditorStyle.Panel.Root.Border.Color });
+        }
+
+        ActiveEditor?.UpdateUI();
         ActiveTool?.UpdateUI();
     }
 

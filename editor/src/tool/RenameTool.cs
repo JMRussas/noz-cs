@@ -26,9 +26,9 @@ public class RenameTool(
     {
         base.Begin();
         _firstFrame = true;
-        UI.SetFocus(TextBoxId, EditorStyle.CanvasId.Workspace);
+        UI.SetFocus(TextBoxId, EditorStyle.CanvasId.Tool);
     }
-
+        
     public override void Update()
     {
         if (Input.WasButtonPressed(InputCode.KeyEscape, InputScope.All))
@@ -49,7 +49,7 @@ public class RenameTool(
         // Click outside the TextBox commits the rename (skip on first frame)
         if (!_firstFrame && Input.WasButtonPressed(InputCode.MouseLeft))
         {
-            var textBoxRect = UI.GetElementRect(EditorStyle.CanvasId.Workspace, RenameTextBoxId);
+            var textBoxRect = UI.GetElementRect(EditorStyle.CanvasId.Tool, RenameTextBoxId);
             var mousePos = UI.ScreenToUI(Input.MousePosition);
             if (textBoxRect.Width > 0 && !textBoxRect.Contains(mousePos))
             {
@@ -68,24 +68,24 @@ public class RenameTool(
         var uiPos = UI.ScreenToUI(screenPos);
         uiPos.X -= EditorStyle.RenameTool.Root.Width.Value * 0.5f;
         uiPos.Y -= EditorStyle.RenameTool.Root.Height.Value * 0.5f;
-        using (UI.BeginCanvas(id: EditorStyle.CanvasId.Workspace))
+        using (UI.BeginCanvas(id: EditorStyle.CanvasId.Tool))
         using (UI.BeginContainer(RenameTextBoxId, EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
         using (UI.BeginContainer(EditorStyle.RenameTool.Content))
         {
             if (_firstFrame)
             {
-                UI.SetTextBoxText(EditorStyle.CanvasId.Workspace, TextBoxId, _originalName, selectAll: true);
+                UI.SetTextBoxText(EditorStyle.CanvasId.Tool, TextBoxId, _originalName, selectAll: true);
                 _firstFrame = false;
             }
 
             if (UI.TextBox(TextBoxId, EditorStyle.RenameTool.Text with { Scope = Scope }))
-                _currentText = new string(UI.GetTextBoxText(EditorStyle.CanvasId.Workspace, TextBoxId));
+                _currentText = new string(UI.GetTextBoxText(EditorStyle.CanvasId.Tool, TextBoxId));
         }
     }
 
     private void Commit()
     {
-        _currentText = new string(UI.GetTextBoxText(EditorStyle.CanvasId.Workspace, TextBoxId));
+        _currentText = new string(UI.GetTextBoxText(EditorStyle.CanvasId.Tool, TextBoxId));
 
         if (!string.IsNullOrWhiteSpace(_currentText) && _currentText != _originalName)
             _commit(_currentText);

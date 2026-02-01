@@ -27,12 +27,14 @@ public readonly struct Color32(byte r, byte g, byte b, byte a=255)
 
     public static Color32 Blend(in Color32 a, in Color32 b)
     {
-        var alpha = b.A / 255f;
+        var srcA = b.A / 255f;
+        var dstA = a.A / 255f;
+        var outA = srcA + dstA * (1f - srcA);
         return new Color32(
-            (byte)(a.R + (b.R - a.R) * alpha),
-            (byte)(a.G + (b.G - a.G) * alpha),
-            (byte)(a.B + (b.B - a.B) * alpha),
-            (byte)(a.A + (b.A - a.A) * alpha)
+            (byte)(a.R + (b.R - a.R) * srcA),
+            (byte)(a.G + (b.G - a.G) * srcA),
+            (byte)(a.B + (b.B - a.B) * srcA),
+            (byte)(outA * 255f)
         );
     }
 
@@ -197,6 +199,7 @@ public readonly struct Color(float r, float g, float b, float a)
     public static readonly Color Black2Pct = new(0f, 0f, 0f, 0.02f);
     public static readonly Color Black5Pct = new(0f, 0f, 0f, 0.05f);
     public static readonly Color Black10Pct = new(0f, 0f, 0f, 0.1f);
+    public static readonly Color Black20Pct = new(0f, 0f, 0f, 0.2f);
     public static readonly Color White1Pct = new(1f, 1f, 1f, 0.01f);
     public static readonly Color White2Pct = new(1f, 1f, 1f, 0.02f);
     public static readonly Color White5Pct = new(1f, 1f, 1f, 0.05f);

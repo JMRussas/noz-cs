@@ -15,6 +15,7 @@ public static class EditorStyle
         public const byte Confirm = 3;
         public const byte DocumentEditor = 4;
         public const byte Workspace = 5;
+        public const byte Tool = 6;
     }
     #endregion
 
@@ -77,6 +78,7 @@ public static class EditorStyle
         public static readonly Color BoundsColor = Color.FromRgb(0x212121);
         public static readonly Color OriginColor = Color.FromRgb(0xff9f2c);
         public static readonly Color LineColor = Color.FromRgb(0x000000);
+        public const float XrayAlpha = 0.5f;
         public const float OriginSize = 0.1f;
         public const float DocumentBoundsLineWidth = 0.015f;
         public const float Padding = 16f;
@@ -171,7 +173,7 @@ public static class EditorStyle
         public static readonly ContainerStyle Root = new()
         {
             Color = Color.FromRgb(0x323232),
-            Border = new BorderStyle { Radius = BorderRadius, Width = BorderWidth, Color = Color.Black10Pct },
+            Border = new BorderStyle { Radius = BorderRadius, Width = BorderWidth, Color = Color.Black20Pct},
             Padding = EdgeInsets.All(BorderWidth)
         };
 

@@ -14,8 +14,11 @@
 - [ ] Setting a color and then setting again seems to not work
 - [ ] sprites losing bone on import after atlas rebuild?  This is because REsolveBinding is called too late for the import to work, fix.
 - [ ] Merge importer into document manager and make Export method to export a document.
+- [X] added collection selector in workspace toolbar
+- [x] Add worksapce toolbar
+- [X] Fixed alpha compositing bug in shape rasterization
 - [X] fixed but in rename tool that was causing button presses to affect workspace.
-- [X] Added Xray button to sprite editor
+- [X] Added Xray button 
 
 
 # 1/31/2026

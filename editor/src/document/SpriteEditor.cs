@@ -22,7 +22,6 @@ public class SpriteEditor : DocumentEditor
     private const byte FirstOpacityId = 10;
     private const byte PreviewButtonId = 11;
     private const byte SkeletonOverlayButtonId = 13;
-    private const byte XrayButtonId = 14;
     private const byte ConstraintsButtonId = 24;
     private const byte FillColorButtonId = 27;
     private const byte StrokeColorButtonId = 28;
@@ -33,7 +32,6 @@ public class SpriteEditor : DocumentEditor
     private ushort _currentFrame;
     private bool _isPlaying;
     private float _playTimer;
-    private bool _xray;
     private readonly PixelData<Color32> _image = new(
         EditorApplication.Config!.AtlasSize,
         EditorApplication.Config!.AtlasSize);
@@ -49,6 +47,8 @@ public class SpriteEditor : DocumentEditor
             TextureFormat.RGBA8,
             TextureFilter.Point,
             "SpriteEditor");
+
+        Workspace.XrayModeChanged += OnXrayModeChanged;
 
         var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
         var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
@@ -157,6 +157,8 @@ public class SpriteEditor : DocumentEditor
     {
         ClearSelection();
 
+        Workspace.XrayModeChanged -= OnXrayModeChanged;
+
         if (Document.IsModified)
             AtlasManager.UpdateSprite(Document);
 
@@ -170,6 +172,8 @@ public class SpriteEditor : DocumentEditor
         Document.UpdateBounds();
         MarkRasterDirty();
     }
+
+    private void OnXrayModeChanged(bool _) => MarkRasterDirty();
 
     public override void Update()
     {
@@ -255,12 +259,6 @@ public class SpriteEditor : DocumentEditor
             {
                 Document.ShowTiling = !Document.ShowTiling;
                 Document.MarkMetaModified();
-            }
-
-            if (EditorUI.Button(XrayButtonId, EditorAssets.Sprites.IconXray, _xray, toolbar: true))
-            {
-                _xray = !_xray;
-                MarkRasterDirty();
             }
 
             EditorUI.ToolbarSpacer();
@@ -594,7 +592,7 @@ public class SpriteEditor : DocumentEditor
                 palette.Colors,
                 options: new Shape.RasterizeOptions {
                     AntiAlias = Document.IsAntiAliased,
-                    Color = _xray ? new Color(1,1,1,0.5f) : (Color?)null
+                    Color = Color.White.WithAlpha(Workspace.XrayAlpha)
                 });
 
         for (int p = Padding - 1; p >= 0; p--)

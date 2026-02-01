@@ -145,6 +145,8 @@ internal class AnimationEditor : DocumentEditor
 
     private void TimelineUI()
     {
+        using var _ = UI.BeginContainer(new ContainerStyle { Padding = EdgeInsets.LeftRight(2) });
+
         var isPlaying = _state == AnimationEditorState.Play;
         var currentFrame = Document.CurrentFrame;
 
