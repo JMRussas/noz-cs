@@ -247,6 +247,19 @@ public ref struct Tokenizer
         return true;
     }
 
+    public bool ExpectIdentifier(out string value)
+    {
+        if (_nextToken.Type != TokenType.Identifier)
+        {
+            value = "";
+            return false;
+        }
+
+        ReadToken();
+        value = GetString();
+        return true;
+    }
+
     public bool ExpectVec2(out Vector2 value)
     {
         if (_nextToken.Type != TokenType.Vec2)

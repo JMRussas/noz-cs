@@ -1,8 +1,7 @@
-# 2/1/2026
+# 2/2/2026
 - [ ] Fix the atlas editor
 - [ ] Create new animation with skeleton selected should use that skeleton for animation
 - [ ] Add animated sprites
-- [ ] Add stroke rendering
 - [ ] Atlas not always rebuilding when sprites change, sprite added i think
 - [ ] toolbar button to add a bone in skeleton editor
 - [ ] Make sure you cant add too many holds or frames to animation (hold + frames < MAxFrames)>)
@@ -12,6 +11,17 @@ import to work, fix.
 - [ ] Merge importer into document manager and make Export method to export a document.
 - [ ] Animation editor onion skin
 - [ ] New palette
+- [ ] Stoke size popup in sprite editor
+- [ ] Per path bone binding.
+- [X] removed rotate tool from skeleton editor
+- [X] reworked scale tool in skeleton editor
+- [X] reworked move tool in skeleton editor
+- [X] Palettes are now more stable (work like layers)
+- [X] REnamed all SDL platform libraries to Desktop
+- [X] Show paelette name in the sprite editor
+
+# 2/1/2026
+- [X] Add stroke rendering
 - [X] New bone shape
 - [X] connected bone icon
 - [X] Redo bone icon
@@ -23,7 +33,6 @@ import to work, fix.
 - [X] Fixed alpha compositing bug in shape rasterization
 - [X] fixed but in rename tool that was causing button presses to affect workspace.
 - [X] Added Xray button 
-
 
 # 1/31/2026
 - [X] Refactor selection within sprite editor

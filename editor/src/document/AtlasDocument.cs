@@ -174,20 +174,6 @@ internal class AtlasDocument : Document
         Padding = EditorApplication.Config.AtlasPadding;
     }
 
-    private Rect ToUV(in AtlasSpriteRect rect)
-    {
-        if (rect.Sprite == null)
-            return Rect.Zero;
-
-        var size = rect.Sprite.RasterBounds.Size;
-        var ts = (float)EditorApplication.Config.AtlasSize;
-        var u = (rect.Rect.Left + Padding) / ts;
-        var v = (rect.Rect.Top + Padding) / ts;
-        var s = u + size.X / ts;
-        var t = v + size.Y / ts;
-        return Rect.FromMinMax(u, v, s, t);
-    }
-
     internal Rect ToUV(in AtlasSpriteRect rect, int sortGroupIndex)
     {
         if (rect.Sprite == null)
@@ -398,7 +384,12 @@ internal class AtlasDocument : Document
                         rasterRect,
                         -rect.Sprite.RasterBounds.Position,
                         palette.Colors,
-                        new Shape.RasterizeOptions { Name = rect.Sprite.Name, AntiAlias = rect.Sprite.IsAntiAliased, Layer = (byte)layer });
+                        new Shape.RasterizeOptions
+                        {
+                            Name = rect.Sprite.Name,
+                            AntiAlias = rect.Sprite.IsAntiAliased,
+                            Layer = (byte)layer
+                        });
 
                     _image.BleedColors(rasterRect);
                     for (int p = Padding - 1; p >= 0; p--)

@@ -38,10 +38,10 @@ internal class SkeletonEditor : DocumentEditor
     {
         var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
         var deleteCommand = new Command { Name = "Delete", Handler = HandleDelete, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
-        var moveCommand = new Command { Name = "Move", Handler = HanleMove, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
-        var rotateCommand = new Command { Name = "Rotate", Handler = HandleRotate, Key = InputCode.KeyR };
+        var moveCommand = new Command { Name = "Move", Handler = OnMoveCommand, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
         var scaleCommand = new Command { Name = "Scale", Handler = HandleScale, Key = InputCode.KeyS };
         var renameCommand = new Command { Name = "Rename", Handler = HandleRename, Key = InputCode.KeyF2 };
+        var selectAllCommand = new Command { Name = "Select All", Handler = OnSelectAll, Key = InputCode.KeyA };
 
         _commands =
         [
@@ -49,8 +49,8 @@ internal class SkeletonEditor : DocumentEditor
             moveCommand,
             deleteCommand,
             scaleCommand,
-            rotateCommand,
             renameCommand,
+            selectAllCommand,
             new Command { Name = "Create Bone", Handler = BeginCreateBone, Key = InputCode.KeyV },
         ];
 
@@ -65,7 +65,6 @@ internal class SkeletonEditor : DocumentEditor
                 PopupMenuItem.FromCommand(deleteCommand, enabled: HasSelection),
                 PopupMenuItem.Separator(),
                 PopupMenuItem.FromCommand(moveCommand, enabled: HasSelection),
-                PopupMenuItem.FromCommand(rotateCommand, enabled: HasSelection),
                 PopupMenuItem.FromCommand(scaleCommand, enabled: HasSelection),
                 PopupMenuItem.Separator(),
                 PopupMenuItem.FromCommand(exitEditCommand),
@@ -84,7 +83,6 @@ internal class SkeletonEditor : DocumentEditor
 
     public override void OnUndoRedo()
     {
-        Document.UpdateTransforms();
     }
 
     public override void Update()
@@ -167,19 +165,7 @@ internal class SkeletonEditor : DocumentEditor
 
     private bool IsBoneSelected(int boneIndex) => Document.Bones[boneIndex].IsSelected;
 
-    private bool IsAncestorFullySelected(int boneIndex)
-    {
-        var parentIndex = Document.Bones[boneIndex].ParentIndex;
-        while (parentIndex >= 0)
-        {
-            if (Document.Bones[parentIndex].IsFullySelected)
-                return true;
-            parentIndex = Document.Bones[parentIndex].ParentIndex;
-        }
-        return false;
-    }
-
-    private void SetHeadSelected(int boneIndex, bool selected)
+    private void SelectHeadJoint(int boneIndex, bool selected)
     {
         var bone = Document.Bones[boneIndex];
         if (bone.IsHeadSelected == selected)
@@ -189,7 +175,7 @@ internal class SkeletonEditor : DocumentEditor
         Document.SelectedHeadCount += selected ? 1 : -1;
     }
 
-    private void SetTailSelected(int boneIndex, bool selected)
+    private void SelectTailJoint(int boneIndex, bool selected)
     {
         var bone = Document.Bones[boneIndex];
         if (bone.IsTailSelected == selected)
@@ -199,10 +185,10 @@ internal class SkeletonEditor : DocumentEditor
         Document.SelectedTailCount += selected ? 1 : -1;
     }
 
-    private void SetBoneFullySelected(int boneIndex, bool selected)
+    private void SelectBone(int boneIndex, bool selected)
     {
-        SetHeadSelected(boneIndex, selected);
-        SetTailSelected(boneIndex, selected);
+        SelectHeadJoint(boneIndex, selected);
+        SelectTailJoint(boneIndex, selected);
     }
 
     private int GetFirstSelectedBoneIndex()
@@ -302,23 +288,23 @@ internal class SkeletonEditor : DocumentEditor
         {
             case BoneHitType.Head:
                 if (shiftDown)
-                    SetHeadSelected(hit.BoneIndex, !bone.IsHeadSelected);
+                    SelectHeadJoint(hit.BoneIndex, !bone.IsHeadSelected);
                 else
-                    SetHeadSelected(hit.BoneIndex, true);
+                    SelectHeadJoint(hit.BoneIndex, true);
                 break;
 
             case BoneHitType.Tail:
                 if (shiftDown)
-                    SetTailSelected(hit.BoneIndex, !bone.IsTailSelected);
+                    SelectTailJoint(hit.BoneIndex, !bone.IsTailSelected);
                 else
-                    SetTailSelected(hit.BoneIndex, true);
+                    SelectTailJoint(hit.BoneIndex, true);
                 break;
 
-            case BoneHitType.Line:
+            case BoneHitType.Bone:
                 if (shiftDown)
-                    SetBoneFullySelected(hit.BoneIndex, !bone.IsFullySelected);
+                    SelectBone(hit.BoneIndex, !bone.IsFullySelected);
                 else
-                    SetBoneFullySelected(hit.BoneIndex, true);
+                    SelectBone(hit.BoneIndex, true);
                 break;
         }
 
@@ -338,10 +324,10 @@ internal class SkeletonEditor : DocumentEditor
             var tailPos = b.TailWorld + Document.Position;
 
             if (bounds.Contains(headPos))
-                SetHeadSelected(boneIndex, true);
+                SelectHeadJoint(boneIndex, true);
 
             if (bounds.Contains(tailPos))
-                SetTailSelected(boneIndex, true);
+                SelectTailJoint(boneIndex, true);
         }
 
         UpdateConnectedToggleState();
@@ -406,22 +392,15 @@ internal class SkeletonEditor : DocumentEditor
         TextRender.ClearOutline();
     }
 
+    private void OnSelectAll()
+    {
+        for (var i = 0; i < Document.BoneCount; i++)
+            SelectBone(i, true);
+    }
+
     #region Move Tool
 
-    private void HanleMove()
-    {
-        if (Document.SelectedBoneCount <= 0)
-            return;
-
-        SaveState();
-        Undo.Record(Document);
-
-        Workspace.BeginTool(new MoveTool(
-            update: UpdateMoveTool,
-            commit: _ => { Document.MarkModified(); Document.NotifyTransformsChanged(); },
-            cancel: Undo.Cancel
-        ));
-    }
+    private void OnMoveCommand() => BeginMoveTool(true);
 
     private void BeginMoveTool(bool recordUndo)
     {
@@ -441,14 +420,10 @@ internal class SkeletonEditor : DocumentEditor
 
     private void UpdateMoveTool(Vector2 delta)
     {
-        // Move selected endpoints
         for (var i = 0; i < Document.BoneCount; i++)
         {
             var bone = Document.Bones[i];
             if (!bone.IsSelected)
-                continue;
-
-            if (IsAncestorFullySelected(i))
                 continue;
 
             var snappedDelta = delta;
@@ -523,76 +498,6 @@ internal class SkeletonEditor : DocumentEditor
 
     #endregion
 
-    #region Rotate Tool
-
-    private void HandleRotate()
-    {
-        if (Document.SelectedBoneCount <= 0)
-            return;
-
-        UpdateSelectionCenter();
-        SaveState();
-        Undo.Record(Document);
-
-        Matrix3x2.Invert(Document.Transform, out var invTransform);
-        var worldOrigin = Vector2.Transform(Vector2.Zero, Document.Transform);
-
-        Workspace.BeginTool(new RotateTool(
-            _selectionCenterWorld,
-            _selectionCenter,
-            worldOrigin,
-            Vector2.Zero,
-            invTransform,
-            update: UpdateRotateTool,
-            commit: _ => { Document.MarkModified(); Document.NotifyTransformsChanged(); },
-            cancel: Undo.Cancel
-        ));
-    }
-
-    private void UpdateRotateTool(float angle)
-    {
-        if (Input.IsCtrlDown())
-        {
-            const float snapIncrement = 15f * MathF.PI / 180f;
-            angle = MathF.Round(angle / snapIncrement) * snapIncrement;
-        }
-
-        var cos = MathF.Cos(angle);
-        var sin = MathF.Sin(angle);
-
-        for (var boneIndex = 0; boneIndex < Document.BoneCount; boneIndex++)
-        {
-            var bone = Document.Bones[boneIndex];
-            if (!bone.IsSelected)
-                continue;
-
-            if (IsAncestorFullySelected(boneIndex))
-                continue;
-
-            var sb = _savedBones[boneIndex];
-
-            if (bone.IsHeadSelected)
-            {
-                var rel = sb.HeadWorld - _selectionCenter;
-                bone.HeadWorld = _selectionCenter + new Vector2(
-                    rel.X * cos - rel.Y * sin,
-                    rel.X * sin + rel.Y * cos);
-            }
-
-            if (bone.IsTailSelected)
-            {
-                var rel = sb.TailWorld - _selectionCenter;
-                bone.TailWorld = _selectionCenter + new Vector2(
-                    rel.X * cos - rel.Y * sin,
-                    rel.X * sin + rel.Y * cos);
-            }
-        }
-
-        EnforceConnectedConstraints();
-    }
-
-    #endregion
-
     #region Scale Tool
 
     private void HandleScale()
@@ -617,22 +522,27 @@ internal class SkeletonEditor : DocumentEditor
 
     private void UpdateScaleTool(Vector2 scale)
     {
+        var pivot = Input.IsShiftDown(InputScope.All) ? Vector2.Zero : _selectionCenter;
+
         for (var boneIndex = 0; boneIndex < Document.BoneCount; boneIndex++)
         {
             var bone = Document.Bones[boneIndex];
-            if (!bone.IsFullySelected)
-                continue;
-
-            if (IsAncestorFullySelected(boneIndex))
+            if (!bone.IsSelected)
                 continue;
 
             var sb = _savedBones[boneIndex];
-            var newLength = Math.Clamp(sb.Length * scale.X, 0.05f, 10.0f);
 
-            var dir = sb.TailWorld - sb.HeadWorld;
-            var len = dir.Length();
-            if (len > 0.0001f)
-                bone.TailWorld = sb.HeadWorld + dir / len * newLength;
+            if (bone.IsHeadSelected)
+            {
+                var offset = sb.HeadWorld - pivot;
+                bone.HeadWorld = pivot + offset * scale;
+            }
+
+            if (bone.IsTailSelected)
+            {
+                var offset = sb.TailWorld - pivot;
+                bone.TailWorld = pivot + offset * scale;
+            }
         }
 
         EnforceConnectedConstraints();
@@ -677,7 +587,7 @@ internal class SkeletonEditor : DocumentEditor
         Document.NotifyBoneAdded(Document.BoneCount - 1);
         Document.UpdateTransforms();
         ClearSelection();
-        SetBoneFullySelected(Document.BoneCount - 1, true);
+        SelectBone(Document.BoneCount - 1, true);
 
         _ignoreUp = true;
         BeginMoveTool(false);
@@ -767,18 +677,17 @@ internal class SkeletonEditor : DocumentEditor
 
             for (var boneIndex = 0; boneIndex < Document.BoneCount; boneIndex++)
             {
-                var b = Document.Bones[boneIndex];
+                ref readonly var b = ref Document.Bones[boneIndex];
                 var lineSelected = b.IsHeadSelected && b.IsTailSelected;
-
                 var headPos = b.HeadWorld;
                 var tailPos = b.TailWorld;
 
                 if (b.ParentIndex >= 0 && !b.IsConnected)
                 {
-                    var parent = Document.Bones[b.ParentIndex];
+                    ref readonly var p = ref Document.Bones[b.ParentIndex];
                     Graphics.SetSortGroup(SortGroupBones);
                     Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
-                    Gizmos.DrawDashedLine(parent.TailWorld, headPos, order: 0);
+                    Gizmos.DrawDashedLine(b.HeadWorld, p.TailWorld);
                 }
 
                 Graphics.SetSortGroup(lineSelected ? SortGroupSelectedBones : SortGroupBones);

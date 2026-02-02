@@ -188,7 +188,7 @@ public class SpriteDocument : Document
 
     private static void NewFile(StreamWriter writer)
     {
-        writer.WriteLine("c 0 a");
+        writer.WriteLine("c DEFAULT a");
     }
 
     public override void Load()
@@ -212,7 +212,20 @@ public class SpriteDocument : Document
             }
             else if (tk.ExpectIdentifier("c"))
             {
-                Palette = (byte)tk.ExpectInt();
+                // Support both old format (row number) and new format (palette ID)
+                if (tk.ExpectInt(out var row))
+                {
+                    // Old format: row number directly
+                    Palette = (byte)row;
+                }
+                else if (tk.ExpectToken(out var token) && token.Type == TokenType.Identifier)
+                {
+                    // New format: look up row from palette ID
+                    var paletteId = tk.GetString(token);
+                    Palette = PaletteManager.TryGetPalette(paletteId, out var paletteDef)
+                        ? (byte)paletteDef.Row
+                        : (byte)0;
+                }
                 IsAntiAliased = tk.ExpectIdentifier("a");
             }
             else if (tk.ExpectIdentifier("o"))
@@ -383,7 +396,10 @@ public class SpriteDocument : Document
     // :save
     public override void Save(StreamWriter writer)
     {
-        writer.Write($"c {Palette}");
+        var paletteId = PaletteManager.TryGetPaletteByRow(Palette, out var paletteDef)
+            ? paletteDef.Id
+            : "DEFAULT";
+        writer.Write($"c {paletteId}");
 
         if (IsAntiAliased)
             writer.WriteLine(" a");

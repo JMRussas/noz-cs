@@ -227,20 +227,13 @@ public class SpriteEditor : DocumentEditor
             SetStrokeColor((byte)strokeColor, strokeOpacity);
 
         // Palette 
-        if (EditorUI.Button(
-            PaletteButtonId,
-            EditorAssets.Sprites.IconPalette,
-            EditorUI.IsPopupOpen(PaletteButtonId),
-            toolbar: true))
-            EditorUI.TogglePopup(PaletteButtonId);
-
-        PalettePopupUI();
+        PaletteButtonUI();
 
         EditorUI.ToolbarSpacer();
 
         LayerButtonUI();
 
-        BoneBindingButton();
+        BoneBindingButtonUI();
 
         UI.Flex();
 
@@ -287,7 +280,27 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
-    private void BoneBindingButton()
+    private void PaletteButtonUI()
+    {
+        if (PaletteManager.Palettes.Count < 2) return;
+
+        void ButtonContent()
+        {
+            EditorUI.ControlIcon(EditorAssets.Sprites.IconPalette);
+            EditorUI.ControlText(PaletteManager.GetPalette(Document.Palette).Label);
+            UI.Spacer(EditorStyle.Control.Spacing);
+        }
+
+        if (EditorUI.Control(
+            PaletteButtonId,
+            ButtonContent,
+            selected: EditorUI.IsPopupOpen(PaletteButtonId)))
+            EditorUI.TogglePopup(PaletteButtonId);
+
+        PalettePopupUI();
+    }
+
+    private void BoneBindingButtonUI()
     {
         var binding = Document.Binding;
         var selected = Workspace.ActiveTool is BoneSelectTool;
@@ -423,11 +436,11 @@ public class SpriteEditor : DocumentEditor
             for (int i=0; i<PaletteManager.Palettes.Count; i++)
             {
                 if (EditorUI.PopupItem(
-                    PaletteManager.Palettes[i].Name,
-                    selected: (byte)PaletteManager.Palettes[i].Id == Document.Palette))
+                    PaletteManager.Palettes[i].Label,
+                    selected: PaletteManager.Palettes[i].Row == Document.Palette))
                 {
                     Undo.Record(Document);
-                    Document.Palette = (byte)PaletteManager.Palettes[i].Id;
+                    Document.Palette = (byte)PaletteManager.Palettes[i].Row;
                     Document.MarkModified();
                     MarkRasterDirty();
                     EditorUI.ClosePopup();

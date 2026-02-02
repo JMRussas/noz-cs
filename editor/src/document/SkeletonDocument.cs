@@ -38,7 +38,7 @@ public enum BoneHitType
     None,
     Head,
     Tail,
-    Line
+    Bone
 }
 
 public struct BoneHitResult
@@ -61,7 +61,6 @@ public class SkeletonDocument : Document
     public int SelectedHeadCount;
     public int SelectedTailCount;
     public int SelectedBoneCount => int.Max(SelectedHeadCount, SelectedTailCount);
-    public float Opacity = 1f;
 
     public bool CurrentConnected = true;
 
@@ -88,15 +87,11 @@ public class SkeletonDocument : Document
         });
     }
 
-    public BoneData? GetParent(BoneData bone)
-    {
-        return bone.ParentIndex >= 0 ? Bones[bone.ParentIndex] : null;
-    }
+    public BoneData? GetParent(BoneData bone) =>
+        bone.ParentIndex >= 0 ? Bones[bone.ParentIndex] : null;
 
-    public Matrix3x2 GetParentLocalToWorld(BoneData bone, Matrix3x2 defaultTransform)
-    {
-        return bone.ParentIndex >= 0 ? LocalToWorld[bone.ParentIndex] : defaultTransform;
-    }
+    public Matrix3x2 GetParentLocalToWorld(BoneData bone, Matrix3x2 defaultTransform) =>
+        bone.ParentIndex >= 0 ? LocalToWorld[bone.ParentIndex] : defaultTransform;
 
     public override void Load()
     {
@@ -211,8 +206,7 @@ public class SkeletonDocument : Document
 
     public override void OnUndoRedo()
     {
-        UpdateTransforms();
-        InitWorldPositions();
+        BuildTransformsFromWorldPoints();
         NotifyTransformsChanged();
     }
 
@@ -220,7 +214,6 @@ public class SkeletonDocument : Document
     {
         var src = (SkeletonDocument)source;
         BoneCount = src.BoneCount;
-        Opacity = src.Opacity;
         SelectedHeadCount = src.SelectedHeadCount;
         SelectedTailCount = src.SelectedTailCount;
         CurrentConnected = src.CurrentConnected;
@@ -233,6 +226,7 @@ public class SkeletonDocument : Document
         for (var i = 0; i < src.BoneCount; i++)
         {
             Bones[i].Name = src.Bones[i].Name;
+            Bones[i].NamePosition = src.Bones[i].NamePosition;
             Bones[i].Index = src.Bones[i].Index;
             Bones[i].ParentIndex = src.Bones[i].ParentIndex;
             Bones[i].Transform = src.Bones[i].Transform;
@@ -435,7 +429,7 @@ public class SkeletonDocument : Document
                 hits[hitCount++] = new BoneHitResult { BoneIndex = boneIndex, HitType = BoneHitType.Tail };
 
             if (Gizmos.HitTestBone(headPos, tailPos, worldPos))
-                hits[hitCount++] = new BoneHitResult { BoneIndex = boneIndex, HitType = BoneHitType.Line };
+                hits[hitCount++] = new BoneHitResult { BoneIndex = boneIndex, HitType = BoneHitType.Bone };
         }
 
         if (hitCount == 0)
@@ -451,7 +445,7 @@ public class SkeletonDocument : Document
             {
                 BoneHitType.Head => Bones[hit.BoneIndex].IsHeadSelected,
                 BoneHitType.Tail => Bones[hit.BoneIndex].IsTailSelected,
-                BoneHitType.Line => Bones[hit.BoneIndex].IsFullySelected,
+                BoneHitType.Bone => Bones[hit.BoneIndex].IsFullySelected,
                 _ => false
             };
 
@@ -642,20 +636,15 @@ public class SkeletonDocument : Document
 
             for (var boneIndex = 0; boneIndex < BoneCount; boneIndex++)
             {
-                ref var m = ref LocalToWorld[boneIndex];
-                var b = Bones[boneIndex];
-                var p0 = Vector2.Transform(Vector2.Zero, m);
-                var p1 = Vector2.Transform(new Vector2(b.Length, 0), m);
-
-                if (b.ParentIndex >= 0)
+                ref readonly var b = ref Bones[boneIndex];
+                if (b.ParentIndex >= 0 && !b.IsConnected)
                 {
-                    var parentTransform = GetParentLocalToWorld(b, m);
-                    var pp = Vector2.Transform(new Vector2(Bones[b.ParentIndex].Length, 0), parentTransform);
-                    if (pp.LengthSquared() > 0.1f * 0.1f)
+                    ref readonly var p = ref Bones[b.ParentIndex];
+                    if (Vector2.DistanceSquared(b.HeadWorld, p.TailWorld) > 0.1f * 0.1f)
                     {
                         Graphics.SetSortGroup(1);
                         Gizmos.SetColor(EditorStyle.Skeleton.ParentLineColor);
-                        Gizmos.DrawDashedLine(pp, p0, order: 1);
+                        Gizmos.DrawDashedLine(b.HeadWorld, p.TailWorld, order: 1);
                     }
                 }
 

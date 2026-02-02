@@ -17,7 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\engine\NoZ.csproj" />
-    <ProjectReference Include="..\platform\sdl\NoZ.SDL.csproj" />
+    <ProjectReference Include="..\platform\desktop\NoZ.Desktop.csproj" />
     <ProjectReference Include="..\platform\webgpu\NoZ.WebGPU.csproj" />
   </ItemGroup>
 

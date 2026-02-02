@@ -20,6 +20,7 @@ public class Animator
     private float _blendDuration;
     private float _blendElapsed;
 
+    public Skeleton Skeleton => _skeleton;
     public Animation? CurrentAnimation => _animation;
     public float Time => _time;
     public float NormalizedTime => _animation != null && _animation.Duration > 0 ? _time / _animation.Duration : 0f;

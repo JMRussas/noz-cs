@@ -111,9 +111,10 @@ public class EditorConfig
             .Where(def => def.Layer != 0)
             .OrderByDescending(def => def.Layer)];
 
-    public int GetPaletteIndex(string name) => _props.GetInt("palettes", name, 0);
+    public IEnumerable<string> GetKeys(string section) => _props.GetKeys(section);
 
-    public IEnumerable<string> GetPaletteNames() => _props.GetKeys("palettes");
+    public string GetString(string section, string key, string defaultValue) =>
+        _props.GetString(section, key, defaultValue);
 
     public string GetCollectionName(string id) => _props.GetString("collections", id, id);
 
@@ -155,9 +156,9 @@ public class EditorConfig
     public static EditorConfig? Load(string path)
     {
         if (!File.Exists(path)) return null;
-              
+
         Log.Info($"Loading Config: {path}");
-        
+
         var props = PropertySet.LoadFile(path);
         if (props == null)
             return null;

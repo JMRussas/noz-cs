@@ -10,7 +10,6 @@
 
   <ItemGroup>
     <PackageReference Include="ppy.SDL3-CS" Version="2025.1205.0" />
-    <PackageReference Include="StbImageSharp" Version="2.30.15" />
   </ItemGroup>
 
   <ItemGroup>

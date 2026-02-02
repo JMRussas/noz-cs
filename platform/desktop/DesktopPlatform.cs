@@ -5,7 +5,6 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 using SDL;
-using StbImageSharp;
 using static SDL.SDL3;
 
 namespace NoZ.Platform;
@@ -119,6 +118,7 @@ public unsafe partial class SDLPlatform : IPlatform
 
     private void SetWindowIcon(string iconPath)
     {
+#if false
         using var stream = File.OpenRead(iconPath);
         var image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
 
@@ -138,6 +138,7 @@ public unsafe partial class SDLPlatform : IPlatform
                 SDL_DestroySurface(surface);
             }
         }
+#endif
     }
 
     public void SetResizeCallback(Action? callback)
