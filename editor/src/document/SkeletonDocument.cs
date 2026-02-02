@@ -667,7 +667,7 @@ public class SkeletonDocument : Document
             {
                 Debug.Assert(Sprites[i] != null);
                 Debug.Assert(Sprites[i].Binding.IsBoundTo(this));
-                Sprites[i].DrawSprite(-Sprites[i].Binding.Offset);
+                Sprites[i].DrawSprite();
             }
         }
     }

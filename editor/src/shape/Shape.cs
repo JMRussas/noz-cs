@@ -84,6 +84,7 @@ public sealed unsafe partial class Shape : IDisposable
         public byte FillColor;
         public byte StrokeColor;
         public byte Layer;
+        public StringId Bone;  // bone name (None = root when skeleton bound)
         public PathFlags Flags;
         public float FillOpacity;
         public float StrokeOpacity;
@@ -841,12 +842,18 @@ public sealed unsafe partial class Shape : IDisposable
         UpdateLayers();
     }
 
+    public void SetPathBone(ushort pathIndex, StringId bone)
+    {
+        _paths[pathIndex].Bone = bone;
+    }
+
     public ushort AddPath(
-        byte fillColor = 0, 
+        byte fillColor = 0,
         float fillOpacity = 1.0f,
         byte strokeColor = 0,
         float strokeOpacity = 0.0f,
-        byte layer = 0)
+        byte layer = 0,
+        StringId bone = default)
     {
         if (PathCount >= MaxPaths) return ushort.MaxValue;
 
@@ -860,6 +867,7 @@ public sealed unsafe partial class Shape : IDisposable
             StrokeColor = strokeColor,
             StrokeOpacity = strokeOpacity,
             Layer = layer,
+            Bone = bone,
             Flags = PathFlags.None | (fillOpacity <= float.MinValue ? PathFlags.Subtract : PathFlags.None),
         };
 
@@ -1571,6 +1579,7 @@ public sealed unsafe partial class Shape : IDisposable
             StrokeColor = srcPath.StrokeColor,
             StrokeOpacity = srcPath.StrokeOpacity,
             Layer = srcPath.Layer,
+            Bone = srcPath.Bone,
             Flags = srcPath.Flags & PathFlags.Subtract
         };
 

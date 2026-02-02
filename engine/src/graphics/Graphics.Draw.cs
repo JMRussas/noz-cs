@@ -111,8 +111,6 @@ public static partial class Graphics
         if (sprite == null || SpriteAtlas == null) return;
 
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
-        if (bone >= 0)
-            bounds = new Rect(bounds.X - sprite.BoneOffset.X, bounds.Y - sprite.BoneOffset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);
@@ -124,17 +122,18 @@ public static partial class Graphics
             SetShader(_spriteShader!);
             SetTextureFilter(sprite.TextureFilter);
 
-            // Draw all quads (one per sort group)
             foreach (ref readonly var quad in sprite.Meshes.AsSpan())
             {
                 var uv = quad.UV;
+                // Use per-mesh bone if available, otherwise use sprite default or passed bone
+                var meshBone = quad.BoneIndex >= 0 ? quad.BoneIndex : bone;
                 AddQuad(
                     p0, p1, p2, p3,
                     uv.TopLeft, new Vector2(uv.Right, uv.Top),
                     uv.BottomRight, new Vector2(uv.Left, uv.Bottom),
                     order: (ushort)quad.SortOrder,
                     atlasIndex: sprite.AtlasIndex,
-                    bone: bone);
+                    bone: meshBone);
             }
         }
     }
@@ -143,11 +142,8 @@ public static partial class Graphics
     {
         if (sprite == null || SpriteAtlas == null) return;
 
-        // Draw with overridden order (uses first quad's UV for backwards compat)
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
-        if (bone >= 0)
-            bounds = new Rect(bounds.X - sprite.BoneOffset.X, bounds.Y - sprite.BoneOffset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);
@@ -168,17 +164,11 @@ public static partial class Graphics
         }
     }
 
-    /// <summary>
-    /// Draw all meshes of a sprite with a fixed order (ignores mesh sort orders).
-    /// Use this for UI rendering where sort groups should not separate meshes.
-    /// </summary>
     public static void DrawFlat(Sprite sprite, ushort order = 0, int bone = -1)
     {
         if (sprite == null || SpriteAtlas == null) return;
 
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
-        if (bone >= 0)
-            bounds = new Rect(bounds.X - sprite.BoneOffset.X, bounds.Y - sprite.BoneOffset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);
@@ -207,6 +197,7 @@ public static partial class Graphics
     /// <summary>
     /// Draw a sprite using the currently bound shader (does not override shader/texture).
     /// Requires SetTexture and SetShader to be called before this.
+    /// Skinned sprites work in skeleton space (no offset needed).
     /// </summary>
     public static void DrawRaw(Sprite sprite, ushort order = 0, int bone = -1)
     {
@@ -214,8 +205,6 @@ public static partial class Graphics
 
         var uv = sprite.UV;
         var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
-        if (bone >= 0)
-            bounds = new Rect(bounds.X + sprite.BoneOffset.X, bounds.Y + sprite.BoneOffset.Y, bounds.Width, bounds.Height);
         var p0 = new Vector2(bounds.Left, bounds.Top);
         var p1 = new Vector2(bounds.Right, bounds.Top);
         var p2 = new Vector2(bounds.Right, bounds.Bottom);

@@ -27,7 +27,8 @@ public class SpriteEditor : DocumentEditor
     private const byte FillColorButtonId = 27;
     private const byte StrokeColorButtonId = 28;
     private const byte LayerButtonId = 29;
-   
+    private const byte BonePathButtonId = 30;
+
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
     private ushort _currentFrame;
@@ -38,6 +39,8 @@ public class SpriteEditor : DocumentEditor
         EditorApplication.Config!.AtlasSize);
     private readonly Texture _rasterTexture;
     private bool _rasterDirty = true;
+    private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
+    private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
 
     public SpriteEditor(SpriteDocument doc) : base(doc)
     {
@@ -54,10 +57,6 @@ public class SpriteEditor : DocumentEditor
         var deleteCommand = new Command { Name = "Delete", Handler = DeleteSelected, Key = InputCode.KeyX, Icon = EditorAssets.Sprites.IconDelete };
         var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
         var moveCommand = new Command { Name = "Move", Handler = BeginMoveTool, Key = InputCode.KeyG, Icon = EditorAssets.Sprites.IconMove };
-        var moveBoneOriginCommand = new Command { Name = "Move Bone Origin", Handler = BeginMoveBoneOrigin, Key = InputCode.KeyG, Shift = true };
-        var boneOriginToOriginCommand = new Command { Name = "Bone Origin to Origin", Handler = BoneOriginToOrigin, Key = InputCode.KeyB, Alt = true };
-        var boneOriginToBoneCommand = new Command { Name = "Bone Origin to Bone", Handler = BoneOriginToBone, Key = InputCode.KeyB, Alt = true, Shift = true };
-        var originToBoneOriginCommand = new Command { Name = "Origin to Bone Origin", Handler = OriginToBoneOrigin };
         var originToCenterCommand = new Command { Name = "Origin to Center", Handler = CenterShape, Key = InputCode.KeyC, Shift = true };
         var rotateCommand = new Command { Name = "Rotate", Handler = BeginRotateTool, Key = InputCode.KeyR };
         var scaleCommand = new Command { Name = "Scale", Handler = BeginScaleTool, Key = InputCode.KeyS };
@@ -73,10 +72,6 @@ public class SpriteEditor : DocumentEditor
             deleteCommand,
             exitEditCommand,
             moveCommand,
-            moveBoneOriginCommand,
-            boneOriginToOriginCommand,
-            boneOriginToBoneCommand,
-            originToBoneOriginCommand,
             originToCenterCommand,
             rotateCommand,
             scaleCommand,
@@ -126,11 +121,6 @@ public class SpriteEditor : DocumentEditor
 
                 PopupMenuItem.Submenu("Set Origin"),
                 PopupMenuItem.FromCommand(originToCenterCommand, level: 1),
-                PopupMenuItem.FromCommand(originToBoneOriginCommand, enabled: () => Document.Binding.IsBound, level: 1),
-                PopupMenuItem.Submenu("Set Bone Origin"),
-                PopupMenuItem.FromCommand(moveBoneOriginCommand, enabled: () => Document.Binding.IsBound, level: 1),
-                PopupMenuItem.FromCommand(boneOriginToOriginCommand, enabled: () => Document.Binding.IsBound, level: 1),
-                PopupMenuItem.FromCommand(boneOriginToBoneCommand, enabled: () => Document.Binding.IsBound, level: 1),
                 PopupMenuItem.Separator(),
                 PopupMenuItem.FromCommand(deleteCommand, enabled: HasSelection),
                 PopupMenuItem.Separator(),
@@ -138,18 +128,6 @@ public class SpriteEditor : DocumentEditor
             ]
         };  
     }
-
-    // Selection
-    private byte _currentFillColor = 0;
-    private byte _currentStrokeColor = 0;
-    private float _currentFillOpacity = 1.0f;
-    private float _currentStrokeOpacity = 0.0f;
-    private byte _selectionLayer = 0;
-
-    // Tool state
-    private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
-    private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
-
 
     public ushort CurrentFrame => _currentFrame;
     public bool IsPlaying => _isPlaying;
@@ -193,7 +171,6 @@ public class SpriteEditor : DocumentEditor
             Graphics.SetTransform(Document.Transform);
             Graphics.SetSortGroup(5);
             Document.DrawOrigin();
-            DrawBoneOrigin();
             Graphics.SetSortGroup(4);
             DrawSegments(shape);
             DrawAnchors(shape);
@@ -215,14 +192,14 @@ public class SpriteEditor : DocumentEditor
     {
         using var _ = UI.BeginRow(EditorStyle.Toolbar.Root);
 
-        var color = (int)_currentFillColor;
-        var opacity = _currentFillOpacity;
+        var color = (int)Document.CurrentFillColor;
+        var opacity = Document.CurrentFillOpacity;
 
         if (EditorUI.ColorButton(FillColorButtonId, Document.Palette, ref color, ref opacity, EditorAssets.Sprites.IconFill))
             SetFillColor((byte)color, opacity);
 
-        var strokeColor = (int)_currentStrokeColor;
-        var strokeOpacity = _currentStrokeOpacity;
+        var strokeColor = (int)Document.CurrentStrokeColor;
+        var strokeOpacity = Document.CurrentStrokeOpacity;
         if (EditorUI.ColorButton(StrokeColorButtonId, Document.Palette, ref strokeColor, ref strokeOpacity, EditorAssets.Sprites.IconStroke))
             SetStrokeColor((byte)strokeColor, strokeOpacity);
 
@@ -233,7 +210,7 @@ public class SpriteEditor : DocumentEditor
 
         LayerButtonUI();
 
-        BoneBindingButtonUI();
+        BoneBindingUI();
 
         UI.Flex();
 
@@ -257,6 +234,9 @@ public class SpriteEditor : DocumentEditor
             Document.MarkMetaModified();
         }
 
+        EditorUI.ToolbarSpacer();
+
+        SkeletonBindingUI();
         ConstraintsButtonUI();
     }
 
@@ -300,28 +280,22 @@ public class SpriteEditor : DocumentEditor
         PalettePopupUI();
     }
 
-    private void BoneBindingButtonUI()
+    private void SkeletonBindingUI()
     {
         var binding = Document.Binding;
-        var selected = Workspace.ActiveTool is BoneSelectTool;
 
-        void BoneBindingContent()
+        void SkeletonBindingContent()
         {
             EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
 
             if (!binding.IsBound)
             {
-                EditorUI.ControlPlaceholderText("Select Bone...");
+                EditorUI.ControlPlaceholderText("Select Skeleton...");
                 UI.Spacer(EditorStyle.Control.Spacing);
                 return;
             }
 
-            using (UI.BeginRow())
-            {
-                EditorUI.ControlText(binding.SkeletonName);
-                EditorUI.ControlText(".");
-                EditorUI.ControlText(binding.BoneName);
-            }
+            EditorUI.ControlText(binding.SkeletonName);
 
             using (UI.BeginContainer(BoneUnbindButtonId, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4) }))
             {
@@ -332,14 +306,16 @@ public class SpriteEditor : DocumentEditor
                         : EditorStyle.Control.Icon);
 
                 if (UI.WasPressed())
-                    ClearBoneBinding();
+                    ClearSkeletonBinding();
             }
 
             UI.Spacer(EditorStyle.Control.Spacing);
         }
 
-        if (EditorUI.Control(BoneBindButtonId, BoneBindingContent, selected: selected))
-            OpenBonePopupMenu();
+        if (EditorUI.Control(BoneBindButtonId, SkeletonBindingContent, selected: EditorUI.IsPopupOpen(BoneBindButtonId)))
+            EditorUI.TogglePopup(BoneBindButtonId);
+
+        SkeletonBindingPopupUI();
 
         if (EditorUI.Button(PreviewButtonId, EditorAssets.Sprites.IconPreview, selected: Document.ShowInSkeleton, disabled: !Document.Binding.IsBound, toolbar: true))
         {
@@ -356,49 +332,25 @@ public class SpriteEditor : DocumentEditor
         }
     }
 
-    private void OpenBonePopupMenu()
+    private void SkeletonBindingPopupUI()
     {
-        var items = new List<PopupMenuItem>();
-        var skeletonIndex = 0;
-
-        foreach (var doc in DocumentManager.Documents)
+        void Content()
         {
-            if (doc is not SkeletonDocument skeleton || skeleton.BoneCount == 0)
-                continue;
-
-            items.Add(PopupMenuItem.Submenu(skeleton.Name, showIcons: false, showChecked: true, isChecked: () => Document.Binding.Skeleton == skeleton));
-
-            for (var i = 0; i < skeleton.BoneCount; i++)
+            foreach (var doc in DocumentManager.Documents)
             {
-                var skel = skeleton;
-                var boneIndex = i;
-                var boneName = skeleton.Bones[i].Name;
-                var isBound = Document.Binding.IsBound && Document.Binding.Skeleton == skeleton && Document.Binding.BoneIndex == i;
-                items.Add(PopupMenuItem.Item(boneName, () => CommitBoneBinding(skel, boneIndex), level: 1, isChecked: () => isBound));
+                if (doc is not SkeletonDocument skeleton || skeleton.BoneCount == 0)
+                    continue;
+
+                var isSelected = Document.Binding.Skeleton == skeleton;
+                if (EditorUI.PopupItem(skeleton.Name, selected: isSelected))
+                {
+                    CommitSkeletonBinding(skeleton);
+                    EditorUI.ClosePopup();
+                }
             }
-
-            skeletonIndex++;
         }
 
-        if (items.Count == 0)
-        {
-            Notifications.AddError("no skeletons available");
-            return;
-        }
-
-        var buttonRect = UI.GetElementRectInCanvas(EditorStyle.CanvasId.DocumentEditor, BoneBindButtonId);
-        var popupStyle = new PopupStyle
-        {
-            AnchorX = Align.Min,
-            AnchorY = Align.Min,
-            PopupAlignX = Align.Min,
-            PopupAlignY = Align.Max,
-            ClampToScreen = true,
-            AnchorRect = buttonRect,
-            MinWidth = buttonRect.Width,
-        };
-
-        Editor.PopupMenu.Open([.. items], null, popupStyle, showChecked: true, showIcons: false);
+        EditorUI.Popup(BoneBindButtonId, Content);
     }
 
     private void UpdateSelectionColor()
@@ -410,10 +362,11 @@ public class SpriteEditor : DocumentEditor
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
 
-            _currentFillColor = path.FillColor;
-            _currentFillOpacity = path.FillOpacity;
-            _currentStrokeColor = path.StrokeColor;
-            _selectionLayer = path.Layer;
+            Document.CurrentFillColor = path.FillColor;
+            Document.CurrentFillOpacity = path.FillOpacity;
+            Document.CurrentStrokeColor = path.StrokeColor;
+            Document.CurrentLayer = path.Layer;
+            Document.CurrentBone = path.Bone;
             return;
         }
     }
@@ -525,7 +478,7 @@ public class SpriteEditor : DocumentEditor
             void ButtonContent()
             {
                 EditorUI.ControlIcon(EditorAssets.Sprites.IconLayer);
-                if (EditorApplication.Config.TryGetSpriteLayer(_selectionLayer, out var spriteLayer))
+                if (EditorApplication.Config.TryGetSpriteLayer(Document.CurrentLayer, out var spriteLayer))
                 {
                     EditorUI.ControlText(spriteLayer.Label);
                     EditorUI.ControlPlaceholderText(spriteLayer.LayerLabel);
@@ -553,7 +506,7 @@ public class SpriteEditor : DocumentEditor
             for (int i = 0; i < layers.Length; i++)
             {
                 ref readonly var layerDef = ref layers[i];
-                var selected = _selectionLayer == layerDef.Layer;
+                var selected = Document.CurrentLayer == layerDef.Layer;
                 var label = layerDef.Label;
                 var layerLabel = layerDef.LayerLabel;
 
@@ -570,7 +523,7 @@ public class SpriteEditor : DocumentEditor
                 }
             }
 
-            if (EditorUI.PopupItem("None", selected: _selectionLayer == 0))
+            if (EditorUI.PopupItem("None", selected: Document.CurrentLayer == 0))
             {
                 SetPathLayer(0);
                 EditorUI.ClosePopup();
@@ -579,7 +532,82 @@ public class SpriteEditor : DocumentEditor
 
         EditorUI.Popup(LayerButtonId, Content);
     }
-   
+
+    private void BoneBindingUI()
+    {
+        if (!Document.Binding.IsBound) return;
+
+        using var _ = UI.BeginContainer(ContainerStyle.Fit);
+
+        void ButtonContent()
+        {
+            EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
+            if (!Document.CurrentBone.IsNone)
+                EditorUI.ControlText(Document.CurrentBone.ToString());
+            else
+                EditorUI.ControlPlaceholderText("Root");
+            UI.Spacer(EditorStyle.Control.Spacing);
+        }
+
+        if (EditorUI.Control(
+            BonePathButtonId,
+            ButtonContent,
+            selected: EditorUI.IsPopupOpen(BonePathButtonId)))
+            EditorUI.TogglePopup(BonePathButtonId);
+
+        BoneBindingPopupUI();
+    }
+
+    private void BoneBindingPopupUI()
+    {
+        void Content()
+        {
+            var skeleton = Document.Binding.Skeleton;
+            if (skeleton == null)
+                return;
+
+            // Root option (None = root bone)
+            if (EditorUI.PopupItem("Root", selected: Document.CurrentBone.IsNone))
+            {
+                SetPathBone(StringId.None);
+                EditorUI.ClosePopup();
+            }
+
+            // List all bones from the skeleton
+            for (int i = 0; i < skeleton.BoneCount; i++)
+            {
+                var boneName = skeleton.Bones[i].Name;
+                var boneNameValue = StringId.Get(boneName);
+                if (EditorUI.PopupItem(boneName, selected: Document.CurrentBone == boneNameValue))
+                {
+                    SetPathBone(boneNameValue);
+                    EditorUI.ClosePopup();
+                }
+            }
+        }
+
+        EditorUI.Popup(BonePathButtonId, Content);
+    }
+
+    public void SetPathBone(StringId bone)
+    {
+        Document.CurrentBone = bone;
+
+        Undo.Record(Document);
+
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort p = 0; p < shape.PathCount; p++)
+        {
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathBone(p, bone);
+        }
+
+        Document.UpdateBounds();
+        Document.MarkModified();
+        MarkRasterDirty();
+    }
+
     private void UpdateRaster()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
@@ -660,8 +688,8 @@ public class SpriteEditor : DocumentEditor
 
     public void SetFillColor(byte color, float opacity)
     {
-        _currentFillColor = color;
-        _currentFillOpacity = opacity;
+        Document.CurrentFillColor = color;
+        Document.CurrentFillOpacity = opacity;
 
         Undo.Record(Document);
 
@@ -670,7 +698,7 @@ public class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathFillColor(p, _currentFillColor, _currentFillOpacity);
+            shape.SetPathFillColor(p, Document.CurrentFillColor, Document.CurrentFillOpacity);
         }
 
         Document.MarkModified();
@@ -679,8 +707,8 @@ public class SpriteEditor : DocumentEditor
 
     public void SetStrokeColor(byte color, float opacity)
     {
-        _currentStrokeColor = color;
-        _currentStrokeOpacity = opacity;
+        Document.CurrentStrokeColor = color;
+        Document.CurrentStrokeOpacity = opacity;
 
         Undo.Record(Document);
 
@@ -689,7 +717,7 @@ public class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathStrokeColor(p, _currentStrokeColor, _currentStrokeOpacity);
+            shape.SetPathStrokeColor(p, Document.CurrentStrokeColor, Document.CurrentStrokeOpacity);
         }
 
         Document.MarkModified();
@@ -698,7 +726,7 @@ public class SpriteEditor : DocumentEditor
 
     public void SetPathLayer(byte layer)
     {
-        _selectionLayer = layer;
+        Document.CurrentLayer = layer;
 
         Undo.Record(Document);
 
@@ -1086,30 +1114,6 @@ public class SpriteEditor : DocumentEditor
         ));
     }
 
-    private void BeginMoveBoneOrigin()
-    {
-        if (!Document.Binding.IsBound) return;
-
-        var savedOffset = Document.Binding.Offset;
-
-        Workspace.BeginTool(new MoveTool(
-            update: delta =>
-            {
-                // Moving the bone origin gizmo changes the offset
-                // Offset is where the sprite origin should be in skeleton space
-                Document.Binding.Offset = savedOffset + delta;
-            },
-            commit: _ =>
-            {
-                Document.MarkMetaModified();
-            },
-            cancel: () =>
-            {
-                Document.Binding.Offset = savedOffset;
-            }
-        ));
-    }
-
     private void BeginRotateTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
@@ -1378,7 +1382,7 @@ public class SpriteEditor : DocumentEditor
     private void BeginPenTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        Workspace.BeginTool(new PenTool(this, shape, _currentFillColor));
+        Workspace.BeginTool(new PenTool(this, shape, Document.CurrentFillColor));
     }
 
     private void BeginKnifeTool()
@@ -1398,9 +1402,9 @@ public class SpriteEditor : DocumentEditor
         Workspace.BeginTool(new ShapeTool(
             this,
             shape,
-            _currentFillColor,
+            Document.CurrentFillColor,
             ShapeType.Rectangle,
-            opacity: _currentFillOpacity));
+            opacity: Document.CurrentFillOpacity));
     }
 
     private void BeginCircleTool()
@@ -1409,9 +1413,9 @@ public class SpriteEditor : DocumentEditor
         Workspace.BeginTool(new ShapeTool(
             this,
             shape,
-            _currentFillColor,
+            Document.CurrentFillColor,
             ShapeType.Circle,
-            opacity: _currentFillOpacity));
+            opacity: Document.CurrentFillOpacity));
     }
 
     private void InsertAnchorAtHover()
@@ -1606,9 +1610,7 @@ public class SpriteEditor : DocumentEditor
         if (skeleton == null)
             return;
 
-        // Calculate offset to position skeleton so bound bone aligns with bone origin gizmo
-        var skeletonOffset = Document.Binding.Offset;
-
+        // Skinned sprites work in skeleton space - draw other sprites at their positions
         using (Graphics.PushState())
         {
             Graphics.SetSortGroup(0);
@@ -1617,7 +1619,7 @@ public class SpriteEditor : DocumentEditor
             {
                 if (sprite == Document) continue;
                 Graphics.SetBlendMode(BlendMode.Alpha);
-                Graphics.SetTransform(Matrix3x2.CreateTranslation(skeletonOffset - sprite.Binding.Offset) * Document.Transform);
+                Graphics.SetTransform(Document.Transform);
                 sprite.DrawSprite(alpha: 0.3f);
             }
         }
@@ -1625,99 +1627,37 @@ public class SpriteEditor : DocumentEditor
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
             Graphics.SetSortGroup(6);
-            Graphics.SetTransform(Document.Transform * Matrix3x2.CreateTranslation(skeletonOffset));
+            Graphics.SetTransform(Document.Transform);
 
             for (var boneIndex = 0; boneIndex < skeleton.BoneCount; boneIndex++)
-                Gizmos.DrawBoneAndJoints(skeleton, boneIndex, selected: boneIndex == Document.Binding.BoneIndex);
+            {
+                var boneName = StringId.Get(skeleton.Bones[boneIndex].Name);
+                Gizmos.DrawBoneAndJoints(skeleton, boneIndex, selected: boneName == Document.CurrentBone);
+            }
         }
     }
 
-    #region Bone Binding
+    #region Skeleton Binding
 
-    private void DrawBoneOrigin()
-    {
-        if (!Document.Binding.IsBound) return;
-        using var _ = Graphics.PushState();
-        Graphics.SetTransform(Document.Transform * Matrix3x2.CreateTranslation(Document.Binding.Offset));
-        Gizmos.DrawOrigin(EditorStyle.SpriteEditor.BoneOriginColor);
-    }
-
-
-    private void CommitBoneBinding(SkeletonDocument skeleton, int boneIndex)
+    private void CommitSkeletonBinding(SkeletonDocument skeleton)
     {
         Undo.Record(Document);
-
-        var wasBound = Document.Binding.IsBound;
-
-        Vector2 offset;
-        if (wasBound)
-        {
-            var boneWorldPos = Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[boneIndex]);
-            var spriteWorldPos = Document.Position - skeleton.Position;
-            offset = spriteWorldPos - boneWorldPos;
-        }
-        else
-        {
-            offset = -Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[boneIndex]);
-        }
-
-        Document.SetBoneBinding(skeleton, boneIndex);
-        Document.Binding.Offset = offset;
+        Document.SetSkeletonBinding(skeleton);
         skeleton.UpdateSprites();
-        var boneName = skeleton.Bones[boneIndex].Name;
-        Notifications.Add($"bound to {skeleton.Name}:{boneName}");
+        Notifications.Add($"bound to skeleton '{skeleton.Name}'");
     }
 
-    private void ClearBoneBinding()
+    private void ClearSkeletonBinding()
     {
         if (!Document.Binding.IsBound)
         {
-            Notifications.Add("sprite has no bone binding");
+            Notifications.Add("sprite has no skeleton binding");
             return;
         }
 
         Undo.Record(Document);
-        Document.ClearBoneBinding();
-        Notifications.Add("bone binding cleared");
-    }
-
-    private void BoneOriginToOrigin()
-    {
-        if (!Document.Binding.IsBound) return;
-        Undo.Record(Document);
-        Document.Binding.Offset = Vector2.Zero;
-        Document.MarkMetaModified();
-        Notifications.Add("bone origin → origin");
-    }
-
-    private void BoneOriginToBone()
-    {
-        var skeleton = Document.Binding.Skeleton;
-        if (skeleton == null) return;
-        Undo.Record(Document);
-        var bonePos = Vector2.Transform(Vector2.Zero, skeleton.LocalToWorld[Document.Binding.BoneIndex]);
-        Document.Binding.Offset = -bonePos;
-        Document.MarkMetaModified();
-        Notifications.Add("bone origin → bone");
-    }
-
-    private void OriginToBoneOrigin()
-    {
-        if (!Document.Binding.IsBound) return;
-        var boneOriginPos = Document.Binding.Offset;
-        if (boneOriginPos == Vector2.Zero) return;
-
-        Undo.Record(Document);
-
-        for (ushort fi = 0; fi < Document.FrameCount; fi++)
-            Document.Frames[fi].Shape.SetOrigin(boneOriginPos);
-
-        Document.Binding.Offset = Vector2.Zero;
-        Document.UpdateBounds();
-        Document.MarkModified();
-        Document.MarkMetaModified();
-        MarkRasterDirty();
-        Notifications.Add("origin → bone origin");
+        Document.ClearSkeletonBinding();
+        Notifications.Add("skeleton binding cleared");
     }
 
     private void ClearSelection()

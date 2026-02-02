@@ -22,9 +22,10 @@ public sealed partial class Shape
         public bool AntiAlias;
         public string Name;
         public byte? Layer;
+        public StringId? Bone;
         public Color? Color;
 
-        public static readonly RasterizeOptions Default = new() { AntiAlias = false, Layer = null, Color = null };
+        public static readonly RasterizeOptions Default = new() { AntiAlias = false, Layer = null, Bone = null, Color = null };
     }
 
     [StructLayout(LayoutKind.Sequential)]
@@ -61,7 +62,7 @@ public sealed partial class Shape
             var dpi = EditorApplication.Config.PixelsPerUnit;
             var antiAlias = options.AntiAlias;
             Span<ushort> sortedPaths = stackalloc ushort[PathCount];
-            var pathCount = GetSortedPathIndicies(sortedPaths, options.Layer);
+            var pathCount = GetSortedPathIndicies(sortedPaths, options.Layer, options.Bone);
 
             foreach (var pathIndex in sortedPaths[..pathCount])
             {
@@ -116,15 +117,20 @@ public sealed partial class Shape
         }
     }
 
-    private int GetSortedPathIndicies(Span<ushort> results, byte? layer = null)
+    private int GetSortedPathIndicies(Span<ushort> results, byte? layer = null, StringId? bone = null)
     {
         var count = 0;
 
-        if (layer != null)
+        if (layer != null || bone != null)
         {
             for (ushort i = 0; i < PathCount; i++)
-                if (_paths[i].Layer == layer)
-                    results[count++] = i;
+            {
+                if (layer != null && _paths[i].Layer != layer)
+                    continue;
+                if (bone != null && _paths[i].Bone != bone.Value)
+                    continue;
+                results[count++] = i;
+            }
 
             return count;
         }

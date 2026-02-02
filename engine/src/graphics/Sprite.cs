@@ -6,15 +6,16 @@ using System.Numerics;
 
 namespace NoZ;
 
-public readonly struct SpriteMesh(Rect uv, short order)
+public readonly struct SpriteMesh(Rect uv, short order, short boneIndex = -1)
 {
     public readonly Rect UV = uv;
     public readonly short SortOrder = order;
+    public readonly short BoneIndex = boneIndex;  // -1 = unbound, 0+ = bone index
 }
 
 public class Sprite : Asset
 {
-    public const ushort Version = 4;
+    public const ushort Version = 5;
     public const int MaxFrames = 64;
 
     public RectInt Bounds { get; private set; }
@@ -25,7 +26,6 @@ public class Sprite : Asset
     public float PixelsPerUnit { get; private set; } = 64.0f;
     public float PixelsPerUnitInv { get; private set; }
     public TextureFilter TextureFilter { get; set; } = TextureFilter.Point;
-    public Vector2 BoneOffset { get; private set; }
     public SpriteMesh[] Meshes { get; private set; } = [];
     public Rect UV => Meshes.Length > 0 ? Meshes[0].UV : Rect.Zero;
     public ushort Order => Meshes.Length > 0 ? (ushort)Meshes[0].SortOrder : (ushort)0;
@@ -38,7 +38,6 @@ public class Sprite : Asset
         float pixelsPerUnit,
         TextureFilter filter,
         int boneIndex,
-        Vector2 boneOffset,
         SpriteMesh[] meshes)
     {
         return new Sprite(name)
@@ -50,7 +49,6 @@ public class Sprite : Asset
             PixelsPerUnitInv = 1.0f / pixelsPerUnit,
             TextureFilter = filter,
             BoneIndex = boneIndex,
-            BoneOffset = boneOffset,
             Meshes = meshes
         };
     }
@@ -69,9 +67,6 @@ public class Sprite : Asset
         var ppu = reader.ReadSingle();
         var filter = (TextureFilter)reader.ReadByte();
         var boneIndex = reader.ReadInt16();
-        var boneOffset = new Vector2(
-            reader.ReadSingle(),
-            reader.ReadSingle());
         var meshCount = reader.ReadByte();
 
         var meshes = new SpriteMesh[meshCount];
@@ -82,7 +77,8 @@ public class Sprite : Asset
             var ur = reader.ReadSingle();
             var ub = reader.ReadSingle();
             var sortOrder = reader.ReadInt16();
-            meshes[i] = new SpriteMesh(Rect.FromMinMax(ul, ut, ur, ub), sortOrder);
+            var meshBoneIndex = reader.ReadInt16();
+            meshes[i] = new SpriteMesh(Rect.FromMinMax(ul, ut, ur, ub), sortOrder, meshBoneIndex);
         }
 
         sprite.Bounds = RectInt.FromMinMax(l, t, r, b);
@@ -92,7 +88,6 @@ public class Sprite : Asset
         sprite.PixelsPerUnit = ppu;
         sprite.PixelsPerUnitInv = 1.0f / ppu;
         sprite.TextureFilter = filter;
-        sprite.BoneOffset = boneOffset;
         sprite.Meshes = meshes;
         return sprite;
     }

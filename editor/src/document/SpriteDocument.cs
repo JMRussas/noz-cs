@@ -20,21 +20,17 @@ public class SpriteFrame : IDisposable
 
 public class SpriteDocument : Document
 {
-    public class BoneBinding
+    public class SkeletonBinding
     {
         public string SkeletonName = "";
-        public string BoneName = "";
         public SkeletonDocument? Skeleton;
-        public int BoneIndex = -1;
-        public Vector2 Offset;
 
-        public bool IsBound => Skeleton != null && BoneIndex >= 0;
-        public bool IsBoundTo(SkeletonDocument skeleton) =>
-            Skeleton == skeleton && BoneIndex >= 0;
+        public bool IsBound => Skeleton != null;
+        public bool IsBoundTo(SkeletonDocument skeleton) => Skeleton == skeleton;
 
-        public void Set(SkeletonDocument? skeleton, int boneIndex)
+        public void Set(SkeletonDocument? skeleton)
         {
-            if (skeleton == null || boneIndex < 0 || boneIndex >= skeleton.BoneCount)
+            if (skeleton == null)
             {
                 Clear();
                 return;
@@ -42,51 +38,28 @@ public class SpriteDocument : Document
 
             Skeleton = skeleton;
             SkeletonName = skeleton.Name;
-            BoneName = skeleton.Bones[boneIndex].Name;
-            BoneIndex = boneIndex;
         }
 
         public void Clear()
         {
             Skeleton = null;
             SkeletonName = "";
-            BoneName = "";
-            BoneIndex = -1;
-            Offset = Vector2.Zero;
         }
 
-        public void CopyFrom(BoneBinding src)
+        public void CopyFrom(SkeletonBinding src)
         {
             SkeletonName = src.SkeletonName;
-            BoneName = src.BoneName;
             Skeleton = src.Skeleton;
-            BoneIndex = src.BoneIndex;
-            Offset = src.Offset;
         }
 
         public void Resolve()
         {
-            Skeleton = null;
-            BoneIndex = -1;
-
-            if (string.IsNullOrEmpty(SkeletonName))
-                return;
-
-            foreach (var doc in DocumentManager.Documents)
-            {
-                if (doc is SkeletonDocument skel && doc.Name == SkeletonName)
-                {
-                    Skeleton = skel;
-                    if (!string.IsNullOrEmpty(BoneName))
-                        BoneIndex = skel.FindBoneIndex(BoneName);
-                    break;
-                }
-            }
+            Skeleton = DocumentManager.Find(AssetType.Skeleton, SkeletonName) as SkeletonDocument;
         }
     }
 
     private BitMask256 _layers = new();
-    private Rect[] _atlasUV = new Rect[255];
+    private readonly Dictionary<(byte layer, StringId bone), Rect> _atlasUV = new();
     private Sprite? _sprite;
 
     public readonly SpriteFrame[] Frames = new SpriteFrame[Sprite.MaxFrames];
@@ -96,15 +69,50 @@ public class SpriteDocument : Document
     public ushort Order;
     public RectInt RasterBounds { get; private set; }
 
+    public byte CurrentFillColor = 0;
+    public byte CurrentStrokeColor = 0;
+    public float CurrentFillOpacity = 1.0f;
+    public float CurrentStrokeOpacity = 0.0f;
+    public byte CurrentLayer = 0;
+    public StringId CurrentBone;
+
     public ref readonly BitMask256 Layers => ref _layers;
+
+    /// <summary>
+    /// Gets the unique (layer, bone) pairs used across all frames.
+    /// Each pair represents a separate mesh slot in the atlas.
+    /// </summary>
+    public List<(byte layer, StringId bone)> GetMeshSlots()
+    {
+        var slots = new HashSet<(byte layer, StringId bone)>();
+        for (ushort fi = 0; fi < FrameCount; fi++)
+        {
+            var shape = Frames[fi].Shape;
+            for (ushort p = 0; p < shape.PathCount; p++)
+            {
+                ref readonly var path = ref shape.GetPath(p);
+                slots.Add((path.Layer, path.Bone));
+            }
+        }
+        // Sort for deterministic ordering
+        var result = slots.ToList();
+        result.Sort((a, b) =>
+        {
+            var layerCmp = a.layer.CompareTo(b.layer);
+            return layerCmp != 0 ? layerCmp : a.bone.Value.CompareTo(b.bone.Value);
+        });
+        return result;
+    }
+
+    public int MeshSlotCount => Math.Max(1, GetMeshSlots().Count);
 
     public Vector2Int AtlasSize
     {
         get
         {
             var padding2 = EditorApplication.Config.AtlasPadding * 2;
-            var layerCount = Math.Max(1, _layers.Count);
-            return new((RasterBounds.Size.X + padding2) * FrameCount * layerCount, RasterBounds.Size.Y + padding2);
+            var slotCount = MeshSlotCount;
+            return new((RasterBounds.Size.X + padding2) * FrameCount * slotCount, RasterBounds.Size.Y + padding2);
         }
     }
     public bool ShowInSkeleton { get; set; }
@@ -114,9 +122,9 @@ public class SpriteDocument : Document
 
     internal AtlasDocument? Atlas;
 
-    public readonly BoneBinding Binding = new();
+    public readonly SkeletonBinding Binding = new();
 
-    public Rect AtlasUV => _atlasUV[0];
+    public Rect AtlasUV => GetAtlasUV(0, StringId.None);
 
     public Sprite? Sprite
     {
@@ -154,32 +162,61 @@ public class SpriteDocument : Document
 
     private static void OnSkeletonBoneRenamed(SkeletonDocument skeleton, int boneIndex, string oldName, string newName)
     {
-        foreach (var doc in DocumentManager.Documents.OfType<SpriteDocument>())
-        {
-            if (doc.Binding.Skeleton != skeleton || doc.Binding.BoneName != oldName)
-                continue;
+        var oldBoneName = StringId.Get(oldName);
+        var newBoneName = StringId.Get(newName);
 
-            doc.Binding.BoneName = newName;
-            doc.MarkMetaModified();
-        }
-    }
-
-    private static void OnSkeletonBoneRemoved(SkeletonDocument skeleton, int removedIndex, string removedName)
-    {
         foreach (var doc in DocumentManager.Documents.OfType<SpriteDocument>())
         {
             if (doc.Binding.Skeleton != skeleton)
                 continue;
 
-            if (doc.Binding.BoneName == removedName)
+            var modified = false;
+            for (ushort fi = 0; fi < doc.FrameCount; fi++)
             {
-                doc.Binding.Clear();
-                doc.MarkMetaModified();
-                Notifications.Add($"Sprite '{doc.Name}' bone binding cleared (bone '{removedName}' deleted)");
+                var shape = doc.Frames[fi].Shape;
+                for (ushort p = 0; p < shape.PathCount; p++)
+                {
+                    if (shape.GetPath(p).Bone == oldBoneName)
+                    {
+                        shape.SetPathBone(p, newBoneName);
+                        modified = true;
+                    }
+                }
             }
-            else if (doc.Binding.BoneIndex > removedIndex)
+
+            if (modified)
+                doc.MarkModified();
+        }
+    }
+
+    private static void OnSkeletonBoneRemoved(SkeletonDocument skeleton, int removedIndex, string removedName)
+    {
+        var removedBoneName = StringId.Get(removedName);
+
+        foreach (var doc in DocumentManager.Documents.OfType<SpriteDocument>())
+        {
+            if (doc.Binding.Skeleton != skeleton)
+                continue;
+
+            var modified = false;
+            for (ushort fi = 0; fi < doc.FrameCount; fi++)
             {
-                doc.Binding.BoneIndex--;
+                var shape = doc.Frames[fi].Shape;
+                for (ushort p = 0; p < shape.PathCount; p++)
+                {
+                    if (shape.GetPath(p).Bone == removedBoneName)
+                    {
+                        // Reset to root bone (None)
+                        shape.SetPathBone(p, StringId.None);
+                        modified = true;
+                    }
+                }
+            }
+
+            if (modified)
+            {
+                doc.MarkModified();
+                Notifications.Add($"Sprite '{doc.Name}' bone bindings updated (bone '{removedName}' deleted)");
             }
         }
     }
@@ -245,7 +282,7 @@ public class SpriteDocument : Document
         }
     }
 
-    private static void ParsePath(SpriteFrame f, ref Tokenizer tk)
+    private void ParsePath(SpriteFrame f, ref Tokenizer tk)
     {
         var pathIndex = f.Shape.AddPath();
         byte fillColor = 0;
@@ -253,6 +290,7 @@ public class SpriteDocument : Document
         byte strokeColor = 0;
         var strokeOpacity = 0.0f;
         byte layer = 0;
+        var bone = StringId.None;
 
         while (!tk.IsEOF)
         {
@@ -274,6 +312,13 @@ public class SpriteDocument : Document
                 layer = EditorApplication.Config.TryGetSpriteLayer(tk.ExpectQuotedString(), out var sg)
                     ? sg.Layer
                     : (byte)0;
+            else if (tk.ExpectIdentifier("b"))
+            {
+                // Bone name - stored directly as Name
+                var boneName = tk.ExpectQuotedString();
+                if (!string.IsNullOrEmpty(boneName))
+                    bone = StringId.Get(boneName);
+            }
             else if (tk.ExpectIdentifier("a"))
                 ParseAnchor(f.Shape, pathIndex, ref tk);
             else
@@ -283,6 +328,7 @@ public class SpriteDocument : Document
         f.Shape.SetPathFillColor(pathIndex, fillColor, fillOpacity);
         f.Shape.SetPathStrokeColor(pathIndex, strokeColor, strokeOpacity);
         f.Shape.SetPathLayer(pathIndex, layer);
+        f.Shape.SetPathBone(pathIndex, bone);
     }
 
     private static void ParseAnchor(Shape shape, ushort pathIndex, ref Tokenizer tk)
@@ -427,13 +473,13 @@ public class SpriteDocument : Document
         }        
     }
     
-    private static void SaveFrame(SpriteFrame f, StreamWriter writer)
+    private void SaveFrame(SpriteFrame f, StreamWriter writer)
     {
         var shape = f.Shape;
 
         for (ushort pIdx = 0; pIdx < shape.PathCount; pIdx++)
         {
-            var path = shape.GetPath(pIdx);
+            ref readonly var path = ref shape.GetPath(pIdx);
             var opacity = path.IsSubtract
                 ? " h"
                 : path.FillOpacity < 1
@@ -448,11 +494,16 @@ public class SpriteDocument : Document
                 ? $" s {path.StrokeColor} {path.StrokeOpacity}"
                 : "";
 
-            writer.WriteLine($"p c {path.FillColor}{opacity}{stroke}{layer}");
+            // Bone: write bone name if not root (None = root/default)
+            var bone = "";
+            if (!path.Bone.IsNone)
+                bone = $" b \"{path.Bone}\"";
+
+            writer.WriteLine($"p c {path.FillColor}{opacity}{stroke}{layer}{bone}");
 
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {
-                var anchor = shape.GetAnchor((ushort)(path.AnchorStart + aIdx));
+                ref readonly var anchor = ref shape.GetAnchor((ushort)(path.AnchorStart + aIdx));
                 writer.Write(string.Format(CultureInfo.InvariantCulture, "a {0} {1}", anchor.Position.X, anchor.Position.Y));
                 if (MathF.Abs(anchor.Curve) > float.Epsilon)
                     writer.Write(string.Format(CultureInfo.InvariantCulture, " {0}", anchor.Curve));
@@ -512,6 +563,13 @@ public class SpriteDocument : Document
         Depth = src.Depth;
         Order = src.Order;
         Bounds = src.Bounds;
+        CurrentFillColor = src.CurrentFillColor;
+        CurrentStrokeColor = src.CurrentStrokeColor;
+        CurrentFillOpacity = src.CurrentFillOpacity;
+        CurrentStrokeOpacity = src.CurrentStrokeOpacity;
+        CurrentLayer = src.CurrentLayer;
+        CurrentBone = src.CurrentBone;
+
         Binding.CopyFrom(src.Binding);
 
         for (var i = 0; i < src.FrameCount; i++)
@@ -526,9 +584,7 @@ public class SpriteDocument : Document
 
     public override void LoadMetadata(PropertySet meta)
     {
-        Binding.SkeletonName = meta.GetString("bone", "skeleton", "");
-        Binding.BoneName = meta.GetString("bone", "name", "");
-        Binding.Offset = meta.GetVector2("bone", "offset", Vector2.Zero);
+        Binding.SkeletonName = meta.GetString("skeleton", "name", "");
         ShowInSkeleton = meta.GetBool("sprite", "show_in_skeleton", false);
         ShowTiling = meta.GetBool("sprite", "show_tiling", false);
         ShowSkeletonOverlay = meta.GetBool("sprite", "show_skeleton_overlay", false);
@@ -557,15 +613,10 @@ public class SpriteDocument : Document
         if (ConstrainedSize.HasValue)
             meta.SetString("sprite", "constrained_size", $"{ConstrainedSize.Value.X}x{ConstrainedSize.Value.Y}");
         if (Binding.IsBound)
-        {
-            meta.SetString("bone", "skeleton", Binding.SkeletonName);
-            meta.SetString("bone", "name", Binding.BoneName);
-            meta.SetVec2("bone", "offset", Binding.Offset);
-        }
+            meta.SetString("skeleton", "name", Binding.SkeletonName);
         else
-        {
-            meta.ClearGroup("bone");
-        }
+            meta.ClearGroup("skeleton");
+        meta.ClearGroup("bone");  // Legacy cleanup
     }
 
     public override void PostLoad()
@@ -573,14 +624,14 @@ public class SpriteDocument : Document
         Binding.Resolve();
     }
 
-    public void SetBoneBinding(SkeletonDocument? skeleton, int boneIndex)
+    public void SetSkeletonBinding(SkeletonDocument? skeleton)
     {
-        Binding.Set(skeleton, boneIndex);
+        Binding.Set(skeleton);
         MarkSpriteDirty();
         MarkMetaModified();
     }
 
-    public void ClearBoneBinding()
+    public void ClearSkeletonBinding()
     {
         var skeleton = Binding.Skeleton;
         Binding.Clear();
@@ -591,41 +642,43 @@ public class SpriteDocument : Document
 
     internal void ClearAtlasUVs()
     {
-        for (int i = 0; i < _atlasUV.Length; i++)
-            _atlasUV[i] = Rect.Zero;
+        _atlasUV.Clear();
         MarkSpriteDirty();
     }
 
-    internal void SetAtlasUV(byte layer, Rect uv)
+    internal void SetAtlasUV(byte layer, StringId bone, Rect uv)
     {
-        _atlasUV[layer] = uv;
+        _atlasUV[(layer, bone)] = uv;
         MarkSpriteDirty();
     }
 
-    internal Rect GetAtlasUV(byte layer) =>
-        _atlasUV[layer];
+    internal Rect GetAtlasUV(byte layer, StringId bone) =>
+        _atlasUV.TryGetValue((layer, bone), out var uv) ? uv : Rect.Zero;
 
     private void UpdateSprite()
     {
-        if (Atlas == null || _layers.Count == 0)
+        var slots = GetMeshSlots();
+        if (Atlas == null || slots.Count == 0)
         {
             _sprite = null;
             return;
         }
 
-        var meshes = new SpriteMesh[_layers.Count];
-        int idx = 0;
-
-        for (int layer = 0; layer < 255; layer++)
+        var meshes = new SpriteMesh[slots.Count];
+        for (int idx = 0; idx < slots.Count; idx++)
         {
-            if (!_layers[layer]) continue;
-            var uv = _atlasUV[layer];
+            var (layer, bone) = slots[idx];
+            var uv = GetAtlasUV(layer, bone);
             if (uv == Rect.Zero)
             {
                 _sprite = null;
                 return;
             }
-            meshes[idx++] = new SpriteMesh(uv, (short)layer);
+            // Look up bone index by name (None = root bone 0, else find by name)
+            var boneIndex = (short)-1;
+            if (Binding.IsBound && Binding.Skeleton != null)
+                boneIndex = bone.IsNone ? (short)0 : (short)Binding.Skeleton.FindBoneIndex(bone.ToString());
+            meshes[idx] = new SpriteMesh(uv, (short)layer, boneIndex);
         }
 
         _sprite = Sprite.Create(
@@ -633,8 +686,7 @@ public class SpriteDocument : Document
             bounds: RasterBounds,
             pixelsPerUnit: EditorApplication.Config.PixelsPerUnit,
             filter: TextureFilter.Point,
-            boneIndex: Binding.BoneIndex,
-            boneOffset: Binding.Offset,
+            boneIndex: -1,  // No longer used at sprite level
             meshes: meshes);
     }
 
@@ -649,6 +701,8 @@ public class SpriteDocument : Document
         Binding.Resolve();
         UpdateBounds();
 
+        var slots = GetMeshSlots();
+
         using var writer = new BinaryWriter(File.Create(outputPath));
         writer.WriteAssetHeader(AssetType.Sprite, Sprite.Version, 0);
         writer.Write(FrameCount);
@@ -659,20 +713,22 @@ public class SpriteDocument : Document
         writer.Write((short)RasterBounds.Bottom);
         writer.Write((float)EditorApplication.Config.PixelsPerUnit);
         writer.Write((byte)(IsAntiAliased ? TextureFilter.Linear : TextureFilter.Point));
-        writer.Write((short)Binding.BoneIndex);
-        writer.Write(Binding.Offset.X);
-        writer.Write(Binding.Offset.Y);
-        writer.Write((byte)_layers.Count);
+        writer.Write((short)-1);  // Legacy bone index field (no longer used)
+        writer.Write((byte)slots.Count);
 
-        for (int i=0; i<255; i++)
+        foreach (var (layer, bone) in slots)
         {
-            if (!_layers[i]) continue;
-            var uv = _atlasUV[i];
+            var uv = GetAtlasUV(layer, bone);
             writer.Write(uv.Left);
             writer.Write(uv.Top);
             writer.Write(uv.Right);
             writer.Write(uv.Bottom);
-            writer.Write((short)i);  // Must match Sprite.Load which reads Int16
+            writer.Write((short)layer);  // Sort order
+            // Look up bone index by name (None = root bone 0, else find by name)
+            var boneIndex = (short)-1;
+            if (Binding.IsBound && Binding.Skeleton != null)
+                boneIndex = bone.IsNone ? (short)0 : (short)Binding.Skeleton.FindBoneIndex(bone.ToString());
+            writer.Write(boneIndex);
         }
     }
 

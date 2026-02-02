@@ -610,14 +610,11 @@ internal class SkeletonEditor : DocumentEditor
                 lowestDeletedIndex = i;
         }
 
-        // Record all sprite documents that will be affected by the deletion
-        // (bound to this skeleton with BoneIndex >= lowestDeletedIndex)
         Undo.BeginGroup();
         foreach (var doc in DocumentManager.Documents.OfType<SpriteDocument>())
-        {
-            if (doc.Binding.Skeleton == Document && doc.Binding.BoneIndex >= lowestDeletedIndex)
+            if (doc.Binding.Skeleton == Document)
                 Undo.Record(doc);
-        }
+
         Undo.Record(Document);
 
         for (var i = Document.BoneCount - 1; i >= 0; i--)

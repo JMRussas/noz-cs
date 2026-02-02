@@ -38,8 +38,8 @@ public static class DocumentManager
 
         Directory.CreateDirectory(outputPath);
 
-            InitDocuments();
-            LoadAll();
+        InitDocuments();
+        LoadAll();
     }
 
     public static void Shutdown()
@@ -155,19 +155,11 @@ public static class DocumentManager
 
     public static Document? Find(AssetType type, string name)
     {
+        if (string.IsNullOrEmpty(name)) return null;
+
         foreach (var doc in _documents)
         {
             if ((type == default || doc.Def.Type == type) && doc.Name == name)
-                return doc;
-        }
-        return null;
-    }
-
-    public static Document? Find(string name)
-    {
-        foreach (var doc in _documents)
-        {
-            if (doc.Name == name)
                 return doc;
         }
         return null;
@@ -287,10 +279,12 @@ public static class DocumentManager
             {
                 var ext = Path.GetExtension(filePath);
                 if (ext == ".meta") continue;
-                if (GetDef(ext) == null) continue;
+
+                var def = GetDef(ext);
+                if (def == null) continue;
 
                 var name = MakeCanonicalName(filePath);
-                if (Find(name) != null) continue;
+                if (Find(def.Type, name) != null) continue;
 
                 Create(filePath);
             }
@@ -320,11 +314,13 @@ public static class DocumentManager
 
     public static Document Get(int index) => _documents[index];
 
-    public static string GetUniquePath(string sourcePath)
+    public static string? GetUniquePath(string sourcePath)
     {
         var parentPath = Path.GetDirectoryName(sourcePath) ?? "";
         var fileName = Path.GetFileNameWithoutExtension(sourcePath);
         var ext = Path.GetExtension(sourcePath);
+        var def = GetDef(ext);
+        if (def == null) return null;
         var canonicalBase = MakeCanonicalName(fileName);
 
         var startIndex = 2;
@@ -343,7 +339,7 @@ public static class DocumentManager
                 continue;
 
             var canonicalName = MakeCanonicalName(candidate);
-            if (Find(canonicalName) != null)
+            if (Find(def.Type, canonicalName) != null)
                 continue;
 
             return candidate;
@@ -353,6 +349,7 @@ public static class DocumentManager
     public static Document? Duplicate(Document source)
     {
         var newPath = GetUniquePath(source.Path);
+        if (newPath == null) return null;
         var newName = Path.GetFileNameWithoutExtension(newPath);
 
         var directory = Path.GetDirectoryName(newPath);

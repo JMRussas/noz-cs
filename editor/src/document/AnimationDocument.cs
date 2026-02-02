@@ -336,8 +336,8 @@ internal class AnimationDocument : Document
         for (var i = 0; i < sprites.Count; i++)
         {
             var sprite = sprites[i];
-            var spriteBounds = sprite.Bounds.Translate(-sprite.Binding.Offset);
-            var boneTransform = Skeleton.WorldToLocal[sprite.Binding.BoneIndex] * LocalToWorld[sprite.Binding.BoneIndex];
+            var spriteBounds = sprite.Bounds;
+            var boneTransform = Skeleton.WorldToLocal[0] * LocalToWorld[0];
             bounds = ExpandBounds(bounds, Vector2.Transform(spriteBounds.TopLeft, boneTransform));
             bounds = ExpandBounds(bounds, Vector2.Transform(spriteBounds.TopRight, boneTransform));
             bounds = ExpandBounds(bounds, Vector2.Transform(spriteBounds.BottomLeft, boneTransform));
@@ -851,10 +851,11 @@ internal class AnimationDocument : Document
                 Debug.Assert(sprite != null);
                 Debug.Assert(sprite.Binding.IsBoundTo(Skeleton));
 
-                ref readonly var bindPose = ref Skeleton.WorldToLocal[sprite.Binding.BoneIndex];
-                ref readonly var animatedPose = ref LocalToWorld[sprite.Binding.BoneIndex];
+                // TODO: Per-mesh bone transforms for editor preview
+                ref readonly var bindPose = ref Skeleton.WorldToLocal[0];
+                ref readonly var animatedPose = ref LocalToWorld[0];
                 Graphics.SetTransform(bindPose * animatedPose * Transform);
-                sprite.DrawSprite(-sprite.Binding.Offset);
+                sprite.DrawSprite();
             }
         }
     }

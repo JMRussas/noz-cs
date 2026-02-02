@@ -13,6 +13,8 @@ import to work, fix.
 - [ ] New palette
 - [ ] Stoke size popup in sprite editor
 - [ ] Per path bone binding.
+- [X] new Name system
+- [X] fixed documentmanager bug causing name conflicts across types
 - [X] removed rotate tool from skeleton editor
 - [X] reworked scale tool in skeleton editor
 - [X] reworked move tool in skeleton editor
