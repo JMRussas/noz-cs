@@ -15,12 +15,13 @@ public class WebPlatform : IPlatform
     private readonly IJSRuntime _js;
     private IJSObjectReference? _module;
     private Vector2 _windowSize;
+    private float _displayScale = 1.0f;
     private bool _shouldQuit;
     private DotNetObjectReference<WebPlatform>? _dotNetRef;
 
     Vector2Int IPlatform.WindowSize => new((int)_windowSize.X, (int)_windowSize.Y);
     public Vector2Int WindowPosition => Vector2Int.Zero; // Not applicable for web
-    public float DisplayScale => 1.0f; // TODO: Get from browser
+    public float DisplayScale => _displayScale;
     public bool IsTextboxVisible => false; // TODO: Implement
     public nint WindowHandle => nint.Zero; // Not applicable for web
     public event Action<PlatformEvent>? OnEvent;
@@ -50,12 +51,13 @@ public class WebPlatform : IPlatform
         _dotNetRef = DotNetObjectReference.Create(this);
 
         _module = await _js.InvokeAsync<IJSObjectReference>("import", "/js/noz/noz-platform.js");
-        var size = await _module.InvokeAsync<WindowSize>("init", _dotNetRef, config.Width, config.Height);
-        _windowSize = new Vector2(size.Width, size.Height);
+        var result = await _module.InvokeAsync<InitResult>("init", _dotNetRef, config.Width, config.Height);
+        _windowSize = new Vector2(result.Width, result.Height);
+        _displayScale = result.Dpr;
         _initialized = true;
     }
 
-    private record WindowSize(int Width, int Height);
+    private record InitResult(int Width, int Height, float Dpr);
 
     public void Shutdown()
     {

@@ -15,9 +15,10 @@ export function init(dotNet, width, height) {
         return { width: width, height: height };
     }
 
-    // Set canvas to actual window size immediately
-    const actualWidth = window.innerWidth;
-    const actualHeight = window.innerHeight;
+    // Set canvas to actual window size, accounting for device pixel ratio for sharp rendering
+    const dpr = window.devicePixelRatio || 1;
+    const actualWidth = Math.floor(window.innerWidth * dpr);
+    const actualHeight = Math.floor(window.innerHeight * dpr);
     canvas.width = actualWidth;
     canvas.height = actualHeight;
     canvas.style.display = 'block';
@@ -47,8 +48,8 @@ export function init(dotNet, width, height) {
     canvas.tabIndex = 1;
     canvas.focus();
 
-    // Return actual window size so C# can use it
-    return { width: actualWidth, height: actualHeight };
+    // Return actual window size and DPR so C# can use it
+    return { width: actualWidth, height: actualHeight, dpr: dpr };
 }
 
 export function shutdown() {
@@ -69,6 +70,10 @@ export function shutdown() {
 
 export function getCanvas() {
     return canvas;
+}
+
+export function getDevicePixelRatio() {
+    return window.devicePixelRatio || 1;
 }
 
 export function setCursor(cursorStyle) {
@@ -108,8 +113,9 @@ function onMouseUp(e) {
 
 function onMouseMove(e) {
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const dpr = window.devicePixelRatio || 1;
+    const x = (e.clientX - rect.left) * dpr;
+    const y = (e.clientY - rect.top) * dpr;
     dotNetRef.invokeMethodAsync('OnMouseMove', x, y);
 }
 
@@ -126,8 +132,9 @@ function onTouchStart(e) {
     if (e.touches.length > 0) {
         const touch = e.touches[0];
         const rect = canvas.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const y = touch.clientY - rect.top;
+        const dpr = window.devicePixelRatio || 1;
+        const x = (touch.clientX - rect.left) * dpr;
+        const y = (touch.clientY - rect.top) * dpr;
         dotNetRef.invokeMethodAsync('OnMouseMove', x, y);
         dotNetRef.invokeMethodAsync('OnMouseDown', 0, 1); // Simulate left click
     }
@@ -142,20 +149,22 @@ function onTouchMove(e) {
     if (e.touches.length > 0) {
         const touch = e.touches[0];
         const rect = canvas.getBoundingClientRect();
-        const x = touch.clientX - rect.left;
-        const y = touch.clientY - rect.top;
+        const dpr = window.devicePixelRatio || 1;
+        const x = (touch.clientX - rect.left) * dpr;
+        const y = (touch.clientY - rect.top) * dpr;
         dotNetRef.invokeMethodAsync('OnMouseMove', x, y);
     }
 }
 
 function onResize() {
-    // Update canvas size to match window
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    // Update canvas size to match window, accounting for device pixel ratio
+    const dpr = window.devicePixelRatio || 1;
+    const width = Math.floor(window.innerWidth * dpr);
+    const height = Math.floor(window.innerHeight * dpr);
     if (canvas) {
         canvas.width = width;
         canvas.height = height;
     }
-    // Notify C# of the resize
+    // Notify C# of the pixel size (not CSS size)
     dotNetRef.invokeMethodAsync('OnResize', width, height);
 }
