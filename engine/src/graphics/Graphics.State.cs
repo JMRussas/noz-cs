@@ -95,6 +95,7 @@ public static unsafe partial class Graphics
 
         _currentPass = RenderPass.Scene;
         _boneRow = 1;
+        _globalsBaseIndex = 0;
         Camera = null;
 
         // Reset all pass projections to identity to ensure clean state

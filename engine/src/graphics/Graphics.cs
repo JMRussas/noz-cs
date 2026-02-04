@@ -116,6 +116,7 @@ public static unsafe partial class Graphics
     private static NativeArray<Batch> _batches;
     private static NativeArray<BatchState> _batchStates;
     private static NativeArray<GlobalsSnapshot> _globalsSnapshots;
+    private static int _globalsBaseIndex; // Base offset for globals buffers to prevent RTT overwriting main frame
     private static ushort _currentBatchState;
     
     public static Color ClearColor { get; set; } = Color.Black;  
@@ -362,7 +363,8 @@ public static unsafe partial class Graphics
         if (count == 0)
             return;
 
-        Driver.SetGlobalsCount(count);
+        // Ensure driver has enough buffers for base + count
+        Driver.SetGlobalsCount(_globalsBaseIndex + count);
 
         var data = stackalloc byte[80];
         for (int i = 0; i < count; i++)
@@ -371,7 +373,7 @@ public static unsafe partial class Graphics
             var transposed = Matrix4x4.Transpose(snapshot.Projection);
             Buffer.MemoryCopy(&transposed, data, 64, 64);
             *(float*)(data + 64) = snapshot.Time;
-            Driver.SetGlobals(i, new ReadOnlySpan<byte>(data, 80));
+            Driver.SetGlobals(_globalsBaseIndex + i, new ReadOnlySpan<byte>(data, 80));
         }
     }
 
@@ -388,9 +390,9 @@ public static unsafe partial class Graphics
         // Only compare projection - time is same for all batches in a frame
         for (int i = 0; i < _globalsSnapshots.Length; i++)
             if (_globalsSnapshots[i].Projection == projection)
-                return (ushort)i;
+                return (ushort)(_globalsBaseIndex + i);
 
-        var index = (ushort)_globalsSnapshots.Length;
+        var index = (ushort)(_globalsBaseIndex + _globalsSnapshots.Length);
         _globalsSnapshots.Add() = new GlobalsSnapshot { Projection = projection, Time = _time };
         return index;
     }
@@ -794,8 +796,12 @@ public static unsafe partial class Graphics
         _indices.Clear();
         _batches.Clear();
         _batchStates.Clear();
+
+        // Advance base index so subsequent ExecuteCommands calls (like RTT) use different buffer slots
+        // This prevents RTT from overwriting globals that main frame draw commands still reference
+        _globalsBaseIndex += _globalsSnapshots.Length;
         _globalsSnapshots.Clear();
-        
+
         _batchStateDirty = true;
         _currentBatchState = 0;
     }
