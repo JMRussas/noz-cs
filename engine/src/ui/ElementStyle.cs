@@ -53,6 +53,7 @@ public struct ContainerStyle()
 
     public static readonly ContainerStyle Default = new();
     public static readonly ContainerStyle Fit = new() { Size = Size2.Fit };
+    public static readonly ContainerStyle Center = new() { Size = Size2.Fit, AlignX = Align.Center, AlignY = Align.Center };
 }
 
 public struct LabelStyle()

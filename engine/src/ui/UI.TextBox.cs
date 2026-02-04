@@ -368,15 +368,16 @@ public static partial class UI
         var padding = e.Data.TextBox.Padding;
 
         var scale = UI.GetUIScale();
-        var screenPos = UI.Camera!.WorldToScreen(Vector2.Transform(e.Rect.Position, e.LocalToWorld));
+        var screenPos = UI.Camera!.WorldToScreen(Vector2.Transform(e.Rect.Position + new Vector2(padding.L, padding.T), e.LocalToWorld));
         var screenHeight = Application.WindowSize.Y;
+        var contentWidth = e.Rect.Width - padding.Horizontal;
+        var contentHeight = e.Rect.Height - padding.Vertical;
         var scissor = new RectInt(
             (int)screenPos.X,
-            (int)(screenHeight - screenPos.Y - e.Rect.Height * scale),
-            (int)(e.Rect.Width * scale),
-            (int)(e.Rect.Height * scale));
+            (int)(screenHeight - screenPos.Y - contentHeight * scale),
+            (int)(contentWidth * scale),
+            (int)(contentHeight * scale));
 
-        var contentHeight = e.Rect.Height - padding.Vertical;
         var textOffset = new Vector2(
             -tb.ScrollOffset + e.Rect.X + padding.L,
             (contentHeight - font.LineHeight * fontSize) * 0.5f + e.Rect.Y + padding.T);
