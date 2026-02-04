@@ -94,6 +94,8 @@ public class Asset : IDisposable {
         // Check all loaded assemblies for embedded resources
         var assemblies = AppDomain.CurrentDomain.GetAssemblies();
 
+        Log.Info($"LoadEmbeddedResource: Looking for '{resourceSuffix}' in {assemblies.Length} assemblies");
+
         foreach (var assembly in assemblies)
         {
             if (assembly == null || assembly.IsDynamic) continue;
@@ -101,22 +103,27 @@ public class Asset : IDisposable {
             try
             {
                 var names = assembly.GetManifestResourceNames();
+                if (names.Length > 0)
+                    Log.Info($"  Assembly {assembly.GetName().Name}: {names.Length} resources");
+
                 foreach (var name in names)
                 {
                     if (name.EndsWith(resourceSuffix, StringComparison.OrdinalIgnoreCase))
                     {
+                        Log.Info($"  FOUND: {name}");
                         var stream = assembly.GetManifestResourceStream(name);
                         if (stream != null)
                             return stream;
                     }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // Skip assemblies that don't support GetManifestResourceNames
+                Log.Warning($"  Assembly {assembly.GetName().Name}: {ex.Message}");
             }
         }
 
+        Log.Error($"LoadEmbeddedResource: NOT FOUND '{resourceSuffix}'");
         return null;
     }
 
