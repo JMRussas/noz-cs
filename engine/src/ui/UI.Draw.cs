@@ -150,8 +150,9 @@ public static partial class UI
         if (style.Color.IsTransparent)
             return;
 
-        var pos = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
-        UIRender.DrawRect(new Rect(pos.X, pos.Y, e.Rect.Width, e.Rect.Height), style.Color);
+        var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
+        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
+        UIRender.DrawRect(new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y), style.Color);
     }
 
     private static void DrawContainer(ref Element e)
@@ -160,9 +161,10 @@ public static partial class UI
         if (style.Color.IsTransparent && style.Border.Width <= 0)
             return;
 
-        var pos = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
+        var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
+        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
         UIRender.DrawRect(
-            new Rect(pos.X, pos.Y, e.Rect.Width, e.Rect.Height),
+            new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y),
             style.Color,
             style.Border.Radius,
             style.Border.Width,

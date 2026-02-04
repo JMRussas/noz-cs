@@ -38,15 +38,18 @@ public static partial class UI
     {
         ref readonly var grid = ref e.Data.Grid;
         var cellSize = new Vector2(grid.CellWidth, grid.CellHeight);
+        var rowHeight = grid.CellHeight + grid.Spacing;
         var elementIndex = e.Index + 1;
 
         for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
         {
-            var col = childIndex % grid.Columns;
-            var row = childIndex / grid.Columns;
+            // Position based on virtual index, not child index
+            var virtualIndex = grid.StartIndex + childIndex;
+            var col = virtualIndex % grid.Columns;
+            var row = virtualIndex / grid.Columns;
             var offset = new Vector2(
                 col * (grid.CellWidth + grid.Spacing),
-                row * (grid.CellHeight + grid.Spacing));
+                row * rowHeight);
 
             ref var child = ref GetElement(elementIndex);
             LayoutElement(elementIndex, offset, cellSize);
@@ -280,8 +283,8 @@ public static partial class UI
             // Pivot point offset from element's top-left
             var pivot = new Vector2(e.Rect.Width * e.Pivot.X, e.Rect.Height * e.Pivot.Y);
 
-            // LocalToWorld positions at the pivot point, with scale/rotate applied
-            // Children use -parentPivotOffset which maps them to top-left relative positions
+            // LocalToWorld positions at the pivot point, with scale/rotate applied around pivot
+            // Matrix order: S * R * T means point is scaled first, then rotated, then translated
             localTransform =
                 Matrix3x2.CreateScale(t.Scale) *
                 Matrix3x2.CreateRotation(MathEx.Deg2Rad * t.Rotate) *

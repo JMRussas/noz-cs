@@ -95,6 +95,11 @@ public static unsafe partial class Graphics
 
         _currentPass = RenderPass.Scene;
         _boneRow = 1;
+        Camera = null;
+
+        // Reset all pass projections to identity to ensure clean state
+        for (var i = 0; i < MaxRenderPasses; i++)
+            _passProjections[i] = Matrix4x4.Identity;
 
         var size = Application.WindowSize;
         SetViewport(0, 0, (int)size.X, (int)size.Y);

@@ -169,11 +169,15 @@ public static class Application
 
     private static void RenderFrame()
     {
-        Time.Update();
+        // Don't call Time.Update() during resize - this is an "extra" render frame
+        // that shouldn't increment the frame count or affect frame-gap detection
+        // in UI canvas state management.
         Input.BeginFrame();
         Input.Update();
 
-        Graphics.BeginFrame();
+        if (!Graphics.BeginFrame())
+            return;
+
         _instance.Update();
         Graphics.BeginUI();
         UI.Begin();

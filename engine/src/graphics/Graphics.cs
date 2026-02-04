@@ -283,6 +283,7 @@ public static unsafe partial class Graphics
         var savedViewport = CurrentState.Viewport;
         var savedScissorEnabled = CurrentState.ScissorEnabled;
         var savedScissor = CurrentState.Scissor;
+        var savedCamera = Camera;
 
         foreach (var request in _rttRequests)
         {
@@ -326,6 +327,7 @@ public static unsafe partial class Graphics
         CurrentState.Viewport = savedViewport;
         CurrentState.ScissorEnabled = savedScissorEnabled;
         CurrentState.Scissor = savedScissor;
+        Camera = savedCamera;
         _batchStateDirty = true;
 
         _rttRequests.Clear();

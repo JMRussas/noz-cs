@@ -99,9 +99,7 @@ public struct GridStyle()
     public float CellWidth = 100;
     public float CellHeight = 100;
     public int VirtualCount = 0;
-    public byte ScrollId = 0;
-    public Action<int, int>? VirtualCellFunc = null;
-    public Action<int, int>? VirtualRangeFunc = null;
+    public int StartIndex = 0;
 }
 
 public struct PopupStyle()

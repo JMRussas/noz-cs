@@ -144,7 +144,7 @@ internal struct GridData
     public float CellWidth;
     public float CellHeight;
     public int VirtualCount;
-    public int StartRow;
+    public int StartIndex;
 
     public static GridData Default => new()
     {
@@ -153,7 +153,7 @@ internal struct GridData
         CellWidth = 100,
         CellHeight = 100,
         VirtualCount = 0,
-        StartRow = 0
+        StartIndex = 0
     };
 }
 

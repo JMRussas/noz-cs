@@ -373,6 +373,7 @@ public static partial class UI
         if (canvasId == CanvasId.None) return 0;
         if (elementId == CanvasId.None) return 0;
         ref var es = ref GetElementState(canvasId, elementId);
+        if (es.Index == 0) return 0;
         ref var e = ref GetElement(es.Index);
         Debug.Assert(e.Type == ElementType.Scrollable, "GetScrollOffset called on non-scrollable element");
         return es.Data.Scrollable.Offset;
@@ -386,6 +387,36 @@ public static partial class UI
         ref var e = ref GetElement(es.Index);
         Debug.Assert(e.Type == ElementType.Scrollable, "SetScrollOffset called on non-scrollable element");
         es.Data.Scrollable.Offset = offset;
+    }
+
+    /// <summary>
+    /// Calculates the visible index range for a virtualized grid inside a scrollable.
+    /// Returns (startIndex, endIndex) where endIndex is exclusive.
+    /// </summary>
+    public static (int startIndex, int endIndex) GetGridCellRange(
+        CanvasId canvasId,
+        ElementId scrollId,
+        int columns,
+        float cellHeight,
+        float spacing,
+        float viewportHeight,
+        int totalCount)
+    {
+        if (totalCount <= 0) return (0, 0);
+
+        var scrollOffset = GetScrollOffset(canvasId, scrollId);
+        var rowHeight = cellHeight + spacing;
+
+        // Calculate visible row range with 1-row buffer above and below
+        var totalRows = (totalCount + columns - 1) / columns;
+        var startRow = Math.Max(0, (int)(scrollOffset / rowHeight) - 1);
+        var visibleRows = (int)Math.Ceiling(viewportHeight / rowHeight) + 2;
+        var endRow = Math.Min(totalRows, startRow + visibleRows);
+
+        var startIndex = startRow * columns;
+        var endIndex = Math.Min(totalCount, endRow * columns);
+
+        return (startIndex, endIndex);
     }
 
     public static Vector2 ScreenToUI(Vector2 screenPos) =>
@@ -735,7 +766,7 @@ public static partial class UI
             CellWidth = style.CellWidth,
             CellHeight = style.CellHeight,
             VirtualCount = style.VirtualCount,
-            StartRow = 0
+            StartIndex = style.StartIndex
         };
         PushElement(e.Index);
         return new AutoGrid();
