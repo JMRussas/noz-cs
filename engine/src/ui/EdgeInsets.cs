@@ -56,6 +56,8 @@ public readonly struct EdgeInsets(float top, float left, float bottom, float rig
     public static EdgeInsets Symmetric(float vertical, float horizontal) =>
         new(vertical, horizontal, vertical, horizontal);
 
+    public static implicit operator EdgeInsets(float v) => new(v, v, v, v);
+
     public static readonly EdgeInsets Zero = new(0, 0, 0, 0);
 
     public override string ToString()

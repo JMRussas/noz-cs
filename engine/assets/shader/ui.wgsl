@@ -1,9 +1,8 @@
 //
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
-//  UI shader - SDF squircle with per-vertex border data
+//  UI shader - Rounded rectangle with per-corner radius support (branchless)
 
-// Bind group 0: Globals
 struct Globals {
     projection: mat4x4<f32>,
     time: f32,
@@ -11,66 +10,77 @@ struct Globals {
 
 @group(0) @binding(0) var<uniform> globals: Globals;
 
-// Vertex input
 struct VertexInput {
     @location(0) position: vec2<f32>,
     @location(1) uv: vec2<f32>,
-    @location(2) normal: vec2<f32>,
+    @location(2) rect_size: vec2<f32>,
     @location(3) color: vec4<f32>,
-    @location(4) border_ratio: f32,
+    @location(4) border_width: f32,
     @location(5) border_color: vec4<f32>,
+    @location(6) corner_radii: vec4<f32>,  // TL, TR, BL, BR
 }
 
-// Vertex output / Fragment input
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
     @location(0) uv: vec2<f32>,
     @location(1) color: vec4<f32>,
-    @location(2) @interpolate(flat) border_ratio: f32,
-    @location(3) @interpolate(flat) border_color: vec4<f32>,
+    @location(2) @interpolate(flat) rect_size: vec2<f32>,
+    @location(3) @interpolate(flat) border_width: f32,
+    @location(4) @interpolate(flat) border_color: vec4<f32>,
+    @location(5) @interpolate(flat) corner_radii: vec4<f32>,
 }
 
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
-
-    var screen_pos = globals.projection * vec4<f32>(input.position, 0.0, 1.0);
-    let scale_x = globals.projection[0][0];
-    let scale_y = globals.projection[1][1];
-    screen_pos.x += input.normal.x * scale_x;
-    screen_pos.y += input.normal.y * scale_y;
-
-    output.position = vec4<f32>(screen_pos.xy, 0.0, 1.0);
+    output.position = globals.projection * vec4<f32>(input.position, 0.0, 1.0);
     output.uv = input.uv;
     output.color = input.color;
-    output.border_ratio = input.border_ratio;
+    output.rect_size = input.rect_size;
+    output.border_width = input.border_width;
     output.border_color = input.border_color;
-
+    output.corner_radii = input.corner_radii;
     return output;
+}
+
+// Branchless rounded rect SDF with per-corner radii
+fn sdf_rounded_rect(p: vec2<f32>, size: vec2<f32>, radii: vec4<f32>) -> f32 {
+    let half = size * 0.5;
+
+    // Select radius based on quadrant (branchless using mix/step)
+    // radii: x=TL, y=TR, z=BL, w=BR
+    let is_right = step(half.x, p.x);
+    let is_bottom = step(half.y, p.y);
+    let r = mix(
+        mix(radii.x, radii.y, is_right),  // top row
+        mix(radii.z, radii.w, is_right),  // bottom row
+        is_bottom
+    );
+
+    // Standard rounded rect SDF
+    let q = abs(p - half) - half + r;
+    return length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
 }
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    // Compute SDF and derivatives BEFORE any branching (WebGPU requires uniform control flow for fwidth)
-    let n = 4.0;
-    let dist = pow(pow(abs(input.uv.x), n) + pow(abs(input.uv.y), n), 1.0 / n);
+    let p = input.uv * input.rect_size;
+    let dist = sdf_rounded_rect(p, input.rect_size, input.corner_radii);
     let edge = fwidth(dist);
 
-    // Early out for non-SDF elements (border_ratio < 0 means no SDF processing)
-    if (input.border_ratio < 0.0) {
-        return input.color;
-    }
+    // Alpha: fade out at boundary (branchless)
+    let alpha = 1.0 - smoothstep(-edge, edge, dist);
 
-    var color = input.color;
-    let border_color = input.border_color;
+    // Border blend (branchless)
+    let border_blend = smoothstep(-edge, edge, dist + input.border_width);
+    let has_border = step(0.001, input.border_width) * step(0.001, input.border_color.a);
+    let final_color = mix(input.color, input.border_color, border_blend * has_border);
 
-    let border = (1.0 + edge) - input.border_ratio;
-    color = mix(color, border_color, smoothstep(border - edge, border, dist));
-    color.a = (1.0 - smoothstep(1.0 - edge, 1.0, dist)) * color.a;
-
-    if (color.a < 0.001) {
+    // Early discard for fully transparent pixels
+    let out_alpha = final_color.a * alpha;
+    if (out_alpha < 0.001) {
         discard;
     }
 
-    return color;
+    return vec4<f32>(final_color.rgb, out_alpha);
 }

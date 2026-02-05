@@ -8,11 +8,11 @@ namespace NoZ;
 
 public struct BorderStyle
 {
-    public float Radius;
+    public BorderRadius Radius;
     public float Width;
     public Color Color;
 
-    public static readonly BorderStyle None = new() { Radius = 0, Width = 0, Color = Color.Transparent };
+    public static readonly BorderStyle None = new() { Radius = BorderRadius.Zero, Width = 0, Color = Color.Transparent };
 }
 
 public struct ContainerStyle()
@@ -63,6 +63,9 @@ public struct LabelStyle()
     public Align AlignX = Align.Min;
     public Align AlignY = Align.Center;
     public Font? Font = null;
+
+    public static readonly LabelStyle Default = new();
+    public static readonly LabelStyle Centered = new() { AlignX = Align.Center, AlignY = Align.Center };
 }
 
 public struct ImageStyle()
@@ -180,6 +183,15 @@ public struct ScrollableStyle()
     public Color ScrollbarThumbHoverColor = new(0.6f, 0.6f, 0.6f, 1f);
     public float ScrollbarPadding = 2f;
     public float ScrollbarBorderRadius = 4f;
+}
+
+public struct SceneStyle()
+{
+    public Camera? Camera = null;
+    public Action? Draw = null;
+    public Align AlignX = Align.Center;
+    public Align AlignY = Align.Center;
+    public Size2 Size = Size2.Default;
 }
 
 public static class ElementStyle

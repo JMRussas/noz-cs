@@ -53,6 +53,7 @@ public static partial class UI
             if (!clickInsidePopup)
             {
                 _closePopups = true;
+                Input.ConsumeButton(InputCode.MouseLeft);
                 return;
             }
         }
@@ -268,7 +269,9 @@ public static partial class UI
             es.SetFlags(ElementFlags.Hovered, mouseOver ? ElementFlags.Hovered : ElementFlags.None);
             es.SetFlags(ElementFlags.Down, mouseOver && _mouseLeftDown ? ElementFlags.Down : ElementFlags.None);
 
-            if (mouseOver && _mouseLeftDoubleClickPressed && _mouseDoubleClickElementId == ElementId.None)
+            var consumesInput = e.Type != ElementType.Scene;
+
+            if (mouseOver && _mouseLeftDoubleClickPressed && _mouseDoubleClickElementId == ElementId.None && consumesInput)
             {
                 _mouseDoubleClickElementId = e.Id;
                 es.SetFlags(ElementFlags.DoubleClick, ElementFlags.DoubleClick);
@@ -276,7 +279,7 @@ public static partial class UI
             else
                 es.SetFlags(ElementFlags.DoubleClick, ElementFlags.None);
 
-            if (mouseOver && _mouseLeftPressed && _mouseLeftElementId == ElementId.None)
+            if (mouseOver && _mouseLeftPressed && _mouseLeftElementId == ElementId.None && consumesInput)
             {
                 es.SetFlags(ElementFlags.Pressed, ElementFlags.Pressed);
                 _mouseLeftElementId = e.Id;
@@ -288,7 +291,7 @@ public static partial class UI
                 es.SetFlags(ElementFlags.Pressed, ElementFlags.None);
             }
 
-            if (mouseOver && _mouseRightPressed && _mouseRightElementId == ElementId.None)
+            if (mouseOver && _mouseRightPressed && _mouseRightElementId == ElementId.None && consumesInput)
             {
                 es.SetFlags(ElementFlags.RightClick, ElementFlags.RightClick);
                 _mouseRightElementId = e.Id;

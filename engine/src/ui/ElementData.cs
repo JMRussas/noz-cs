@@ -202,6 +202,22 @@ internal struct SpacerData
     public Vector2 Size;
 }
 
+internal struct SceneData
+{
+    public int CallbackIndex;
+    public Align AlignX;
+    public Align AlignY;
+    public Size2 Size;
+
+    public static SceneData Default => new()
+    {
+        CallbackIndex = -1,
+        AlignX = Align.Center,
+        AlignY = Align.Center,
+        Size = Size2.Default
+    };
+}
+
 
 internal struct CanvasData
 {
@@ -264,4 +280,5 @@ internal struct ElementData
     [FieldOffset(0)] public SpacerData Spacer;
     [FieldOffset(0)] public CanvasData Canvas;
     [FieldOffset(0)] public TextBoxData TextBox;
+    [FieldOffset(0)] public SceneData Scene;
 }

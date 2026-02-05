@@ -93,6 +93,7 @@ public static partial class UI
         ElementType.Row => MeasureContainer(in e, in p),
         ElementType.Grid => MeasureGrid(in e, in p),
         ElementType.Popup => MeasurePopup(in e, in p),
+        ElementType.Scene => MeasureScene(in e, in p),
         ElementType.TextBox => MeasureTextBox(in e, in p),
         ElementType.Flex when p.Type is ElementType.Row => MeasureRowFlex(in e, in p),
         ElementType.Flex when p.Type is ElementType.Column => MeasureColumnFlex(in e, in p),
@@ -114,6 +115,11 @@ public static partial class UI
     {
         var widthMode = p.Type == ElementType.Row ? Size.Fit : Size.Percent();
         return ResolveSize(in e, in p, new Size2(widthMode, e.Data.TextBox.Height));
+    }
+
+    private static Vector2 MeasureScene(ref readonly Element e, ref readonly Element p)
+    {
+        return ResolveSize(in e, in p, e.Data.Scene.Size);
     }
 
     private static Vector2 MeasurePopup(ref readonly Element e, ref readonly Element p)

@@ -22,7 +22,14 @@ public static partial class UI
     private const int MaxElementStack = 128;
     private const int MaxPopups = 4;
     private const int MaxTextBuffer = 64 * 1024;
+    private const int MaxSceneCallbacks = 64;
     
+    private struct SceneCallback
+    {
+        public Action? Draw;
+        public Camera? Camera;
+    }
+
     public struct AutoCanvas : IDisposable { readonly void IDisposable.Dispose() => EndCanvas(); }
     public struct AutoContainer : IDisposable { readonly void IDisposable.Dispose() => EndContainer(); }
     public struct AutoColumn : IDisposable { readonly void IDisposable.Dispose() => EndColumn(); }
@@ -45,6 +52,8 @@ public static partial class UI
     private static NativeArray<char>[] _textBuffers = [new(MaxTextBuffer), new(MaxTextBuffer)];
     private static NativeArray<CanvasState> _canvasStates = new(CanvasId.MaxValue + 1, CanvasId.MaxValue + 1);
     private static NativeArray<CanvasId> _activeCanvasIds = new(CanvasId.MaxValue + 1);
+    private static readonly SceneCallback[] _sceneCallbacks = new SceneCallback[MaxSceneCallbacks];
+    private static int _sceneCallbackCount;
 
     private static int _currentTextBuffer;
     private static CanvasId _currentCanvasId;
@@ -474,10 +483,15 @@ public static partial class UI
 
     internal static void Begin()
     {
+        for (int i=0; i< _sceneCallbackCount; i++)
+            _sceneCallbacks[i] = new SceneCallback();
+        _sceneCallbackCount = 0;
+
         _refSize = GetRefSize();
         _elementStackCount = 0;
         _elementCount = 0;
         _popupCount = 0;
+        _sceneCallbackCount = 0;
         _currentTextBuffer = 1 - _currentTextBuffer;
         _textBuffers[_currentTextBuffer].Clear();
         _currentCanvasId = CanvasId.None;
@@ -773,6 +787,32 @@ public static partial class UI
     }
 
     public static void EndGrid() => EndElement(ElementType.Grid);
+
+    public static void Scene(ElementId id, in SceneStyle style)
+    {
+        ref var e = ref CreateElement(ElementType.Scene);
+
+        var callbackIndex = -1;
+        if (_sceneCallbackCount < MaxSceneCallbacks)
+        {
+            callbackIndex = _sceneCallbackCount;
+            _sceneCallbacks[_sceneCallbackCount++] = new() { Camera = style.Camera, Draw = style.Draw };
+        }
+
+        e.Data.Scene = new SceneData
+        {
+            CallbackIndex = callbackIndex,
+            AlignX = style.AlignX,
+            AlignY = style.AlignY,
+            Size = style.Size
+        };
+
+        SetId(ref e, _currentCanvasId, id);
+        PushElement(e.Index);
+        PopElement();
+    }
+
+    public static void Scene(in SceneStyle style) => Scene(ElementId.None, style);
 
     public static AutoPopup BeginPopup(ElementId id, PopupStyle style)
     {

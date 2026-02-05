@@ -70,6 +70,7 @@ internal enum ElementType : ushort
     Label,
     Row,
     Scrollable,
+    Scene,
     Spacer,
     Transform,
     Popup,

@@ -47,19 +47,24 @@ public static partial class UI
                 DrawTextBox(ref e);
                 break;
 
+            case ElementType.Scene:
+                DrawScene(ref e);
+                return;
+
             case ElementType.Popup when !isPopup:
                 return;
 
             case ElementType.Scrollable:
             {
-                var pos = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
-                var screenPos = Camera!.WorldToScreen(pos);
-                var scale = Application.WindowSize.Y / _size.Y;
+                var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
+                var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
+                var screenTopLeft = Camera!.WorldToScreen(topLeft);
+                var screenBottomRight = Camera!.WorldToScreen(bottomRight);
                 var screenHeight = Application.WindowSize.Y;
-                var scissorX = (int)screenPos.X;
-                var scissorY = (int)(screenHeight - screenPos.Y - e.Rect.Height * scale);
-                var scissorW = (int)(e.Rect.Width * scale);
-                var scissorH = (int)(e.Rect.Height * scale);
+                var scissorX = (int)screenTopLeft.X;
+                var scissorW = (int)(screenBottomRight.X - screenTopLeft.X);
+                var scissorH = (int)(screenBottomRight.Y - screenTopLeft.Y);
+                var scissorY = (int)(screenHeight - screenBottomRight.Y);
                 Graphics.SetScissor(scissorX, scissorY, scissorW, scissorH);
                 setScissor = true;
                 break;
@@ -261,5 +266,34 @@ public static partial class UI
             Graphics.SetColor(img.Color);
             Graphics.DrawFlat(e.Sprite, order: 0, bone: -1);
         }
+    }
+
+    private static void DrawScene(ref Element e)
+    {
+        ref var scene = ref e.Data.Scene;
+        if (scene.CallbackIndex < 0)
+            return;
+
+        ref readonly var callback = ref _sceneCallbacks[scene.CallbackIndex];
+        if (callback.Camera == null || callback.Draw == null)
+            return;
+
+        var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
+        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
+        var screenTopLeft = Camera!.WorldToScreen(topLeft);
+        var screenBottomRight = Camera!.WorldToScreen(bottomRight);
+
+        var viewportX = (int)screenTopLeft.X;
+        var viewportY = (int)screenTopLeft.Y;
+        var viewportW = (int)(screenBottomRight.X - screenTopLeft.X);
+        var viewportH = (int)(screenBottomRight.Y - screenTopLeft.Y);
+
+        using var _ = Graphics.PushState();
+        Graphics.SetViewport(viewportX, viewportY, viewportW, viewportH);
+        Graphics.ClearScissor();
+        callback.Camera.Viewport = new Rect(viewportX, viewportY, viewportW, viewportH);
+        Graphics.SetCamera(callback.Camera);
+
+        callback.Draw();
     }
 }
