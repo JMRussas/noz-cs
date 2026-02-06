@@ -47,11 +47,11 @@ public static partial class UI
     private static int _currentTextBuffer;
 
     private static short _elementCount;
+    private static short _previousElementCount;
     private static int _elementStackCount;
     private static int _popupCount;
     private static int _focusElementId;
     private static int _pendingFocusElementId;
-    private static int _frameNumber;
     private static Vector2 _size;
     private static Vector2Int _refSize;
     private static int _activeScrollId;
@@ -145,6 +145,7 @@ public static partial class UI
         element.MeasuredSize = Vector2.Zero;
         element.LocalToWorld = Matrix3x2.Identity;
         element.WorldToLocal = Matrix3x2.Identity;
+        element.Asset = null;
 
         if (_elementStackCount > 0)
             _elements[_elementStack[_elementStackCount - 1]].ChildCount++;
@@ -250,11 +251,6 @@ public static partial class UI
         e.Id = elementId;
 
         ref var es = ref GetElementState(elementId);
-
-        if (es.LastFrame != _frameNumber - 1)
-            es = default;
-
-        es.LastFrame = _frameNumber;
         es.Index = e.Index;
     }
 
@@ -321,6 +317,7 @@ public static partial class UI
         return result;
     }
 
+    public static bool IsHovered(int elementId) => GetElementState(elementId).IsHovered;
     public static bool IsHovered() => GetElementState(ref GetSelf()).IsHovered;
     public static bool WasPressed() => GetElementState(ref GetSelf()).IsPressed;
     public static bool IsDown() => GetElementState(ref GetSelf()).IsDown;
@@ -412,11 +409,7 @@ public static partial class UI
 
     internal static void Begin()
     {
-        _frameNumber++;
-
-        for (int i = 0; i < _elementCount; i++)
-            _elements[i].Asset = null;
-
+        _previousElementCount = _elementCount;
         _refSize = GetRefSize();
         _elementStackCount = 0;
         _elementCount = 0;
@@ -693,8 +686,17 @@ public static partial class UI
         }
         else
         {
-            var winSize = Application.WindowSize;
-            rt = RenderTexturePool.Acquire(winSize.X, winSize.Y);
+            // Use previous frame's element size in screen pixels for pixel-perfect RT
+            var screenRect = Camera!.WorldToScreen(GetElementWorldRect(id));
+            var rtW = (int)MathF.Round(screenRect.Width);
+            var rtH = (int)MathF.Round(screenRect.Height);
+            if (rtW <= 0 || rtH <= 0)
+            {
+                var winSize = Application.WindowSize;
+                rtW = winSize.X;
+                rtH = winSize.Y;
+            }
+            rt = RenderTexturePool.Acquire(rtW, rtH);
             ownsRT = true;
         }
 
@@ -710,7 +712,7 @@ public static partial class UI
         SetId(ref e, id);
         PushElement(e.Index);
 
-        Graphics.BeginPass(rt, Color.Transparent);
+        Graphics.BeginPass(rt, style.Color);
         if (style.Camera != null)
         {
             Graphics.SetCamera(style.Camera);
@@ -871,50 +873,19 @@ public static partial class UI
         DrawElements();
 
         TextBoxEndFrame();
+
+        for (int i = _elementCount ; i < _previousElementCount; i++)
+        {
+            ref var e = ref _elements[i];
+            e.Asset = null;
+            
+            if (e.Id != 0)
+            {
+                ref var es = ref GetElementState(e.Id);
+                es = default;
+            }
+        }
     }
-
-#if false
-    // Transform calculation - LocalToWorld positions at center of rect
-    private static int UpdateTransforms(int elementIndex, Matrix3x2 parentTransform)
-    {
-        ref var e = ref _elements[elementIndex++];
-
-        // Center of this element's rect in parent-local space
-        var center = new Vector2(e.Rect.X + e.Rect.Width * 0.5f, e.Rect.Y + e.Rect.Height * 0.5f);
-
-        if (e.Type == ElementType.Transform)
-        {
-            ref var t = ref e.Data.Transform;
-            var localTransform =
-                Matrix3x2.CreateScale(t.Scale) *
-                Matrix3x2.CreateRotation(t.Rotate) *
-                Matrix3x2.CreateTranslation(t.Translate + center);
-
-            e.LocalToWorld = localTransform * parentTransform;
-        }
-        else
-        {
-            e.LocalToWorld = Matrix3x2.CreateTranslation(center) * parentTransform;
-        }
-
-        Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
-
-        if (e.Type == ElementType.Scrollable)
-        {
-            var scrollTransform = e.LocalToWorld * Matrix3x2.CreateTranslation(0, -e.Data.Scrollable.Offset);
-            for (var i = 0; i < e.ChildCount; i++)
-                elementIndex = UpdateTransforms(elementIndex, scrollTransform);
-        }
-        else
-        {
-            for (var i = 0; i < e.ChildCount; i++)
-                elementIndex = UpdateTransforms(elementIndex, e.LocalToWorld);
-        }
-
-        return elementIndex;
-    }
-#endif
-
 
     [Conditional("NOZ_UI_DEBUG")]
     private static void LogUI(string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)

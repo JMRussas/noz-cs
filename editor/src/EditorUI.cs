@@ -40,6 +40,8 @@ internal static partial class EditorUI
         _controlSelected = false;
     }
 
+    public static bool IsHovered() => _controlHovered;
+
     private static void ShortcutText(string text, bool selected = false)
     {
         UI.Label(text, style: selected ? EditorStyle.Control.Text : EditorStyle.Shortcut.Text);

@@ -254,7 +254,11 @@ public static partial class UI
         var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
         var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
 
-        Graphics.Draw(scene.RenderTexture, topLeft, bottomRight);
+        using (Graphics.PushState())
+        {
+            Graphics.SetTextureFilter(TextureFilter.Point);
+            Graphics.Draw(scene.RenderTexture, topLeft, bottomRight);
+        }
 
         if (scene.OwnsRT)
             RenderTexturePool.Release(scene.RenderTexture);

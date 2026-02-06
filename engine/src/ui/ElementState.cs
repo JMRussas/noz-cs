@@ -46,7 +46,6 @@ internal struct ElementState
 {
     public ElementFlags Flags;
     public short Index;
-    public int LastFrame;
     public Rect Rect;
     public System.Numerics.Matrix3x2 LocalToWorld;
     public ElementStateData Data;

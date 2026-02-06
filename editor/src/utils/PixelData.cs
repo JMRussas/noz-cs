@@ -148,7 +148,7 @@ public static class PixelDataExtensions
                 for (var x = x0; x < x1; x++)
                 {
                     ref var pixel = ref pixels[x, y];
-                    if (pixel.A != 0) continue;
+                    if (pixel.A != 0 || (pixel.R | pixel.G | pixel.B) != 0) continue;
 
                     var sumR = 0;
                     var sumG = 0;
@@ -167,7 +167,7 @@ public static class PixelDataExtensions
                             if (nx < x0 || nx >= x1) continue;
 
                             ref var neighbor = ref pixels[nx, ny];
-                            if (neighbor.A == 0) continue;
+                            if (neighbor.A == 0 && (neighbor.R | neighbor.G | neighbor.B) == 0) continue;
 
                             sumR += neighbor.R;
                             sumG += neighbor.G;

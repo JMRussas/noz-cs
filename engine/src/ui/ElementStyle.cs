@@ -177,6 +177,7 @@ public struct SceneStyle()
     public Align AlignX = Align.Center;
     public Align AlignY = Align.Center;
     public Size2 Size = Size2.Default;
+    public Color Color = Color.Transparent;
     public RenderTexture? RenderTarget = null;
 }
 

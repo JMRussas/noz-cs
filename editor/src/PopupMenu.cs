@@ -285,7 +285,7 @@ public static partial class PopupMenu
                 void Content()
                 {
                     UI.Flex();
-                    EditorUI.Shortcut(key, ctrl, alt, shift, selected: UI.IsHovered() && itemEnabled);
+                    EditorUI.Shortcut(key, ctrl, alt, shift, selected: EditorUI.IsHovered() && itemEnabled);
                 }
 
                 if (EditorUI.PopupItem(itemId, item.Icon, item.Label, hasShortcut ? Content : null, selected: item.IsChecked, disabled: !enabled, showChecked: _levels[level].ShowChecked, showIcon: _levels[level].ShowIcons))
@@ -310,7 +310,7 @@ public static partial class PopupMenu
                 _levels[l].OpenSubmenu = -1;
         }
 
-        var hovered = UI.IsHovered() && enabled;
+        var hovered = UI.IsHovered(itemId) && enabled;
         if (hovered && _levels[level].OpenSubmenu >= 0 && _levels[level].OpenSubmenu != index)
         {
             _levels[level].OpenSubmenu = index;

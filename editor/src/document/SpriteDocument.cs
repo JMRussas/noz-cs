@@ -803,7 +803,7 @@ public class SpriteDocument : Document
             bounds: RasterBounds,
             pixelsPerUnit: EditorApplication.Config.PixelsPerUnit,
             filter: TextureFilter.Point,
-            boneIndex: -1,  // No longer used at sprite level
+            boneIndex: -1,
             meshes: meshes);
     }
 
