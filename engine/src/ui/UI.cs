@@ -195,15 +195,7 @@ public static partial class UI
     private static ref ElementState GetElementState(int elementId)
     {
         Debug.Assert(elementId > 0 && elementId <= MaxElementId, $"Invalid ElementId: {elementId}");
-        ref var es = ref _elementStates[elementId];
-        if (es.LastFrame != _frameNumber)
-        {
-            es.LastFrame = _frameNumber;
-            es.Flags = ElementFlags.None;
-            es.Index = 0;
-            // Persistent data (TextBox.Text, Scrollable.Offset) is preserved
-        }
-        return ref es;
+        return ref _elementStates[elementId];
     }
 
     public static bool IsRow() => GetSelf().Type == ElementType.Row;
@@ -267,6 +259,11 @@ public static partial class UI
         e.Id = elementId;
 
         ref var es = ref GetElementState(elementId);
+
+        if (es.LastFrame != _frameNumber - 1)
+            es = default;
+
+        es.LastFrame = _frameNumber;
         es.Index = e.Index;
     }
 
@@ -430,7 +427,6 @@ public static partial class UI
             _sceneCallbacks[i] = new SceneCallback();
         _sceneCallbackCount = 0;
 
-        // Clear asset references from previous frame's elements to avoid leaks
         for (int i = 0; i < _elementCount; i++)
             _elements[i].Asset = null;
 
