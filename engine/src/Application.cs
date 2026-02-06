@@ -137,6 +137,7 @@ public static class Application
         _instance.UpdateUI();
         UI.End();
         _instance.LateUpdate();
+        Cursor.Update();
         Graphics.EndFrame();
 
         return _running;
@@ -181,6 +182,7 @@ public static class Application
         UI.Begin();
         _instance.UpdateUI();
         UI.End();
+        Cursor.Update();
         Graphics.EndFrame();
     }
 }

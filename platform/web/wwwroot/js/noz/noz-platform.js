@@ -36,6 +36,9 @@ export function init(dotNet, width, height) {
     canvas.addEventListener('mousemove', onMouseMove);
     canvas.addEventListener('wheel', onMouseWheel, { passive: false });
 
+    canvas.addEventListener('mouseenter', onMouseEnter);
+    canvas.addEventListener('mouseleave', onMouseLeave);
+
     // Touch events (basic support)
     canvas.addEventListener('touchstart', onTouchStart, { passive: false });
     canvas.addEventListener('touchend', onTouchEnd);
@@ -62,6 +65,8 @@ export function shutdown() {
         canvas.removeEventListener('mouseup', onMouseUp);
         canvas.removeEventListener('mousemove', onMouseMove);
         canvas.removeEventListener('wheel', onMouseWheel);
+        canvas.removeEventListener('mouseenter', onMouseEnter);
+        canvas.removeEventListener('mouseleave', onMouseLeave);
         canvas.removeEventListener('touchstart', onTouchStart);
         canvas.removeEventListener('touchend', onTouchEnd);
         canvas.removeEventListener('touchmove', onTouchMove);
@@ -117,6 +122,14 @@ function onMouseMove(e) {
     const x = (e.clientX - rect.left) * dpr;
     const y = (e.clientY - rect.top) * dpr;
     dotNetRef.invokeMethodAsync('OnMouseMove', x, y);
+}
+
+function onMouseEnter() {
+    dotNetRef.invokeMethodAsync('OnMouseEnter');
+}
+
+function onMouseLeave() {
+    dotNetRef.invokeMethodAsync('OnMouseLeave');
 }
 
 function onMouseWheel(e) {

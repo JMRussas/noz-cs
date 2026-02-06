@@ -180,6 +180,18 @@ public class WebPlatform : IPlatform
     }
 
     [JSInvokable]
+    public void OnMouseEnter()
+    {
+        OnEvent?.Invoke(PlatformEvent.MouseEnter());
+    }
+
+    [JSInvokable]
+    public void OnMouseLeave()
+    {
+        OnEvent?.Invoke(PlatformEvent.MouseLeave());
+    }
+
+    [JSInvokable]
     public void OnResize(int width, int height)
     {
         _windowSize = new Vector2(width, height);

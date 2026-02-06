@@ -46,4 +46,6 @@ public struct PlatformEvent
     public static PlatformEvent GamepadAxisMove(InputCode axis, float value) => new() { Type = PlatformEventType.GamepadAxis, GamepadAxis = axis, AxisValue = value };
 
     public static PlatformEvent Resize(int width, int height) => new() { Type = PlatformEventType.WindowResize, WindowWidth = width, WindowHeight = height };
+    public static PlatformEvent MouseEnter() => new() { Type = PlatformEventType.WindowMouseEnter };
+    public static PlatformEvent MouseLeave() => new() { Type = PlatformEventType.WindowMouseLeave };
 }

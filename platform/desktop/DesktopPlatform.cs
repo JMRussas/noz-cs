@@ -312,6 +312,14 @@ public unsafe partial class SDLPlatform : IPlatform
                 WindowSize = new Vector2Int(evt.window.data1, evt.window.data2);
                 OnEvent?.Invoke(PlatformEvent.Resize(evt.window.data1, evt.window.data2));
                 break;
+
+            case SDL_EventType.SDL_EVENT_WINDOW_MOUSE_ENTER:
+                OnEvent?.Invoke(PlatformEvent.MouseEnter());
+                break;
+
+            case SDL_EventType.SDL_EVENT_WINDOW_MOUSE_LEAVE:
+                OnEvent?.Invoke(PlatformEvent.MouseLeave());
+                break;
         }
     }
 

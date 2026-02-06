@@ -180,9 +180,11 @@ public static unsafe partial class Graphics
         CurrentState.SortGroup = (ushort)group;
     }
 
+    public const ushort MaxLayer = 0xFFF;
+
     public static void SetLayer(ushort layer)
     {
-        Debug.Assert((layer & 0xFFF) == layer);
+        Debug.Assert((layer & MaxLayer) == layer);
         CurrentState.SortLayer = layer;
     }
 
