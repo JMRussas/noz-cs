@@ -163,8 +163,6 @@ public static unsafe partial class Graphics
             TextureFilter.Point,
             name: "Bones");
 
-        WhiteTexture = Texture.Create(1, 1, [255, 255, 255, 255], name: "White");
-
         ResetState();
     }
 
@@ -189,6 +187,9 @@ public static unsafe partial class Graphics
     internal static bool BeginFrame()
     {
         ResetState();
+
+        if (WhiteTexture == null)
+            WhiteTexture = Texture.Create(1, 1, [255, 255, 255, 255], name: "White");
 
         if (!Driver.BeginFrame())
             return false;

@@ -8,6 +8,7 @@ public static partial class ConfirmDialog
 {
     [ElementId("Yes")]
     [ElementId("No")]
+    [ElementId("Close")]
     private static partial class ElementId { }
 
     private static bool _visible;
@@ -76,24 +77,24 @@ public static partial class ConfirmDialog
 
         Action? executed = null;
 
-        using (UI.BeginContainer(id: 0))
-                if (UI.WasPressed())
-                    Close();
+        using (UI.BeginContainer(ElementId.Close))
+            if (UI.WasPressed())
+                Close();
 
-            using (UI.BeginColumn(EditorStyle.Confirm.Root))
+        using (UI.BeginColumn(EditorStyle.Confirm.Root))
+        {
+            UI.Label(_message, EditorStyle.Confirm.MessageLabel);
+
+            using (UI.BeginRow(EditorStyle.Confirm.ButtonContainer))
             {
-                UI.Label(_message, EditorStyle.Confirm.MessageLabel);
-
-                using (UI.BeginRow(EditorStyle.Confirm.ButtonContainer))
-                {
-                    if (EditorUI.Button(ElementId.Yes, _yesText, selected: true))
-                        executed = _onConfirm;
+                if (EditorUI.Button(ElementId.Yes, _yesText, selected: true))
+                    executed = _onConfirm;
 
                 if (EditorUI.Button(ElementId.No, _noText))
                     Close();
             }
         }
-
+        
         if (executed != null)
         {
             Close();

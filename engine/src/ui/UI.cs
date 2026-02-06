@@ -887,6 +887,22 @@ public static partial class UI
         }
     }
 
+    public static Rect WorldToSceneLocal(Camera camera, int sceneElementId, Rect worldRect)
+    {
+        var viewport = camera.Viewport;                        // screen pixels (set by BeginScene)
+        var elementRect = UI.GetElementRect(sceneElementId);   // UI units (from previous frame layout)
+
+        var screenRect = camera.WorldToScreen(worldRect);      // world → screen pixels
+
+        // Map from viewport-relative pixels → element-relative UI units
+        return new Rect(
+            elementRect.X + (screenRect.X - viewport.X) / viewport.Width * elementRect.Width,
+            elementRect.Y + (screenRect.Y - viewport.Y) / viewport.Height * elementRect.Height,
+            screenRect.Width / viewport.Width * elementRect.Width,
+            screenRect.Height / viewport.Height * elementRect.Height
+        );
+    }
+
     [Conditional("NOZ_UI_DEBUG")]
     private static void LogUI(string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)
     {
