@@ -240,7 +240,7 @@ public static unsafe partial class Graphics
     }
 
     public static void SetScissor(int x, int y, int width, int height) =>
-    SetScissor(new RectInt(x, y, width, height));
+        SetScissor(new RectInt(x, y, width, height));
 
     public static void SetScissor(in RectInt scissor)
     {

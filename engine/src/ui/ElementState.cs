@@ -49,6 +49,7 @@ internal struct ElementState
     public Rect Rect;
     public System.Numerics.Matrix3x2 LocalToWorld;
     public ElementStateData Data;
+    public ushort LastFrame;
 
     public readonly bool HasFocus => (Flags & ElementFlags.Focus) != 0;
     public readonly bool IsHovered => (Flags & ElementFlags.Hovered) != 0;

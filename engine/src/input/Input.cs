@@ -273,10 +273,10 @@ public static class Input
         }
     }
 
-    internal static bool IsButtonDownRaw(InputCode code) => Buttons[(int)code].Logical;
-    internal static bool WasButtonPressedRaw(InputCode code) => Buttons[(int)code].Pressed;
-    internal static bool WasButtonReleasedRaw(InputCode code) => Buttons[(int)code].Released;
-    internal static bool WasButtonRepeatRaw(InputCode code) => Buttons[(int)code].Repeat;
+    public static bool IsButtonDownRaw(InputCode code) => Buttons[(int)code].Physical;
+    public static bool WasButtonPressedRaw(InputCode code) => Buttons[(int)code].Pressed;
+    public static bool WasButtonReleasedRaw(InputCode code) => Buttons[(int)code].Released;
+    public static bool WasButtonRepeatRaw(InputCode code) => Buttons[(int)code].Repeat;
 
     internal static float GetAxisValue(InputCode code)
     {

@@ -128,7 +128,7 @@ public static partial class UI
         }
         else if (es.IsDragging)
         {
-            if (Input.IsButtonDown(InputCode.MouseLeft, scope))
+            if (Input.IsButtonDownRaw(InputCode.MouseLeft))
             {
                 var mouseIndex = GetTextBoxPosition(ref e, tb.Text.AsReadOnlySpan(), font, fontSize, mousePos);
                 tb.CursorIndex = mouseIndex;

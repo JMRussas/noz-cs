@@ -11,6 +11,7 @@ public static partial class CommandPalette
     [ElementId("Close")]
     [ElementId("Search")]
     [ElementId("CommandList")]
+    [ElementId("Command", MaxFilteredCommands)]
     private static partial class ElementId { }
 
     private static string _text = string.Empty;
@@ -129,7 +130,7 @@ public static partial class CommandPalette
                 var isSelected = i == selectedIndex;
 
                 using (UI.BeginContainer(
-                    id: (byte)(i + 10),
+                    id: ElementId.Command + i,
                     style: isSelected
                         ? EditorStyle.CommandPalette.SelectedCommand
                         : EditorStyle.CommandPalette.Command))
