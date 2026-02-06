@@ -95,7 +95,6 @@ Application.Init(new ApplicationConfig
     Graphics = new GraphicsConfig
     {
         Driver = new WebGPUGraphicsDriver(),
-        CompositeShader = "composite",
         PixelsPerUnit = EditorApplication.Config.PixelsPerUnit
     }
 });

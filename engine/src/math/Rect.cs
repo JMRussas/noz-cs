@@ -131,4 +131,6 @@ public struct Rect(float x, float y, float width, float height)
     public static bool operator !=(Rect left, Rect right) => !left.Equals(right);
 
     public override string ToString() => $"<{X}, {Y}, {Width}, {Height}>";
+
+    public static implicit operator RectInt(Rect rect) => new((int)rect.X, (int)rect.Y, (int)rect.Width, (int)rect.Height);
 }

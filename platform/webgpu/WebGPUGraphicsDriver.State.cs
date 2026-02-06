@@ -123,7 +123,7 @@ public unsafe partial class WebGPUGraphicsDriver
             uint width, height;
             if (_activeRenderTexture != 0)
             {
-                ref var rt = ref _renderTextures[(int)_activeRenderTexture];
+                ref var rt = ref _renderTextures[_rtHandleToSlot[(int)_activeRenderTexture]];
                 width = (uint)rt.Width;
                 height = (uint)rt.Height;
             }

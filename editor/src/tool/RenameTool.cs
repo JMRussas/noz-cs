@@ -6,13 +6,13 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-public class RenameTool(
+public partial class RenameTool(
     string originalName,
     Func<Vector2> getWorldPosition,
     Action<string> commit) : Tool
 {
-    private const int RenameTextBoxId = EditorStyle.ElementId.RenameTool;
-    private const int TextBoxId = EditorStyle.ElementId.RenameTool + 1;
+    [ElementId("TextBox")]
+    private static partial class ElementId { }
 
     private readonly string _originalName = originalName;
     private readonly Func<Vector2> _getWorldPosition = getWorldPosition;
@@ -26,7 +26,7 @@ public class RenameTool(
     {
         base.Begin();
         _firstFrame = true;
-        UI.SetFocus(TextBoxId);
+        UI.SetFocus(ElementId.TextBox);
     }
         
     public override void Update()
@@ -49,7 +49,7 @@ public class RenameTool(
         // Click outside the TextBox commits the rename (skip on first frame)
         if (!_firstFrame && Input.WasButtonPressed(InputCode.MouseLeft))
         {
-            var textBoxRect = UI.GetElementRect(RenameTextBoxId);
+            var textBoxRect = UI.GetElementRect(ElementId.TextBox);
             var mousePos = UI.ScreenToUI(Input.MousePosition);
             if (textBoxRect.Width > 0 && !textBoxRect.Contains(mousePos))
             {
@@ -68,23 +68,23 @@ public class RenameTool(
         var uiPos = UI.ScreenToUI(screenPos);
         uiPos.X -= EditorStyle.RenameTool.Root.Width.Value * 0.5f;
         uiPos.Y -= EditorStyle.RenameTool.Root.Height.Value * 0.5f;
-        using (UI.BeginContainer(RenameTextBoxId, EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
+        using (UI.BeginContainer(ElementId.TextBox, EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
         using (UI.BeginContainer(EditorStyle.RenameTool.Content))
         {
             if (_firstFrame)
             {
-                UI.SetTextBoxText(TextBoxId, _originalName, selectAll: true);
+                UI.SetTextBoxText(ElementId.TextBox, _originalName, selectAll: true);
                 _firstFrame = false;
             }
 
-            if (UI.TextBox(TextBoxId, EditorStyle.RenameTool.Text with { Scope = Scope }))
-                _currentText = new string(UI.GetTextBoxText(TextBoxId));
+            if (UI.TextBox(ElementId.TextBox, EditorStyle.RenameTool.Text with { Scope = Scope }))
+                _currentText = new string(UI.GetTextBoxText(ElementId.TextBox));
         }
     }
 
     private void Commit()
     {
-        _currentText = new string(UI.GetTextBoxText(TextBoxId));
+        _currentText = new string(UI.GetTextBoxText(ElementId.TextBox));
 
         if (!string.IsNullOrWhiteSpace(_currentText) && _currentText != _originalName)
             _commit(_currentText);

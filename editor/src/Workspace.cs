@@ -12,15 +12,12 @@ public enum WorkspaceState
     Edit
 }
 
-public static class Workspace
+public static partial class Workspace
 {
-    private static class ElementId
-    {
-        private const int BaseId = EditorStyle.ElementId.Workspace;
-        public const int Toolbar = BaseId + 1;
-        public const int XrayButton = BaseId + 2;
-        public const int CollectionButton = BaseId + 3;
-    }
+    [ElementId("Toolbar")]
+    [ElementId("XrayButton")]
+    [ElementId("CollectionButton")]
+    private static partial class ElementId { }
 
     private const float ZoomMin = 0.2f;
     private const float ZoomMax = 200f;

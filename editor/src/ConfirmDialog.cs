@@ -4,14 +4,11 @@
 
 namespace NoZ.Editor;
 
-public static class ConfirmDialog
+public static partial class ConfirmDialog
 {
-    private static class ElementId
-    {
-        private const int BaseId = EditorStyle.ElementId.ConfirmDialog;
-        public const int ConfirmYesButton = BaseId + 0;
-        public const int ConfirmNoButton = BaseId + 1;
-    }
+    [ElementId("Yes")]
+    [ElementId("No")]
+    private static partial class ElementId { }
 
     private static bool _visible;
     private static string _message = string.Empty;
@@ -39,7 +36,7 @@ public static class ConfirmDialog
         _message = message;
         _onConfirm = onConfirm;
         _visible = true;
-        UI.SetFocus(ElementId.ConfirmNoButton);
+        UI.SetFocus(ElementId.No);
     }
 
     public static void Close()
@@ -89,10 +86,10 @@ public static class ConfirmDialog
 
                 using (UI.BeginRow(EditorStyle.Confirm.ButtonContainer))
                 {
-                    if (EditorUI.Button(ElementId.ConfirmYesButton, _yesText, selected: true))
+                    if (EditorUI.Button(ElementId.Yes, _yesText, selected: true))
                         executed = _onConfirm;
 
-                if (EditorUI.Button(ElementId.ConfirmNoButton, _noText))
+                if (EditorUI.Button(ElementId.No, _noText))
                     Close();
             }
         }

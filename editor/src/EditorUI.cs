@@ -6,10 +6,12 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-internal static class EditorUI
+internal static partial class EditorUI
 {
-    public const int PopupId = EditorStyle.ElementId.PopupMenu;
-    public const int FirstPopupItemId = PopupId + 1;
+    [ElementId("Popup")]
+    [ElementId("PopupItem", count: 64)]
+    private static partial class ElementId { }
+
     private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
     private static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
     private static readonly float[] OpacityValues = [0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f];
@@ -18,7 +20,7 @@ internal static class EditorUI
     private static bool _controlSelected = false;
     private static bool _controlDisabled = false;
     private static int _popupId = -1;
-    private static int _nextPopupItemId = FirstPopupItemId;
+    private static int _nextPopupItemId = -1;
 
     private static float _opacityValue;
     private static int _colorValue;
@@ -257,11 +259,11 @@ internal static class EditorUI
     {
         if (_popupId != id) return false;
 
-        _nextPopupItemId = FirstPopupItemId;
+        _nextPopupItemId = ElementId.PopupItem;
 
         var anchorRect = UI.GetElementWorldRect(id).Translate(offset);
         using var _ = UI.BeginPopup(
-            PopupId,
+            ElementId.Popup,
             style ?? new PopupStyle
             {
                 AnchorX = Align.Min,
@@ -399,7 +401,7 @@ internal static class EditorUI
             Columns = 8
         });
 
-        var nextItemId = FirstPopupItemId;
+        var nextItemId = ElementId.PopupItem;
         var hasOpacity = _opacityValue > float.Epsilon;
 
         int colors = (PaletteManager.GetPalette(_colorPalette).Count + 7) & ~7;

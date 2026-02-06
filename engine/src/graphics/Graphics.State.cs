@@ -120,7 +120,7 @@ public static unsafe partial class Graphics
         var view = camera.ViewMatrix;
         var projection = new Matrix4x4(
             view.M11, view.M12, 0, view.M31,
-            view.M21, view.M22, 0, view.M32,
+            -view.M21, -view.M22, 0, -view.M32,
             0, 0, 1, 0,
             0, 0, 0, 1
         );

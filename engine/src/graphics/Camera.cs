@@ -179,6 +179,13 @@ public class Camera
         return float.Abs(screenB.X - screenA.X);
     }
 
+    public Rect WorldToScreen(Rect rect)
+    {
+        var min = WorldToScreen(rect.Min);
+        var max = WorldToScreen(rect.Max);
+        return Rect.FromMinMax(min, max);
+    }
+
     public Vector2 WorldToScreen(Vector2 worldPos)
     {
         // Transform by view matrix

@@ -28,4 +28,6 @@ public class UIConfig
     public Vector2Int ReferenceResolution { get; init; } = new(1920, 1080);
     public ScreenMatchMode ScreenMatchMode { get; init; } = ScreenMatchMode.MatchWidthOrHeight;
     public float MatchWidthOrHeight { get; init; } = 0.5f;
+
+    public ushort UILayer { get; init; } = 1000;
 }

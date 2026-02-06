@@ -44,12 +44,6 @@ internal static class JSObjectHelper
         return WebGPUInterop.CreateTextureBindGroupEntry((int)binding, textureId);
     }
 
-    public static JSObject CreateOffscreenTextureBindGroupEntry(uint binding)
-    {
-        // Special marker for offscreen resolve texture
-        return WebGPUInterop.CreateTextureBindGroupEntry((int)binding, -3);
-    }
-
     public static JSObject CreateSamplerBindGroupEntry(uint binding, bool useLinear)
     {
         return WebGPUInterop.CreateSamplerBindGroupEntry((int)binding, useLinear);

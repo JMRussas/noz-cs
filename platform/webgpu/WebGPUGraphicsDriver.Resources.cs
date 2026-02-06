@@ -608,7 +608,10 @@ public unsafe partial class WebGPUGraphicsDriver
 
     private const int MaxRenderTextures = 16;
     private readonly RenderTextureInfo[] _renderTextures = new RenderTextureInfo[MaxRenderTextures];
-    private int _nextRenderTextureId = 1;
+    private readonly int[] _rtHandleToSlot = new int[MaxTextures]; // Maps texture handle → RT slot
+    private readonly int[] _freeRtSlots = new int[MaxRenderTextures];
+    private int _freeRtSlotCount;
+    private int _nextRenderTextureSlot = 1;
     private nuint _activeRenderTexture;
 
     private struct RenderTextureInfo
@@ -638,6 +641,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
         var texture = _wgpu.DeviceCreateTexture(_device, &textureDesc);
 
+        // D2 view for render pass color attachment
         var viewDesc = new TextureViewDescriptor
         {
             Format = wgpuFormat,
@@ -650,27 +654,67 @@ public unsafe partial class WebGPUGraphicsDriver
         };
         var textureView = _wgpu.TextureCreateView(texture, &viewDesc);
 
-        var handle = (nuint)_nextRenderTextureId++;
-        _renderTextures[(int)handle] = new RenderTextureInfo
+        // D2Array view for sampling (sprite shader expects texture_2d_array)
+        var arrayViewDesc = new TextureViewDescriptor
+        {
+            Format = wgpuFormat,
+            Dimension = TextureViewDimension.Dimension2DArray,
+            BaseMipLevel = 0,
+            MipLevelCount = 1,
+            BaseArrayLayer = 0,
+            ArrayLayerCount = 1,
+            Aspect = TextureAspect.All,
+        };
+        var arrayTextureView = _wgpu.TextureCreateView(texture, &arrayViewDesc);
+
+        // Allocate from shared texture handle space so RT can be used with BindTexture
+        var handle = (nuint)_nextTextureId++;
+        var rtSlot = _freeRtSlotCount > 0 ? _freeRtSlots[--_freeRtSlotCount] : _nextRenderTextureSlot++;
+
+        _renderTextures[rtSlot] = new RenderTextureInfo
         {
             Texture = texture,
-            TextureView = textureView,
+            TextureView = textureView,  // D2 view for render pass
             Width = width,
             Height = height,
             Format = wgpuFormat,
         };
+
+        // D2Array view for sampling through the batch pipeline
+        _textures[(int)handle] = new TextureInfo
+        {
+            Texture = texture,
+            TextureView = arrayTextureView,
+            Width = width,
+            Height = height,
+            Format = wgpuFormat,
+            IsArray = true,
+        };
+
+        // Map handle → RT slot for render pass operations
+        _rtHandleToSlot[(int)handle] = rtSlot;
 
         return handle;
     }
 
     public void DestroyRenderTexture(nuint handle)
     {
-        ref var rt = ref _renderTextures[(int)handle];
+        var rtSlot = _rtHandleToSlot[(int)handle];
+        ref var rt = ref _renderTextures[rtSlot];
 
+        // Release the D2 view (render pass attachment)
         if (rt.TextureView != null)
         {
             _wgpu.TextureViewRelease(rt.TextureView);
             rt.TextureView = null;
+        }
+
+        // Release the D2Array view (sampling)
+        ref var tex = ref _textures[(int)handle];
+        if (tex.TextureView != null)
+        {
+            _wgpu.TextureViewRelease(tex.TextureView);
+            tex.TextureView = null;
         }
 
         if (rt.Texture != null)
@@ -678,6 +722,11 @@ public unsafe partial class WebGPUGraphicsDriver
             _wgpu.TextureRelease(rt.Texture);
             rt.Texture = null;
         }
+
+        _textures[(int)handle] = default;
+        _renderTextures[rtSlot] = default;
+        _rtHandleToSlot[(int)handle] = 0;
+        _freeRtSlots[_freeRtSlotCount++] = rtSlot;
     }
 
     public void BeginRenderTexturePass(nuint renderTexture, Color clearColor)
@@ -685,7 +734,8 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_currentRenderPass != null)
             throw new InvalidOperationException("Already in a render pass");
 
-        ref var rt = ref _renderTextures[(int)renderTexture];
+        var rtSlot = _rtHandleToSlot[(int)renderTexture];
+        ref var rt = ref _renderTextures[rtSlot];
         _activeRenderTexture = renderTexture;
         _state.CurrentPassSampleCount = 1;
 
@@ -754,7 +804,8 @@ public unsafe partial class WebGPUGraphicsDriver
 
     public Task<byte[]> ReadRenderTexturePixelsAsync(nuint renderTexture)
     {
-        ref var rt = ref _renderTextures[(int)renderTexture];
+        var rtSlot = _rtHandleToSlot[(int)renderTexture];
+        ref var rt = ref _renderTextures[rtSlot];
 
         int bytesPerPixel = 4; // RGBA8
         int bytesPerRow = rt.Width * bytesPerPixel;

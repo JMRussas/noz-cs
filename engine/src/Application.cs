@@ -133,7 +133,6 @@ public static class Application
             return _running;
 
         _instance.Update();
-        Graphics.BeginUI();
         UI.Begin();
         _instance.UpdateUI();
         UI.End();
@@ -179,7 +178,6 @@ public static class Application
             return;
 
         _instance.Update();
-        Graphics.BeginUI();
         UI.Begin();
         _instance.UpdateUI();
         UI.End();

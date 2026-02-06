@@ -104,6 +104,26 @@ public static partial class Graphics
         AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order: order, bone: bone);
     }
 
+    /// <summary>
+    /// Draws a render texture as a textured quad between topLeft and bottomRight.
+    /// </summary>
+    public static void Draw(RenderTexture rt, Vector2 topLeft, Vector2 bottomRight, ushort order = 0)
+    {
+        if (!rt.IsValid) return;
+
+        using var _ = PushState();
+        SetShader(_spriteShader!);
+        SetTexture(rt.Handle, filter: TextureFilter.Linear);
+        SetBlendMode(BlendMode.Alpha);
+
+        var p0 = topLeft;
+        var p1 = new Vector2(bottomRight.X, topLeft.Y);
+        var p2 = bottomRight;
+        var p3 = new Vector2(topLeft.X, bottomRight.Y);
+
+        AddQuad(p0, p1, p2, p3, new Vector2(0, 0), new Vector2(1, 0), new Vector2(1, 1), new Vector2(0, 1), order: order, bone: -1);
+    }
+
     public static void Draw(Sprite sprite) => Draw(sprite, bone: sprite.BoneIndex);
 
     public static void Draw(Sprite sprite, int bone = -1)

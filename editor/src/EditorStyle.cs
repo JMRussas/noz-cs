@@ -7,15 +7,6 @@ namespace NoZ.Editor;
 
 public static class EditorStyle
 {
-    public static class ElementId
-    {
-        public const int CommandPalette = 1;
-        public const int PopupMenu = CommandPalette + 100;
-        public const int ConfirmDialog = PopupMenu + 100;
-        public const int RenameTool = ConfirmDialog + 100;
-        public const int Workspace = RenameTool + 100;
-    }
-
     public static readonly Color SelectionColor = Color.FromRgb(0x54a3f6);
 
     // Toggle Button

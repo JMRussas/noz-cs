@@ -6,6 +6,7 @@ using System.Buffers;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.JavaScript;
+using System.Runtime.Versioning;
 using System.Text;
 using NoZ.Platform;
 
@@ -30,6 +31,7 @@ internal static class ArrayPoolExtensions
 /// <summary>
 /// IGraphicsDriver implementation for browser WebGPU using JSImport interop
 /// </summary>
+[SupportedOSPlatform("browser")]
 public class WebGraphicsDriver : IGraphicsDriver
 {
     private GraphicsDriverConfig _config = null!;
@@ -60,13 +62,6 @@ public class WebGraphicsDriver : IGraphicsDriver
     private readonly int[] _globalsBuffers = new int[MaxGlobalsBuffers];
     private int _globalsBufferCount;
     private int _currentGlobalsIndex = -1;
-
-    // Fullscreen quad mesh for compositing
-    private nuint _fullscreenQuadMesh;
-
-    // Offscreen rendering state
-    private Vector2Int _offscreenSize;
-    private int _msaaSamples = 1;
 
     // Pre-allocated buffers to reduce per-frame allocations
     private readonly byte[] _globalsWriteBuffer = new byte[GlobalsBufferSize];
@@ -203,7 +198,6 @@ public class WebGraphicsDriver : IGraphicsDriver
             TextureFilters = new TextureFilter[8]
         };
 
-        CreateFullscreenQuad();
     }
 
     public void Shutdown()
@@ -1083,26 +1077,15 @@ public class WebGraphicsDriver : IGraphicsDriver
     // Render Passes
     // ============================================================================
 
-    public void ResizeOffscreenTarget(Vector2Int size, int msaaSamples)
-    {
-        if (_offscreenSize == size && _msaaSamples == msaaSamples)
-            return;
-
-        _offscreenSize = size;
-        _msaaSamples = Math.Max(1, msaaSamples);
-
-        WebGPUInterop.ResizeOffscreenTarget(size.X, size.Y, _msaaSamples);
-    }
-
     public void BeginScenePass(Color clearColor)
     {
-        _state.CurrentPassSampleCount = _msaaSamples;
+        _state.CurrentPassSampleCount = 1;
 
         _singleColorAttachment[0] = JSObjectHelper.CreateColorAttachment(
-            -2, // offscreen MSAA texture
-            _msaaSamples > 1 ? -3 : 0, // resolve texture if MSAA
+            -1, // surface texture
+            0, // no resolve
             "clear",
-            _msaaSamples > 1 ? "discard" : "store",
+            "store",
             clearColor
         );
 
@@ -1116,66 +1099,21 @@ public class WebGraphicsDriver : IGraphicsDriver
         WebGPUInterop.EndRenderPass();
     }
 
-    public void Composite(nuint compositeShader)
+    public void ResumeScenePass()
     {
         _state.CurrentPassSampleCount = 1;
 
         _singleColorAttachment[0] = JSObjectHelper.CreateColorAttachment(
             -1, // surface texture
             0, // no resolve
-            "clear",
+            "load",
             "store",
-            new Color(0, 0, 0, 1)
+            Color.Transparent // not used with "load"
         );
 
-        WebGPUInterop.BeginRenderPass(_singleColorAttachment, null, "Composite");
+        WebGPUInterop.BeginRenderPass(_singleColorAttachment, null, "ScenePass (resumed)");
         WebGPUInterop.SetViewport(0, 0, _surfaceWidth, _surfaceHeight, 0, 1);
         WebGPUInterop.SetScissorRect(0, 0, _surfaceWidth, _surfaceHeight);
-
-        BindShader(compositeShader);
-
-        // Create composite bind group manually (texture + sampler from offscreen)
-        var shader = _shaders[compositeShader];
-        var entries = new[]
-        {
-            JSObjectHelper.CreateOffscreenTextureBindGroupEntry(0),
-            JSObjectHelper.CreateSamplerBindGroupEntry(1, true) // linear sampler
-        };
-        var bindGroupId = WebGPUInterop.CreateBindGroup(shader.BindGroupLayoutId, entries, "composite_bind_group");
-
-        // Get/create pipeline
-        var pipelineId = GetOrCreateCompositeQuadPipeline(compositeShader);
-
-        WebGPUInterop.SetPipeline(pipelineId);
-        WebGPUInterop.SetBindGroup(0, bindGroupId);
-        WebGPUInterop.DrawFullscreenQuad();
-
-        WebGPUInterop.EndRenderPass();
-    }
-
-    public void BeginUIPass()
-    {
-        _state.CurrentPassSampleCount = 1;
-
-        _singleColorAttachment[0] = JSObjectHelper.CreateColorAttachment(
-            -1, // surface texture
-            0, // no resolve
-            "load", // preserve existing content
-            "store",
-            new Color(0, 0, 0, 1)
-        );
-
-        WebGPUInterop.BeginRenderPass(_singleColorAttachment, null, "UIPass");
-        WebGPUInterop.SetViewport(0, 0, _surfaceWidth, _surfaceHeight, 0, 1);
-        WebGPUInterop.SetScissorRect(0, 0, _surfaceWidth, _surfaceHeight);
-
-        _state.PipelineDirty = true;
-        _state.BindGroupDirty = true;
-    }
-
-    public void EndUIPass()
-    {
-        WebGPUInterop.EndRenderPass();
     }
 
     // ============================================================================
@@ -1183,7 +1121,6 @@ public class WebGraphicsDriver : IGraphicsDriver
     // ============================================================================
 
     private readonly Dictionary<nuint, RenderTextureInfo> _renderTextures = new();
-    private int _nextRenderTextureId = 1;
     private nuint _activeRenderTexture;
 
     private struct RenderTextureInfo
@@ -1197,15 +1134,28 @@ public class WebGraphicsDriver : IGraphicsDriver
     public nuint CreateRenderTexture(int width, int height, TextureFormat format = TextureFormat.BGRA8, string? name = null)
     {
         var gpuFormat = MapTextureFormat(format);
+        // JS side allocates from shared nextTextureId and stores in both textures + renderTextures maps
         var jsTextureId = WebGPUInterop.CreateRenderTexture(width, height, gpuFormat, name);
 
-        var handle = (nuint)_nextRenderTextureId++;
+        // Use shared handle space so RT handles work with BindTexture/CreateBindGroup
+        var handle = (nuint)_nextTextureId++;
         _renderTextures[handle] = new RenderTextureInfo
         {
             JsTextureId = jsTextureId,
             Width = width,
             Height = height,
             Format = gpuFormat
+        };
+
+        // Also store in _textures so CreateBindGroup can resolve the texture
+        _textures[handle] = new TextureInfo
+        {
+            JsTextureId = jsTextureId,
+            Width = width,
+            Height = height,
+            Layers = 1,
+            Format = gpuFormat,
+            IsArray = true  // Sprite shader expects texture_2d_array; JS side creates 2DArray view
         };
 
         return handle;
@@ -1218,6 +1168,7 @@ public class WebGraphicsDriver : IGraphicsDriver
             WebGPUInterop.DestroyRenderTexture(rt.JsTextureId);
             _renderTextures.Remove(handle);
         }
+        _textures.Remove(handle);
     }
 
     public void BeginRenderTexturePass(nuint renderTexture, Color clearColor)
@@ -1267,80 +1218,4 @@ public class WebGraphicsDriver : IGraphicsDriver
         return result;
     }
 
-    // ============================================================================
-    // Fullscreen Quad
-    // ============================================================================
-
-    private void CreateFullscreenQuad()
-    {
-        _fullscreenQuadMesh = CreateMesh<CompositeVertex>(4, 6, BufferUsage.Static, "fullscreen_quad");
-
-        var vertices = new CompositeVertex[4];
-        vertices[0] = new CompositeVertex { Position = new Vector2(-1, -1), UV = new Vector2(0, 0) };
-        vertices[1] = new CompositeVertex { Position = new Vector2(1, -1), UV = new Vector2(1, 0) };
-        vertices[2] = new CompositeVertex { Position = new Vector2(-1, 1), UV = new Vector2(0, 1) };
-        vertices[3] = new CompositeVertex { Position = new Vector2(1, 1), UV = new Vector2(1, 1) };
-
-        var indices = new ushort[] { 0, 1, 2, 1, 3, 2 };
-
-        UpdateMesh(_fullscreenQuadMesh, MemoryMarshal.AsBytes(vertices.AsSpan()), indices.AsSpan());
-    }
-
-    private int GetOrCreateCompositeQuadPipeline(nuint shaderHandle)
-    {
-        if (!_shaders.TryGetValue(shaderHandle, out var shader))
-        {
-            Log.Error($"Composite shader {shaderHandle} not found");
-            return 0;
-        }
-
-        var key = new PsoKey
-        {
-            ShaderHandle = shaderHandle,
-            BlendMode = BlendMode.None,
-            VertexStride = CompositeVertex.SizeInBytes,
-            MsaaSamples = 1
-        };
-
-        if (shader.PsoCache.TryGetValue(key, out var pipelineId))
-            return pipelineId;
-
-        var descriptor = JSObjectHelper.CreateRenderPipelineDescriptor(
-            shader.VertexModuleId,
-            shader.FragmentModuleId,
-            shader.PipelineLayoutId,
-            CompositeVertex.GetFormatDescriptor(),
-            BlendMode.None,
-            1,
-            _surfaceFormat,
-            $"{shader.Name}_composite"
-        );
-
-        pipelineId = WebGPUInterop.CreateRenderPipeline(descriptor);
-        shader.PsoCache[key] = pipelineId;
-
-        return pipelineId;
-    }
-}
-
-/// <summary>
-/// Composite vertex for fullscreen quad
-/// </summary>
-[StructLayout(LayoutKind.Sequential)]
-internal struct CompositeVertex : IVertex
-{
-    public Vector2 Position;
-    public Vector2 UV;
-
-    public static readonly int SizeInBytes = Marshal.SizeOf(typeof(CompositeVertex));
-
-    public static VertexFormatDescriptor GetFormatDescriptor() => new()
-    {
-        Stride = SizeInBytes,
-        Attributes =
-        [
-            new VertexAttribute(0, 2, VertexAttribType.Float, (int)Marshal.OffsetOf<CompositeVertex>(nameof(Position))),
-            new VertexAttribute(1, 2, VertexAttribType.Float, (int)Marshal.OffsetOf<CompositeVertex>(nameof(UV)))
-        ]
-    };
 }

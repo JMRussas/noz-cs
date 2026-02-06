@@ -22,14 +22,7 @@ public static partial class UI
     private const int MaxElementStack = 128;
     private const int MaxPopups = 4;
     private const int MaxTextBuffer = 64 * 1024;
-    private const int MaxSceneCallbacks = 64;
     private const int MaxElementId = 32767;
-    
-    private struct SceneCallback
-    {
-        public Action? Draw;
-        public Camera? Camera;
-    }
 
     public struct AutoContainer : IDisposable { readonly void IDisposable.Dispose() => EndContainer(); }
     public struct AutoColumn : IDisposable { readonly void IDisposable.Dispose() => EndColumn(); }
@@ -39,6 +32,7 @@ public static partial class UI
     public struct AutoPopup : IDisposable { readonly void IDisposable.Dispose() => EndPopup(); }
     public struct AutoGrid : IDisposable { readonly void IDisposable.Dispose() => EndGrid(); }
     public struct AutoTransformed : IDisposable { readonly void IDisposable.Dispose() => EndTransformed(); }
+    public struct AutoScene : IDisposable { readonly void IDisposable.Dispose() => EndScene(); }
 
     private static Font? _defaultFont;
     public static Font? DefaultFont => _defaultFont;
@@ -50,9 +44,6 @@ public static partial class UI
     private static readonly short[] _popups = new short[MaxPopups];
     private static NativeArray<ElementState> _elementStates = new(MaxElementId + 1, MaxElementId + 1);
     private static NativeArray<char>[] _textBuffers = [new(MaxTextBuffer), new(MaxTextBuffer)];
-    private static readonly SceneCallback[] _sceneCallbacks = new SceneCallback[MaxSceneCallbacks];
-    private static int _sceneCallbackCount;
-
     private static int _currentTextBuffer;
 
     private static short _elementCount;
@@ -128,7 +119,7 @@ public static partial class UI
     public static void Init(UIConfig? config = null)
     {
         Config = config ?? new UIConfig();
-        Camera = new Camera { FlipY = true };
+        Camera = new Camera { FlipY = false };
 
         UIRender.Init(Config);
 
@@ -423,10 +414,6 @@ public static partial class UI
     {
         _frameNumber++;
 
-        for (int i=0; i< _sceneCallbackCount; i++)
-            _sceneCallbacks[i] = new SceneCallback();
-        _sceneCallbackCount = 0;
-
         for (int i = 0; i < _elementCount; i++)
             _elements[i].Asset = null;
 
@@ -434,7 +421,6 @@ public static partial class UI
         _elementStackCount = 0;
         _elementCount = 0;
         _popupCount = 0;
-        _sceneCallbackCount = 0;
         _currentTextBuffer = 1 - _currentTextBuffer;
         _textBuffers[_currentTextBuffer].Clear();
 
@@ -695,20 +681,27 @@ public static partial class UI
 
     public static void EndGrid() => EndElement(ElementType.Grid);
 
-    public static void Scene(int id, in SceneStyle style)
+    public static AutoScene BeginScene(int id, in SceneStyle style)
     {
         ref var e = ref CreateElement(ElementType.Scene);
 
-        var callbackIndex = -1;
-        if (_sceneCallbackCount < MaxSceneCallbacks)
+        RenderTexture rt;
+        bool ownsRT = false;
+        if (style.RenderTarget.HasValue && style.RenderTarget.Value.IsValid)
         {
-            callbackIndex = _sceneCallbackCount;
-            _sceneCallbacks[_sceneCallbackCount++] = new() { Camera = style.Camera, Draw = style.Draw };
+            rt = style.RenderTarget.Value;
+        }
+        else
+        {
+            var winSize = Application.WindowSize;
+            rt = RenderTexturePool.Acquire(winSize.X, winSize.Y);
+            ownsRT = true;
         }
 
         e.Data.Scene = new SceneData
         {
-            CallbackIndex = callbackIndex,
+            RenderTexture = rt,
+            OwnsRT = ownsRT,
             AlignX = style.AlignX,
             AlignY = style.AlignY,
             Size = style.Size
@@ -716,10 +709,26 @@ public static partial class UI
 
         SetId(ref e, id);
         PushElement(e.Index);
-        PopElement();
+
+        Graphics.BeginPass(rt, Color.Transparent);
+        if (style.Camera != null)
+        {
+            Graphics.SetCamera(style.Camera);
+            Graphics.SetViewport(0, 0, rt.Width, rt.Height);
+            style.Camera.Viewport = Camera!.WorldToScreen(GetElementWorldRect(id));
+        }
+
+        return new AutoScene();
     }
 
-    public static void Scene(in SceneStyle style) => Scene(0, style);
+    public static AutoScene BeginScene(in SceneStyle style) => BeginScene(0, style);
+
+    public static void EndScene()
+    {
+        Graphics.EndPass();
+        Graphics.SetCamera(Camera);
+        EndElement(ElementType.Scene);
+    }
 
     public static AutoPopup BeginPopup(int id, PopupStyle style)
     {

@@ -6,28 +6,29 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-public class SpriteEditor : DocumentEditor
+public partial class SpriteEditor : DocumentEditor
 {
     private const int Padding = 8;
 
-    private const byte RootId = 1;
-    private const byte PaletteButtonId = 2;
-    private const byte TileButtonId = 3;
-    private const byte BoneBindButtonId = 4;
-    private const byte BoneUnbindButtonId = 5;
-    private const byte OpacityButtonId = 6;
-    private const byte OpacityPopupId = 7;
-    private const byte SubtractButtonId = 8;
-    private const byte AntiAliasButtonId = 9;
-    private const byte FirstOpacityId = 10;
-    private const byte PreviewButtonId = 11;
-    private const byte SkeletonOverlayButtonId = 13;
-    private const byte DopeSheetId = 14;
-    private const byte ConstraintsButtonId = 24;
-    private const byte FillColorButtonId = 27;
-    private const byte StrokeColorButtonId = 28;
-    private const byte LayerButtonId = 29;
-    private const byte BonePathButtonId = 30;
+    [ElementId("Root")]
+    [ElementId("PaletteButton")]
+    [ElementId("TileButton")]
+    [ElementId("BoneBindButton")]
+    [ElementId("BoneUnbindButton")]
+    [ElementId("OpacityButton")]
+    [ElementId("OpacityPopup")]
+    [ElementId("SubtractButton")]
+    [ElementId("AntiAliasButton")]
+    [ElementId("FirstOpacity")]
+    [ElementId("PreviewButton")]
+    [ElementId("SkeletonOverlayButton")]
+    [ElementId("DopeSheet")]
+    [ElementId("ConstraintsButton")]
+    [ElementId("FillColorButton")]
+    [ElementId("StrokeColorButton")]
+    [ElementId("LayerButton")]
+    [ElementId("BonePathButton")]
+    private static partial class ElementId { }
 
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
@@ -195,12 +196,12 @@ public class SpriteEditor : DocumentEditor
         var color = (int)Document.CurrentFillColor;
         var opacity = Document.CurrentFillOpacity;
 
-        if (EditorUI.ColorButton(FillColorButtonId, Document.Palette, ref color, ref opacity, EditorAssets.Sprites.IconFill))
+        if (EditorUI.ColorButton(ElementId.FillColorButton, Document.Palette, ref color, ref opacity, EditorAssets.Sprites.IconFill))
             SetFillColor((byte)color, opacity);
 
         var strokeColor = (int)Document.CurrentStrokeColor;
         var strokeOpacity = Document.CurrentStrokeOpacity;
-        if (EditorUI.ColorButton(StrokeColorButtonId, Document.Palette, ref strokeColor, ref strokeOpacity, EditorAssets.Sprites.IconStroke))
+        if (EditorUI.ColorButton(ElementId.StrokeColorButton, Document.Palette, ref strokeColor, ref strokeOpacity, EditorAssets.Sprites.IconStroke))
             SetStrokeColor((byte)strokeColor, strokeOpacity);
 
         // Palette 
@@ -215,7 +216,7 @@ public class SpriteEditor : DocumentEditor
         UI.Flex();
 
         if (EditorUI.Button(
-            AntiAliasButtonId,
+            ElementId.AntiAliasButton,
             Document.IsAntiAliased
                 ? EditorAssets.Sprites.IconAntialiasOn
                 : EditorAssets.Sprites.IconAntialiasOff,
@@ -228,7 +229,7 @@ public class SpriteEditor : DocumentEditor
             Document.IsAntiAliased = !Document.IsAntiAliased;
         }
 
-        if (EditorUI.Button(TileButtonId, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))
+        if (EditorUI.Button(ElementId.TileButton, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))
         {
             Document.ShowTiling = !Document.ShowTiling;
             Document.MarkMetaModified();
@@ -242,7 +243,7 @@ public class SpriteEditor : DocumentEditor
 
     public override void UpdateUI()
     {
-        using (UI.BeginColumn(RootId, EditorStyle.DocumentEditor.Root))
+        using (UI.BeginColumn(ElementId.Root, EditorStyle.DocumentEditor.Root))
         {
             ToolbarUI();
 
@@ -252,7 +253,7 @@ public class SpriteEditor : DocumentEditor
                 for (ushort i = 0; i < Document.FrameCount; i++)
                     frames[i] = new EditorUI.DopeSheetFrame { Hold = Document.Frames[i].Hold, };
                 var currentFrame = 0;
-                EditorUI.DopeSheet(DopeSheetId, frames, ref currentFrame, Sprite.MaxFrames, false);
+                EditorUI.DopeSheet(ElementId.DopeSheet, frames, ref currentFrame, Sprite.MaxFrames, false);
             }
 
             UI.Spacer(EditorStyle.Control.Spacing);
@@ -271,10 +272,10 @@ public class SpriteEditor : DocumentEditor
         }
 
         if (EditorUI.Control(
-            PaletteButtonId,
+            ElementId.PaletteButton,
             ButtonContent,
-            selected: EditorUI.IsPopupOpen(PaletteButtonId)))
-            EditorUI.TogglePopup(PaletteButtonId);
+            selected: EditorUI.IsPopupOpen(ElementId.PaletteButton)))
+            EditorUI.TogglePopup(ElementId.PaletteButton);
 
         PalettePopupUI();
     }
@@ -296,7 +297,7 @@ public class SpriteEditor : DocumentEditor
 
             EditorUI.ControlText(binding.SkeletonName.ToString());
 
-            using (UI.BeginContainer(BoneUnbindButtonId, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4) }))
+            using (UI.BeginContainer(ElementId.BoneUnbindButton, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4) }))
             {
                 UI.Image(
                     EditorAssets.Sprites.IconDelete,
@@ -311,12 +312,12 @@ public class SpriteEditor : DocumentEditor
             UI.Spacer(EditorStyle.Control.Spacing);
         }
 
-        if (EditorUI.Control(BoneBindButtonId, SkeletonBindingContent, selected: EditorUI.IsPopupOpen(BoneBindButtonId)))
-            EditorUI.TogglePopup(BoneBindButtonId);
+        if (EditorUI.Control(ElementId.BoneBindButton, SkeletonBindingContent, selected: EditorUI.IsPopupOpen(ElementId.BoneBindButton)))
+            EditorUI.TogglePopup(ElementId.BoneBindButton);
 
         SkeletonBindingPopupUI();
 
-        if (EditorUI.Button(PreviewButtonId, EditorAssets.Sprites.IconPreview, selected: Document.ShowInSkeleton, disabled: !Document.Binding.IsBound, toolbar: true))
+        if (EditorUI.Button(ElementId.PreviewButton, EditorAssets.Sprites.IconPreview, selected: Document.ShowInSkeleton, disabled: !Document.Binding.IsBound, toolbar: true))
         {
             Undo.Record(Document);
             Document.ShowInSkeleton = !Document.ShowInSkeleton;
@@ -324,7 +325,7 @@ public class SpriteEditor : DocumentEditor
             Document.MarkMetaModified();
         }
 
-        if (EditorUI.Button(SkeletonOverlayButtonId, EditorAssets.Sprites.IconBone, selected: Document.ShowSkeletonOverlay, disabled: !Document.Binding.IsBound, toolbar: true))
+        if (EditorUI.Button(ElementId.SkeletonOverlayButton, EditorAssets.Sprites.IconBone, selected: Document.ShowSkeletonOverlay, disabled: !Document.Binding.IsBound, toolbar: true))
         {
             Document.ShowSkeletonOverlay = !Document.ShowSkeletonOverlay;
             Document.MarkMetaModified();
@@ -349,7 +350,7 @@ public class SpriteEditor : DocumentEditor
             }
         }
 
-        EditorUI.Popup(BoneBindButtonId, Content);
+        EditorUI.Popup(ElementId.BoneBindButton, Content);
     }
 
     private void UpdateSelectionColor()
@@ -400,7 +401,7 @@ public class SpriteEditor : DocumentEditor
             }
         }
 
-        EditorUI.Popup(PaletteButtonId, Content);
+        EditorUI.Popup(ElementId.PaletteButton, Content);
     }
 
     private void ConstraintsButtonUI()
@@ -421,11 +422,11 @@ public class SpriteEditor : DocumentEditor
             }
 
             if (EditorUI.Control(
-                ConstraintsButtonId,
+                ElementId.ConstraintsButton,
                 ConstraintsButtonContent,
-                selected: EditorUI.IsPopupOpen(ConstraintsButtonId),
+                selected: EditorUI.IsPopupOpen(ElementId.ConstraintsButton),
                 disabled: sizes.Length == 0))
-                EditorUI.TogglePopup(ConstraintsButtonId);
+                EditorUI.TogglePopup(ElementId.ConstraintsButton);
 
             ConstraintsPopupUI();
             
@@ -467,7 +468,7 @@ public class SpriteEditor : DocumentEditor
             }
         }
 
-        EditorUI.Popup(ConstraintsButtonId, Content);
+        EditorUI.Popup(ElementId.ConstraintsButton, Content);
     }
 
     private void LayerButtonUI()
@@ -489,10 +490,10 @@ public class SpriteEditor : DocumentEditor
             }
 
             if (EditorUI.Control(
-                LayerButtonId,
+                ElementId.LayerButton,
                 ButtonContent,
-                selected: EditorUI.IsPopupOpen(LayerButtonId)))
-                EditorUI.TogglePopup(LayerButtonId);
+                selected: EditorUI.IsPopupOpen(ElementId.LayerButton)))
+                EditorUI.TogglePopup(ElementId.LayerButton);
 
             LayerPopupUI();
         }
@@ -530,7 +531,7 @@ public class SpriteEditor : DocumentEditor
             }
         }
 
-        EditorUI.Popup(LayerButtonId, Content);
+        EditorUI.Popup(ElementId.LayerButton, Content);
     }
 
     private void BoneBindingUI()
@@ -550,10 +551,10 @@ public class SpriteEditor : DocumentEditor
         }
 
         if (EditorUI.Control(
-            BonePathButtonId,
+            ElementId.BonePathButton,
             ButtonContent,
-            selected: EditorUI.IsPopupOpen(BonePathButtonId)))
-            EditorUI.TogglePopup(BonePathButtonId);
+            selected: EditorUI.IsPopupOpen(ElementId.BonePathButton)))
+            EditorUI.TogglePopup(ElementId.BonePathButton);
 
         BoneBindingPopupUI();
     }
@@ -586,7 +587,7 @@ public class SpriteEditor : DocumentEditor
             }
         }
 
-        EditorUI.Popup(BonePathButtonId, Content);
+        EditorUI.Popup(ElementId.BonePathButton, Content);
     }
 
     public void SetPathBone(StringId bone)

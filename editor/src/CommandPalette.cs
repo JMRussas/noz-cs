@@ -4,17 +4,14 @@
 
 namespace NoZ.Editor;
 
-public static class CommandPalette
+public static partial class CommandPalette
 {
-    private static class ElementId
-    {
-        private const int BaseId = EditorStyle.ElementId.CommandPalette;
-        public const int Close = BaseId + 0;
-        public const int Search = BaseId + 1;
-        public const int CommandList = BaseId + 2;
-    }
-
     private const int MaxFilteredCommands = 32;
+
+    [ElementId("Close")]
+    [ElementId("Search")]
+    [ElementId("CommandList")]
+    private static partial class ElementId { }
 
     private static string _text = string.Empty;
     private static string _lastFilterText = string.Empty;

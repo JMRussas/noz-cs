@@ -53,8 +53,11 @@ public struct PopupMenuItem
         new() { Label = cmd.Name, Handler = cmd.Handler, Level = level, Key = cmd.Key, Ctrl = cmd.Ctrl, Alt = cmd.Alt, Shift = cmd.Shift, GetEnabled = enabled, GetChecked = isChecked, Icon = cmd.Icon, ShowChecked = true };
 }
 
-public static class PopupMenu
+public static partial class PopupMenu
 {
+    private const int MaxItems = 64;
+    private const int MaxSubmenuDepth = 8;
+
     private struct LevelState
     {
         public int OpenSubmenu;
@@ -62,10 +65,9 @@ public static class PopupMenu
         public bool ShowIcons;
     }
 
-    private static readonly int MenuIdStart = EditorStyle.ElementId.PopupMenu;
-    private static readonly int ItemIdStart = EditorStyle.ElementId.PopupMenu + 20;
-    private const int MaxItems = 64;
-    private const int MaxSubmenuDepth = 8;
+    [ElementId("Menu", count: MaxSubmenuDepth)]
+    [ElementId("Item", count: MaxItems)]
+    private static partial class ElementId { }
 
     private static bool _visible;
     private static Vector2 _position;
@@ -234,7 +236,7 @@ public static class PopupMenu
             AnchorRect = new Rect(anchorRect.X, anchorRect.Y - 8, anchorRect.Width, anchorRect.Height)
         };
 
-        using var _ = UI.BeginPopup((byte)(MenuIdStart + level), style);
+        using var _ = UI.BeginPopup((byte)(ElementId.Menu+ level), style);
 
         if (UI.IsClosed())
             shouldClose = true;
@@ -264,7 +266,7 @@ public static class PopupMenu
 
                 var hasChildren = HasChildren(index);
                 var isSubmenuOpen = level < MaxSubmenuDepth && _levels[level].OpenSubmenu == index;
-                var itemId = (byte)(ItemIdStart + index);
+                var itemId = ElementId.Item + index;
                 var enabled = item.IsEnabled;
 
                 if (hasChildren)
@@ -292,7 +294,7 @@ public static class PopupMenu
         }
     }
 
-    private static void SubmenuItemUI(int level, int index, byte itemId, ref PopupMenuItem item, bool enabled, bool isSubmenuOpen, ref Action? executed, ref bool shouldClose)
+    private static void SubmenuItemUI(int level, int index, int itemId, ref PopupMenuItem item, bool enabled, bool isSubmenuOpen, ref Action? executed, ref bool shouldClose)
     {
         static void Content()
         {

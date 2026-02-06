@@ -207,14 +207,14 @@ internal struct SpacerData
 
 internal struct SceneData
 {
-    public int CallbackIndex;
+    public RenderTexture RenderTexture;
+    public bool OwnsRT;
     public Align AlignX;
     public Align AlignY;
     public Size2 Size;
 
     public static SceneData Default => new()
     {
-        CallbackIndex = -1,
         AlignX = Align.Center,
         AlignY = Align.Center,
         Size = Size2.Default

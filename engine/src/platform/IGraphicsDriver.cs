@@ -78,12 +78,9 @@ public interface IGraphicsDriver
     void WaitFence(nuint fence);
     void DeleteFence(nuint fence);
 
-    void ResizeOffscreenTarget(Vector2Int size, int msaaSamples);
     void BeginScenePass(Color clearColor);
+    void ResumeScenePass();
     void EndScenePass();
-    void Composite(nuint compositeShader);
-    void BeginUIPass();
-    void EndUIPass();
 
     // Render Texture support (BGRA8 default matches swap chain format for pipeline compatibility)
     nuint CreateRenderTexture(int width, int height, TextureFormat format = TextureFormat.BGRA8, string? name = null);

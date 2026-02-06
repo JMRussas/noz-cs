@@ -12,19 +12,20 @@ internal enum AnimationEditorState
     Play
 }
 
-internal class AnimationEditor : DocumentEditor
+internal partial class AnimationEditor : DocumentEditor
 {
     private static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
 
-    private const int RootId = 1;
-    private const int OnionSkinButtonId = 2;
-    private const int PlayButtonId = 3;
-    private const int LoopButtonId = 5;
-    private const int AddFrameButtonId = 6;
-    private const int SkeletonButtonId = 7;
-    private const int ShowSkeletonButtonId = 8;
-    private const int MirrorButtonId = 9;
-    private const int FirstFrameId = 16;
+    [ElementId("Root")]
+    [ElementId("OnionSkinButton")]
+    [ElementId("PlayButton")]
+    [ElementId("LoopButton")]
+    [ElementId("AddFrameButton")]
+    [ElementId("SkeletonButton")]
+    [ElementId("ShowSkeletonButton")]
+    [ElementId("MirrorButton")]
+    [ElementId("FirstFrame")]
+    private static partial class ElementId { }
 
     private AnimationEditorState _state = AnimationEditorState.Default;
     private bool _showSkeleton = true;
@@ -120,7 +121,7 @@ internal class AnimationEditor : DocumentEditor
             }
         }
 
-        EditorUI.Popup(SkeletonButtonId, Content);
+        EditorUI.Popup(ElementId.SkeletonButton, Content);
     }
 
     private void SkeletonButtonUI()
@@ -134,8 +135,8 @@ internal class AnimationEditor : DocumentEditor
                 EditorUI.ControlPlaceholderText(Document.Skeleton.Name);
         }
 
-        if (EditorUI.Control(SkeletonButtonId, ButtonContent, false, false, false))
-            EditorUI.TogglePopup(SkeletonButtonId);
+        if (EditorUI.Control(ElementId.SkeletonButton, ButtonContent, false, false, false))
+            EditorUI.TogglePopup(ElementId.SkeletonButton);
 
         SkeletonPopupUI();
     }
@@ -151,7 +152,7 @@ internal class AnimationEditor : DocumentEditor
         for (var i = 0; i < Document.FrameCount; i++)
             frames[i] = new EditorUI.DopeSheetFrame { Hold = Document.Frames[i].Hold };
         
-        if (EditorUI.DopeSheet(FirstFrameId, frames, ref currentFrame, AnimationDocument.MaxFrames, isPlaying))
+        if (EditorUI.DopeSheet(ElementId.FirstFrame, frames, ref currentFrame, AnimationDocument.MaxFrames, isPlaying))
         {
             Document.CurrentFrame = currentFrame;
             Document.UpdateTransforms();
@@ -166,13 +167,13 @@ internal class AnimationEditor : DocumentEditor
         using (UI.BeginFlex())
         using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
         {
-            if (EditorUI.Button(AddFrameButtonId, EditorAssets.Sprites.IconKeyframe, toolbar: true))
+            if (EditorUI.Button(ElementId.AddFrameButton, EditorAssets.Sprites.IconKeyframe, toolbar: true))
                 InsertFrameAfter();
-            if (EditorUI.Button(MirrorButtonId, EditorAssets.Sprites.IconMirror, toolbar: true))
+            if (EditorUI.Button(ElementId.MirrorButton, EditorAssets.Sprites.IconMirror, toolbar: true))
                 MirrorPose();
         }
 
-        if (EditorUI.Button(PlayButtonId, EditorAssets.Sprites.IconPlay, selected: Document.IsPlaying, toolbar: true))
+        if (EditorUI.Button(ElementId.PlayButton, EditorAssets.Sprites.IconPlay, selected: Document.IsPlaying, toolbar: true))
             TogglePlayback();
 
         using (UI.BeginFlex())
@@ -180,17 +181,17 @@ internal class AnimationEditor : DocumentEditor
         {
             UI.Flex();
 
-            if (EditorUI.Button(ShowSkeletonButtonId, EditorAssets.Sprites.IconPreview, selected: _showSkeleton, toolbar: true))
+            if (EditorUI.Button(ElementId.ShowSkeletonButton, EditorAssets.Sprites.IconPreview, selected: _showSkeleton, toolbar: true))
                 _showSkeleton = !_showSkeleton;
 
-            if (EditorUI.Button(LoopButtonId, EditorAssets.Sprites.IconLoop, selected: Document.IsLooping, toolbar: true))
+            if (EditorUI.Button(ElementId.LoopButton, EditorAssets.Sprites.IconLoop, selected: Document.IsLooping, toolbar: true))
             {
                 Undo.Record(Document);
                 Document.MarkMetaModified();
                 Document.IsLooping = !Document.IsLooping;
             }
 
-            if (EditorUI.Button(OnionSkinButtonId, EditorAssets.Sprites.IconOnion, selected: _onionSkin, toolbar: true))
+            if (EditorUI.Button(ElementId.OnionSkinButton, EditorAssets.Sprites.IconOnion, selected: _onionSkin, toolbar: true))
                 _onionSkin = !_onionSkin;
         }
 
@@ -200,7 +201,7 @@ internal class AnimationEditor : DocumentEditor
 
     public override void UpdateUI()
     {
-        using (UI.BeginColumn(RootId, EditorStyle.DocumentEditor.Root))
+        using (UI.BeginColumn(ElementId.Root, EditorStyle.DocumentEditor.Root))
         {
             ToolbarUI();
             TimelineUI();

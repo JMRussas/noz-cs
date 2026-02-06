@@ -174,10 +174,10 @@ public struct ScrollableStyle()
 public struct SceneStyle()
 {
     public Camera? Camera = null;
-    public Action? Draw = null;
     public Align AlignX = Align.Center;
     public Align AlignY = Align.Center;
     public Size2 Size = Size2.Default;
+    public RenderTexture? RenderTarget = null;
 }
 
 public static class ElementStyle

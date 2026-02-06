@@ -248,32 +248,15 @@ public static partial class UI
     private static void DrawScene(ref Element e)
     {
         ref var scene = ref e.Data.Scene;
-        if (scene.CallbackIndex < 0)
-            return;
-
-        ref readonly var callback = ref _sceneCallbacks[scene.CallbackIndex];
-        if (callback.Camera == null || callback.Draw == null)
+        if (!scene.RenderTexture.IsValid)
             return;
 
         var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
         var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
-        var screenTopLeft = Camera!.WorldToScreen(topLeft);
-        var screenBottomRight = Camera!.WorldToScreen(bottomRight);
 
-        var viewportX = (int)screenTopLeft.X;
-        var viewportY = (int)screenTopLeft.Y;
-        var viewportW = (int)(screenBottomRight.X - screenTopLeft.X);
-        var viewportH = (int)(screenBottomRight.Y - screenTopLeft.Y);
+        Graphics.Draw(scene.RenderTexture, topLeft, bottomRight);
 
-        using var _ = Graphics.PushState();
-        Graphics.SetViewport(viewportX, viewportY, viewportW, viewportH);
-        Graphics.ClearScissor();
-        callback.Camera.Viewport = new Rect(viewportX, viewportY, viewportW, viewportH);
-        Graphics.SetCamera(callback.Camera);
-
-        callback.Draw();
-
-        // Restore UI camera so subsequent UI draws use the correct projection
-        Graphics.SetCamera(Camera);
+        if (scene.OwnsRT)
+            RenderTexturePool.Release(scene.RenderTexture);
     }
 }

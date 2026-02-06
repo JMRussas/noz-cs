@@ -14,33 +14,6 @@ using WGPUTextureFormat = Silk.NET.WebGPU.TextureFormat;
 
 namespace NoZ.Platform.WebGPU;
 
-[StructLayout(LayoutKind.Sequential)]
-internal struct CompositeVertex : IVertex
-{
-    public Vector2 Position;
-    public Vector2 UV;
-
-    public static readonly int SizeInBytes = Marshal.SizeOf(typeof(CompositeVertex));
-
-    public static VertexFormatDescriptor GetFormatDescriptor() => new()
-    {
-        Stride = SizeInBytes,
-        Attributes =
-        [
-            new VertexAttribute(
-                0,
-                2,
-                VertexAttribType.Float,
-                (int)Marshal.OffsetOf<CompositeVertex>(nameof(Position))),
-            new VertexAttribute(
-                1,
-                2,
-                VertexAttribType.Float,
-                (int)Marshal.OffsetOf<CompositeVertex>(nameof(UV)))
-        ]
-    };
-}
-
 public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
 {
     private GraphicsDriverConfig _config = null!;
@@ -61,7 +34,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     private CommandEncoder* _commandEncoder;
     private RenderPassEncoder* _currentRenderPass;
     private WGPUTexture* _currentSurfaceTexture;
-    private TextureView* _currentSurfaceView;
+    private TextureView* _currentSurfaceTextureView;
 
     // Resource tracking
     private const int MaxMeshes = 32;
@@ -82,22 +55,9 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     // Cached state
     private CachedState _state;
 
-    // Offscreen rendering
-    private WGPUTexture* _offscreenMsaaTexture;
-    private TextureView* _offscreenMsaaTextureView;
-    private WGPUTexture* _offscreenResolveTexture;
-    private TextureView* _offscreenResolveTextureView;
-    private WGPUTexture* _offscreenDepthTexture;
-    private TextureView* _offscreenDepthTextureView;
-    private Vector2Int _offscreenSize;
-    private int _msaaSamples = 1;
-
     // Bind group management
     private BindGroup* _currentBindGroup;
     private List<nint> _bindGroupsToRelease = new();
-
-    // Fullscreen quad for composite
-    private nuint _fullscreenQuadMesh;
 
     // Global samplers for per-draw-call filtering
     private Sampler* _linearSampler;
@@ -234,7 +194,6 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
             throw new Exception("Failed to get device queue");
 
         CreateSwapChain();
-        CreateFullscreenQuad();
         CreateGlobalSamplers();
     }
 
@@ -487,9 +446,6 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
             _nearestSampler = null;
         }
 
-        // Release offscreen resources
-        DestroyOffscreenTarget();
-
         // Release surface
         if (_surface != null)
         {
@@ -523,41 +479,6 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
             _wgpu.InstanceRelease(_instance);
             _instance = null;
         }
-    }
-
-    private void DestroyOffscreenTarget()
-    {
-        var sameTexture = _offscreenResolveTexture == _offscreenMsaaTexture;
-        var sameView = _offscreenResolveTextureView == _offscreenMsaaTextureView;
-
-        if (_offscreenMsaaTextureView != null)
-            _wgpu.TextureViewRelease(_offscreenMsaaTextureView);
-
-        if (_offscreenMsaaTexture != null)
-            _wgpu.TextureRelease(_offscreenMsaaTexture);
-
-        if (_offscreenResolveTextureView != null && !sameView)
-        {
-            _wgpu.TextureViewRelease(_offscreenResolveTextureView);
-            _offscreenResolveTextureView = null;
-        }
-
-        if (_offscreenResolveTexture != null && !sameTexture)
-        {
-            _wgpu.TextureRelease(_offscreenResolveTexture);
-            _offscreenResolveTexture = null;
-        }
-
-        if (_offscreenDepthTextureView != null)
-            _wgpu.TextureViewRelease(_offscreenDepthTextureView);
-
-        if (_offscreenDepthTexture != null)
-            _wgpu.TextureRelease(_offscreenDepthTexture);
-
-        _offscreenMsaaTextureView = null;
-        _offscreenMsaaTexture = null;
-        _offscreenDepthTextureView = null;
-        _offscreenDepthTexture = null;
     }
 
     public bool BeginFrame()
@@ -596,6 +517,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
             return false;
 
         _currentSurfaceTexture = surfaceTexture.Texture;
+        _currentSurfaceTextureView = _wgpu.TextureCreateView(_currentSurfaceTexture, null);
 
         var encoderDesc = new CommandEncoderDescriptor();
         _commandEncoder = _wgpu.DeviceCreateCommandEncoder(_device, ref encoderDesc);
@@ -625,6 +547,12 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         _wgpu.CommandBufferRelease(commandBuffer);
         _wgpu.CommandEncoderRelease(_commandEncoder);
         _commandEncoder = null;
+
+        if (_currentSurfaceTextureView != null)
+        {
+            _wgpu.TextureViewRelease(_currentSurfaceTextureView);
+            _currentSurfaceTextureView = null;
+        }
     }
 
     public void Clear(Color color)
@@ -659,7 +587,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         int targetWidth, targetHeight;
         if (_activeRenderTexture != 0)
         {
-            ref var rt = ref _renderTextures[(int)_activeRenderTexture];
+            ref var rt = ref _renderTextures[_rtHandleToSlot[(int)_activeRenderTexture]];
             targetWidth = rt.Width;
             targetHeight = rt.Height;
         }
@@ -700,7 +628,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
             uint width, height;
             if (_activeRenderTexture != 0)
             {
-                ref var rt = ref _renderTextures[(int)_activeRenderTexture];
+                ref var rt = ref _renderTextures[_rtHandleToSlot[(int)_activeRenderTexture]];
                 width = (uint)rt.Width;
                 height = (uint)rt.Height;
             }
@@ -713,26 +641,4 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         }
     }
 
-    private void CreateFullscreenQuad()
-    {
-        // Create fullscreen quad mesh (2 triangles covering NDC -1 to 1)
-        _fullscreenQuadMesh = CreateMesh<CompositeVertex>(4, 6, BufferUsage.Static, "fullscreen_quad");
-
-        // Define vertices: position in NDC space, UV coordinates
-        var vertices = new CompositeVertex[4];
-        vertices[0] = new CompositeVertex { Position = new Vector2(-1, -1), UV = new Vector2(0, 0) }; // Bottom-left
-        vertices[1] = new CompositeVertex { Position = new Vector2(1, -1), UV = new Vector2(1, 0) };  // Bottom-right
-        vertices[2] = new CompositeVertex { Position = new Vector2(-1, 1), UV = new Vector2(0, 1) };  // Top-left
-        vertices[3] = new CompositeVertex { Position = new Vector2(1, 1), UV = new Vector2(1, 1) };   // Top-right
-
-        // Define indices for 2 triangles (CCW winding)
-        var indices = new ushort[6];
-        indices[0] = 0; indices[1] = 1; indices[2] = 2; // First triangle: bottom-left, bottom-right, top-left
-        indices[3] = 1; indices[4] = 3; indices[5] = 2; // Second triangle: bottom-right, top-right, top-left
-
-        // Upload to GPU
-        UpdateMesh(_fullscreenQuadMesh,
-            MemoryMarshal.AsBytes(vertices.AsSpan()),
-            indices.AsSpan());
-    }
 }

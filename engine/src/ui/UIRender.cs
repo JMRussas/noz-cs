@@ -19,12 +19,14 @@ public static class UIRender
     private static Shader? _shader;
     private static Texture? _whiteTexture;
     private static bool _initialized;
+    private static ushort _uiLayer;
 
     public static void Init(UIConfig config)
     {
         if (_initialized) return;
 
         _shader = Asset.Get<Shader>(AssetType.Shader, config.UIShader);
+        _uiLayer = config.UILayer;
         _vertices = new NativeArray<UIVertex>(MaxUIVertices);
         _indices = new NativeArray<ushort>(MaxUIIndices);
 
@@ -161,6 +163,7 @@ public static class UIRender
 
         AddQuadIndices(vertexOffset);
 
+        Graphics.SetLayer(_uiLayer);
         Graphics.SetShader(_shader);
         Graphics.SetTexture(texture ?? _whiteTexture, filter: texture?.Filter ?? TextureFilter.Point);
         Graphics.SetMesh(_mesh);

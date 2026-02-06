@@ -6,15 +6,16 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-internal class SkeletonEditor : DocumentEditor
+internal partial class SkeletonEditor : DocumentEditor
 {
-    private const int RootId = 1;
-    private const int PreviewButtonId = 2;
-    private const int ConnectedButtonId = 3;
-
     private const int SortGroupSkin = 0;
     private const int SortGroupBones = 1;
     private const int SortGroupSelectedBones = 2;
+
+    [ElementId("Root")]
+    [ElementId("PreviewButton")]
+    [ElementId("ConnectedButton")]
+    private static partial class ElementId { }
 
     private struct SavedBone
     {
@@ -110,7 +111,7 @@ internal class SkeletonEditor : DocumentEditor
         {
             var hasSelectableHead = HasSelectedHeadWithParent();
             if (EditorUI.Button(
-                ConnectedButtonId,
+                ElementId.ConnectedButton,
                 EditorAssets.Sprites.IconConnected,
                 selected: Document.CurrentConnected,
                 disabled: !hasSelectableHead,
@@ -121,7 +122,7 @@ internal class SkeletonEditor : DocumentEditor
 
             EditorUI.ToolbarSpacer();
 
-            if (EditorUI.Button(PreviewButtonId, EditorAssets.Sprites.IconPreview, toolbar: true))
+            if (EditorUI.Button(ElementId.PreviewButton, EditorAssets.Sprites.IconPreview, toolbar: true))
                 _showPreview = !_showPreview;
         }
 
@@ -155,7 +156,7 @@ internal class SkeletonEditor : DocumentEditor
 
     public override void UpdateUI()
     {
-        using (UI.BeginColumn(RootId, EditorStyle.DocumentEditor.Root))
+        using (UI.BeginColumn(ElementId.Root, EditorStyle.DocumentEditor.Root))
         {
             ToolbarUI();
             UI.Spacer(EditorStyle.Control.Spacing);

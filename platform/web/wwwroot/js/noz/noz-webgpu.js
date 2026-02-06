@@ -41,19 +41,6 @@ let nextSamplerId = 1;
 let linearSampler = null;
 let nearestSampler = null;
 
-// Offscreen rendering
-let offscreenMsaaTexture = null;
-let offscreenMsaaTextureView = null;
-let offscreenResolveTexture = null;
-let offscreenResolveTextureView = null;
-let offscreenWidth = 0;
-let offscreenHeight = 0;
-let msaaSamples = 1;
-
-// Fullscreen quad for compositing
-let fullscreenQuadVertexBuffer = null;
-let fullscreenQuadIndexBuffer = null;
-
 // ============================================================================
 // Initialization
 // ============================================================================
@@ -113,9 +100,6 @@ export async function init(canvasSelector) {
         addressModeV: "clamp-to-edge",
         addressModeW: "clamp-to-edge"
     });
-
-    // Create fullscreen quad
-    createFullscreenQuad();
 
     return {
         width: surfaceWidth,
@@ -573,17 +557,12 @@ export function createBindGroup(layoutId, entries, label) {
                 size: entry.size
             };
         } else if (entry.textureViewId !== undefined && entry.textureViewId !== null) {
-            // Special case: -3 means offscreen resolve texture
-            if (entry.textureViewId === -3) {
-                resolved.resource = offscreenResolveTextureView;
-            } else {
-                const tex = textures.get(entry.textureViewId);
-                if (!tex) {
-                    console.error(`Texture ${entry.textureViewId} not found for binding ${entry.binding}`);
-                    return null;
-                }
-                resolved.resource = tex.view;
+            const tex = textures.get(entry.textureViewId);
+            if (!tex) {
+                console.error(`Texture ${entry.textureViewId} not found for binding ${entry.binding}`);
+                return null;
             }
+            resolved.resource = tex.view;
         } else if (entry.samplerId !== undefined && entry.samplerId !== null) {
             resolved.resource = entry.samplerId === 1 ? linearSampler : nearestSampler;
         } else if (entry.useLinearSampler !== undefined && entry.useLinearSampler !== null) {
@@ -645,16 +624,12 @@ export function createBindGroupFromJson(layoutId, entriesJson, label) {
                 size: entry.size
             };
         } else if (entry.type === 'texture') {
-            if (entry.textureId === -3) {
-                resolved.resource = offscreenResolveTextureView;
-            } else {
-                const tex = textures.get(entry.textureId);
-                if (!tex) {
-                    console.error(`Texture ${entry.textureId} not found for binding ${entry.binding}`);
-                    return null;
-                }
-                resolved.resource = tex.view;
+            const tex = textures.get(entry.textureId);
+            if (!tex) {
+                console.error(`Texture ${entry.textureId} not found for binding ${entry.binding}`);
+                return null;
             }
+            resolved.resource = tex.view;
         } else if (entry.type === 'sampler') {
             resolved.resource = entry.useLinear ? linearSampler : nearestSampler;
         }
@@ -727,19 +702,13 @@ export function beginRenderPass(colorAttachments, depthAttachment, label) {
             // Use current surface texture
             view = currentSurfaceTexture.createView();
             currentSurfaceTextureView = view;
-        } else if (att.textureId === -2) {
-            // Use offscreen MSAA texture
-            view = offscreenMsaaTextureView;
         } else {
             const tex = textures.get(att.textureId);
             view = tex ? tex.view : null;
         }
 
         let resolveTarget;
-        if (att.resolveTextureId === -3) {
-            // Use offscreen resolve texture
-            resolveTarget = offscreenResolveTextureView;
-        } else if (att.resolveTextureId) {
+        if (att.resolveTextureId) {
             const tex = textures.get(att.resolveTextureId);
             resolveTarget = tex ? tex.view : null;
         }
@@ -861,77 +830,16 @@ export function draw(vertexCount, instanceCount, firstVertex, firstInstance) {
 // Offscreen Rendering
 // ============================================================================
 
-export function resizeOffscreenTarget(width, height, samples) {
-    if (offscreenWidth === width && offscreenHeight === height && msaaSamples === samples) {
-        return;
-    }
-
-    // Destroy existing offscreen textures
-    if (offscreenMsaaTexture) {
-        offscreenMsaaTexture.destroy();
-        offscreenMsaaTexture = null;
-        offscreenMsaaTextureView = null;
-    }
-    if (offscreenResolveTexture && offscreenResolveTexture !== offscreenMsaaTexture) {
-        offscreenResolveTexture.destroy();
-        offscreenResolveTexture = null;
-        offscreenResolveTextureView = null;
-    }
-
-    offscreenWidth = width;
-    offscreenHeight = height;
-    msaaSamples = Math.max(1, samples);
-
-    if (msaaSamples > 1) {
-        // MSAA: separate render and resolve textures
-        offscreenMsaaTexture = device.createTexture({
-            size: { width, height, depthOrArrayLayers: 1 },
-            format: presentFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT,
-            sampleCount: msaaSamples,
-            label: 'offscreen_msaa'
-        });
-        offscreenMsaaTextureView = offscreenMsaaTexture.createView();
-
-        offscreenResolveTexture = device.createTexture({
-            size: { width, height, depthOrArrayLayers: 1 },
-            format: presentFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-            label: 'offscreen_resolve'
-        });
-        offscreenResolveTextureView = offscreenResolveTexture.createView();
-    } else {
-        // No MSAA: single texture
-        offscreenMsaaTexture = device.createTexture({
-            size: { width, height, depthOrArrayLayers: 1 },
-            format: presentFormat,
-            usage: GPUTextureUsage.RENDER_ATTACHMENT | GPUTextureUsage.TEXTURE_BINDING,
-            label: 'offscreen'
-        });
-        offscreenMsaaTextureView = offscreenMsaaTexture.createView();
-        offscreenResolveTexture = offscreenMsaaTexture;
-        offscreenResolveTextureView = offscreenMsaaTextureView;
-    }
-}
-
-export function getOffscreenResolveTextureView() {
-    return offscreenResolveTextureView;
-}
-
-export function getMsaaSamples() {
-    return msaaSamples;
-}
-
 // ============================================================================
 // Render Texture (for capturing to image)
 // ============================================================================
 
 const renderTextures = new Map();
-let nextRenderTextureId = 1;
 let currentRenderTexturePass = null;
 
 export function createRenderTexture(width, height, format, label) {
-    const id = nextRenderTextureId++;
+    // Allocate from shared texture ID space so RT can be used with bind groups
+    const id = nextTextureId++;
     const gpuFormat = formatMap[format] || 'rgba8unorm';
 
     const texture = device.createTexture({
@@ -942,6 +850,7 @@ export function createRenderTexture(width, height, format, label) {
         label: label || `render_texture_${id}`
     });
 
+    // D2 view for render pass color attachment
     const view = texture.createView({ format: gpuFormat, dimension: '2d' });
 
     renderTextures.set(id, {
@@ -950,6 +859,19 @@ export function createRenderTexture(width, height, format, label) {
         width: width,
         height: height,
         format: gpuFormat
+    });
+
+    // D2Array view for sampling (sprite shader expects texture_2d_array)
+    const arrayView = texture.createView({ format: gpuFormat, dimension: '2d-array', arrayLayerCount: 1 });
+
+    textures.set(id, {
+        texture: texture,
+        view: arrayView,
+        width: width,
+        height: height,
+        format: gpuFormat,
+        layers: 1,
+        isArray: true
     });
 
     return id;
@@ -961,6 +883,7 @@ export function destroyRenderTexture(textureId) {
         rt.texture.destroy();
         renderTextures.delete(textureId);
     }
+    textures.delete(textureId);
 }
 
 export function beginRenderTexturePass(textureId, clearR, clearG, clearB, clearA) {
@@ -1039,50 +962,6 @@ export async function readRenderTexturePixels(textureId) {
         binary += String.fromCharCode(result[i]);
     }
     return btoa(binary);
-}
-
-// ============================================================================
-// Fullscreen Quad
-// ============================================================================
-
-function createFullscreenQuad() {
-    // Position (vec2) + UV (vec2) = 16 bytes per vertex
-    const vertices = new Float32Array([
-        // Position    UV
-        -1, -1,       0, 0,   // Bottom-left
-         1, -1,       1, 0,   // Bottom-right
-        -1,  1,       0, 1,   // Top-left
-         1,  1,       1, 1    // Top-right
-    ]);
-
-    const indices = new Uint16Array([
-        0, 1, 2,   // First triangle
-        1, 3, 2    // Second triangle
-    ]);
-
-    fullscreenQuadVertexBuffer = device.createBuffer({
-        size: vertices.byteLength,
-        usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
-        label: 'fullscreen_quad_vertices'
-    });
-    queue.writeBuffer(fullscreenQuadVertexBuffer, 0, vertices);
-
-    fullscreenQuadIndexBuffer = device.createBuffer({
-        size: indices.byteLength,
-        usage: GPUBufferUsage.INDEX | GPUBufferUsage.COPY_DST,
-        label: 'fullscreen_quad_indices'
-    });
-    queue.writeBuffer(fullscreenQuadIndexBuffer, 0, indices);
-}
-
-export function drawFullscreenQuad() {
-    if (currentRenderPass && fullscreenQuadVertexBuffer && fullscreenQuadIndexBuffer) {
-        currentRenderPass.setVertexBuffer(0, fullscreenQuadVertexBuffer);
-        currentRenderPass.setIndexBuffer(fullscreenQuadIndexBuffer, 'uint16');
-        currentRenderPass.drawIndexed(6, 1, 0, 0, 0);
-    } else {
-        console.warn('drawFullscreenQuad: missing resources');
-    }
 }
 
 // ============================================================================

@@ -163,19 +163,6 @@ public static partial class WebGPUInterop
     [JSImport("draw", ModuleName)]
     internal static partial void Draw(int vertexCount, int instanceCount, int firstVertex, int firstInstance);
 
-    [JSImport("drawFullscreenQuad", ModuleName)]
-    internal static partial void DrawFullscreenQuad();
-
-    // ============================================================================
-    // Offscreen Rendering
-    // ============================================================================
-
-    [JSImport("resizeOffscreenTarget", ModuleName)]
-    internal static partial void ResizeOffscreenTarget(int width, int height, int samples);
-
-    [JSImport("getMsaaSamples", ModuleName)]
-    internal static partial int GetMsaaSamples();
-
     // ============================================================================
     // Render Texture (for capturing to image)
     // ============================================================================
