@@ -95,10 +95,11 @@ public static partial class UI
             }
 
             // Layout non-flex child
+            offset[axis] += child.MarginMin[axis];
             LayoutElement(elementIndex, offset, sizeOverride);
 
-            var childSize = child.Rect.GetSize(axis) + child.MarginMin[axis] + child.MarginMax[axis];
-            nonFlexSize += childSize;
+            var childSize = child.Rect.GetSize(axis) + child.MarginMax[axis];
+            nonFlexSize += child.MarginMin[axis] + childSize;
             offset[axis] += childSize;
             prevWasChild = true;
             elementIndex = child.NextSiblingIndex;

@@ -17,6 +17,8 @@ public enum SystemCursor
 
 public static class Cursor
 {
+    private const float Scale = 0.75f;
+
     private static Sprite? _sprite;
     private static readonly Camera _camera = new() { FlipY = false };
 
@@ -51,7 +53,7 @@ public static class Cursor
         Graphics.SetLayer(Graphics.MaxLayer);
         Graphics.SetBlendMode(BlendMode.Alpha);
         Graphics.SetTransform(
-            Matrix3x2.CreateScale(_sprite.PixelsPerUnit) *
+            Matrix3x2.CreateScale(_sprite.PixelsPerUnit * Scale) *
             Matrix3x2.CreateTranslation(Input.MousePosition));
         Graphics.DrawFlat(_sprite);
     }
