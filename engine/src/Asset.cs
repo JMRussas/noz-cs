@@ -11,11 +11,13 @@ public class Asset : IDisposable {
     internal AssetDef Def { get; }
     protected internal nuint Handle { get; protected set; }
     public string Name { get; private set; }
+    public StringId Id { get; private set; }
     private static readonly AssetDef[] Defs = new AssetDef[Constants.AssetTypeCount];
     private static readonly Dictionary<(AssetType, string), Asset> _registry = new();
 
     internal Asset(AssetType type, string name)
     {
+        Id = StringId.Get(name);
         Name = name;
         Def = Defs[(int)type];
         Debug.Assert(Def != null);

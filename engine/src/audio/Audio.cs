@@ -10,6 +10,8 @@ public static class Audio
 {
     public static IAudioDriver Driver { get; private set; } = null!;
 
+    private static Dictionary<StringId, int> _playFrame = new(128);
+
     internal static void Init(IAudioDriver driver)
     {
         Driver = driver;
@@ -22,9 +24,18 @@ public static class Audio
         Driver.Shutdown();
     }
 
-    // Playback
-    public static SoundHandle Play(Sound sound, float volume = 1f, float pitch = 1f, bool loop = false)
-        => new(Driver.Play(sound.PlatformHandle, volume, pitch, loop));
+    public static SoundHandle Play(Sound sound, float volume = 1f, float pitch = 1f, bool loop = false, bool debounce=true)
+    {
+        if (debounce)
+        {
+           if (_playFrame.TryGetValue(sound.Id, out var frame) && frame == Time.FrameCount)
+                return default;
+            
+            _playFrame[sound.Id] = Time.FrameCount;
+        }
+
+        return new(Driver.Play(sound.PlatformHandle, volume, pitch, loop));
+    }
 
     public static SoundHandle PlayRandom(Sound[] sounds, float volume = 1f, float pitch = 1f, bool loop = false)
     {

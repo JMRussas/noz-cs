@@ -31,7 +31,8 @@ namespace NoZ.Editor
         }
 
         // Compute winding number contribution from a contour using analytical ray casting.
-        // For each edge, computes exact ray-edge intersections instead of sampling.
+        // Quadratic edges are decomposed into y-monotone segments so that the same
+        // half-open y-interval rule used for linear edges applies consistently.
         private static int ComputeWindingNumber(Contour contour, Vector2Double p)
         {
             int winding = 0;
@@ -59,53 +60,80 @@ namespace NoZ.Editor
                 }
                 else if (edge is QuadraticEdge q)
                 {
-                    // Solve (1-t)^2*y0 + 2t(1-t)*y1 + t^2*y2 = py for t
-                    // Rearranges to: a*t^2 + b*t + c = 0
-                    double a = q.p0.y - 2 * q.p1.y + q.p2.y;
-                    double b = 2 * (q.p1.y - q.p0.y);
-                    double c = q.p0.y - p.y;
+                    // Decompose into y-monotone segments by splitting at the y-extremum.
+                    // This ensures consistent half-open interval handling with linear edges.
+                    double ay = q.p0.y - 2 * q.p1.y + q.p2.y;
 
-                    double disc = b * b - 4 * a * c;
-                    if (disc < 0) continue;
-
-                    // Near-linear case (a ≈ 0)
-                    if (Math.Abs(a) < 1e-14)
+                    if (Math.Abs(ay) > 1e-12)
                     {
-                        if (Math.Abs(b) < 1e-14) continue;
-                        double t = -c / b;
-                        if (t >= 0 && t < 1)
+                        double tExt = (q.p0.y - q.p1.y) / ay;
+                        if (tExt > 0 && tExt < 1)
                         {
-                            double omt = 1 - t;
-                            double xAt = omt * omt * q.p0.x + 2 * omt * t * q.p1.x + t * t * q.p2.x;
-                            if (xAt > p.x)
-                            {
-                                double dydt = 2 * omt * (q.p1.y - q.p0.y) + 2 * t * (q.p2.y - q.p1.y);
-                                winding += dydt > 0 ? 1 : -1;
-                            }
-                        }
-                        continue;
-                    }
-
-                    double sqrtDisc = Math.Sqrt(disc);
-                    double inv2a = 1.0 / (2 * a);
-                    for (int i = 0; i < 2; i++)
-                    {
-                        double t = (-b + (i == 0 ? sqrtDisc : -sqrtDisc)) * inv2a;
-                        if (t >= 0 && t < 1)
-                        {
-                            double omt = 1 - t;
-                            double xAt = omt * omt * q.p0.x + 2 * omt * t * q.p1.x + t * t * q.p2.x;
-                            if (xAt > p.x)
-                            {
-                                double dydt = 2 * omt * (q.p1.y - q.p0.y) + 2 * t * (q.p2.y - q.p1.y);
-                                winding += dydt > 0 ? 1 : -1;
-                            }
+                            // Non-monotone: split at y-extremum and process two pieces
+                            double yExt = QuadY(q, tExt);
+                            QuadMonoCrossing(q, p, 0, tExt, q.p0.y, yExt, ref winding);
+                            QuadMonoCrossing(q, p, tExt, 1, yExt, q.p2.y, ref winding);
+                            continue;
                         }
                     }
+
+                    // Already y-monotone
+                    QuadMonoCrossing(q, p, 0, 1, q.p0.y, q.p2.y, ref winding);
                 }
             }
 
             return winding;
+        }
+
+        private static double QuadY(QuadraticEdge q, double t)
+        {
+            double omt = 1 - t;
+            return omt * omt * q.p0.y + 2 * omt * t * q.p1.y + t * t * q.p2.y;
+        }
+
+        // Check for a ray crossing within a y-monotone quadratic segment [tA, tB].
+        // Uses the same half-open interval rule as linear edges (include lower y, exclude upper y).
+        private static void QuadMonoCrossing(
+            QuadraticEdge q, Vector2Double p,
+            double tA, double tB, double yA, double yB,
+            ref int winding)
+        {
+            int dir;
+            if (yA <= p.y && yB > p.y)
+                dir = 1;  // upward
+            else if (yA > p.y && yB <= p.y)
+                dir = -1; // downward
+            else
+                return;
+
+            // Solve (y0 - 2*y1 + y2)*t^2 + 2*(y1-y0)*t + (y0-py) = 0
+            double a = q.p0.y - 2 * q.p1.y + q.p2.y;
+            double b = 2 * (q.p1.y - q.p0.y);
+            double c = q.p0.y - p.y;
+
+            double t;
+            if (Math.Abs(a) < 1e-12)
+            {
+                t = (Math.Abs(b) > 1e-12) ? -c / b : (tA + tB) * 0.5;
+            }
+            else
+            {
+                double disc = b * b - 4 * a * c;
+                if (disc < 0) disc = 0;
+                double sqrtDisc = Math.Sqrt(disc);
+                double inv2a = 0.5 / a;
+                double t1 = (-b + sqrtDisc) * inv2a;
+                double t2 = (-b - sqrtDisc) * inv2a;
+
+                // Pick the root that falls within [tA, tB]
+                t = (t1 >= tA - 1e-6 && t1 <= tB + 1e-6) ? t1 : t2;
+                t = Math.Clamp(t, tA, tB);
+            }
+
+            double omt = 1 - t;
+            double xAt = omt * omt * q.p0.x + 2 * omt * t * q.p1.x + t * t * q.p2.x;
+            if (xAt > p.x)
+                winding += dir;
         }
 
         private static void GenerateSDF(
@@ -120,14 +148,8 @@ namespace NoZ.Editor
             if (shape == null)
                 return;
 
-            int contourCount = shape.contours.Length;
             int w = outputSize.X;
             int h = outputSize.Y;
-
-            // Get the windings..
-            var windings = new int[contourCount];
-            for (int i = 0; i < shape.contours.Length; i++)
-                windings[i] = shape.contours[i].Winding();
 
             Parallel.For(0, h, y =>
             {
