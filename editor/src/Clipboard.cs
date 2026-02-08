@@ -48,7 +48,9 @@ public sealed class PathClipboardData
     {
         public byte FillColor;
         public float FillOpacity;
+        public float StrokeOpacity;
         public byte StrokeColor;
+        public byte StrokeWidth;
         public Vector2[] Anchors;
         public float[] Curves;
     }
@@ -86,14 +88,16 @@ public sealed class PathClipboardData
                 FillColor = srcPath.FillColor,
                 FillOpacity = srcPath.FillOpacity,
                 StrokeColor = srcPath.StrokeColor,
-                Anchors = selectedAnchors.ToArray(),
-                Curves = selectedCurves.ToArray()
+                StrokeOpacity = srcPath.StrokeOpacity,
+                StrokeWidth = srcPath.StrokeWidth,
+                Anchors = [.. selectedAnchors],
+                Curves = [.. selectedCurves]
             });
 
             allPositions.AddRange(selectedAnchors);
         }
 
-        Paths = pathList.ToArray();
+        Paths = [.. pathList];
 
         if (allPositions.Count > 0)
         {
@@ -113,7 +117,9 @@ public sealed class PathClipboardData
             var newPathIndex = shape.AddPath(
                 fillColor: pathData.FillColor,
                 fillOpacity: pathData.FillOpacity,
-                strokeColor: pathData.StrokeColor);
+                strokeColor: pathData.StrokeColor,
+                strokeOpacity: pathData.StrokeOpacity,
+                strokeWidth: pathData.StrokeWidth);
             if (newPathIndex == ushort.MaxValue)
                 break;
 
