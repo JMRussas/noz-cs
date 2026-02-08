@@ -17,9 +17,7 @@ public struct FontGlyph
 
 public class Font : Asset
 {
-    internal const ushort Version = 3;
-    private const int MaxGlyphs = 256;
-    private const int MaxKerningPairs = MaxGlyphs * MaxGlyphs;
+    internal const ushort Version = 4;
 
     public int FontSize { get; private init; }
     public int AtlasWidth { get; private init; }
@@ -31,44 +29,33 @@ public class Font : Asset
     public float InternalLeading { get; private init; }
     public string FamilyName { get; private init; } = "";
 
-    private readonly FontGlyph[] _glyphs = new FontGlyph[MaxGlyphs];
-    private readonly ushort[] _kerningIndex = new ushort[MaxKerningPairs];
-    private float[] _kerningValues = [];
+    private readonly Dictionary<int, FontGlyph> _glyphs = new();
+    private readonly Dictionary<uint, float> _kerning = new();
     private Texture? _atlasTexture;
 
     public Texture? AtlasTexture => _atlasTexture;
 
     private Font(string name) : base(AssetType.Font, name)
     {
-        for (var i = 0; i < MaxKerningPairs; i++)
-            _kerningIndex[i] = 0xFFFF;
     }
 
     public FontGlyph GetGlyph(char c)
     {
-        var index = (int)c;
-        if (index < MaxGlyphs && _glyphs[index].Advance > 0)
-            return _glyphs[index];
+        if (_glyphs.TryGetValue((int)c, out var glyph) && glyph.Advance > 0)
+            return glyph;
 
         // Fallback to unknown glyph (ASCII DEL)
         const int unknownChar = 0x7F;
-        if (_glyphs[unknownChar].Advance > 0)
-            return _glyphs[unknownChar];
+        if (_glyphs.TryGetValue(unknownChar, out var fallback) && fallback.Advance > 0)
+            return fallback;
 
         return default;
     }
 
     public float GetKerning(char first, char second)
     {
-        var f = (byte)first;
-        var s = (byte)second;
-        var index = f * MaxGlyphs + s;
-        var valueIndex = _kerningIndex[index];
-
-        if (valueIndex != 0xFFFF && valueIndex < _kerningValues.Length)
-            return _kerningValues[valueIndex];
-
-        return 0f;
+        var key = ((uint)first << 16) | (uint)second;
+        return _kerning.GetValueOrDefault(key, 0f);
     }
 
     private static Font? Load(Stream stream, string name)
@@ -84,7 +71,6 @@ public class Font : Asset
         var baseline = reader.ReadSingle();
         var internalLeading = reader.ReadSingle();
 
-        // Read family name (added in version 2)
         var familyNameLength = reader.ReadUInt16();
         var familyName = familyNameLength > 0
             ? new string(reader.ReadChars(familyNameLength))
@@ -118,37 +104,25 @@ public class Font : Asset
             var bearingX = reader.ReadSingle();
             var bearingY = reader.ReadSingle();
 
-            if (codepoint < MaxGlyphs)
+            font._glyphs[(int)codepoint] = new FontGlyph
             {
-                font._glyphs[codepoint] = new FontGlyph
-                {
-                    UVMin = new Vector2(uvMinX, uvMinY),
-                    UVMax = new Vector2(uvMaxX, uvMaxY),
-                    Size = new Vector2(sizeX, sizeY),
-                    Advance = advance,
-                    Bearing = new Vector2(bearingX, bearingY)
-                };
-            }
+                UVMin = new Vector2(uvMinX, uvMinY),
+                UVMax = new Vector2(uvMaxX, uvMaxY),
+                Size = new Vector2(sizeX, sizeY),
+                Advance = advance,
+                Bearing = new Vector2(bearingX, bearingY)
+            };
         }
 
         // Read kerning
         var kerningCount = reader.ReadUInt16();
-        if (kerningCount > 0)
+        for (var i = 0; i < kerningCount; i++)
         {
-            font._kerningValues = new float[kerningCount];
-            for (var i = 0; i < kerningCount; i++)
-            {
-                var first = reader.ReadUInt32();
-                var second = reader.ReadUInt32();
-                var amount = reader.ReadSingle();
-
-                if (first < MaxGlyphs && second < MaxGlyphs)
-                {
-                    var index = first * MaxGlyphs + second;
-                    font._kerningIndex[index] = (ushort)i;
-                    font._kerningValues[i] = amount;
-                }
-            }
+            var first = reader.ReadUInt32();
+            var second = reader.ReadUInt32();
+            var amount = reader.ReadSingle();
+            var key = (first << 16) | second;
+            font._kerning[key] = amount;
         }
 
         // Read atlas texture data (R8 format)

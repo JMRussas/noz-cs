@@ -275,4 +275,10 @@ public static partial class Graphics
     {
         AddTriangles(vertices, indices, order: order, bone: bone);
     }
+
+    public static void DrawText(in ReadOnlySpan<char> text, Font font, float fontSize, int order = 0) =>
+        TextRender.Draw(text, font, fontSize, order);
+
+    public static Vector2 MeasureText(ReadOnlySpan<char> text, Font font, float fontSize) =>
+        TextRender.Measure(text, font, fontSize);
 }

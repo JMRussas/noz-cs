@@ -29,6 +29,10 @@ public class FontDocument : Document
         Characters = meta.GetString("font", "characters", DefaultCharacters);
         SdfRange = meta.GetFloat("sdf", "range", 8f);
         Padding = meta.GetInt("font", "padding", 1);
+
+        var ranges = meta.GetString("font", "ranges", "");
+        if (!string.IsNullOrEmpty(ranges))
+            Characters = MergeCharacterRanges(ranges, Characters);
     }
 
     public override void SaveMetadata(PropertySet meta)
@@ -39,9 +43,11 @@ public class FontDocument : Document
         if (Padding != 1) meta.SetInt("font", "padding", Padding);
     }
 
+    private bool ImportAll => Characters == "*";
+
     public override void Import(string outputPath, PropertySet meta)
     {
-        var ttf = TrueTypeFont.Load(Path, FontSize, Characters);
+        var ttf = TrueTypeFont.Load(Path, FontSize, ImportAll ? null : Characters);
         if (ttf == null)
             throw new ImportException($"Failed to load TTF file: {Path}");
 
@@ -66,22 +72,24 @@ public class FontDocument : Document
         public double Advance;
         public Vector2Int PackedSize;
         public RectInt PackedRect;
-        public char Ascii;
+        public char Codepoint;
     }
 
     private List<ImportGlyph> BuildGlyphList(TrueTypeFont ttf)
     {
         var glyphs = new List<ImportGlyph>();
 
-        foreach (var c in Characters)
-        {
-            var ttfGlyph = ttf.GetGlyph(c);
-            if (ttfGlyph == null)
-                continue;
+        // When importing all, iterate every glyph the TTF reader loaded.
+        // Otherwise, iterate the Characters filter string.
+        var source = ImportAll
+            ? ttf.Glyphs
+            : Characters.Select(c => ttf.GetGlyph(c)).Where(g => g != null)!;
 
+        foreach (var ttfGlyph in source)
+        {
             var glyph = new ImportGlyph
             {
-                Ascii = c,
+                Codepoint = ttfGlyph!.codepoint,
                 Ttf = ttfGlyph,
                 Size = ttfGlyph.size + new Vector2Double(SdfRange * 2, SdfRange * 2),
                 Bearing = ttfGlyph.bearing - new Vector2Double(SdfRange, SdfRange),
@@ -196,7 +204,7 @@ public class FontDocument : Document
         writer.Write((ushort)glyphs.Count);
         foreach (var glyph in glyphs)
         {
-            writer.Write((uint)glyph.Ascii);
+            writer.Write((uint)glyph.Codepoint);
 
             // Glyphs with no contours (space, etc.) have no atlas entry - write zero UVs
             var hasContours = glyph.Ttf.contours != null && glyph.Ttf.contours.Length > 0;
@@ -238,19 +246,41 @@ public class FontDocument : Document
 
         if (kerning != null)
         {
-            foreach (var k in kerning)
+            foreach (var (key, value) in kerning)
             {
-                var pair = k.Item1;
-                var left = (uint)(pair >> 8);
-                var right = (uint)(pair & 0xFF);
+                var left = (uint)(key >> 16);
+                var right = (uint)(key & 0xFFFF);
                 writer.Write(left);
                 writer.Write(right);
-                writer.Write(k.Item2 * fontSizeInv);
+                writer.Write(value * fontSizeInv);
             }
         }
 
         var bytes = atlas.AsByteSpan();
         writer.Write(bytes);
+    }
+
+    private static string MergeCharacterRanges(string rangesStr, string existingChars)
+    {
+        var chars = new HashSet<char>(existingChars);
+        foreach (var range in rangesStr.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            var parts = range.Split('-', 2);
+            if (parts.Length == 2)
+            {
+                var start = Convert.ToInt32(parts[0].Trim(), 16);
+                var end = Convert.ToInt32(parts[1].Trim(), 16);
+                for (int c = start; c <= end && c <= 0xFFFF; c++)
+                    chars.Add((char)c);
+            }
+            else if (parts.Length == 1)
+            {
+                var c = Convert.ToInt32(parts[0].Trim(), 16);
+                if (c <= 0xFFFF)
+                    chars.Add((char)c);
+            }
+        }
+        return new string(chars.OrderBy(c => c).ToArray());
     }
 
     private static uint NextPowerOf2(uint v)

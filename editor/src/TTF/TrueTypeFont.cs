@@ -28,7 +28,7 @@ namespace NoZ.Editor
         public class Glyph
         {
             public ushort id;
-            public char ascii;
+            public char codepoint;
             public Point[] points = null!;
             public Contour[] contours = null!;
             public double advance;
@@ -43,20 +43,21 @@ namespace NoZ.Editor
         public double InternalLeading { get; internal set; }
         public string FamilyName { get; internal set; } = "";
 
-        private Glyph[] _glyphs = null!;
-        internal List<Tuple<ushort, float>> _kerning = null!;
+        private Dictionary<char, Glyph> _glyphs = null!;
+        internal Dictionary<uint, float> _kerning = null!;
 
         private partial class Reader { };
 
-        public Glyph GetGlyph(char c) => _glyphs[c];
+        public Glyph? GetGlyph(char c) => _glyphs.GetValueOrDefault(c);
+        public IEnumerable<Glyph> Glyphs => _glyphs.Values;
 
-        public static TrueTypeFont Load(string path, int requestedSize, string filter)
+        public static TrueTypeFont Load(string path, int requestedSize, string? filter)
         {
             using var stream = File.OpenRead(path);
             return Load(stream, requestedSize, filter);
         }
 
-        public static TrueTypeFont Load(Stream stream, int requestedSize, string filter)
+        public static TrueTypeFont Load(Stream stream, int requestedSize, string? filter)
         {
             using var reader = new Reader(stream, requestedSize, filter);
             return reader.Read();

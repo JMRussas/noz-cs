@@ -785,6 +785,7 @@ public ref struct Tokenizer
             return true;
 
         // Unknown - skip character
+        BeginToken();
         NextChar();
         EndToken(TokenType.None);
         return true;

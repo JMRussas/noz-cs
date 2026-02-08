@@ -6,7 +6,7 @@ namespace NoZ.Editor
 {
     partial class TrueTypeFont
     {
-        partial class Reader(Stream stream, int requestedSize, string filter) : IDisposable
+        partial class Reader(Stream stream, int requestedSize, string? filter) : IDisposable
         {
             private enum TableName
             {
@@ -130,24 +130,24 @@ namespace NoZ.Editor
                     var platformSpecificId = ReadUInt16();
                     var platformOffset = ReadUInt32();    // Offset
 
-                    if (platformId == 0 || (platformId == 3 && platformSpecificId == 1))
+                    if (platformId == 0 || (platformId == 3 && (platformSpecificId == 1 || platformSpecificId == 10)))
                         offset = platformOffset;
                 }
 
                 if (offset == 0)
                     throw new InvalidDataException("TTF file has no unicode character map.");
 
-                // Seek to the character map 
+                // Seek to the character map
                 Seek(TableName.CMAP, offset);
 
                 var format = ReadUInt16();
-                var length = ReadUInt16();
-                var language = ReadUInt16();
 
                 switch (format)
                 {
                     case 4:
                     {
+                        var length = ReadUInt16();
+                        var language = ReadUInt16();
                         var segcount = ReadUInt16() / 2;
                         var searchRange = ReadUInt16();
                         var entitySelector = ReadUInt16();
@@ -166,11 +166,6 @@ namespace NoZ.Editor
                             var delta = (short)idDelta[i];
                             var rangeOffset = idRangeOffset[i];
 
-                            if (start > 254)
-                                continue;
-                            if (end > 254)
-                                end = 254;
-
                             if (rangeOffset == 0)
                             {
                                 for (int c = start; c <= end; c++)
@@ -179,10 +174,11 @@ namespace NoZ.Editor
                                         continue;
 
                                     var glyphId = (ushort)(c + delta);
-                                    if (_ttf._glyphs[c] != null)
+                                    if (_ttf._glyphs.ContainsKey((char)c))
                                         throw new InvalidDataException($"Multiple definitions for glyph {c:2x}");
-                                    _ttf._glyphs[c] = new Glyph { id = glyphId, ascii = (char)c };
-                                    _glyphsById[glyphId] = _ttf._glyphs[c];
+                                    var glyph = new Glyph { id = glyphId, codepoint = (char)c };
+                                    _ttf._glyphs[(char)c] = glyph;
+                                    _glyphsById[glyphId] = glyph;
                                 }
                             }
                             else
@@ -194,10 +190,46 @@ namespace NoZ.Editor
 
                                     Seek(glyphIdArray + i * 2 + rangeOffset + 2 * (c - start));
                                     ushort glyphId = ReadUInt16();
-                                    if (_ttf._glyphs[c] != null)
+                                    if (_ttf._glyphs.ContainsKey((char)c))
                                         throw new InvalidDataException($"Multiple definitions for glyph {c:2x}");
-                                    _ttf._glyphs[c] = new Glyph { id = glyphId, ascii = (char)c };
-                                    _glyphsById[glyphId] = _ttf._glyphs[c];
+                                    var glyph = new Glyph { id = glyphId, codepoint = (char)c };
+                                    _ttf._glyphs[(char)c] = glyph;
+                                    _glyphsById[glyphId] = glyph;
+                                }
+                            }
+                        }
+                        break;
+                    }
+
+                    case 12:
+                    {
+                        // Format 12: format(u16) already read, next is reserved(u16), length(u32), language(u32), numGroups(u32)
+                        ReadUInt16(); // reserved
+                        var length12 = ReadUInt32();
+                        var language12 = ReadUInt32();
+                        var numGroups = ReadUInt32();
+
+                        for (uint g = 0; g < numGroups; g++)
+                        {
+                            var startCharCode = ReadUInt32();
+                            var endCharCode = ReadUInt32();
+                            var startGlyphId = ReadUInt32();
+
+                            for (uint c = startCharCode; c <= endCharCode; c++)
+                            {
+                                // Only handle BMP range
+                                if (c > 0xFFFF) continue;
+
+                                if (!IsInFilter((char)c))
+                                    continue;
+
+                                var glyphId = (ushort)(startGlyphId + (c - startCharCode));
+                                if (!_ttf._glyphs.ContainsKey((char)c))
+                                {
+                                    var glyph = new Glyph { id = glyphId, codepoint = (char)c };
+                                    _ttf._glyphs[(char)c] = glyph;
+                                    if (glyphId < _glyphsById.Length)
+                                        _glyphsById[glyphId] = glyph;
                                 }
                             }
                         }
@@ -307,12 +339,8 @@ namespace NoZ.Editor
                 var compoundGlyphs = new List<Glyph>();
 
                 // First pass: load simple glyphs
-                for (int i = 0; i < _ttf._glyphs.Length; i++)
+                foreach (var glyph in _ttf._glyphs.Values)
                 {
-                    var glyph = _ttf._glyphs[i];
-                    if (glyph == null)
-                        continue;
-
                     if (!SeekToGlyph(glyph))
                         continue;
 
@@ -636,19 +664,16 @@ namespace NoZ.Editor
 
                 var metricCount = ReadUInt16();
 
-                for (int i = 0; i < _ttf._glyphs.Length; i++)
+                foreach (var glyph in _ttf._glyphs.Values)
                 {
-                    if (_ttf._glyphs[i] == null)
-                        continue;
-
                     // If the glyph is past the end of the total number of metrics
                     // then it is contained in the end run..
-                    if (_ttf._glyphs[i].id >= metricCount)
+                    if (glyph.id >= metricCount)
                         // TODO: implement end run..
                         throw new NotImplementedException();
 
-                    Seek(TableName.HMTX, _ttf._glyphs[i].id * 4);
-                    _ttf._glyphs[i].advance = ReadUFUnit();
+                    Seek(TableName.HMTX, glyph.id * 4);
+                    glyph.advance = ReadUFUnit();
                     double leftBearing = ReadFUnit();
                 }
             }
@@ -787,13 +812,8 @@ namespace NoZ.Editor
                                 if (left == null || right == null)
                                     continue;
 
-                                if (null == _ttf._kerning)
-                                    _ttf._kerning = new List<Tuple<ushort, float>>();
-
-                                _ttf._kerning.Add(new Tuple<ushort, float>(
-                                    (ushort)((left.ascii << 8) + right.ascii),
-                                    (float)kern
-                                    ));
+                                var key = ((uint)left.codepoint << 16) | (uint)right.codepoint;
+                                _ttf._kerning[key] = (float)kern;
                             }
                             break;
                         }
@@ -817,8 +837,8 @@ namespace NoZ.Editor
                 ReadUInt16(); // Entry Selector
                 ReadUInt16(); // Range Shift
 
-                // Right now we only support ASCII table.
-                _ttf._glyphs = new Glyph[255];
+                _ttf._glyphs = new Dictionary<char, Glyph>();
+                _ttf._kerning = new Dictionary<uint, float>();
 
                 // Read all of the relevant table offsets and validate their checksums
                 for (int i = 0; i < numTables; i++)
