@@ -92,7 +92,7 @@ public static class PaletteManager
             displayName = tk.ExpectQuotedString();
 
             _paletteRowMap[row] = _palettes.Count;
-            _paletteIdMap[id] = _palettes.Count;
+            _paletteIdMap[id.ToLower()] = _palettes.Count;
             _palettes.Add(new PaletteDef(id, row, displayName));
         }
 
@@ -116,7 +116,7 @@ public static class PaletteManager
 
     public static bool TryGetPalette(string? id, out PaletteDef palette)
     {
-        if (!string.IsNullOrEmpty(id) && _paletteIdMap.TryGetValue(id, out var index))
+        if (!string.IsNullOrEmpty(id) && _paletteIdMap.TryGetValue(id.ToLower(), out var index))
         {
             palette = _palettes[index];
             return true;

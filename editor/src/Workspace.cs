@@ -256,7 +256,6 @@ public static partial class Workspace
 
     public static void SaveUserSettings(PropertySet props)
     {
-        // Save camera position and zoom to current collection before saving
         var collection = CollectionManager.VisibleCollection;
         if (collection != null)
         {
@@ -268,7 +267,6 @@ public static partial class Workspace
         props.SetBool("workspace", "show_names", _showNames);
         props.SetFloat("workspace", "ui_scale", UI.UserScale);
     }
-
     
     public static void Update()
     {

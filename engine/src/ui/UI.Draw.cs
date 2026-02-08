@@ -131,12 +131,15 @@ public static partial class UI
         if (_elementCount == 0) return;
 
         Graphics.SetBlendMode(BlendMode.Alpha);
+        Graphics.SetLayer(Config.UILayer);
+        Graphics.SetSortGroup(0);
 
         DrawElement(0, false);
 
         // Popups
         for (var i = 0; i < _popupCount; i++)
         {
+            Graphics.SetSortGroup(i + 1);
             var popupIndex = _popups[i];
             DrawElement(popupIndex, true);
         }

@@ -157,7 +157,6 @@ public static class UIRender
 
         AddQuadIndices(vertexOffset);
 
-        Graphics.SetLayer(_uiLayer);
         Graphics.SetShader(_shader);
         Graphics.SetTexture(texture ?? Graphics.WhiteTexture, filter: texture?.Filter ?? TextureFilter.Point);
         Graphics.SetMesh(_mesh);

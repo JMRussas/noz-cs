@@ -638,7 +638,7 @@ public partial class SpriteEditor : DocumentEditor
                 palette.Colors,
                 options: new Shape.RasterizeOptions {
                     AntiAlias = Document.IsAntiAliased,
-                    Color = Color.White.WithAlpha(Workspace.XrayAlpha)
+                    Color = Color.White
                 });
 
         for (int p = Padding - 1; p >= 0; p--)
@@ -1494,8 +1494,8 @@ public partial class SpriteEditor : DocumentEditor
             Graphics.SetLayer(EditorLayer.DocumentEditor);
             Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetTransform(Document.Transform);
+            Graphics.SetColor(Color.White.WithAlpha(Workspace.XrayAlpha));
             Graphics.SetTexture(_rasterTexture);
-            Graphics.SetColor(Color.White);
             Graphics.Draw(quad, uv);
 
             if (Document.ShowTiling)

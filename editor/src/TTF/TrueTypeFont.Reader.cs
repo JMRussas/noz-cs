@@ -28,7 +28,7 @@ namespace NoZ.Editor
             private short _indexToLocFormat;
             private readonly long[] _tableOffsets = new long[Enum.GetValues<TableName>().Length];
             private Vector2Double _scale;
-            private readonly string _filter = filter;
+            private readonly string? _filter = filter;
             private double _unitsPerEm;
             private int _requestedSize = requestedSize;
             private Glyph[] _glyphsById = null!;
