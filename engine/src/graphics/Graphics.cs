@@ -250,11 +250,6 @@ public static unsafe partial class Graphics
             ?? throw new ArgumentNullException(nameof(RenderConfig.SpriteShader), "Sprite shader not found");
     }
 
-    public static void Clear(Color color)
-    {
-        Driver.Clear(color);
-    }
-
     private static void UploadBones()
     {
         Driver.UpdateTextureRegion(
@@ -292,7 +287,7 @@ public static unsafe partial class Graphics
             (((long)(CurrentState.SortLayer & 0xFFF)) << LayerShift) |
             (((long)CurrentState.SortGroup) << GroupShift) |
             (((long)order) << OrderShift) |
-            (((long)_commands.Length) << IndexShift);
+            (((long)(_commands.Length & 0xFFFF)) << IndexShift);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -519,13 +514,22 @@ public static unsafe partial class Graphics
 
             LogGraphicsVerbose($"  Command: Index={commandIndex}  SortKey={cmd.SortKey}  IndexOffset={cmd.IndexOffset} IndexCount={cmd.IndexCount} State={cmd.BatchState}");
 
-            // Always break batch on external vertex arrays.
+            // External mesh: merge if same state and contiguous indices, otherwise new batch.
             if (cmdState.Mesh != _mesh)
             {
-                ref var newBatch = ref _batches.Add();
-                newBatch.IndexOffset = cmd.IndexOffset;
-                newBatch.IndexCount = cmd.IndexCount;
-                newBatch.State = cmd.BatchState;
+                ref var prevBatch = ref _batches[^1];
+                if (cmd.BatchState == prevBatch.State &&
+                    cmd.IndexOffset == prevBatch.IndexOffset + prevBatch.IndexCount)
+                {
+                    prevBatch.IndexCount += cmd.IndexCount;
+                }
+                else
+                {
+                    ref var newBatch = ref _batches.Add();
+                    newBatch.IndexOffset = cmd.IndexOffset;
+                    newBatch.IndexCount = cmd.IndexCount;
+                    newBatch.State = cmd.BatchState;
+                }
                 continue;
             }
 

@@ -732,6 +732,7 @@ public static partial class UI
             Color = style.Color,
             AlignX = style.AlignX,
             AlignY = style.AlignY,
+            Order = style.Order,
             Text = AddText(text)
         };
 
@@ -755,6 +756,7 @@ public static partial class UI
             AlignY = style.AlignY,
             Scale = style.Scale,
             Color = style.Color,
+            Order = style.Order,
             Texture = Graphics.SpriteAtlas?.Handle ?? nuint.Zero,
             UV0 = sprite.UV.TopLeft,
             UV1 = sprite.UV.BottomRight,
@@ -780,6 +782,7 @@ public static partial class UI
             AlignY = style.AlignY,
             Scale = style.Scale,
             Color = style.Color,
+            Order = style.Order,
             Texture = texture.Handle,
             UV0 = Vector2.Zero,
             UV1 = Vector2.One,

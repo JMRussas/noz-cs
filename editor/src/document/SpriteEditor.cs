@@ -28,6 +28,7 @@ public partial class SpriteEditor : DocumentEditor
     [ElementId("StrokeColorButton")]
     [ElementId("LayerButton")]
     [ElementId("BonePathButton")]
+    [ElementId("StrokeWidth")]
     private static partial class ElementId { }
 
     public new SpriteDocument Document => (SpriteDocument)base.Document;
@@ -201,8 +202,9 @@ public partial class SpriteEditor : DocumentEditor
 
         var strokeColor = (int)Document.CurrentStrokeColor;
         var strokeOpacity = Document.CurrentStrokeOpacity;
-        if (EditorUI.ColorButton(ElementId.StrokeColorButton, Document.Palette, ref strokeColor, ref strokeOpacity, EditorAssets.Sprites.IconStroke))
-            SetStrokeColor((byte)strokeColor, strokeOpacity);
+        var strokeWidth = (int)Document.CurrentStrokeWidth;
+        if (EditorUI.ColorButton(ElementId.StrokeColorButton, Document.Palette, ref strokeColor, ref strokeOpacity, ref strokeWidth, EditorAssets.Sprites.IconStroke))
+            SetStroke((byte)strokeColor, strokeOpacity, (byte)strokeWidth);
 
         // Palette 
         PaletteButtonUI();
@@ -353,7 +355,7 @@ public partial class SpriteEditor : DocumentEditor
         EditorUI.Popup(ElementId.BoneBindButton, Content);
     }
 
-    private void UpdateSelectionColor()
+    private void UpdateSelection()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
 
@@ -365,8 +367,10 @@ public partial class SpriteEditor : DocumentEditor
             Document.CurrentFillColor = path.FillColor;
             Document.CurrentFillOpacity = path.FillOpacity;
             Document.CurrentStrokeColor = path.StrokeColor;
+            Document.CurrentStrokeOpacity = path.StrokeOpacity;
             Document.CurrentLayer = path.Layer;
             Document.CurrentBone = path.Bone;
+            Document.CurrentStrokeWidth = (byte)int.Max(1, (int)path.StrokeWidth);
             return;
         }
     }
@@ -428,8 +432,7 @@ public partial class SpriteEditor : DocumentEditor
                 disabled: sizes.Length == 0))
                 EditorUI.TogglePopup(ElementId.ConstraintsButton);
 
-            ConstraintsPopupUI();
-            
+            ConstraintsPopupUI();            
         }
     }
 
@@ -706,10 +709,11 @@ public partial class SpriteEditor : DocumentEditor
         MarkRasterDirty();
     }
 
-    public void SetStrokeColor(byte color, float opacity)
+    public void SetStroke(byte color, float opacity, int width)
     {
         Document.CurrentStrokeColor = color;
         Document.CurrentStrokeOpacity = opacity;
+        Document.CurrentStrokeWidth = (byte)Math.Max(1, width);
 
         Undo.Record(Document);
 
@@ -718,7 +722,11 @@ public partial class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathStrokeColor(p, Document.CurrentStrokeColor, Document.CurrentStrokeOpacity);
+            shape.SetPathStroke(
+                p,
+                Document.CurrentStrokeColor,
+                Document.CurrentStrokeOpacity,
+                Document.CurrentStrokeWidth);
         }
 
         Document.MarkModified();
@@ -766,10 +774,8 @@ public partial class SpriteEditor : DocumentEditor
         var pathCount = 0;
 
         for (ushort p = 0; p < shape.PathCount; p++)
-        {
             if (PathHasSelectedAnchor(shape, shape.GetPath(p)))
                 pathsToDuplicate[pathCount++] = p;
-        }
 
         if (pathCount == 0)
             return;
@@ -785,6 +791,8 @@ public partial class SpriteEditor : DocumentEditor
                 fillColor: srcPath.FillColor,
                 fillOpacity: srcPath.FillOpacity,
                 strokeColor: srcPath.StrokeColor,
+                strokeWidth: srcPath.StrokeWidth,
+                strokeOpacity: srcPath.StrokeOpacity,
                 layer: srcPath.Layer);
             if (newPathIndex == ushort.MaxValue)
                 break;
@@ -837,7 +845,7 @@ public partial class SpriteEditor : DocumentEditor
         Document.MarkModified();
         Document.UpdateBounds();
         MarkRasterDirty();
-        UpdateSelectionColor();
+        UpdateSelection();
     }
 
     private void CenterShape()
@@ -921,7 +929,7 @@ public partial class SpriteEditor : DocumentEditor
         var shape = Document.GetFrame(_currentFrame).Shape;
         for (ushort i = 0; i < shape.AnchorCount; i++)
             shape.SetAnchorSelected(i, true);
-        UpdateSelectionColor();
+        UpdateSelection();
     }
 
     private void UpdateAnimation()
@@ -1015,7 +1023,7 @@ public partial class SpriteEditor : DocumentEditor
             return;
         }
 
-        UpdateSelectionColor();
+        UpdateSelection();
     }
 
     private static int FindNextInCycle(Span<ushort> items, Func<ushort, bool> isSelected)
@@ -1284,7 +1292,7 @@ public partial class SpriteEditor : DocumentEditor
         var localRect = Rect.FromMinMax(minLocal, maxLocal);
         shape.SelectAnchors(localRect);
 
-        UpdateSelectionColor();
+        UpdateSelection();
     }
 
     private void SelectAnchor(ushort anchorIndex, bool toggle)
@@ -1303,7 +1311,7 @@ public partial class SpriteEditor : DocumentEditor
             shape.SetAnchorSelected(anchorIndex, true);
         }
 
-        UpdateSelectionColor();
+        UpdateSelection();
     }
 
     private void SelectSegment(ushort anchorIndex, bool toggle)
@@ -1332,7 +1340,7 @@ public partial class SpriteEditor : DocumentEditor
             shape.SetAnchorSelected(nextAnchor, true);
         }
 
-        UpdateSelectionColor();
+        UpdateSelection();
     }
 
     private void SelectPath(ushort pathIndex, bool toggle)
@@ -1362,7 +1370,7 @@ public partial class SpriteEditor : DocumentEditor
                 shape.SetAnchorSelected((ushort)(path.AnchorStart + a), true);
         }
 
-        UpdateSelectionColor();
+        UpdateSelection();
     }
 
     private void SplitSegment(ushort anchorIndex)

@@ -13,8 +13,7 @@ public sealed partial class Shape
 {
     private const float AntiAliasEdgeInner = -0.5f;
     private const float AntiAliasEdgeOuter = 0.5f;
-
-    private const float DefaultStrokeWidth = 0.05f;
+    private const float StrokeScale = 0.005f;
     private static readonly Color32 DefaultStrokeColor = Color32.Black;
 
     public struct RasterizeOptions
@@ -89,7 +88,7 @@ public sealed partial class Shape
                 var strokeColor = palette[path.StrokeColor % palette.Length]
                     .ToColor32()
                     .WithAlpha(path.StrokeOpacity);
-                if (strokeColor.A >= float.Epsilon)
+                if (strokeColor.A > float.Epsilon)
                 {
                     RasterizeStroke(
                         target,
@@ -97,7 +96,7 @@ public sealed partial class Shape
                         sourceOffset,
                         polyVerts.AsSpan(0, vertCount),
                         strokeColor,
-                        DefaultStrokeWidth * dpi,
+                        StrokeScale * path.StrokeWidth * dpi,
                         antiAlias);
                 }
             }

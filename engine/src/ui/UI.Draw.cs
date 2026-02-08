@@ -199,7 +199,7 @@ public static partial class UI
         {
             Graphics.SetColor(e.Data.Label.Color);
             Graphics.SetTransform(transform);
-            TextRender.Draw(text, font, e.Data.Label.FontSize);
+            TextRender.Draw(text, font, e.Data.Label.FontSize, order: e.Data.Label.Order);
         }
     }
 
@@ -232,7 +232,7 @@ public static partial class UI
             Graphics.SetTransform(transform);
             Graphics.SetColor(img.Color);
             Graphics.SetTextureFilter(sprite.TextureFilter);
-            Graphics.DrawFlat(sprite, order: 0, bone: -1);
+            Graphics.DrawFlat(sprite, order: img.Order, bone: -1);
         }
         else if (e.Asset is Texture texture)
         {

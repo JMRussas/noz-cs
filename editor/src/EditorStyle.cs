@@ -118,7 +118,7 @@ public static class EditorStyle
             FontSize = TextSize,
             Color = Color.FromRgb(0xebebeb),
             AlignX = Align.Min,
-            AlignY = Align.Center
+            AlignY = Align.Center,
         };
         public readonly static LabelStyle DisabledText = Text with { Color = Color.FromRgb(0x3e3e3e) };
         public readonly static LabelStyle HoveredText = Text with { Color = Color.FromRgb(0xffffff) };

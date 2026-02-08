@@ -35,7 +35,6 @@ public interface IGraphicsDriver
     bool BeginFrame();
     void EndFrame();
 
-    void Clear(Color color);
     void SetViewport(in RectInt viewport);
     void SetScissor(in RectInt scissor);
     void ClearScissor();

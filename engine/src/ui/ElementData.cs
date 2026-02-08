@@ -51,6 +51,7 @@ internal struct LabelData
     public Color Color;
     public Align AlignX;
     public Align AlignY;
+    public ushort Order;
     public UnsafeSpan<char> Text;
 
     public static LabelData Default => new()
@@ -70,6 +71,7 @@ internal struct ImageData
     public Align AlignY;
     public float Scale;
     public Color Color;
+    public ushort Order;
     public nuint Texture;
     public Vector2 UV0;
     public Vector2 UV1;

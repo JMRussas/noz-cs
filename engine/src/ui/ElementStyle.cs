@@ -65,6 +65,7 @@ public struct LabelStyle()
     public Align AlignX = Align.Min;
     public Align AlignY = Align.Center;
     public Font? Font = null;
+    public ushort Order = 2;
 
     public static readonly LabelStyle Default = new();
     public static readonly LabelStyle Centered = new() { AlignX = Align.Center, AlignY = Align.Center };
@@ -78,6 +79,7 @@ public struct ImageStyle()
     public float Scale = 1.0f;
     public Color Color = Color.White;
     public BorderRadius BorderRadius = BorderRadius.Zero;
+    public ushort Order = 1;
 
     public static readonly ImageStyle Default = new();
     public static readonly ImageStyle Center = new() { AlignX = Align.Center, AlignY = Align.Center };

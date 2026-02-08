@@ -81,6 +81,7 @@ public class SpriteDocument : Document
 
     public byte CurrentFillColor = 0;
     public byte CurrentStrokeColor = 0;
+    public byte CurrentStrokeWidth = 1;
     public float CurrentFillOpacity = 1.0f;
     public float CurrentStrokeOpacity = 0.0f;
     public byte CurrentLayer = 0;
@@ -353,6 +354,7 @@ public class SpriteDocument : Document
         var fillOpacity = 1.0f;
         byte strokeColor = 0;
         var strokeOpacity = 0.0f;
+        var strokeWidth = 1;
         byte layer = 0;
         var bone = StringId.None;
 
@@ -367,6 +369,7 @@ public class SpriteDocument : Document
             {
                 strokeColor = (byte)tk.ExpectInt();
                 strokeOpacity = MathEx.Clamp01(tk.ExpectFloat(strokeOpacity));
+                strokeWidth = tk.ExpectInt(strokeWidth);
             }
             else if (tk.ExpectIdentifier("subtract"))
             {
@@ -391,7 +394,7 @@ public class SpriteDocument : Document
         }
 
         f.Shape.SetPathFillColor(pathIndex, fillColor, fillOpacity);
-        f.Shape.SetPathStrokeColor(pathIndex, strokeColor, strokeOpacity);
+        f.Shape.SetPathStroke(pathIndex, strokeColor, strokeOpacity, (byte)strokeWidth);
         f.Shape.SetPathLayer(pathIndex, layer);
         f.Shape.SetPathBone(pathIndex, bone);
     }
@@ -549,7 +552,7 @@ public class SpriteDocument : Document
                 writer.WriteLine($"fill {path.FillColor} {path.FillOpacity}");
 
             if (path.StrokeOpacity > float.Epsilon)
-                writer.WriteLine($"stroke {path.StrokeColor} {path.StrokeOpacity}");
+                writer.WriteLine($"stroke {path.StrokeColor} {path.StrokeOpacity} {path.StrokeWidth}");
 
             if (EditorApplication.Config.TryGetSpriteLayer(path.Layer, out var layerDef))
                 writer.WriteLine($"layer \"{layerDef.Id}\"");
@@ -672,6 +675,7 @@ public class SpriteDocument : Document
         Bounds = src.Bounds;
         CurrentFillColor = src.CurrentFillColor;
         CurrentStrokeColor = src.CurrentStrokeColor;
+        CurrentStrokeWidth = src.CurrentStrokeWidth;
         CurrentFillOpacity = src.CurrentFillOpacity;
         CurrentStrokeOpacity = src.CurrentStrokeOpacity;
         CurrentLayer = src.CurrentLayer;
@@ -718,6 +722,8 @@ public class SpriteDocument : Document
         meta.SetBool("sprite", "show_skeleton_overlay", ShowSkeletonOverlay);
         if (ConstrainedSize.HasValue)
             meta.SetString("sprite", "constrained_size", $"{ConstrainedSize.Value.X}x{ConstrainedSize.Value.Y}");
+        else
+            meta.RemoveKey("sprite", "constrained_size");
         meta.ClearGroup("skeleton");  // Legacy cleanup - skeleton now in .sprite file
         meta.ClearGroup("bone");  // Legacy cleanup
     }

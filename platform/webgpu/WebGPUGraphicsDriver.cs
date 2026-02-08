@@ -555,11 +555,6 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         }
     }
 
-    public void Clear(Color color)
-    {
-        // Clear is handled in BeginScenePass
-    }
-
     public void SetViewport(in RectInt viewport)
     {
         var clampedViewport = viewport;

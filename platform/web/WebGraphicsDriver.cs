@@ -1080,6 +1080,8 @@ public class WebGraphicsDriver : IGraphicsDriver
     public void BeginScenePass(Color clearColor)
     {
         _state.CurrentPassSampleCount = 1;
+        _state.PipelineDirty = true;
+        _state.BindGroupDirty = true;
 
         _singleColorAttachment[0] = JSObjectHelper.CreateColorAttachment(
             -1, // surface texture
@@ -1102,6 +1104,8 @@ public class WebGraphicsDriver : IGraphicsDriver
     public void ResumeScenePass()
     {
         _state.CurrentPassSampleCount = 1;
+        _state.PipelineDirty = true;
+        _state.BindGroupDirty = true;
 
         _singleColorAttachment[0] = JSObjectHelper.CreateColorAttachment(
             -1, // surface texture

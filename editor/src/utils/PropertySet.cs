@@ -61,6 +61,12 @@ public class PropertySet
         GetOrAddGroup(group)[key] = "";
     }
 
+    public void RemoveKey(string group, string key)
+    {
+        if (_properties.TryGetValue(group, out var g))
+            g.Remove(key);
+    }
+
     public bool HasKey(string group, string key) =>
         _properties.TryGetValue(group, out var g) && g.ContainsKey(key);
 

@@ -611,10 +611,30 @@ public static partial class Workspace
 
     private static void UpdateCamera()
     {
+        if (UI.Camera == null)
+            return;
+
         var effectiveDpi = _dpi * _uiScale * _userUIScale * _zoom;
-        var screenSize = Application.WindowSize;
-        var worldWidth = screenSize.X / effectiveDpi;
-        var worldHeight = screenSize.Y / effectiveDpi;
+
+        var sceneWorldRect = UI.GetElementWorldRect(ElementId.Scene);
+        var sceneScreenRect = UI.Camera!.WorldToScreen(sceneWorldRect);
+        var sceneWidth = sceneScreenRect.Width;
+        var sceneHeight = sceneScreenRect.Height;
+
+        if (sceneWidth <= 0 || sceneHeight <= 0)
+        {
+            var screenSize = Application.WindowSize;
+            sceneWidth = screenSize.X;
+            sceneHeight = screenSize.Y;
+            _camera.Viewport = default;
+        }
+        else
+        {
+            _camera.Viewport = new Rect(sceneScreenRect.X, sceneScreenRect.Y, sceneWidth, sceneHeight);
+        }
+
+        var worldWidth = sceneWidth / effectiveDpi;
+        var worldHeight = sceneHeight / effectiveDpi;
         var halfWidth = worldWidth * 0.5f;
         var halfHeight = worldHeight * 0.5f;
 

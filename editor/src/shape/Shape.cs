@@ -83,6 +83,7 @@ public sealed unsafe partial class Shape : IDisposable
         public ushort AnchorCount;
         public byte FillColor;
         public byte StrokeColor;
+        public byte StrokeWidth;
         public byte Layer;
         public StringId Bone;  // bone name (None = root when skeleton bound)
         public PathFlags Flags;
@@ -193,10 +194,15 @@ public sealed unsafe partial class Shape : IDisposable
         var max = new Vector2(float.MinValue, float.MinValue);
         var stroke = false;
 
+        var maxHalfStroke = 0f;
+
         for (ushort p = 0; p < PathCount; p++)
         {
             ref var path = ref _paths[p];
             stroke |= path.StrokeOpacity > float.Epsilon;
+
+            if (path.StrokeWidth > 0 && path.StrokeOpacity > float.Epsilon)
+                maxHalfStroke = MathF.Max(maxHalfStroke, path.StrokeWidth * StrokeScale);
 
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
@@ -220,13 +226,18 @@ public sealed unsafe partial class Shape : IDisposable
             }
         }
 
+        if (maxHalfStroke > 0f)
+        {
+            min -= new Vector2(maxHalfStroke, maxHalfStroke);
+            max += new Vector2(maxHalfStroke, maxHalfStroke);
+        }
+
         Bounds = Rect.FromMinMax(min, max);
 
-        var strokePadding = (int)(stroke ? MathF.Ceiling(DefaultStrokeWidth * 0.5f + 1f) : 0.0f);
-        var xMin = (int)MathF.Floor(min.X * dpi + 0.001f) - strokePadding;
-        var yMin = (int)MathF.Floor(min.Y * dpi + 0.001f) - strokePadding;
-        var xMax = (int)MathF.Ceiling(max.X * dpi - 0.001f) + strokePadding;
-        var yMax = (int)MathF.Ceiling(max.Y * dpi - 0.001f) + strokePadding;
+        var xMin = (int)MathF.Floor(min.X * dpi + 0.001f);
+        var yMin = (int)MathF.Floor(min.Y * dpi + 0.001f);
+        var xMax = (int)MathF.Ceiling(max.X * dpi - 0.001f);
+        var yMax = (int)MathF.Ceiling(max.Y * dpi - 0.001f);
 
         RasterBounds = new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
     }
@@ -830,10 +841,12 @@ public sealed unsafe partial class Shape : IDisposable
             path.Flags |= PathFlags.Subtract;
     }
 
-    public void SetPathStrokeColor(ushort pathIndex, byte color, float opacity)
+    public void SetPathStroke(ushort pathIndex, byte color, float opacity, byte width)
     {
-        _paths[pathIndex].StrokeColor = color;
-        _paths[pathIndex].StrokeOpacity = opacity;
+        ref var path = ref _paths[pathIndex];
+        path.StrokeColor = color;
+        path.StrokeOpacity = opacity;
+        path.StrokeWidth = width;
     }
 
     public void SetPathLayer(ushort pathIndex, byte layer)
@@ -852,6 +865,7 @@ public sealed unsafe partial class Shape : IDisposable
         float fillOpacity = 1.0f,
         byte strokeColor = 0,
         float strokeOpacity = 0.0f,
+        byte strokeWidth = 1,
         byte layer = 0,
         StringId bone = default)
     {
@@ -866,6 +880,7 @@ public sealed unsafe partial class Shape : IDisposable
             FillOpacity = fillOpacity,
             StrokeColor = strokeColor,
             StrokeOpacity = strokeOpacity,
+            StrokeWidth = strokeWidth,
             Layer = layer,
             Bone = bone,
             Flags = PathFlags.None | (fillOpacity <= float.MinValue ? PathFlags.Subtract : PathFlags.None),
@@ -1785,6 +1800,8 @@ public sealed unsafe partial class Shape : IDisposable
         var hasContent = false;
         var stroke = false;
 
+        var maxHalfStroke = 0f;
+
         for (ushort p = 0; p < PathCount; p++)
         {
             ref var path = ref _paths[p];
@@ -1793,6 +1810,9 @@ public sealed unsafe partial class Shape : IDisposable
 
             hasContent = true;
             stroke |= path.StrokeOpacity > float.Epsilon;
+
+            if (path.StrokeWidth > 0 && path.StrokeOpacity > float.Epsilon)
+                maxHalfStroke = MathF.Max(maxHalfStroke, path.StrokeWidth * StrokeScale);
 
             for (ushort a = 0; a < path.AnchorCount; a++)
             {
@@ -1816,14 +1836,19 @@ public sealed unsafe partial class Shape : IDisposable
             }
         }
 
+        if (maxHalfStroke > 0f)
+        {
+            min -= new Vector2(maxHalfStroke, maxHalfStroke);
+            max += new Vector2(maxHalfStroke, maxHalfStroke);
+        }
+
         if (!hasContent)
             return RectInt.Zero;
 
-        var strokePadding = (int)(stroke ? MathF.Ceiling(DefaultStrokeWidth * 0.5f + 1f) : 0.0f);
-        var xMin = (int)MathF.Floor(min.X * dpi + 0.001f) - strokePadding;
-        var yMin = (int)MathF.Floor(min.Y * dpi + 0.001f) - strokePadding;
-        var xMax = (int)MathF.Ceiling(max.X * dpi - 0.001f) + strokePadding;
-        var yMax = (int)MathF.Ceiling(max.Y * dpi - 0.001f) + strokePadding;
+        var xMin = (int)MathF.Floor(min.X * dpi + 0.001f);
+        var yMin = (int)MathF.Floor(min.Y * dpi + 0.001f);
+        var xMax = (int)MathF.Ceiling(max.X * dpi - 0.001f);
+        var yMax = (int)MathF.Ceiling(max.Y * dpi - 0.001f);
 
         return new RectInt(xMin, yMin, xMax - xMin, yMax - yMin);
     }
