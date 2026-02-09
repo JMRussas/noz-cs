@@ -23,6 +23,8 @@ public static class Application
     public static Vector2Int WindowPosition => Platform.WindowPosition;
     public static string AssetPath { get; private set; } = null!;
 
+    public static event Action? BeginFrame;
+
     public static void SetWindowSize(int width, int height) => Platform.SetWindowSize(width, height);
     public static void SetWindowPosition(int x, int y) => Platform.SetWindowPosition(x, y);
 
@@ -131,6 +133,10 @@ public static class Application
 
         if (!Graphics.BeginFrame())
             return _running;
+
+        var beginFrame = BeginFrame;
+        BeginFrame = null;
+        beginFrame?.Invoke();
 
         _instance.Update();
         UI.Begin();
