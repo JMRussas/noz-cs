@@ -2,8 +2,8 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-// #define NOZ_GRAPHICS_DEBUG
-// #define NOZ_GRAPHICS_DEBUG_VERBOSE
+//#define NOZ_GRAPHICS_DEBUG
+//#define NOZ_GRAPHICS_DEBUG_VERBOSE
 
 using System.Diagnostics;
 using System.Numerics;
@@ -97,6 +97,8 @@ public static unsafe partial class Graphics
     private static byte _rtPassIndex;
     private static Matrix4x4[] _passProjections = new Matrix4x4[MaxRenderPasses];
     private static RenderTexture _activeRenderTexture;
+    private static int _rtPassCount;
+    private static (nuint Handle, Color ClearColor)[] _rtPasses = new (nuint, Color)[MaxRenderPasses];
     private static NativeArray<float> _boneData;
     private static int _maxDrawCommands;
     private static int _maxBatches;
@@ -216,7 +218,7 @@ public static unsafe partial class Graphics
         _currentPass = RenderPass.RenderTexture;
         _rtPassIndex++;
         _activeRenderTexture = rt;
-
+        _rtPasses[_rtPassCount++] = (rt.Handle, CurrentState.ClearColor);
         SetViewport(0, 0, rt.Width, rt.Height);
         ClearScissor();
         _batchStateDirty = true;
@@ -345,18 +347,20 @@ public static unsafe partial class Graphics
         _batchStates.Add() = candidate;
 
         LogGraphics(
-            $"AddBatchState: Pass={candidate.Pass}" +
+            $"AddBatchState: " +
+            $" {_batchStates.Length - 1}" +
+            $" Pass={candidate.Pass}" +
             $" Globals={candidate.GlobalsIndex}" +
             $" Shader=0x{candidate.Shader:X}" +
             $" ({Asset.Get<Shader>(AssetType.Shader, candidate.Shader)?.Name ?? "???"})" +
             $" Texture0=0x{candidate.Textures[0]:X}" +
             $" Texture1=0x{candidate.Textures[1]:X}" +
             $" BlendMode={candidate.BlendMode}" +
-            $" Viewport=({candidate.Viewport})" +
+            $" Viewport={candidate.Viewport}" +
             $" Scissor={(candidate.ScissorEnabled?candidate.Scissor.ToString():"None")}" +
             $" Mesh=0x{candidate.Mesh:X}");
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AddQuad(
         in Vector2 p0,
@@ -403,11 +407,14 @@ public static unsafe partial class Graphics
             _indices.Length + indices.Length > MaxIndices)
             return;
 
+        var sortKey = MakeSortKey(order);
         ref var cmd = ref _commands.Add();
-        cmd.SortKey = MakeSortKey(order);
+        cmd.SortKey = sortKey;
         cmd.IndexOffset = _indices.Length;
         cmd.IndexCount = indices.Length;
         cmd.BatchState = _currentBatchState;
+
+        LogGraphics($"AddQuad: BatchState={_currentBatchState} SortKey={cmd.SortKey} Count={cmd.IndexCount} Offset={cmd.IndexOffset} Order={order}");
 
         var baseVertex = _vertices.Length;
 
@@ -461,9 +468,6 @@ public static unsafe partial class Graphics
         if (_commands.Length > 0)
         {
             ref var lastCommand = ref _commands[^1];
-            bool testa = lastCommand.BatchState == _currentBatchState;
-            bool testb = (lastCommand.SortKey & SortKeyMergeMask) == (sortKey & SortKeyMergeMask);
-            bool testc = lastCommand.IndexOffset + lastCommand.IndexCount == indexOffset;
 
             if (lastCommand.BatchState == _currentBatchState &&
                 (lastCommand.SortKey & SortKeyMergeMask) == (sortKey & SortKeyMergeMask) &&
@@ -473,8 +477,6 @@ public static unsafe partial class Graphics
                 LogGraphicsVerbose($"DrawElements (MERGE): BatchState={lastCommand.BatchState} Count={lastCommand.IndexCount} Offset={indexOffset} Order={order}");
                 return;
             }
-
-            testc = false;
         }
 
         ref var cmd = ref _commands.Add();
@@ -558,7 +560,7 @@ public static unsafe partial class Graphics
             return;
 
         TextRender.Flush();
-        UIRender.Flush();
+        UI.Flush();
 
         _commands.AsSpan().Sort();
 
@@ -566,21 +568,6 @@ public static unsafe partial class Graphics
 
         LogGraphics(
             $"ExecuteCommands: BatchStates={_batchStates.Length} Commands={_commands.Length} Vertices={_vertices.Length} Indices={_indices.Length}");
-
-        var lastViewport = RectInt.Zero;
-        var lastScissorEnabled = false;
-        var lastScissor = RectInt.Zero;
-        var lastShader = nuint.Zero;
-        var lastTextures = stackalloc nuint[MaxTextures];
-        var lastTextureFilters = stackalloc byte[MaxTextures];
-        for (int i = 0; i < MaxTextures; i++)
-        {
-            lastTextures[i] = nuint.Zero;
-            lastTextureFilters[i] = 0xFF; // Invalid value to force initial bind
-        }
-        var lastMesh = nuint.Zero;
-        var lastBlendMode = BlendMode.None;
-        var lastGlobalsIndex = ushort.MaxValue;
 
         if (_vertices.Length > 0 || _indices.Length > 0)
         {
@@ -590,8 +577,6 @@ public static unsafe partial class Graphics
 
             Driver.BindMesh(_mesh);
             Driver.UpdateMesh(_mesh, _vertices.AsByteSpan(), _sortedIndices.AsSpan());
-            Driver.SetBlendMode(BlendMode.None);
-            lastMesh = _mesh;
         }
 
         UploadBones();
@@ -605,6 +590,7 @@ public static unsafe partial class Graphics
         // Track current render target for pass switching (0 = scene pass, non-zero = RT pass)
         nuint currentRT = nuint.MaxValue;  // Invalid value to force first pass begin
         bool scenePassStarted = false;
+        Span<bool> rtVisited = stackalloc bool[_rtPassCount];
 
         for (int batchIndex = 0, batchCount = _batches.Length; batchIndex < batchCount; batchIndex++)
         {
@@ -649,99 +635,45 @@ public static unsafe partial class Graphics
                     // RT pass - get clear color from batch state
                     Driver.BeginRenderTexturePass(currentRT, batchState.ClearColor);
                     LogGraphics($"  BeginPass: RT 0x{currentRT:X}");
-                }
 
-                // Reset all state tracking - new render pass encoder needs everything rebound
-                lastViewport = RectInt.Zero;
-                lastScissorEnabled = false;
-                lastScissor = RectInt.Zero;
-                lastShader = nuint.Zero;
-                for (int i = 0; i < MaxTextures; i++)
-                {
-                    lastTextures[i] = nuint.Zero;
-                    lastTextureFilters[i] = 0xFF;
-                }
-                lastBlendMode = BlendMode.None;
-                lastGlobalsIndex = ushort.MaxValue;
-                lastMesh = nuint.Zero;
-            }
-
-            LogGraphics($"  Batch: Index={batchIndex} IndexOffset={batch.IndexOffset} IndexCount={batch.IndexCount} State={batch.State} Pass={batchState.Pass} RT=0x{batchState.RenderTextureHandle:X}");
-
-            if (lastViewport != batchState.Viewport)
-            {
-                LogGraphics($"    SetViewport: {batchState.Viewport}");
-
-                lastViewport = batchState.Viewport;
-                Driver.SetViewport(batchState.Viewport);
-            }
-
-            if (lastScissorEnabled != batchState.ScissorEnabled || lastScissor != batchState.Scissor)
-            {
-                LogGraphics($"    SetScissor: {(batchState.ScissorEnabled ? batchState.Scissor.ToString() : "None")}");
-
-                lastScissorEnabled = batchState.ScissorEnabled;
-                lastScissor = batchState.Scissor;
-
-                if (batchState.ScissorEnabled)
-                    Driver.SetScissor(batchState.Scissor);
-                else
-                    Driver.ClearScissor();
-            }
-
-            if (lastShader != batchState.Shader)
-            {
-                lastShader = batchState.Shader;
-                Driver.BindShader(batchState.Shader);
-                LogGraphics($"    BindShader: Handle=0x{batchState.Shader:X} ({Asset.Get<Shader>(AssetType.Shader, batchState.Shader)?.Name ?? "???"})");
-            }
-
-            if (lastGlobalsIndex != batchState.GlobalsIndex)
-            {
-                lastGlobalsIndex = batchState.GlobalsIndex;
-                Driver.BindGlobals(batchState.GlobalsIndex);
-                LogGraphics($"    BindGlobals: Index={batchState.GlobalsIndex}");
-            }
-
-            for (int t = 0; t < MaxTextures; t++)
-            {
-                if (lastTextures[t] != (nuint)batchState.Textures[t] || lastTextureFilters[t] != batchState.TextureFilters[t])
-                {
-                    lastTextures[t] = (nuint)batchState.Textures[t];
-                    lastTextureFilters[t] = batchState.TextureFilters[t];
-                    if (batchState.Textures[t] != 0)
+                    // Mark this RT as visited
+                    for (int r = 0; r < _rtPassCount; r++)
                     {
-                        Driver.BindTexture((nuint)batchState.Textures[t], t, (TextureFilter)batchState.TextureFilters[t]);
-                        LogGraphics($"    BindTexture: Slot={t} Handle=0x{batchState.Textures[t]:X} Filter={(TextureFilter)batchState.TextureFilters[t]} ({Asset.Get<Texture>(AssetType.Texture, (nuint)batchState.Textures[t])?.Name ?? "???"})");
+                        if (_rtPasses[r].Handle == currentRT)
+                        {
+                            rtVisited[r] = true;
+                            break;
+                        }
                     }
                 }
+
+                // Re-bind bone texture — driver state was reset by BeginPass
+                Driver.BindTexture(_boneTexture, BoneTextureSlot);
             }
 
-            if (lastBlendMode != batchState.BlendMode)
+            LogGraphics($"  Batch: Mesh={batchState.Mesh:X}  Shader={Asset.Get<Shader>(AssetType.Shader, batchState.Shader)!.Name}  Index={batchIndex} IndexOffset={batch.IndexOffset} IndexCount={batch.IndexCount} State={batch.State} Pass={batchState.Pass} RT=0x{batchState.RenderTextureHandle:X}");
+
+            // Apply all state unconditionally — driver early-exits handle optimization
+            Driver.SetViewport(batchState.Viewport);
+            if (batchState.ScissorEnabled)
+                Driver.SetScissor(batchState.Scissor);
+            else
+                Driver.ClearScissor();
+            Driver.BindShader(batchState.Shader);
+            Driver.BindGlobals(batchState.GlobalsIndex);
+            for (int t = 0; t < MaxTextures; t++)
             {
-                lastBlendMode = batchState.BlendMode;
-                Driver.SetBlendMode(batchState.BlendMode);
-                LogGraphics($"    SetBlendMode: {batchState.BlendMode}");
+                if (batchState.Textures[t] != 0)
+                    Driver.BindTexture((nuint)batchState.Textures[t], t, (TextureFilter)batchState.TextureFilters[t]);
             }
+            Driver.SetBlendMode(batchState.BlendMode);
+            Driver.BindMesh(batchState.Mesh);
 
-            if (lastMesh != batchState.Mesh)
-            {
-                lastMesh = batchState.Mesh;
-                Driver.BindMesh(batchState.Mesh);
-                LogGraphics($"    BindMesh: Handle=0x{batchState.Mesh:X}");
-            }
-
-            LogGraphics($"    DrawElements: IndexCount={batch.IndexCount} IndexOffset={batch.IndexOffset}");
             Driver.DrawElements(batch.IndexOffset, batch.IndexCount, 0);
-            LogGraphics($"    DrawElements: Done");
         }
 
-        // Clear scissor before ending the pass
-        if (lastScissorEnabled)
-        {
-            Driver.ClearScissor();
-            LogGraphics($"  ClearScissor");
-        }
+        // Clear scissor before ending the final pass
+        Driver.ClearScissor();
 
         // End the final pass
         if (currentRT == 0)
@@ -753,6 +685,17 @@ public static unsafe partial class Graphics
         {
             Driver.EndRenderTexturePass();
             LogGraphics($"  EndPass: RT 0x{currentRT:X}");
+        }
+
+        // Clear any RT passes that had no draw commands (e.g. empty workspace with grid hidden)
+        for (int r = 0; r < _rtPassCount; r++)
+        {
+            if (!rtVisited[r])
+            {
+                Driver.BeginRenderTexturePass(_rtPasses[r].Handle, _rtPasses[r].ClearColor);
+                Driver.EndRenderTexturePass();
+                LogGraphics($"  ClearOnly RT 0x{_rtPasses[r].Handle:X}");
+            }
         }
 
         LogGraphics($"Clearing buffers");

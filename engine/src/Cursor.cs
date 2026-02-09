@@ -52,6 +52,7 @@ public static class Cursor
         Graphics.SetCamera(_camera);
         Graphics.SetLayer(Graphics.MaxLayer);
         Graphics.SetBlendMode(BlendMode.Alpha);
+        Graphics.SetColor(Color.White);
         Graphics.SetTransform(
             Matrix3x2.CreateScale(_sprite.PixelsPerUnit * Scale) *
             Matrix3x2.CreateTranslation(Input.MousePosition));

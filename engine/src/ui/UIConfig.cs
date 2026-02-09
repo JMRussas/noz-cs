@@ -19,8 +19,7 @@ public enum ScreenMatchMode
 
 public class UIConfig
 {
-    public string UIShader { get; init; } = "ui";
-    public string UIImageShader { get; init; } = "ui_image";
+    public string Shader { get; init; } = "ui";
     public string DefaultFont { get; init; } = "";
     public string AtlasArray { get; init; } = "";
 

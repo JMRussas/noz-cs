@@ -96,6 +96,7 @@ public static unsafe partial class Graphics
 
         _currentPass = RenderPass.Scene;
         _rtPassIndex = 0;
+        _rtPassCount = 0;
         _boneRow = 1;
         _globalsBaseIndex = 0;
         Camera = null;

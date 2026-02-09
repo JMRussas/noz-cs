@@ -19,9 +19,12 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_currentSurfaceTextureView == null)
             throw new InvalidOperationException("Surface texture view is null - BeginFrame not called?");
 
+        // Reset all cached state — new render pass encoder needs everything rebound
+        _state = default;
         _state.CurrentPassSampleCount = 1;
         _state.PipelineDirty = true;
         _state.BindGroupDirty = true;
+        _currentGlobalsIndex = -1;
 
         var colorAttachment = new RenderPassColorAttachment
         {
@@ -88,9 +91,12 @@ public unsafe partial class WebGPUGraphicsDriver
         if (_currentSurfaceTextureView == null)
             throw new InvalidOperationException("Surface texture view is null - BeginFrame not called?");
 
+        // Reset all cached state — new render pass encoder needs everything rebound
+        _state = default;
         _state.CurrentPassSampleCount = 1;
         _state.PipelineDirty = true;
         _state.BindGroupDirty = true;
+        _currentGlobalsIndex = -1;
 
         var colorAttachment = new RenderPassColorAttachment
         {

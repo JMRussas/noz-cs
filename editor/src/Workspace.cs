@@ -308,8 +308,8 @@ public static partial class Workspace
 
         ActiveTool?.Draw();
 
-        if (Workspace.State == WorkspaceState.Edit && Workspace.ActiveEditor != null)
-            Workspace.ActiveEditor.Update();
+        if (State == WorkspaceState.Edit && ActiveEditor != null)
+            ActiveEditor.Update();
     }
 
     private static void UpdateToolAutoStart()
@@ -420,7 +420,11 @@ public static partial class Workspace
             UI.Container(new ContainerStyle { Height = 1, Color = EditorStyle.Panel.Root.Border.Color });
 
             using (UI.BeginFlex())
-                UI.Scene(ElementId.Scene, Camera, DrawScene, new SceneStyle { Color = EditorStyle.Workspace.FillColor, SampleCount = 4 });
+                UI.Scene(ElementId.Scene, Camera, DrawScene, new SceneStyle 
+                { 
+                    Color = EditorStyle.Workspace.FillColor,
+                    SampleCount = 4 
+                });
         }
 
         ActiveEditor?.UpdateUI();

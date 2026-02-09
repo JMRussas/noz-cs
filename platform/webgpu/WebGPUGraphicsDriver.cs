@@ -557,9 +557,23 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
 
     public void SetViewport(in RectInt viewport)
     {
+        // Clamp to current render target dimensions (RT or surface)
+        int targetWidth, targetHeight;
+        if (_activeRenderTexture != 0)
+        {
+            ref var rt = ref _renderTextures[_rtHandleToSlot[(int)_activeRenderTexture]];
+            targetWidth = rt.Width;
+            targetHeight = rt.Height;
+        }
+        else
+        {
+            targetWidth = _surfaceWidth;
+            targetHeight = _surfaceHeight;
+        }
+
         var clampedViewport = viewport;
-        clampedViewport.Width = Math.Min(viewport.Width, _surfaceWidth - viewport.X);
-        clampedViewport.Height = Math.Min(viewport.Height, _surfaceHeight - viewport.Y);
+        clampedViewport.Width = Math.Min(viewport.Width, targetWidth - viewport.X);
+        clampedViewport.Height = Math.Min(viewport.Height, targetHeight - viewport.Y);
         if (clampedViewport.Width <= 0 || clampedViewport.Height <= 0)
             return;
 

@@ -5,9 +5,9 @@
 // #define NOZ_UI_DEBUG
 // #define NOZ_UI_DEBUG_LINE_DIFF
 
+using NoZ.Platform;
 using System.Diagnostics;
 using System.Numerics;
-using System.Text;
 
 namespace NoZ;
 
@@ -35,11 +35,9 @@ public static partial class UI
     public struct AutoGrid : IDisposable { readonly void IDisposable.Dispose() => EndGrid(); }
     public struct AutoTransformed : IDisposable { readonly void IDisposable.Dispose() => EndTransformed(); }
 
-
     private static Font? _defaultFont;
     public static Font? DefaultFont => _defaultFont;
     public static UIConfig Config { get; private set; } = new();
-
 
     private static readonly Element[] _elements = new Element[MaxElements];
     private static readonly short[] _elementStack = new short[MaxElementStack];
@@ -124,13 +122,26 @@ public static partial class UI
         Config = config ?? new UIConfig();
         Camera = new Camera { FlipY = false };
 
-        UIRender.Init(Config);
+        _vertices = new NativeArray<UIVertex>(MaxUIVertices);
+        _indices = new NativeArray<ushort>(MaxUIIndices);
+        _mesh = Graphics.Driver.CreateMesh<UIVertex>(
+            MaxUIVertices,
+            MaxUIIndices,
+            BufferUsage.Dynamic,
+            "UIRender"
+        );
 
         _defaultFont = Asset.Get<Font>(AssetType.Font, Config.DefaultFont);
+        _shader = Asset.Get<Shader>(AssetType.Shader, Config.Shader)!;
     }
 
     public static void Shutdown()
     {
+        _vertices.Dispose();
+        _indices.Dispose();
+
+        Graphics.Driver.DestroyMesh(_mesh);
+
         _textBuffers[0].Dispose();
         _textBuffers[1].Dispose();
     }
@@ -830,8 +841,6 @@ public static partial class UI
         // Pop the automatic root container
         PopElement();
 
-        LogUIBegin();
-
         LayoutElements();
 
         Graphics.SetCamera(Camera);
@@ -843,8 +852,6 @@ public static partial class UI
         Graphics.SetCamera(Camera);
 
         DrawElements();
-
-        LogUIEnd();
 
         TextBoxEndFrame();
 
@@ -878,50 +885,17 @@ public static partial class UI
         );
     }
 
-    private static readonly StringBuilder _logBuffer = new();
-    private static string[] _logPrevLines = [];
-
-    [Conditional("NOZ_UI_DEBUG")]
-    private static void LogUIBegin() => _logBuffer.Clear();
-
-    [Conditional("NOZ_UI_DEBUG")]
-    private static void LogUIEnd()
-    {
-        var currentLines = _logBuffer.ToString().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
-        if (currentLines.AsSpan().SequenceEqual(_logPrevLines))
-        {
-            _logPrevLines = currentLines;
-            return;
-        }
-
-#if NOZ_UI_DEBUG_LINE_DIFF
-        var max = Math.Max(currentLines.Length, _logPrevLines.Length);
-        for (int i = 0; i < max; i++)
-        {
-            if (i >= currentLines.Length)
-                Log.Debug($"- {_logPrevLines[i]}");
-            else if (i >= _logPrevLines.Length || currentLines[i] != _logPrevLines[i])
-                Log.Debug(currentLines[i]);
-        }
-#else
-        foreach (var line in currentLines)
-            Log.Debug(line);
-#endif
-
-        _logPrevLines = currentLines;
-    }
-
     [Conditional("NOZ_UI_DEBUG")]
     private static void LogUI(string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)
     {
         if (condition == null || condition())
-            _logBuffer.AppendLine($"[UI] {new string(' ', depth)}{msg}{Log.Params(values)}");
+            Log.Info($"[UI] {new string(' ', depth)}{msg}{Log.Params(values)}");
     }
 
     [Conditional("NOZ_UI_DEBUG")]
     private static void LogUI(in Element e, string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)
     {
         if (condition == null || condition())
-            _logBuffer.AppendLine($"[UI]   {new string(' ', GetDepth(in e) * 2 + depth * 2)}{msg}{Log.Params(values)}");
+            Log.Info($"[UI]   {new string(' ', GetDepth(in e) * 2 + depth * 2)}{msg}{Log.Params(values)}");
     }
 }

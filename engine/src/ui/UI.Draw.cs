@@ -6,11 +6,19 @@
 
 using System.Diagnostics;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 
 namespace NoZ;
 
 public static partial class UI
 {
+    private const int MaxUIVertices = 16384;
+    private const int MaxUIIndices = 32768;
+    private static nuint _mesh;
+    private static NativeArray<UIVertex> _vertices;
+    private static NativeArray<ushort> _indices;
+    private static Shader _shader = null!;
+
     // Draw pass
     private static void DrawElement(int elementIndex, bool isPopup)
     {
@@ -102,7 +110,7 @@ public static partial class UI
         var trackH = viewportHeight - s.ScrollbarPadding * 2;
 
         // Draw track
-        UIRender.DrawRect(
+        DrawRect(
             new Rect(trackX, trackY, s.ScrollbarWidth, trackH),
             s.ScrollbarTrackColor,
             s.ScrollbarBorderRadius
@@ -116,7 +124,7 @@ public static partial class UI
             var scrollRatio = s.Offset / maxScroll;
             var thumbY = trackY + scrollRatio * (trackH - thumbH);
 
-            UIRender.DrawRect(
+            DrawRect(
                 new Rect(trackX, thumbY, s.ScrollbarWidth, thumbH),
                 s.ScrollbarThumbColor,
                 s.ScrollbarBorderRadius
@@ -130,9 +138,13 @@ public static partial class UI
 
         if (_elementCount == 0) return;
 
+        using var _ = Graphics.PushState();
         Graphics.SetBlendMode(BlendMode.Alpha);
+        Graphics.SetShader(_shader);
         Graphics.SetLayer(Config.UILayer);
         Graphics.SetSortGroup(0);
+        Graphics.SetTransform(Matrix3x2.Identity);
+        Graphics.SetMesh(_mesh);
 
         DrawElement(0, false);
 
@@ -153,7 +165,7 @@ public static partial class UI
 
         var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
         var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
-        UIRender.DrawRect(
+        DrawRect(
             new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y),
             style.Color,
             style.Border.Radius,
@@ -241,7 +253,7 @@ public static partial class UI
         {
             var topLeft = Vector2.Transform(offset, e.LocalToWorld);
             var bottomRight = Vector2.Transform(offset + scaledSize, e.LocalToWorld);
-            UIRender.DrawImage(
+            DrawImage(
                 new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y),
                 texture,
                 img.Color,
@@ -280,7 +292,6 @@ public static partial class UI
         Graphics.BeginPass(rt, scene.Color);
         Graphics.SetCamera(camera);
         Graphics.SetViewport(0, 0, rt.Width, rt.Height);
-        //camera.Viewport = new Rect(screenTopLeft.X, screenTopLeft.Y, screenBottomRight.X - screenTopLeft.X, screenBottomRight.Y - screenTopLeft.Y);
         draw();
         Graphics.EndPass();
         Graphics.SetCamera(Camera);
@@ -291,5 +302,136 @@ public static partial class UI
             Graphics.SetTextureFilter(TextureFilter.Point);
             Graphics.Draw(rt, topLeft, bottomRight);
         }
+    }
+
+    private static void DrawRect(
+        in Rect rect,
+        Color color,
+        float borderRadius = 0,
+        float borderWidth = 0,
+        Color borderColor = default,
+        ushort order = 0)
+    {
+        DrawRect(rect, color, BorderRadius.Circular(borderRadius), borderWidth, borderColor, order: order);
+    }
+
+    private static void DrawRect(
+        in Rect rect,
+        Color color,
+        BorderRadius borderRadius,
+        float borderWidth = 0,
+        Color borderColor = default,
+        ushort order = 0)
+    {
+        DrawTexturedRect(rect, Graphics.WhiteTexture, color, borderRadius, borderWidth, borderColor, order: order);
+    }
+
+    private static void DrawImage(
+        in Rect rect,
+        Texture texture,
+        Color color,
+        BorderRadius borderRadius = default)
+    {
+        DrawTexturedRect(rect, texture, color, borderRadius, 0, default);
+    }
+
+    private static void DrawTexturedRect(
+        in Rect rect,
+        Texture? texture,
+        Color color,
+        BorderRadius borderRadius,
+        float borderWidth,
+        Color borderColor,
+        ushort order = 0)
+    {
+        var vertexOffset = _vertices.Length;
+        var indexOffset = _indices.Length;
+
+        if (!_vertices.CheckCapacity(4) || !_indices.CheckCapacity(6))
+            return;
+
+        var x = rect.X;
+        var y = rect.Y;
+        var w = rect.Width;
+        var h = rect.Height;
+
+        // Clamp radii to half the rect size to avoid overlap
+        var maxR = MathF.Min(w, h) / 2;
+        var rTL = MathF.Min(borderRadius.TopLeft, maxR);
+        var rTR = MathF.Min(borderRadius.TopRight, maxR);
+        var rBL = MathF.Min(borderRadius.BottomLeft, maxR);
+        var rBR = MathF.Min(borderRadius.BottomRight, maxR);
+
+        var radii = new Vector4(rTL, rTR, rBL, rBR);
+        var rectSize = new Vector2(w, h);
+
+        // Simple 4-vertex quad - shader handles everything
+        _vertices.Add(new UIVertex
+        {
+            Position = new Vector2(x, y),
+            UV = new Vector2(0, 0),
+            Normal = rectSize,
+            Color = color,
+            BorderRatio = borderWidth,
+            BorderColor = borderColor,
+            CornerRadii = radii
+        });
+        _vertices.Add(new UIVertex
+        {
+            Position = new Vector2(x + w, y),
+            UV = new Vector2(1, 0),
+            Normal = rectSize,
+            Color = color,
+            BorderRatio = borderWidth,
+            BorderColor = borderColor,
+            CornerRadii = radii
+        });
+        _vertices.Add(new UIVertex
+        {
+            Position = new Vector2(x + w, y + h),
+            UV = new Vector2(1, 1),
+            Normal = rectSize,
+            Color = color,
+            BorderRatio = borderWidth,
+            BorderColor = borderColor,
+            CornerRadii = radii
+        });
+        _vertices.Add(new UIVertex
+        {
+            Position = new Vector2(x, y + h),
+            UV = new Vector2(0, 1),
+            Normal = rectSize,
+            Color = color,
+            BorderRatio = borderWidth,
+            BorderColor = borderColor,
+            CornerRadii = radii
+        });
+
+        AddQuadIndices(vertexOffset);
+
+        using var _ = Graphics.PushState();
+        Graphics.SetTexture(texture ?? Graphics.WhiteTexture, filter: texture?.Filter ?? TextureFilter.Point);
+        Graphics.SetMesh(_mesh);
+        Graphics.DrawElements(6, indexOffset, order: order);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void AddQuadIndices(int baseVertex)
+    {
+        _indices.Add((ushort)baseVertex);
+        _indices.Add((ushort)(baseVertex + 1));
+        _indices.Add((ushort)(baseVertex + 2));
+        _indices.Add((ushort)(baseVertex + 2));
+        _indices.Add((ushort)(baseVertex + 3));
+        _indices.Add((ushort)baseVertex);
+    }
+
+    public static void Flush()
+    {
+        if (_indices.Length == 0) return;
+        Graphics.Driver.BindMesh(_mesh);
+        Graphics.Driver.UpdateMesh(_mesh, _vertices.AsByteSpan(), _indices.AsSpan());
+        _vertices.Clear();
+        _indices.Clear();
     }
 }

@@ -68,20 +68,6 @@ public class WebGraphicsDriver : IGraphicsDriver
     private readonly StringBuilder _jsonBuilder = new(512);
     private readonly JSObject[] _singleColorAttachment = new JSObject[1]; // Reusable array for render pass
 
-    // Bind group cache to avoid recreating bind groups every frame
-    private readonly Dictionary<BindGroupKey, int> _bindGroupCache = new();
-    private struct BindGroupKey : IEquatable<BindGroupKey>
-    {
-        public nuint Shader;
-        public int GlobalsIndex;
-        public ulong TextureHash; // Combined hash of bound textures
-
-        public bool Equals(BindGroupKey other) =>
-            Shader == other.Shader && GlobalsIndex == other.GlobalsIndex && TextureHash == other.TextureHash;
-
-        public override int GetHashCode() => HashCode.Combine(Shader, GlobalsIndex, TextureHash);
-    }
-
     public string ShaderExtension => "";
 
     private struct CachedState
@@ -100,6 +86,25 @@ public class WebGraphicsDriver : IGraphicsDriver
         public int CurrentPassSampleCount;
         public int CurrentPipelineId;
         public int CurrentBindGroupId;
+
+        /// <summary>Reset all cached state to defaults, preserving allocated arrays.</summary>
+        public void Reset()
+        {
+            BoundShader = 0;
+            BlendMode = BlendMode.None;
+            TextureFilter = TextureFilter.Point;
+            BoundMesh = 0;
+            Array.Clear(BoundTextures);
+            Array.Clear(TextureFilters);
+            PipelineDirty = true;
+            BindGroupDirty = true;
+            Viewport = default;
+            ScissorEnabled = false;
+            Scissor = default;
+            CurrentPassSampleCount = 0;
+            CurrentPipelineId = 0;
+            CurrentBindGroupId = 0;
+        }
     }
 
     private struct MeshInfo
@@ -229,8 +234,7 @@ public class WebGraphicsDriver : IGraphicsDriver
             _surfaceHeight = newHeight;
         }
 
-        _state.CurrentPipelineId = 0;
-        _state.CurrentBindGroupId = 0;
+        _state.Reset();
 
         return true;
     }
@@ -251,9 +255,22 @@ public class WebGraphicsDriver : IGraphicsDriver
 
     public void SetViewport(in RectInt viewport)
     {
+        // Clamp to current render target dimensions (RT or surface)
+        int targetWidth, targetHeight;
+        if (_activeRenderTexture != 0 && _renderTextures.TryGetValue(_activeRenderTexture, out var rt))
+        {
+            targetWidth = rt.Width;
+            targetHeight = rt.Height;
+        }
+        else
+        {
+            targetWidth = _surfaceWidth;
+            targetHeight = _surfaceHeight;
+        }
+
         var clampedViewport = viewport;
-        clampedViewport.Width = Math.Min(viewport.Width, _surfaceWidth - viewport.X);
-        clampedViewport.Height = Math.Min(viewport.Height, _surfaceHeight - viewport.Y);
+        clampedViewport.Width = Math.Min(viewport.Width, targetWidth - viewport.X);
+        clampedViewport.Height = Math.Min(viewport.Height, targetHeight - viewport.Y);
         if (clampedViewport.Width <= 0 || clampedViewport.Height <= 0)
             return;
 
@@ -914,25 +931,6 @@ public class WebGraphicsDriver : IGraphicsDriver
             return 0;
         }
 
-        // Compute texture hash for cache key
-        ulong textureHash = 0;
-        for (int i = 0; i < _state.BoundTextures.Length; i++)
-        {
-            textureHash = textureHash * 31 + _state.BoundTextures[i];
-            textureHash = textureHash * 31 + (ulong)_state.TextureFilters[i];
-        }
-
-        // Check cache first
-        var cacheKey = new BindGroupKey
-        {
-            Shader = _state.BoundShader,
-            GlobalsIndex = _currentGlobalsIndex,
-            TextureHash = textureHash
-        };
-
-        if (_bindGroupCache.TryGetValue(cacheKey, out var cachedId))
-            return cachedId;
-
         // Build JSON using StringBuilder to avoid allocations
         _jsonBuilder.Clear();
         _jsonBuilder.Append('[');
@@ -1029,16 +1027,7 @@ public class WebGraphicsDriver : IGraphicsDriver
 
         _jsonBuilder.Append(']');
         var bindGroupId = WebGPUInterop.CreateBindGroupFromJson(shader.BindGroupLayoutId, _jsonBuilder.ToString(), null);
-
-        // Cache the result
-        _bindGroupCache[cacheKey] = bindGroupId;
         return bindGroupId;
-    }
-
-    // Clear bind group cache when textures change or at frame boundaries if needed
-    private void InvalidateBindGroupCache()
-    {
-        _bindGroupCache.Clear();
     }
 
     // No longer needed - using StringBuilder instead
@@ -1079,9 +1068,10 @@ public class WebGraphicsDriver : IGraphicsDriver
 
     public void BeginScenePass(Color clearColor)
     {
+        // Reset all cached state — new render pass encoder needs everything rebound
+        _state.Reset();
         _state.CurrentPassSampleCount = 1;
-        _state.PipelineDirty = true;
-        _state.BindGroupDirty = true;
+        _currentGlobalsIndex = -1;
 
         _singleColorAttachment[0] = JSObjectHelper.CreateColorAttachment(
             -1, // surface texture
@@ -1103,9 +1093,10 @@ public class WebGraphicsDriver : IGraphicsDriver
 
     public void ResumeScenePass()
     {
+        // Reset all cached state — new render pass encoder needs everything rebound
+        _state.Reset();
         _state.CurrentPassSampleCount = 1;
-        _state.PipelineDirty = true;
-        _state.BindGroupDirty = true;
+        _currentGlobalsIndex = -1;
 
         _singleColorAttachment[0] = JSObjectHelper.CreateColorAttachment(
             -1, // surface texture
@@ -1188,13 +1179,15 @@ public class WebGraphicsDriver : IGraphicsDriver
         }
 
         _activeRenderTexture = renderTexture;
+
+        // Reset all cached state — new render pass encoder needs everything rebound
+        _state.Reset();
         _state.CurrentPassSampleCount = rt.SampleCount;
+        _currentGlobalsIndex = -1;
+
         WebGPUInterop.BeginRenderTexturePass(rt.JsTextureId, clearColor.R, clearColor.G, clearColor.B, clearColor.A);
         WebGPUInterop.SetViewport(0, 0, rt.Width, rt.Height, 0, 1);
         WebGPUInterop.SetScissorRect(0, 0, rt.Width, rt.Height);
-
-        _state.PipelineDirty = true;
-        _state.BindGroupDirty = true;
     }
 
     public void EndRenderTexturePass()

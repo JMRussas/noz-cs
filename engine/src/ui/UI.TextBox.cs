@@ -19,7 +19,7 @@ public static partial class UI
         var isFocused = e.Id != 0 && IsFocused(ref e);
         var border = isFocused ? data.FocusBorder : data.Border;
 
-        UIRender.DrawRect(
+        DrawRect(
             new Rect(Vector2.Transform(e.Rect.Position, e.LocalToWorld), e.Rect.Size),
             data.BackgroundColor,
             border.Radius,
@@ -365,7 +365,7 @@ public static partial class UI
 
         var pos = Vector2.Transform(new Vector2(drawX + e.Rect.X, e.Rect.Y + padding.T), e.LocalToWorld);
         var selectionHeight = e.Rect.Height - padding.Vertical;
-        UIRender.DrawRect(new Rect(pos.X, pos.Y, drawW, selectionHeight), e.Data.TextBox.SelectionColor);
+        DrawRect(new Rect(pos.X, pos.Y, drawW, selectionHeight), e.Data.TextBox.SelectionColor);
     }
 
     private static void DrawTextBoxText(
@@ -382,8 +382,8 @@ public static partial class UI
         ref var tb = ref es.Data.TextBox;
         var padding = e.Data.TextBox.Padding;
 
-        var scale = UI.GetUIScale();
-        var screenPos = UI.Camera!.WorldToScreen(Vector2.Transform(e.Rect.Position + new Vector2(padding.L, padding.T), e.LocalToWorld));
+        var scale = GetUIScale();
+        var screenPos = Camera!.WorldToScreen(Vector2.Transform(e.Rect.Position + new Vector2(padding.L, padding.T), e.LocalToWorld));
         var screenHeight = Application.WindowSize.Y;
         var contentWidth = e.Rect.Width - padding.Horizontal;
         var contentHeight = e.Rect.Height - padding.Vertical;
@@ -405,7 +405,7 @@ public static partial class UI
             Graphics.SetScissor(scissor);
             Graphics.SetColor(color);
             Graphics.SetTransform(Matrix3x2.CreateTranslation(textOffset) * e.LocalToWorld);
-            TextRender.Draw(textToRender, font, fontSize);
+            TextRender.Draw(textToRender, font, fontSize, order: 2);
             Graphics.ClearScissor();
         }
     }
@@ -458,7 +458,7 @@ public static partial class UI
         var cursorY = (contentHeight - cursorH) * 0.5f + padding.T;
 
         var pos = Vector2.Transform(new Vector2(cursorX + e.Rect.X, cursorY + e.Rect.Y), e.LocalToWorld);
-        UIRender.DrawRect(new Rect(pos.X, pos.Y, cursorW, cursorH), Color.White);
+        DrawRect(new Rect(pos.X, pos.Y, cursorW, cursorH), Color.White);
     }
 
     private static float MeasureText(

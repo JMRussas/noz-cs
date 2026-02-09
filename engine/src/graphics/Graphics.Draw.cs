@@ -242,11 +242,6 @@ public static partial class Graphics
         }
     }
 
-    /// <summary>
-    /// Draw a sprite using the currently bound shader (does not override shader/texture).
-    /// Requires SetTexture and SetShader to be called before this.
-    /// Skinned sprites work in skeleton space (no offset needed).
-    /// </summary>
     public static void DrawRaw(Sprite sprite, ushort order = 0, int bone = -1)
     {
         if (sprite == null) return;

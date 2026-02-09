@@ -774,7 +774,13 @@ public unsafe partial class WebGPUGraphicsDriver
         var rtSlot = _rtHandleToSlot[(int)renderTexture];
         ref var rt = ref _renderTextures[rtSlot];
         _activeRenderTexture = renderTexture;
+
+        // Reset all cached state — new render pass encoder needs everything rebound
+        _state = default;
         _state.CurrentPassSampleCount = rt.SampleCount;
+        _state.PipelineDirty = true;
+        _state.BindGroupDirty = true;
+        _currentGlobalsIndex = -1;
 
         var colorAttachment = new RenderPassColorAttachment
         {
@@ -802,9 +808,6 @@ public unsafe partial class WebGPUGraphicsDriver
 
         _wgpu.RenderPassEncoderSetViewport(_currentRenderPass, 0, 0, rt.Width, rt.Height, 0, 1);
         _wgpu.RenderPassEncoderSetScissorRect(_currentRenderPass, 0, 0, (uint)rt.Width, (uint)rt.Height);
-
-        _state.PipelineDirty = true;
-        _state.BindGroupDirty = true;
     }
 
     public void EndRenderTexturePass()
