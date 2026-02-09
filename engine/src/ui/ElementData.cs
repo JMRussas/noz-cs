@@ -202,6 +202,11 @@ internal struct PopupData
     };
 }
 
+internal struct OpacityData
+{
+    public float Value;
+}
+
 internal struct SpacerData
 {
     public Vector2 Size;
@@ -267,4 +272,5 @@ internal struct ElementData
     [FieldOffset(0)] public SpacerData Spacer;
     [FieldOffset(0)] public TextBoxData TextBox;
     [FieldOffset(0)] public SceneData Scene;
+    [FieldOffset(0)] public OpacityData Opacity;
 }

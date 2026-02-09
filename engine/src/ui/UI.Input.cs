@@ -252,7 +252,7 @@ public static partial class UI
             // When popups are open, only process input for elements inside popups
             if (_popupCount > 0 && !IsInsidePopup(elementIndex))
             {
-                es.SetFlags(ElementFlags.Hovered | ElementFlags.Down | ElementFlags.Pressed | ElementFlags.DoubleClick | ElementFlags.RightClick, ElementFlags.None);
+                es.SetFlags(ElementFlags.Hovered | ElementFlags.Down | ElementFlags.Pressed | ElementFlags.DoubleClick | ElementFlags.RightClick | ElementFlags.HoverChanged, ElementFlags.None);
                 continue;
             }
 
@@ -262,7 +262,9 @@ public static partial class UI
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
             var mouseOver = e.Rect.Contains(localMouse);
 
+            var wasHovered = es.IsHovered;
             es.SetFlags(ElementFlags.Hovered, mouseOver ? ElementFlags.Hovered : ElementFlags.None);
+            es.SetFlags(ElementFlags.HoverChanged, wasHovered != es.IsHovered ? ElementFlags.HoverChanged : ElementFlags.None);
             es.SetFlags(ElementFlags.Down, mouseOver && _mouseLeftDown ? ElementFlags.Down : ElementFlags.None);
 
             // Scene elements pass input through to the application; when the mouse

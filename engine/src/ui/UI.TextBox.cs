@@ -21,10 +21,10 @@ public static partial class UI
 
         DrawRect(
             new Rect(Vector2.Transform(e.Rect.Position, e.LocalToWorld), e.Rect.Size),
-            data.BackgroundColor,
+            ApplyOpacity(data.BackgroundColor),
             border.Radius,
             border.Width,
-            border.Color
+            ApplyOpacity(border.Color)
         );
 
         if (e.Id == 0)
@@ -36,7 +36,7 @@ public static partial class UI
         ref var es = ref GetElementState(ref e);
         var text = es.Data.TextBox.Text.AsReadOnlySpan();
         DrawTextBoxSelection(ref e, text, font);
-        DrawTextBoxText(ref e, text, font, data.FontSize, data.TextColor, data.Password);
+        DrawTextBoxText(ref e, text, font, data.FontSize, ApplyOpacity(data.TextColor), data.Password);
         DrawTextBoxPlaceholder(ref e, text, font);
         DrawTextBoxCursor(ref e, text, font);            
     }
@@ -365,7 +365,7 @@ public static partial class UI
 
         var pos = Vector2.Transform(new Vector2(drawX + e.Rect.X, e.Rect.Y + padding.T), e.LocalToWorld);
         var selectionHeight = e.Rect.Height - padding.Vertical;
-        DrawRect(new Rect(pos.X, pos.Y, drawW, selectionHeight), e.Data.TextBox.SelectionColor);
+        DrawRect(new Rect(pos.X, pos.Y, drawW, selectionHeight), ApplyOpacity(e.Data.TextBox.SelectionColor));
     }
 
     private static void DrawTextBoxText(
@@ -428,7 +428,7 @@ public static partial class UI
 
         using (Graphics.PushState())
         {
-            Graphics.SetColor(data.PlaceholderColor);
+            Graphics.SetColor(ApplyOpacity(data.PlaceholderColor));
             Graphics.SetTransform(transform);
             TextRender.Draw(placeholder, font, fontSize);
         }
@@ -458,7 +458,7 @@ public static partial class UI
         var cursorY = (contentHeight - cursorH) * 0.5f + padding.T;
 
         var pos = Vector2.Transform(new Vector2(cursorX + e.Rect.X, cursorY + e.Rect.Y), e.LocalToWorld);
-        DrawRect(new Rect(pos.X, pos.Y, cursorW, cursorH), Color.White);
+        DrawRect(new Rect(pos.X, pos.Y, cursorW, cursorH), ApplyOpacity(Color.White));
     }
 
     private static float MeasureText(

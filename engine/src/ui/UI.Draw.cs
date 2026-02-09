@@ -18,6 +18,10 @@ public static partial class UI
     private static NativeArray<UIVertex> _vertices;
     private static NativeArray<ushort> _indices;
     private static Shader _shader = null!;
+    private static float _drawOpacity = 1.0f;
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Color ApplyOpacity(Color c) => c.WithAlpha(c.A * _drawOpacity);
 
     // Draw pass
     private static void DrawElement(int elementIndex, bool isPopup)
@@ -30,6 +34,7 @@ public static partial class UI
         ])}");
 
         var setScissor = false;
+        var previousOpacity = _drawOpacity;
 
         switch (e.Type)
         {
@@ -57,6 +62,10 @@ public static partial class UI
 
             case ElementType.Popup when !isPopup:
                 return;
+
+            case ElementType.Opacity:
+                _drawOpacity *= e.Data.Opacity.Value;
+                break;
 
             case ElementType.Scrollable:
             {
@@ -89,6 +98,8 @@ public static partial class UI
         // Draw scrollbar after children (outside scissor)
         if (e.Type == ElementType.Scrollable)
             DrawScrollbar(ref e);
+
+        _drawOpacity = previousOpacity;
     }
 
     private static void DrawScrollbar(ref Element e)
@@ -112,7 +123,7 @@ public static partial class UI
         // Draw track
         DrawRect(
             new Rect(trackX, trackY, s.ScrollbarWidth, trackH),
-            s.ScrollbarTrackColor,
+            ApplyOpacity(s.ScrollbarTrackColor),
             s.ScrollbarBorderRadius
         );
 
@@ -126,7 +137,7 @@ public static partial class UI
 
             DrawRect(
                 new Rect(trackX, thumbY, s.ScrollbarWidth, thumbH),
-                s.ScrollbarThumbColor,
+                ApplyOpacity(s.ScrollbarThumbColor),
                 s.ScrollbarBorderRadius
             );
         }
@@ -138,6 +149,7 @@ public static partial class UI
 
         if (_elementCount == 0) return;
 
+        _drawOpacity = 1.0f;
         using var _ = Graphics.PushState();
         Graphics.SetBlendMode(BlendMode.Alpha);
         Graphics.SetShader(_shader);
@@ -167,10 +179,10 @@ public static partial class UI
         var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
         DrawRect(
             new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y),
-            style.Color,
+            ApplyOpacity(style.Color),
             style.Border.Radius,
             style.Border.Width,
-            style.Border.Color,
+            ApplyOpacity(style.Border.Color),
             order: e.Data.Container.Order
         );
     }
@@ -196,7 +208,7 @@ public static partial class UI
 
         using (Graphics.PushState())
         {
-            Graphics.SetColor(color);
+            Graphics.SetColor(ApplyOpacity(color));
             Graphics.SetTransform(transform);
             TextRender.Draw(text, font, fontSize);
         }
@@ -212,7 +224,7 @@ public static partial class UI
 
         using (Graphics.PushState())
         {
-            Graphics.SetColor(e.Data.Label.Color);
+            Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
             Graphics.SetTransform(transform);
             TextRender.Draw(text, font, e.Data.Label.FontSize, order: e.Data.Label.Order);
         }
@@ -245,7 +257,7 @@ public static partial class UI
             var transform = Matrix3x2.CreateScale(scale * sprite.PixelsPerUnit) * Matrix3x2.CreateTranslation(offset) * e.LocalToWorld;
             using var _ = Graphics.PushState();
             Graphics.SetTransform(transform);
-            Graphics.SetColor(img.Color);
+            Graphics.SetColor(ApplyOpacity(img.Color));
             Graphics.SetTextureFilter(sprite.TextureFilter);
             Graphics.DrawFlat(sprite, order: img.Order, bone: -1);
         }
@@ -256,7 +268,7 @@ public static partial class UI
             DrawImage(
                 new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y),
                 texture,
-                img.Color,
+                ApplyOpacity(img.Color),
                 img.BorderRadius
             );
         }
@@ -299,6 +311,7 @@ public static partial class UI
         // Draw the RT to screen
         using (Graphics.PushState())
         {
+            Graphics.SetColor(ApplyOpacity(Color.White));
             Graphics.SetTextureFilter(TextureFilter.Point);
             Graphics.Draw(rt, topLeft, bottomRight);
         }

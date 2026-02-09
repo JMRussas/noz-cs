@@ -18,6 +18,7 @@ internal enum ElementFlags : ushort
     Changed = 1 << 5,
     DoubleClick = 1 << 6,
     RightClick = 1 << 7,
+    HoverChanged = 1 << 8,
 }
 
 internal struct TextBoxState
@@ -50,9 +51,11 @@ internal struct ElementState
     public System.Numerics.Matrix3x2 LocalToWorld;
     public ElementStateData Data;
     public ushort LastFrame;
+    public Tween Tween;
 
     public readonly bool HasFocus => (Flags & ElementFlags.Focus) != 0;
     public readonly bool IsHovered => (Flags & ElementFlags.Hovered) != 0;
+    public readonly bool IsHoverChanged => (Flags & ElementFlags.HoverChanged) != 0;
     public readonly bool IsPressed => (Flags & ElementFlags.Pressed) != 0;
     public readonly bool IsDown => (Flags & ElementFlags.Down) != 0;
     public readonly bool IsDragging => (Flags & ElementFlags.Dragging) != 0;

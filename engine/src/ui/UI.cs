@@ -34,6 +34,7 @@ public static partial class UI
     public struct AutoPopup : IDisposable { readonly void IDisposable.Dispose() => EndPopup(); }
     public struct AutoGrid : IDisposable { readonly void IDisposable.Dispose() => EndGrid(); }
     public struct AutoTransformed : IDisposable { readonly void IDisposable.Dispose() => EndTransformed(); }
+    public struct AutoOpacity : IDisposable { readonly void IDisposable.Dispose() => EndOpacity(); }
 
     private static Font? _defaultFont;
     public static Font? DefaultFont => _defaultFont;
@@ -265,6 +266,12 @@ public static partial class UI
         e.Id = elementId;
 
         ref var es = ref GetElementState(elementId);
+
+        // Clear hover for elements not present in the previous frame to prevent
+        // stale/garbage flags from triggering false HoverChanged
+        if (es.LastFrame != (ushort)(_frame - 1) && es.LastFrame != _frame)
+            es.SetFlags(ElementFlags.Hovered, ElementFlags.None);
+
         es.LastFrame = _frame;
         es.Index = e.Index;
     }
@@ -334,8 +341,16 @@ public static partial class UI
 
     public static bool IsHovered(int elementId) => GetElementState(elementId).IsHovered;
     public static bool IsHovered() => GetElementState(ref GetSelf()).IsHovered;
+    public static bool HoverEnter() { ref var es = ref GetElementState(ref GetSelf()); return es.IsHoverChanged && es.IsHovered; }
+    public static bool HoverEnter(int elementId) { ref var es = ref GetElementState(elementId); return es.IsHoverChanged && es.IsHovered; }
+    public static bool HoverExit() { ref var es = ref GetElementState(ref GetSelf()); return es.IsHoverChanged && !es.IsHovered; }
+    public static bool HoverExit(int elementId) { ref var es = ref GetElementState(elementId); return es.IsHoverChanged && !es.IsHovered; }
+    public static bool HoverChanged() => GetElementState(ref GetSelf()).IsHoverChanged;
+    public static bool HoverChanged(int elementId) => GetElementState(elementId).IsHoverChanged;
     public static bool WasPressed() => GetElementState(ref GetSelf()).IsPressed;
     public static bool IsDown() => GetElementState(ref GetSelf()).IsDown;
+
+    public static ref Tween GetElementTween(int elementId) => ref GetElementState(elementId).Tween;
 
     public static float GetScrollOffset(int elementId)
     {
@@ -639,6 +654,16 @@ public static partial class UI
     }
 
     public static void EndTransformed() => EndElement(ElementType.Transform);
+
+    public static AutoOpacity BeginOpacity(float opacity)
+    {
+        ref var e = ref CreateElement(ElementType.Opacity);
+        e.Data.Opacity = new OpacityData { Value = opacity };
+        PushElement(e.Index);
+        return new AutoOpacity();
+    }
+
+    public static void EndOpacity() => EndElement(ElementType.Opacity);
 
     public static AutoScrollable BeginScrollable(int id) =>
         BeginScrollable(id, new ScrollableStyle());

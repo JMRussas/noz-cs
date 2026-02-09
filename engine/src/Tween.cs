@@ -138,7 +138,7 @@ public struct Tween
         {
             if (!d.Forward)
             {
-                d.Generation = 0;
+                d.Duration = 0;
             }
             else
             {
@@ -148,7 +148,7 @@ public struct Tween
         }
         else
         {
-            d.Generation = 0;
+            d.Duration = 0;
         }
     }
 
@@ -157,7 +157,7 @@ public struct Tween
         for (int i = 0; i < MaxTweens; i++)
         {
             ref var data = ref _data[i];
-            if (data.Generation == 0)
+            if (data.Duration <= 0)
                 return i;
 
             if (Time.FrameCount - data.LastUpdateFrame > 1)
@@ -185,6 +185,7 @@ public struct Tween
         d.Mode = mode;
         d.Forward = true;
         d.Generation++;
+        if (d.Generation == 0) d.Generation = 1;
         d.LastUpdateFrame = Time.FrameCount;
 
         return new Tween { Index = (ushort)index, Generation = d.Generation };
