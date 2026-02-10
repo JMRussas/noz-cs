@@ -14,7 +14,7 @@ internal struct AtlasSpriteRect
     public string Name;
     public SpriteDocument? Sprite;
     public RectInt Rect;
-    public int FrameCount;
+    public ushort FrameIndex;
     public bool Dirty;
 }
 
@@ -87,10 +87,10 @@ internal class AtlasDocument : Document
                 rect.Width = tk.ExpectInt();
                 rect.Height = tk.ExpectInt();
 
-                int frameCount = tk.ExpectInt(1);
+                ushort frameIndex = (ushort)tk.ExpectInt(0);
 
                 if (!string.IsNullOrEmpty(name))
-                    _rects.Add(new AtlasSpriteRect { Name = name, Rect = rect, FrameCount = frameCount, Dirty = true });
+                    _rects.Add(new AtlasSpriteRect { Name = name, Rect = rect, FrameIndex = frameIndex, Dirty = true });
             }
             else
             {
@@ -139,7 +139,7 @@ internal class AtlasDocument : Document
         writer.WriteLine($"p {Padding}");
         writer.WriteLine();
         foreach (var rect in _rects)
-            writer.WriteLine($"r \"{rect.Name}\" {rect.Rect.X} {rect.Rect.Y} {rect.Rect.Width} {rect.Rect.Height}");
+            writer.WriteLine($"r \"{rect.Name}\" {rect.Rect.X} {rect.Rect.Y} {rect.Rect.Width} {rect.Rect.Height} {rect.FrameIndex}");
     }
 
     public override void PostLoad()
@@ -157,14 +157,18 @@ internal class AtlasDocument : Document
 
     internal void Clear()
     {
+        var cleared = new HashSet<SpriteDocument>();
         var span = CollectionsMarshal.AsSpan(_rects);
         for (int i = 0; i < span.Length; i++)
         {
             ref var rect = ref span[i];
             if (rect.Sprite == null) continue;
-            rect.Sprite.Atlas = null;
-            rect.Sprite.ClearAtlasUVs();
-            rect.Sprite.Reimport();
+            if (cleared.Add(rect.Sprite))
+            {
+                rect.Sprite.Atlas = null;
+                rect.Sprite.ClearAtlasUVs();
+                rect.Sprite.Reimport();
+            }
         }
 
         _rects.Clear();
@@ -188,41 +192,37 @@ internal class AtlasDocument : Document
 
     internal void UpdateSpriteUVs(SpriteDocument sprite)
     {
-        var rectIndex = GetRectIndex(sprite);
-        if (rectIndex == -1) return;
-
-        var rect = _rects[rectIndex];
         sprite.ClearAtlasUVs();
-
-        var slots = sprite.GetMeshSlots();
-        var slotBounds = sprite.GetMeshSlotBounds();
         var padding2 = Padding * 2;
-        var xOffset = 0;
+        int uvIndex = 0;
 
-        for (int slotIndex = 0; slotIndex < slots.Count; slotIndex++)
+        for (ushort frameIndex = 0; frameIndex < sprite.FrameCount; frameIndex++)
         {
-            // Get the size for this slot (list is aligned with slots by index)
-            var bounds = slotBounds[slotIndex];
-            var slotSize = (bounds.Width > 0 && bounds.Height > 0)
-                ? bounds.Size
-                : sprite.RasterBounds.Size;
+            var rectIndex = GetRectIndex(sprite, frameIndex);
+            if (rectIndex == -1) return;
 
-            var frameStride = slotSize.X + padding2;
+            ref readonly var rect = ref CollectionsMarshal.AsSpan(_rects)[rectIndex];
+            var slots = sprite.GetMeshSlots(frameIndex);
+            var slotBounds = sprite.GetMeshSlotBounds(frameIndex);
+            var xOffset = 0;
 
-            // Store a UV per (frame, slot) pair
-            for (int frameIndex = 0; frameIndex < rect.FrameCount; frameIndex++)
+            for (int slotIndex = 0; slotIndex < slots.Count; slotIndex++)
             {
-                var uvIndex = frameIndex * slots.Count + slotIndex;
-                sprite.SetAtlasUV(uvIndex, ToUV(rect, slotIndex, slotSize, xOffset + frameIndex * frameStride));
-            }
+                var bounds = slotBounds[slotIndex];
+                var slotSize = (bounds.Width > 0 && bounds.Height > 0)
+                    ? bounds.Size
+                    : sprite.RasterBounds.Size;
 
-            // Advance x offset for next slot
-            xOffset += frameStride * rect.FrameCount;
+                sprite.SetAtlasUV(uvIndex, ToUV(rect, slotIndex, slotSize, xOffset));
+                uvIndex++;
+                xOffset += slotSize.X + padding2;
+            }
         }
     }
 
     internal void ResolveSprites()
     {
+        var resolved = new HashSet<SpriteDocument>();
         var span = CollectionsMarshal.AsSpan(_rects);
         for (int i = 0; i < span.Length; i++)
         {
@@ -237,20 +237,25 @@ internal class AtlasDocument : Document
             if (rect.Sprite == null)
                 continue;
 
-            // Use AtlasSize (which accounts for slot bounds) instead of RasterBounds
-            var atlasSize = rect.Sprite.AtlasSize;
-            if (atlasSize.X > rect.Rect.Size.X ||
-                atlasSize.Y > rect.Rect.Size.Y )
+            // Check that this frame's rect is large enough
+            if (rect.FrameIndex < rect.Sprite.FrameCount)
             {
-                rect.Name = "";
-                rect.Sprite = null;
-                MarkModified();
-                continue;
+                var frameSize = rect.Sprite.GetFrameAtlasSize(rect.FrameIndex);
+                if (frameSize.X > rect.Rect.Size.X || frameSize.Y > rect.Rect.Size.Y)
+                {
+                    rect.Name = "";
+                    rect.Sprite = null;
+                    MarkModified();
+                    continue;
+                }
             }
 
             rect.Sprite.Atlas = this;
-            UpdateSpriteUVs(rect.Sprite);
+            resolved.Add(rect.Sprite);
         }
+
+        foreach (var sprite in resolved)
+            UpdateSpriteUVs(sprite);
     }
 
     public override void Dispose()
@@ -276,76 +281,121 @@ internal class AtlasDocument : Document
         return -1;
     }
 
-    private int GetRectIndex(SpriteDocument sprite)
+    private int GetRectIndex(SpriteDocument sprite, ushort frameIndex)
+    {
+        var rects = CollectionsMarshal.AsSpan(_rects);
+        for (int i = 0; i < _rects.Count; i++)
+        {
+            ref var rect = ref rects[i];
+            if (rect.Sprite == sprite && rect.FrameIndex == frameIndex)
+                return i;
+        }
+        return -1;
+    }
+
+    private int GetRectCount(SpriteDocument sprite)
+    {
+        int count = 0;
+        var rects = CollectionsMarshal.AsSpan(_rects);
+        for (int i = 0; i < _rects.Count; i++)
+        {
+            if (rects[i].Sprite == sprite)
+                count++;
+        }
+        return count;
+    }
+
+    private void RemoveSpriteRects(SpriteDocument sprite)
     {
         var rects = CollectionsMarshal.AsSpan(_rects);
         for (int i = 0; i < _rects.Count; i++)
         {
             ref var rect = ref rects[i];
             if (rect.Sprite == sprite)
-                return i;
+            {
+                rect.Sprite = null;
+                rect.Name = "";
+                rect.Dirty = true;
+            }
         }
-        return -1;
     }
 
     internal bool TryAddSprite(SpriteDocument sprite)
     {
-        // Try to reclaim an empty rect
-        var rects = CollectionsMarshal.AsSpan(_rects);
-        var size = sprite.AtlasSize;
-        var freeRectIndex = GetFreeRectIndex(size);
-        if (freeRectIndex != -1)
+        for (ushort frameIndex = 0; frameIndex < sprite.FrameCount; frameIndex++)
         {
-            ref var rect = ref rects[freeRectIndex];
-            rect.Name = sprite.Name;
-            rect.Sprite = sprite;
-            rect.FrameCount = sprite.FrameCount;
-            rect.Dirty = true;
-            sprite.Atlas = this;
-            UpdateSpriteUVs(sprite);
-            rect.Sprite.Reimport();
-            return true;
-        }
+            var size = sprite.GetFrameAtlasSize(frameIndex);
 
-        // Pack a new one (AtlasSize already includes per-frame padding)
-        var rectIndex = _packer.Insert(size, out var packedRect);
-        if (rectIndex == -1) return false;
-        Debug.Assert(rectIndex == _rects.Count);
-        _rects.Add(new AtlasSpriteRect
-        {
-            Name = sprite.Name,
-            Sprite = sprite,
-            Rect = packedRect,
-            FrameCount = sprite.FrameCount,
-            Dirty = true
-        });
+            // Try to reclaim an empty rect
+            var freeRectIndex = GetFreeRectIndex(size);
+            if (freeRectIndex != -1)
+            {
+                ref var rect = ref CollectionsMarshal.AsSpan(_rects)[freeRectIndex];
+                rect.Name = sprite.Name;
+                rect.Sprite = sprite;
+                rect.FrameIndex = frameIndex;
+                rect.Dirty = true;
+            }
+            else
+            {
+                // Pack a new rect
+                var rectIndex = _packer.Insert(size, out var packedRect);
+                if (rectIndex == -1)
+                {
+                    // Failed — roll back frames already added
+                    RemoveSpriteRects(sprite);
+                    return false;
+                }
+                Debug.Assert(rectIndex == _rects.Count);
+                _rects.Add(new AtlasSpriteRect
+                {
+                    Name = sprite.Name,
+                    Sprite = sprite,
+                    Rect = packedRect,
+                    FrameIndex = frameIndex,
+                    Dirty = true
+                });
+            }
+        }
 
         sprite.Atlas = this;
         UpdateSpriteUVs(sprite);
         sprite.Reimport();
-
         return true;
     }
 
     internal bool TryUpdate(SpriteDocument sprite)
-    { 
-        var rectIndex = GetRectIndex(sprite);
-        if (rectIndex == -1)
-            return false;
-
-        var rects = CollectionsMarshal.AsSpan(_rects);
-        ref var rect = ref rects[rectIndex];
-        var size = sprite.AtlasSize;
-
-        if (size.X > rect.Rect.Width || size.Y > rect.Rect.Height)
+    {
+        // If frame count changed, remove all and re-add
+        var currentRectCount = GetRectCount(sprite);
+        if (currentRectCount != sprite.FrameCount)
         {
-            rect.Sprite = null;
-            rect.Dirty = true;
+            RemoveSpriteRects(sprite);
             return TryAddSprite(sprite);
         }
 
-        rect.FrameCount = sprite.FrameCount;
-        rect.Dirty = true;
+        // Check each frame fits in its rect
+        for (ushort fi = 0; fi < sprite.FrameCount; fi++)
+        {
+            var rectIndex = GetRectIndex(sprite, fi);
+            if (rectIndex == -1)
+            {
+                RemoveSpriteRects(sprite);
+                return TryAddSprite(sprite);
+            }
+
+            var size = sprite.GetFrameAtlasSize(fi);
+            ref var rect = ref CollectionsMarshal.AsSpan(_rects)[rectIndex];
+            if (size.X > rect.Rect.Width || size.Y > rect.Rect.Height)
+            {
+                RemoveSpriteRects(sprite);
+                return TryAddSprite(sprite);
+            }
+
+            rect.Dirty = true;
+        }
+
+        UpdateSpriteUVs(sprite);
         MarkModified();
         return true;
     }
@@ -354,6 +404,8 @@ internal class AtlasDocument : Document
     {
         var rects = CollectionsMarshal.AsSpan(_rects);
         RectInt? updateRect = null;
+        var dirtySprites = new HashSet<SpriteDocument>();
+
         for (int i = 0; i < _rects.Count; ++i)
         {
             ref var rect = ref rects[i];
@@ -373,68 +425,61 @@ internal class AtlasDocument : Document
             var palette = PaletteManager.GetPalette(rect.Sprite.Palette);
             if (palette == null) continue;
 
-            // Use frame 0 slots for atlas layout
-            var slots = rect.Sprite.GetMeshSlots();
-            var slotBounds = rect.Sprite.GetMeshSlotBounds();
+            dirtySprites.Add(rect.Sprite);
+
+            // Each rect is one frame — use that frame's own slots and bounds
+            var frameIndex = rect.FrameIndex;
+            var frame = rect.Sprite.GetFrame(frameIndex);
+            var slots = rect.Sprite.GetMeshSlots(frameIndex);
+            var slotBounds = rect.Sprite.GetMeshSlotBounds(frameIndex);
             var padding2 = Padding * 2;
             var xOffset = 0;
 
             for (int slotIndex = 0; slotIndex < slots.Count; slotIndex++)
             {
                 var slot = slots[slotIndex];
-
-                // Get the tight bounds for this slot (list is aligned with slots by index)
                 var slotRasterBounds = slotBounds[slotIndex];
                 if (slotRasterBounds.Width <= 0 || slotRasterBounds.Height <= 0)
                     slotRasterBounds = rect.Sprite.RasterBounds;
 
-                var frameStride = slotRasterBounds.Size.X + padding2;
+                var slotWidth = slotRasterBounds.Size.X + padding2;
 
-                for (int frameIndex = 0; frameIndex < rect.FrameCount; frameIndex++)
+                AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} Frame={frameIndex} Layer={slot.Layer} Bone={slot.Bone} Rect={rect.Rect} SlotBounds={slotRasterBounds}");
+
+                var outerRect = new RectInt(
+                    rect.Rect.Position + new Vector2Int(xOffset, 0),
+                    new Vector2Int(slotWidth, slotRasterBounds.Size.Y + padding2));
+                var rasterRect = new RectInt(
+                    outerRect.Position + new Vector2Int(Padding, Padding),
+                    slotRasterBounds.Size);
+
+                if (slot.PathIndices.Count > 0)
                 {
-                    var frame = rect.Sprite.GetFrame((ushort)frameIndex);
-
-                    // Get slots for this specific frame to get correct path indices
-                    var frameSlots = rect.Sprite.GetMeshSlots((ushort)frameIndex);
-                    var frameSlot = slotIndex < frameSlots.Count ? frameSlots[slotIndex] : null;
-
-                    AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} Layer={slot.Layer} Bone={slot.Bone} Frame={frameIndex} Rect={rect.Rect} SlotBounds={slotRasterBounds}");
-
-                    var outerRect = new RectInt(
-                        rect.Rect.Position + new Vector2Int(xOffset + frameIndex * frameStride, 0),
-                        new Vector2Int(frameStride, slotRasterBounds.Size.Y + padding2));
-                    var rasterRect = new RectInt(
-                        outerRect.Position + new Vector2Int(Padding, Padding),
-                        slotRasterBounds.Size);
-
-                    if (frameSlot != null && frameSlot.PathIndices.Count > 0)
-                    {
-                        // Rasterize specific paths for this slot using slot-specific bounds offset
-                        frame.Shape.Rasterize(
-                            _image,
-                            rasterRect,
-                            -slotRasterBounds.Position,
-                            palette.Colors,
-                            CollectionsMarshal.AsSpan(frameSlot.PathIndices),
-                            rect.Sprite.IsAntiAliased);
-                    }
-
-                    _image.BleedColors(rasterRect);
-                    for (int p = Padding - 1; p >= 0; p--)
-                    {
-                        var padRect = new RectInt(
-                            outerRect.Position + new Vector2Int(p, p),
-                            outerRect.Size - new Vector2Int(p * 2, p * 2));
-                        _image.ExtrudeEdges(padRect);
-                    }
+                    frame.Shape.Rasterize(
+                        _image,
+                        rasterRect,
+                        -slotRasterBounds.Position,
+                        palette.Colors,
+                        CollectionsMarshal.AsSpan(slot.PathIndices),
+                        rect.Sprite.IsAntiAliased);
                 }
 
-                // Advance x offset for next slot
-                xOffset += frameStride * rect.FrameCount;
-            }
+                _image.BleedColors(rasterRect);
+                for (int p = Padding - 1; p >= 0; p--)
+                {
+                    var padRect = new RectInt(
+                        outerRect.Position + new Vector2Int(p, p),
+                        outerRect.Size - new Vector2Int(p * 2, p * 2));
+                    _image.ExtrudeEdges(padRect);
+                }
 
-            UpdateSpriteUVs(rect.Sprite);
+                xOffset += slotWidth;
+            }
         }
+
+        // Update UVs once per dirty sprite
+        foreach (var sprite in dirtySprites)
+            UpdateSpriteUVs(sprite);
 
         if (updateRect != null)
             _texture?.Update(_image.AsByteSpan(), updateRect.Value, _image.Width);
@@ -444,8 +489,8 @@ internal class AtlasDocument : Document
 
     public void Rebuild()
     {
-        // Gather sprite names from existing rects
-        var spriteNames = new List<string>();
+        // Gather unique sprite names from existing rects
+        var spriteNames = new HashSet<string>();
         foreach (var rect in _rects)
         {
             if (!string.IsNullOrEmpty(rect.Name))
