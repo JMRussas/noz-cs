@@ -118,6 +118,8 @@ public static partial class UI
                 crossMode = child.Data.Image.Size[crossAxis].Mode;
             if (crossMode is SizeMode.Fit or SizeMode.Fixed)
                 childOverride[crossAxis] = AutoSize[crossAxis];
+            else
+                childOverride[crossAxis] -= child.MarginMin[crossAxis] + child.MarginMax[crossAxis];
             LayoutElement(elementIndex, offset, childOverride);
 
             var childSize = child.Rect.GetSize(axis) + child.MarginMax[axis];

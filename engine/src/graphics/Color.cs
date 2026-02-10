@@ -105,6 +105,11 @@ public readonly struct Color(float r, float g, float b, float a)
 
     public Color WithAlpha(float alpha) => new(R, G, B, alpha);
     public Color MultiplyAlpha(float multiply) => new(R, G, B, A * multiply);
+    public Color MultiplyValue(float multiply) => new(
+        MathEx.Clamp01(R * multiply),
+        MathEx.Clamp01(G * multiply),
+        MathEx.Clamp01(B * multiply),
+        MathEx.Clamp01(A));
 
     public Color(float r, float g, float b) : this(r, g, b, 1.0f)
     {
