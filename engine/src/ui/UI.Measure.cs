@@ -165,10 +165,20 @@ public static partial class UI
 
     private static Vector2 FitLabel(ref readonly Element e, ref readonly Element p)
     {
-        return TextRender.Measure(
-            e.Data.Label.Text.AsReadOnlySpan(),
-            (Font)e.Asset!,
-            e.Data.Label.FontSize);
+        var text = e.Data.Label.Text.AsReadOnlySpan();
+        var font = (Font)e.Asset!;
+        var fontSize = e.Data.Label.FontSize;
+
+        if (e.Data.Label.Wrap)
+        {
+            var availableWidth = p.ContentRect.Width;
+            if (availableWidth <= 0 && p.IsContainer && p.Data.Container.Size.Width.IsFixed)
+                availableWidth = p.Data.Container.Size.Width.Value - p.Data.Container.Padding.Horizontal;
+            if (availableWidth > 0)
+                return TextRender.MeasureWrapped(text, font, fontSize, availableWidth);
+        }
+
+        return TextRender.Measure(text, font, fontSize);
     }
 
     private static Vector2 FitTextBox(ref readonly Element e, ref readonly Element p)

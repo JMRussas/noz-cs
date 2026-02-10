@@ -781,6 +781,7 @@ public static partial class UI
             AlignX = style.AlignX,
             AlignY = style.AlignY,
             Order = style.Order,
+            Wrap = style.Wrap,
             Text = AddText(text)
         };
 

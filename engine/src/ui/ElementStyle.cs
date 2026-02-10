@@ -66,6 +66,7 @@ public struct LabelStyle()
     public Align AlignY = Align.Center;
     public Font? Font = null;
     public ushort Order = 2;
+    public bool Wrap = false;
 
     public static readonly LabelStyle Default = new();
     public static readonly LabelStyle Centered = new() { AlignX = Align.Center, AlignY = Align.Center };

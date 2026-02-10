@@ -219,14 +219,37 @@ public static partial class UI
     {
         var font = (e.Asset as Font) ?? _defaultFont!;
         var text = e.Data.Label.Text.AsReadOnlySpan();
-        var textOffset = GetTextOffset(text, font, e.Data.Label.FontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
-        var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * e.LocalToWorld;
+        var fontSize = e.Data.Label.FontSize;
 
-        using (Graphics.PushState())
+        if (e.Data.Label.Wrap)
         {
-            Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
-            Graphics.SetTransform(transform);
-            TextRender.Draw(text, font, e.Data.Label.FontSize, order: e.Data.Label.Order);
+            // Vertical alignment: offset the whole text block within the element
+            var wrappedHeight = TextRender.MeasureWrapped(text, font, fontSize, e.Rect.Width).Y;
+            var offsetY = (e.Rect.Height - wrappedHeight) * e.Data.Label.AlignY.ToFactor();
+            var displayScale = Application.Platform.DisplayScale;
+            offsetY = MathF.Round(offsetY * displayScale) / displayScale;
+
+            var transform = Matrix3x2.CreateTranslation(e.Rect.Position + new Vector2(0, offsetY)) * e.LocalToWorld;
+
+            using (Graphics.PushState())
+            {
+                Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
+                Graphics.SetTransform(transform);
+                TextRender.DrawWrapped(text, font, fontSize, e.Rect.Width,
+                    e.Rect.Width, e.Data.Label.AlignX.ToFactor(), e.Rect.Height, order: e.Data.Label.Order);
+            }
+        }
+        else
+        {
+            var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
+            var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * e.LocalToWorld;
+
+            using (Graphics.PushState())
+            {
+                Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
+                Graphics.SetTransform(transform);
+                TextRender.Draw(text, font, fontSize, order: e.Data.Label.Order);
+            }
         }
     }
 

@@ -180,6 +180,18 @@ public static partial class UI
         e.Rect.Width = sizeOverride.X < AutoSize.X ? sizeOverride.X : size.X;
         e.Rect.Height = sizeOverride.Y < AutoSize.Y ? sizeOverride.Y : size.Y;
 
+        // Re-measure wrapped label height now that width is known.
+        // Only when height resolved via Fit (Column parent, unconstrained Y) — not Percent.
+        if (e.Type == ElementType.Label && e.Data.Label.Wrap && e.Rect.Width > 0
+            && p.Type == ElementType.Column && sizeOverride.Y >= AutoSize.Y)
+        {
+            e.Rect.Height = TextRender.MeasureWrapped(
+                e.Data.Label.Text.AsReadOnlySpan(),
+                (Font)e.Asset!,
+                e.Data.Label.FontSize,
+                e.Rect.Width).Y;
+        }
+
         var align = AlignElement(ref e, in p);
         e.Rect.X = align.X + offset.X + p.ContentRect.X;
         e.Rect.Y = align.Y + offset.Y + p.ContentRect.Y;
