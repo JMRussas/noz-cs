@@ -189,7 +189,8 @@ public static partial class UI
                 e.Data.Label.Text.AsReadOnlySpan(),
                 (Font)e.Asset!,
                 e.Data.Label.FontSize,
-                e.Rect.Width).Y;
+                e.Rect.Width,
+                cacheId: e.Id).Y;
         }
 
         var align = AlignElement(ref e, in p);

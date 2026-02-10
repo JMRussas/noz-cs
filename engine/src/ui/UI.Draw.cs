@@ -224,7 +224,7 @@ public static partial class UI
         if (e.Data.Label.Wrap)
         {
             // Vertical alignment: offset the whole text block within the element
-            var wrappedHeight = TextRender.MeasureWrapped(text, font, fontSize, e.Rect.Width).Y;
+            var wrappedHeight = TextRender.MeasureWrapped(text, font, fontSize, e.Rect.Width, cacheId: e.Id).Y;
             var offsetY = (e.Rect.Height - wrappedHeight) * e.Data.Label.AlignY.ToFactor();
             var displayScale = Application.Platform.DisplayScale;
             offsetY = MathF.Round(offsetY * displayScale) / displayScale;
@@ -236,7 +236,8 @@ public static partial class UI
                 Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
                 Graphics.SetTransform(transform);
                 TextRender.DrawWrapped(text, font, fontSize, e.Rect.Width,
-                    e.Rect.Width, e.Data.Label.AlignX.ToFactor(), e.Rect.Height, order: e.Data.Label.Order);
+                    e.Rect.Width, e.Data.Label.AlignX.ToFactor(), e.Rect.Height,
+                    order: e.Data.Label.Order, cacheId: e.Id);
             }
         }
         else

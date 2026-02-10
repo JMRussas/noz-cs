@@ -789,6 +789,25 @@ public static partial class UI
         PopElement();
     }
 
+    public static void WrappedLabel(int id, string text, LabelStyle style)
+    {
+        ref var e = ref CreateElement(ElementType.Label);
+        e.Asset = style.Font ?? _defaultFont;
+        e.Data.Label = new LabelData
+        {
+            FontSize = style.FontSize > 0 ? style.FontSize : 16,
+            Color = style.Color,
+            AlignX = style.AlignX,
+            AlignY = style.AlignY,
+            Order = style.Order,
+            Wrap = true,
+            Text = AddText(text)
+        };
+        SetId(ref e, id);
+        PushElement(e.Index);
+        PopElement();
+    }
+
     // :image
     public static void Image(Sprite? sprite) => Image(sprite, new ImageStyle());
 

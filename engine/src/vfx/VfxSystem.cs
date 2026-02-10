@@ -167,6 +167,8 @@ public static class VfxSystem
         if (instance < 0)
             return;
 
+        _instances[instance].Loop = false;
+
         // Stop all emitters but let existing particles live
         for (var i = 0; i < MaxEmitters; i++)
         {
@@ -175,6 +177,34 @@ public static class VfxSystem
 
             if (_emitters[i].InstanceIndex == instance)
                 _emitters[i].Rate = 0f;
+        }
+    }
+
+    public static void Kill(VfxHandle handle)
+    {
+        var instance = GetInstance(handle);
+        if (instance < 0)
+            return;
+
+        for (var i = 0; i < MaxParticles; i++)
+        {
+            if (!_particleValid[i])
+                continue;
+
+            if (!_emitterValid[_particles[i].EmitterIndex])
+                continue;
+
+            if (_emitters[_particles[i].EmitterIndex].InstanceIndex == instance)
+                FreeParticle(i);
+        }
+
+        for (var i = 0; i < MaxEmitters; i++)
+        {
+            if (!_emitterValid[i])
+                continue;
+
+            if (_emitters[i].InstanceIndex == instance)
+                FreeEmitter(i);
         }
     }
 
@@ -276,8 +306,22 @@ public static class VfxSystem
 
             if (e.Rate <= 0.0000001f || e.Elapsed >= e.Duration)
             {
-                if (e.ParticleCount == 0)
-                    FreeEmitter(i);
+                if (_instanceValid[e.InstanceIndex] && _instances[e.InstanceIndex].Loop)
+                {
+                    ref var def = ref e.Vfx.EmitterDefs[e.DefIndex];
+                    e.Elapsed = 0f;
+                    e.Accumulator = 0f;
+                    e.Duration = GetRandom(def.Duration);
+
+                    var burstCount = Random.Shared.Next(def.Burst.Min, Math.Max(def.Burst.Min, def.Burst.Max) + 1);
+                    for (var b = 0; b < burstCount; b++)
+                        EmitParticle(i);
+                }
+                else
+                {
+                    if (e.ParticleCount == 0)
+                        FreeEmitter(i);
+                }
                 continue;
             }
 

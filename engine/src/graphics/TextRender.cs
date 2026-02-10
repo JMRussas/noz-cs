@@ -52,6 +52,7 @@ internal static class TextRender
 
     public static void Shutdown()
     {
+        _wrapCache.Clear();
         _vertices.Dispose();
         Graphics.Driver.DestroyMesh(_mesh);
         _mesh = nuint.Zero;
@@ -170,6 +171,79 @@ internal static class TextRender
         public int End; // exclusive
     }
 
+    internal struct CachedLine
+    {
+        public int Start;
+        public int End;   // trimmed (no trailing spaces)
+        public float Width;
+    }
+
+    private class WrapCacheEntry
+    {
+        public int TextHash;
+        public int TextLength;
+        public float MaxWidth;
+        public float FontSize;
+        public Vector2 MeasuredSize;
+        public int LineCount;
+        public CachedLine[] Lines = [];
+    }
+
+    private static readonly Dictionary<int, WrapCacheEntry> _wrapCache = new();
+
+    private static bool TryGetCachedWrap(
+        int cacheId, ReadOnlySpan<char> text, float fontSize, float maxWidth,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out WrapCacheEntry? entry)
+    {
+        if (cacheId != 0 && _wrapCache.TryGetValue(cacheId, out entry))
+        {
+            if (entry.TextLength == text.Length
+                && entry.MaxWidth == maxWidth
+                && entry.FontSize == fontSize
+                && entry.TextHash == string.GetHashCode(text))
+                return true;
+        }
+        entry = null;
+        return false;
+    }
+
+    private static WrapCacheEntry PopulateWrapCache(
+        int cacheId, ReadOnlySpan<char> text, Font font, float fontSize, float maxWidth)
+    {
+        Span<LineInfo> rawLines = stackalloc LineInfo[MaxWrappedLines];
+        var lineCount = ComputeLineBreaks(text, font, fontSize, maxWidth, rawLines);
+        var count = Math.Min(lineCount, MaxWrappedLines);
+
+        if (!_wrapCache.TryGetValue(cacheId, out var entry))
+        {
+            entry = new WrapCacheEntry();
+            _wrapCache[cacheId] = entry;
+        }
+
+        entry.TextHash = string.GetHashCode(text);
+        entry.TextLength = text.Length;
+        entry.MaxWidth = maxWidth;
+        entry.FontSize = fontSize;
+        entry.LineCount = count;
+
+        if (entry.Lines.Length < count)
+            entry.Lines = new CachedLine[count];
+
+        var maxLineWidth = 0f;
+        for (var i = 0; i < count; i++)
+        {
+            var line = rawLines[i];
+            var end = line.End;
+            while (end > line.Start && text[end - 1] == ' ') end--;
+            var w = MeasureLineWidth(text[line.Start..end], font, fontSize);
+            entry.Lines[i] = new CachedLine { Start = line.Start, End = end, Width = w };
+            maxLineWidth = MathF.Max(maxLineWidth, w);
+        }
+
+        entry.MeasuredSize = new Vector2(maxLineWidth, lineCount * font.LineHeight * fontSize);
+        return entry;
+    }
+
     private static float MeasureLineWidth(ReadOnlySpan<char> text, Font font, float fontSize)
     {
         var width = 0f;
@@ -267,10 +341,17 @@ internal static class TextRender
         return lineCount;
     }
 
-    public static Vector2 MeasureWrapped(ReadOnlySpan<char> text, Font font, float fontSize, float maxWidth)
+    public static Vector2 MeasureWrapped(ReadOnlySpan<char> text, Font font, float fontSize, float maxWidth, int cacheId = 0)
     {
         if (text.Length == 0) return Vector2.Zero;
 
+        if (TryGetCachedWrap(cacheId, text, fontSize, maxWidth, out var cached))
+            return cached.MeasuredSize;
+
+        if (cacheId != 0)
+            return PopulateWrapCache(cacheId, text, font, fontSize, maxWidth).MeasuredSize;
+
+        // Uncached path
         Span<LineInfo> lines = stackalloc LineInfo[MaxWrappedLines];
         var lineCount = ComputeLineBreaks(text, font, fontSize, maxWidth, lines);
         if (lineCount == 0) return Vector2.Zero;
@@ -382,7 +463,8 @@ internal static class TextRender
 
     public static void DrawWrapped(
         in ReadOnlySpan<char> text, Font font, float fontSize, float maxWidth,
-        float containerWidth, float alignXFactor, float maxHeight = 0, int order = 0)
+        float containerWidth, float alignXFactor, float maxHeight = 0, int order = 0,
+        int cacheId = 0)
     {
         Debug.Assert(order >= 0 && order <= ushort.MaxValue);
 
@@ -393,8 +475,40 @@ internal static class TextRender
         if (atlasTexture == null)
             return;
 
-        Span<LineInfo> lines = stackalloc LineInfo[MaxWrappedLines];
-        var lineCount = ComputeLineBreaks(text, font, fontSize, maxWidth, lines);
+        // Resolve line data from cache or fresh computation
+        // Always use stack buffer — copy from cache when available
+        Span<CachedLine> lineData = stackalloc CachedLine[MaxWrappedLines];
+        int lineCount;
+
+        if (TryGetCachedWrap(cacheId, text, fontSize, maxWidth, out var cacheEntry))
+        {
+            lineCount = cacheEntry.LineCount;
+            cacheEntry.Lines.AsSpan(0, lineCount).CopyTo(lineData);
+        }
+        else if (cacheId != 0)
+        {
+            cacheEntry = PopulateWrapCache(cacheId, text, font, fontSize, maxWidth);
+            lineCount = cacheEntry.LineCount;
+            cacheEntry.Lines.AsSpan(0, lineCount).CopyTo(lineData);
+        }
+        else
+        {
+            // Uncached: compute fresh
+            Span<LineInfo> rawLines = stackalloc LineInfo[MaxWrappedLines];
+            lineCount = Math.Min(ComputeLineBreaks(text, font, fontSize, maxWidth, rawLines), MaxWrappedLines);
+            for (var i = 0; i < lineCount; i++)
+            {
+                var end = rawLines[i].End;
+                while (end > rawLines[i].Start && text[end - 1] == ' ') end--;
+                lineData[i] = new CachedLine
+                {
+                    Start = rawLines[i].Start,
+                    End = end,
+                    Width = MeasureLineWidth(text[rawLines[i].Start..end], font, fontSize)
+                };
+            }
+        }
+
         if (lineCount == 0) return;
 
         using var _ = Graphics.PushState();
@@ -411,30 +525,22 @@ internal static class TextRender
         var outlineWidth = OutlineWidth;
         var outlineSoftness = OutlineSoftness;
         var displayScale = Application.Platform.DisplayScale;
-        var count = Math.Min(lineCount, MaxWrappedLines);
 
         // Determine visible lines based on max height
-        var maxLines = maxHeight > 0 ? Math.Max(1, (int)(maxHeight / lineHeight)) : count;
-        var visibleCount = Math.Min(count, maxLines);
+        var maxLines = maxHeight > 0 ? Math.Max(1, (int)(maxHeight / lineHeight)) : lineCount;
+        var visibleCount = Math.Min(lineCount, maxLines);
         var truncated = visibleCount < lineCount;
         var ellipsisWidth = truncated ? MeasureEllipsis(font, fontSize) : 0f;
         var orderU16 = (ushort)order;
 
         for (var lineIdx = 0; lineIdx < visibleCount; lineIdx++)
         {
-            var line = lines[lineIdx];
-            var end = line.End;
-            while (end > line.Start && text[end - 1] == ' ') end--;
-
+            var line = lineData[lineIdx];
             var isLastTruncated = truncated && lineIdx == visibleCount - 1;
 
-            var lineSlice = text[line.Start..end];
-            var lineWidth = isLastTruncated
-                ? MeasureLineWidth(lineSlice, font, fontSize) + ellipsisWidth
-                : MeasureLineWidth(lineSlice, font, fontSize);
-            var alignWidth = isLastTruncated
-                ? Math.Min(lineWidth, maxWidth)
-                : lineWidth;
+            var lineSlice = text[line.Start..line.End];
+            var lineWidth = isLastTruncated ? line.Width + ellipsisWidth : line.Width;
+            var alignWidth = isLastTruncated ? Math.Min(lineWidth, maxWidth) : line.Width;
             var offsetX = (containerWidth - alignWidth) * alignXFactor;
             var offsetY = lineIdx * lineHeight;
 

@@ -175,7 +175,7 @@ public static partial class UI
             if (availableWidth <= 0 && p.IsContainer && p.Data.Container.Size.Width.IsFixed)
                 availableWidth = p.Data.Container.Size.Width.Value - p.Data.Container.Padding.Horizontal;
             if (availableWidth > 0)
-                return TextRender.MeasureWrapped(text, font, fontSize, availableWidth);
+                return TextRender.MeasureWrapped(text, font, fontSize, availableWidth, cacheId: e.Id);
         }
 
         return TextRender.Measure(text, font, fontSize);
