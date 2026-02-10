@@ -165,28 +165,36 @@ public static partial class UI
         {
             ref var popup = ref e.Data.Popup;
 
-            if (popup.MinWidth > 0 && e.Rect.Width < popup.MinWidth)
-                e.Rect.Width = popup.MinWidth;
-
-            // Anchor rect is in canvas space
-            var anchorX = popup.AnchorRect.X + popup.AnchorRect.Width * popup.AnchorX.ToFactor();
-            var anchorY = popup.AnchorRect.Y + popup.AnchorRect.Height * popup.AnchorY.ToFactor();
-
-            // Position popup so the specified edge/corner aligns with anchor point
-            e.Rect.X = anchorX - e.Rect.Width * popup.PopupAlignX.ToFactor();
-            e.Rect.Y = anchorY - e.Rect.Height * popup.PopupAlignY.ToFactor();
-
-            // Apply spacing only in directions where anchor and popup alignments differ
-            // (where there's actual separation - e.g. popup to right, popup above, etc.)
-            if (popup.AnchorX != popup.PopupAlignX)
+            if (popup.AnchorRect == Rect.Zero)
             {
-                var spacingDirX = 1f - 2f * popup.PopupAlignX.ToFactor();
-                e.Rect.X += popup.Spacing * spacingDirX;
+                // Full-screen popup (used for dialogs)
+                e.Rect = new Rect(0, 0, ScreenSize.X, ScreenSize.Y);
             }
-            if (popup.AnchorY != popup.PopupAlignY)
+            else
             {
-                var spacingDirY = 1f - 2f * popup.PopupAlignY.ToFactor();
-                e.Rect.Y += popup.Spacing * spacingDirY;
+                if (popup.MinWidth > 0 && e.Rect.Width < popup.MinWidth)
+                    e.Rect.Width = popup.MinWidth;
+
+                // Anchor rect is in canvas space
+                var anchorX = popup.AnchorRect.X + popup.AnchorRect.Width * popup.AnchorX.ToFactor();
+                var anchorY = popup.AnchorRect.Y + popup.AnchorRect.Height * popup.AnchorY.ToFactor();
+
+                // Position popup so the specified edge/corner aligns with anchor point
+                e.Rect.X = anchorX - e.Rect.Width * popup.PopupAlignX.ToFactor();
+                e.Rect.Y = anchorY - e.Rect.Height * popup.PopupAlignY.ToFactor();
+
+                // Apply spacing only in directions where anchor and popup alignments differ
+                // (where there's actual separation - e.g. popup to right, popup above, etc.)
+                if (popup.AnchorX != popup.PopupAlignX)
+                {
+                    var spacingDirX = 1f - 2f * popup.PopupAlignX.ToFactor();
+                    e.Rect.X += popup.Spacing * spacingDirX;
+                }
+                if (popup.AnchorY != popup.PopupAlignY)
+                {
+                    var spacingDirY = 1f - 2f * popup.PopupAlignY.ToFactor();
+                    e.Rect.Y += popup.Spacing * spacingDirY;
+                }
             }
         }
 

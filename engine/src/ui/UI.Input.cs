@@ -38,9 +38,11 @@ public static partial class UI
         if (_mouseLeftPressed && _popupCount > 0)
         {
             var clickInsidePopup = false;
+            var anyAutoClose = false;
             for (var i = 0; i < _popupCount; i++)
             {
                 ref var popup = ref _elements[_popups[i]];
+                anyAutoClose |= popup.Data.Popup.AutoClose;
                 var localMouse = Vector2.Transform(mouse, popup.WorldToLocal);
                 if (popup.Rect.Contains(localMouse))
                 {
@@ -49,7 +51,7 @@ public static partial class UI
                 }
             }
 
-            if (!clickInsidePopup)
+            if (anyAutoClose && !clickInsidePopup)
             {
                 _closePopups = true;
                 Input.ConsumeButton(InputCode.MouseLeft);

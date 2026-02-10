@@ -188,6 +188,7 @@ internal struct PopupData
     public bool ClampToScreen;
     public Rect AnchorRect;
     public float MinWidth;
+    public bool AutoClose;
 
     public static PopupData Default => new()
     {
@@ -198,7 +199,8 @@ internal struct PopupData
         Spacing = 0,
         MinWidth = 0,
         ClampToScreen = false,
-        AnchorRect = Rect.Zero
+        AnchorRect = Rect.Zero,
+        AutoClose = true
     };
 }
 

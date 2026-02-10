@@ -124,7 +124,8 @@ public static partial class UI
 
     private static Vector2 MeasurePopup(ref readonly Element e, ref readonly Element p)
     {
-        // Popup fits to its content
+        if (e.Data.Popup.AnchorRect == Rect.Zero)
+            return ScreenSize;
         return FitPopup(in e, in p);
     }
 

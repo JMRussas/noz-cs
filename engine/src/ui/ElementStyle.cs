@@ -120,6 +120,7 @@ public struct PopupStyle()
     public bool ClampToScreen = false;
     public Rect AnchorRect = Rect.Zero;
     public float MinWidth = 0;
+    public bool AutoClose = true;
 }
 
 public struct TextBoxStyle()

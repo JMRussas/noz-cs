@@ -756,7 +756,8 @@ public static partial class UI
             Spacing = style.Spacing,
             ClampToScreen = style.ClampToScreen,
             AnchorRect = style.AnchorRect,
-            MinWidth = style.MinWidth
+            MinWidth = style.MinWidth,
+            AutoClose = style.AutoClose
         };
         SetId(ref e, id);
         PushElement(e.Index);
