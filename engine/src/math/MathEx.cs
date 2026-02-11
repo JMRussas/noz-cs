@@ -202,6 +202,49 @@ public static class MathEx
         return Mix(a, b, t);
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void SmoothDampCoefficients(float smoothTime, float deltaTime, out float omega, out float exp)
+    {
+        smoothTime = MathF.Max(0.0001f, smoothTime);
+        omega = 2f / smoothTime;
+        var x = omega * deltaTime;
+        exp = 1f / (1f + x + 0.48f * x * x + 0.235f * x * x * x);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static float SmoothDampStep(float change, float target, ref float velocity, float omega, float exp, float deltaTime)
+    {
+        var temp = (velocity + omega * change) * deltaTime;
+        velocity = (velocity - omega * temp) * exp;
+        return target + (change + temp) * exp;
+    }
+
+    public static Vector2 SmoothDamp(
+        Vector2 current,
+        Vector2 target,
+        ref Vector2 currentVelocity,
+        float smoothTime,
+        float maxSpeed,
+        float deltaTime)
+    {
+        SmoothDampCoefficients(smoothTime, deltaTime, out var omega, out var exp);
+        var change = current - target;
+        var originalTo = target;
+        var maxChange = maxSpeed * smoothTime;
+        if (change.LengthSquared() > maxChange * maxChange)
+            change = Vector2.Normalize(change) * maxChange;
+        target = current - change;
+        var output = new Vector2(
+            SmoothDampStep(change.X, target.X, ref currentVelocity.X, omega, exp, deltaTime),
+            SmoothDampStep(change.Y, target.Y, ref currentVelocity.Y, omega, exp, deltaTime));
+        if (Vector2.Dot(originalTo - current, output - originalTo) > 0f)
+        {
+            output = originalTo;
+            currentVelocity = (output - originalTo) / deltaTime;
+        }
+        return output;
+    }
+
     public static float SmoothDamp(
         float current,
         float target,
@@ -210,31 +253,18 @@ public static class MathEx
         float maxSpeed,
         float deltaTime)
     {
-        smoothTime = MathF.Max(0.0001f, smoothTime);
-        var omega = 2f / smoothTime;
-
-        var x = omega * deltaTime;
-        var exp = 1f / (1f + x + 0.48f * x * x + 0.235f * x * x * x);
-
+        SmoothDampCoefficients(smoothTime, deltaTime, out var omega, out var exp);
         var change = current - target;
         var originalTo = target;
-
         var maxChange = maxSpeed * smoothTime;
         change = Math.Clamp(change, -maxChange, maxChange);
         target = current - change;
-
-        var temp = (currentVelocity + omega * change) * deltaTime;
-        currentVelocity = (currentVelocity - omega * temp) * exp;
-
-        var output = target + (change + temp) * exp;
-
-        // Prevent overshooting
+        var output = SmoothDampStep(change, target, ref currentVelocity, omega, exp, deltaTime);
         if (originalTo - current > 0f == output > originalTo)
         {
             output = originalTo;
             currentVelocity = (output - originalTo) / deltaTime;
         }
-
         return output;
     }
 
