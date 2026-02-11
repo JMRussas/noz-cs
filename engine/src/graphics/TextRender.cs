@@ -163,7 +163,7 @@ internal static class TextRender
         Graphics.DrawElements(6, baseIndex);
     }
 
-    private const int MaxWrappedLines = 256;
+    internal const int MaxWrappedLines = 256;
 
     private struct LineInfo
     {
@@ -244,7 +244,43 @@ internal static class TextRender
         return entry;
     }
 
-    private static float MeasureLineWidth(ReadOnlySpan<char> text, Font font, float fontSize)
+    internal static int GetWrapLines(
+        ReadOnlySpan<char> text, Font font, float fontSize, float maxWidth,
+        int cacheId, Span<CachedLine> outLines)
+    {
+        if (text.Length == 0) return 0;
+
+        WrapCacheEntry? entry;
+        if (!TryGetCachedWrap(cacheId, text, fontSize, maxWidth, out entry))
+            entry = cacheId != 0
+                ? PopulateWrapCache(cacheId, text, font, fontSize, maxWidth)
+                : null;
+
+        if (entry != null)
+        {
+            var count = Math.Min(entry.LineCount, outLines.Length);
+            entry.Lines.AsSpan(0, count).CopyTo(outLines);
+            return count;
+        }
+
+        // Uncached path
+        Span<LineInfo> rawLines = stackalloc LineInfo[MaxWrappedLines];
+        var lineCount = Math.Min(ComputeLineBreaks(text, font, fontSize, maxWidth, rawLines), outLines.Length);
+        for (var i = 0; i < lineCount; i++)
+        {
+            var end = rawLines[i].End;
+            while (end > rawLines[i].Start && text[end - 1] == ' ') end--;
+            outLines[i] = new CachedLine
+            {
+                Start = rawLines[i].Start,
+                End = end,
+                Width = MeasureLineWidth(text[rawLines[i].Start..end], font, fontSize)
+            };
+        }
+        return lineCount;
+    }
+
+    internal static float MeasureLineWidth(ReadOnlySpan<char> text, Font font, float fontSize)
     {
         var width = 0f;
         for (var i = 0; i < text.Length; i++)

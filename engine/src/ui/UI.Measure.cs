@@ -98,6 +98,7 @@ public static partial class UI
         ElementType.Popup => MeasurePopup(in e, in p),
         ElementType.Scene => MeasureScene(in e, in p),
         ElementType.TextBox => MeasureTextBox(in e, in p),
+        ElementType.TextArea => MeasureTextArea(in e, in p),
         ElementType.Image => MeasureImage(in e, in p),
         ElementType.Flex when p.Type is ElementType.Row => MeasureRowFlex(in e, in p),
         ElementType.Flex when p.Type is ElementType.Column => MeasureColumnFlex(in e, in p),
@@ -214,6 +215,40 @@ public static partial class UI
         }
 
         var padding = e.Data.TextBox.Padding;
+        return new Vector2(width + padding.Horizontal, height);
+    }
+
+    private static Vector2 MeasureTextArea(ref readonly Element e, ref readonly Element p)
+    {
+        var widthMode = p.Type == ElementType.Row ? Size.Fit : Size.Percent();
+        return ResolveSize(in e, in p, new Size2(widthMode, e.Data.TextArea.Height));
+    }
+
+    private static Vector2 FitTextArea(ref readonly Element e, ref readonly Element p)
+    {
+        var height = e.Data.TextArea.Height.Mode == SizeMode.Fixed
+            ? e.Data.TextArea.Height.Value
+            : 100f;
+
+        var font = (e.Asset as Font) ?? DefaultFont;
+        var width = 0f;
+
+        if (font != null)
+        {
+            var fontSize = e.Data.TextArea.FontSize;
+            var text = e.Id != 0
+                ? GetElementState(e.Id).Data.TextArea.Text.AsReadOnlySpan()
+                : ReadOnlySpan<char>.Empty;
+
+            if (text.Length == 0)
+                text = e.Data.TextArea.Placeholder.AsReadOnlySpan();
+
+            width = text.Length > 0
+                ? TextRender.Measure(text, font, fontSize).X
+                : 0;
+        }
+
+        var padding = e.Data.TextArea.Padding;
         return new Vector2(width + padding.Horizontal, height);
     }
 
@@ -342,6 +377,7 @@ public static partial class UI
         ElementType.Image => FitImage(in e),
         ElementType.Label => FitLabel(in e, in p),
         ElementType.TextBox => FitTextBox(in e, in p),
+        ElementType.TextArea => FitTextArea(in e, in p),
         ElementType.Spacer => e.Data.Spacer.Size,
         _ => Vector2.Zero
     };

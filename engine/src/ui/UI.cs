@@ -935,6 +935,38 @@ public static partial class UI
         return changed;
     }
 
+    // :textarea
+    public static bool TextArea(int id, string? placeholder = null) =>
+        TextArea(id, new TextAreaStyle(), placeholder);
+
+    public static bool TextArea(
+        int id,
+        TextAreaStyle style = default,
+        string? placeholder = null)
+    {
+        ref var e = ref CreateElement(ElementType.TextArea);
+        e.Data.TextArea = style.ToData();
+        e.Asset = style.Font ?? _defaultFont;
+
+        if (!string.IsNullOrEmpty(placeholder))
+            e.Data.TextArea.Placeholder = AddText(placeholder);
+
+        SetId(ref e, id);
+
+        ref var es = ref GetElementState(ref e);
+
+        // the ui system uses alternating text buffers so we can access previous
+        // text while building new text. Here we copy the previous text into the current buffer.
+        es.Data.TextArea.Text = AddText(es.Data.TextArea.Text.AsReadOnlySpan());
+
+        var changed = es.IsChanged;
+        es.SetFlags(ElementFlags.Changed, ElementFlags.None);
+        PushElement(e.Index);
+        PopElement();
+
+        return changed;
+    }
+
     internal static void End()
     {
         // Pop the automatic root container

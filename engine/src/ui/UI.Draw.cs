@@ -56,6 +56,10 @@ public static partial class UI
                 DrawTextBox(ref e);
                 break;
 
+            case ElementType.TextArea:
+                DrawTextArea(ref e);
+                break;
+
             case ElementType.Scene:
                 DrawScene(ref e);
                 return;

@@ -161,6 +161,35 @@ public struct TextBoxStyle()
     };
 }
 
+public struct TextAreaStyle()
+{
+    public Size Height = Size.Default;
+    public float FontSize = 16;
+    public Font? Font = null;
+    public Color BackgroundColor = Color.Transparent;
+    public Color TextColor = Color.White;
+    public Color PlaceholderColor = new(0.4f, 0.4f, 0.4f, 1f);
+    public Color SelectionColor = new(0.2f, 0.4f, 0.8f, 0.5f);
+    public BorderStyle Border = BorderStyle.None;
+    public BorderStyle FocusBorder = BorderStyle.None;
+    public EdgeInsets Padding = EdgeInsets.Zero;
+    public InputScope Scope = InputScope.All;
+
+    internal TextAreaData ToData() => new()
+    {
+        Height = Height,
+        FontSize = FontSize,
+        BackgroundColor = BackgroundColor,
+        TextColor = TextColor,
+        PlaceholderColor = PlaceholderColor,
+        SelectionColor = SelectionColor,
+        Border = Border,
+        FocusBorder = FocusBorder,
+        Padding = Padding,
+        Scope = Scope
+    };
+}
+
 public enum ScrollbarVisibility : byte
 {
     Auto,    // Show when content exceeds viewport

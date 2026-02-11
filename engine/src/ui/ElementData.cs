@@ -274,6 +274,35 @@ public struct TextBoxData
     };
 }
 
+public struct TextAreaData
+{
+    public Size Height;
+    public float FontSize;
+    public Color BackgroundColor;
+    public Color TextColor;
+    public Color PlaceholderColor;
+    public Color SelectionColor;
+    public BorderStyle Border;
+    public BorderStyle FocusBorder;
+    public EdgeInsets Padding;
+    public UnsafeSpan<char> Placeholder;
+    public InputScope Scope;
+
+    public static TextAreaData Default => new()
+    {
+        Height = Size.Default,
+        FontSize = 16,
+        BackgroundColor = new Color(0.22f, 0.22f, 0.22f, 1f),
+        TextColor = Color.White,
+        PlaceholderColor = new Color(0.4f, 0.4f, 0.4f, 1f),
+        SelectionColor = new Color(0.2f, 0.4f, 0.8f, 0.5f),
+        Border = BorderStyle.None,
+        FocusBorder = BorderStyle.None,
+        Padding = EdgeInsets.Zero,
+        Placeholder = UnsafeSpan<char>.Empty
+    };
+}
+
 [StructLayout(LayoutKind.Explicit)]
 internal struct ElementData
 {
@@ -287,6 +316,7 @@ internal struct ElementData
     [FieldOffset(0)] public PopupData Popup;
     [FieldOffset(0)] public SpacerData Spacer;
     [FieldOffset(0)] public TextBoxData TextBox;
+    [FieldOffset(0)] public TextAreaData TextArea;
     [FieldOffset(0)] public SceneData Scene;
     [FieldOffset(0)] public OpacityData Opacity;
     [FieldOffset(0)] public CursorData Cursor;

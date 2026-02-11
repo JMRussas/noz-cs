@@ -22,6 +22,7 @@ internal enum ElementType : ushort
     Transform,
     Popup,
     TextBox,
+    TextArea,
     Opacity,
     Cursor
 }
