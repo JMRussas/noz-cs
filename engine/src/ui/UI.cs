@@ -62,6 +62,7 @@ public static partial class UI
     private static int _activeScrollId;
     private static float _lastScrollMouseY;
     private static bool _closePopups;
+    private static int _inputPopupIndex;
 
     // Scrollbar drag state
     private static bool _scrollbarDragging;

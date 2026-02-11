@@ -37,25 +37,43 @@ public static partial class UI
         _closePopups = false;
         if (_mouseLeftPressed && _popupCount > 0)
         {
-            var clickInsidePopup = false;
+            var clickInsideAutoClosePopup = false;
             var anyAutoClose = false;
             for (var i = 0; i < _popupCount; i++)
             {
                 ref var popup = ref _elements[_popups[i]];
-                anyAutoClose |= popup.Data.Popup.AutoClose;
+                if (!popup.Data.Popup.AutoClose) continue;
+                anyAutoClose = true;
                 var localMouse = Vector2.Transform(mouse, popup.WorldToLocal);
                 if (popup.Rect.Contains(localMouse))
                 {
-                    clickInsidePopup = true;
+                    clickInsideAutoClosePopup = true;
                     break;
                 }
             }
 
-            if (anyAutoClose && !clickInsidePopup)
+            if (anyAutoClose && !clickInsideAutoClosePopup)
             {
                 _closePopups = true;
+                _mouseLeftPressed = false;
                 Input.ConsumeButton(InputCode.MouseLeft);
-                return;
+            }
+        }
+
+        // When multiple popups are open, determine which popup the mouse is over
+        // so that child popups block input to elements in parent popups
+        _inputPopupIndex = -1;
+        if (_popupCount > 1)
+        {
+            for (var i = _popupCount - 1; i >= 0; i--)
+            {
+                ref var popup = ref _elements[_popups[i]];
+                var localMouse = Vector2.Transform(mouse, popup.WorldToLocal);
+                if (popup.Rect.Contains(localMouse))
+                {
+                    _inputPopupIndex = _popups[i];
+                    break;
+                }
             }
         }
 
@@ -237,6 +255,13 @@ public static partial class UI
 
     private static bool IsInsidePopup(int elementIndex)
     {
+        // When the mouse is over a specific popup, only that popup receives input
+        if (_inputPopupIndex >= 0)
+        {
+            ref var popup = ref _elements[_inputPopupIndex];
+            return elementIndex >= _inputPopupIndex && elementIndex < popup.NextSiblingIndex;
+        }
+
         for (var i = 0; i < _popupCount; i++)
         {
             var popupIndex = _popups[i];
