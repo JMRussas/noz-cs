@@ -22,7 +22,8 @@ internal enum ElementType : ushort
     Transform,
     Popup,
     TextBox,
-    Opacity
+    Opacity,
+    Cursor
 }
 
 internal struct Element

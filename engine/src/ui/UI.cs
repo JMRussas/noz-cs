@@ -35,6 +35,7 @@ public static partial class UI
     public struct AutoGrid : IDisposable { readonly void IDisposable.Dispose() => EndGrid(); }
     public struct AutoTransformed : IDisposable { readonly void IDisposable.Dispose() => EndTransformed(); }
     public struct AutoOpacity : IDisposable { readonly void IDisposable.Dispose() => EndOpacity(); }
+    public struct AutoCursor : IDisposable { readonly void IDisposable.Dispose() => EndCursor(); }
 
     private static Font? _defaultFont;
     public static Font? DefaultFont => _defaultFont;
@@ -675,6 +676,24 @@ public static partial class UI
     }
 
     public static void EndOpacity() => EndElement(ElementType.Opacity);
+
+    public static AutoCursor BeginCursor(Sprite sprite)
+    {
+        ref var e = ref CreateElement(ElementType.Cursor);
+        e.Asset = sprite;
+        PushElement(e.Index);
+        return new AutoCursor();
+    }
+
+    public static AutoCursor BeginCursor(SystemCursor cursor)
+    {
+        ref var e = ref CreateElement(ElementType.Cursor);
+        e.Data.Cursor = new CursorData { SystemCursor = cursor };
+        PushElement(e.Index);
+        return new AutoCursor();
+    }
+
+    public static void EndCursor() => EndElement(ElementType.Cursor);
 
     public static AutoScrollable BeginScrollable(int id) =>
         BeginScrollable(id, new ScrollableStyle());

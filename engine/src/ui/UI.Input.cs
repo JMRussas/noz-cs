@@ -80,6 +80,7 @@ public static partial class UI
         }
         HandleScrollableDrag(mouse);
         HandleMouseWheelScroll(mouse);
+        HandleCursor();
     }
 
     private static bool GetScrollbarThumbRect(ref Element e, out Rect thumbRect)
@@ -391,6 +392,55 @@ public static partial class UI
             e.Data.Scrollable.Offset = newOffset;
             state.Data.Scrollable.Offset = newOffset;
             break;
+        }
+    }
+
+    private static bool _uiCursorActive;
+    private static Sprite? _savedCursorSprite;
+    private static SystemCursor _savedSystemCursor;
+
+    private static void HandleCursor()
+    {
+        short cursorIndex = -1;
+
+        for (short i = 0; i < _elementCount; i++)
+        {
+            ref var e = ref _elements[i];
+            if (e.Type != ElementType.Cursor)
+                continue;
+
+            if (_popupCount > 0 && !IsInsidePopup(i))
+                continue;
+
+            var localMouse = Vector2.Transform(_mousePosition, e.WorldToLocal);
+            if (!e.Rect.Contains(localMouse))
+                continue;
+
+            cursorIndex = i;
+        }
+
+        if (cursorIndex >= 0)
+        {
+            if (!_uiCursorActive)
+            {
+                _savedCursorSprite = Cursor.ActiveSprite;
+                _savedSystemCursor = Cursor.ActiveSystemCursor;
+                _uiCursorActive = true;
+            }
+
+            ref var e = ref _elements[cursorIndex];
+            if (e.Asset is Sprite sprite)
+                Cursor.Set(sprite);
+            else
+                Cursor.Set(e.Data.Cursor.SystemCursor);
+        }
+        else if (_uiCursorActive)
+        {
+            _uiCursorActive = false;
+            if (_savedCursorSprite != null)
+                Cursor.Set(_savedCursorSprite);
+            else
+                Cursor.Set(_savedSystemCursor);
         }
     }
 }

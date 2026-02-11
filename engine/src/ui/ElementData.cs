@@ -212,6 +212,11 @@ internal struct OpacityData
     public float Value;
 }
 
+internal struct CursorData
+{
+    public SystemCursor SystemCursor;
+}
+
 internal struct SpacerData
 {
     public Vector2 Size;
@@ -278,4 +283,5 @@ internal struct ElementData
     [FieldOffset(0)] public TextBoxData TextBox;
     [FieldOffset(0)] public SceneData Scene;
     [FieldOffset(0)] public OpacityData Opacity;
+    [FieldOffset(0)] public CursorData Cursor;
 }

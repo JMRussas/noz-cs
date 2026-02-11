@@ -333,6 +333,7 @@ public static partial class UI
         ElementType.Grid => MeasureGrid(in e, in p),
         ElementType.Popup => FitPopup(in e, in p),
         ElementType.Transform => FitTransform(in e, in p),
+        ElementType.Cursor => FitTransform(in e, in p),
         ElementType.Image => FitImage(in e),
         ElementType.Label => FitLabel(in e, in p),
         ElementType.TextBox => FitTextBox(in e, in p),

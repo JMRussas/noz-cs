@@ -20,17 +20,23 @@ public static class Cursor
     private const float Scale = 0.75f;
 
     private static Sprite? _sprite;
+    private static SystemCursor _systemCursor;
     private static readonly Camera _camera = new() { FlipY = false };
+
+    internal static Sprite? ActiveSprite => _sprite;
+    internal static SystemCursor ActiveSystemCursor => _systemCursor;
 
     public static void Set(SystemCursor cursor)
     {
         _sprite = null;
+        _systemCursor = cursor;
         Application.Platform.SetCursor(cursor);
     }
 
     public static void Set(Sprite sprite)
     {
         _sprite = sprite;
+        _systemCursor = SystemCursor.None;
         Application.Platform.SetCursor(SystemCursor.None);
     }
 
