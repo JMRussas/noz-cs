@@ -68,6 +68,7 @@ public struct Size2(Size width, Size height)
         }
     }
 
+    public static implicit operator Size2(float value) => new(value, value);
     public static implicit operator Size2(Size size) => new(size, size);
     public override string ToString() => $"Width: {Width}, Height: {Height}";
 

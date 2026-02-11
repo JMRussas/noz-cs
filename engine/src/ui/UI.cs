@@ -737,11 +737,31 @@ public static partial class UI
             Columns = style.Columns,
             CellWidth = style.CellWidth,
             CellHeight = style.CellHeight,
+            CellMinWidth = style.CellMinWidth,
+            CellHeightOffset = style.CellHeightOffset,
             VirtualCount = style.VirtualCount,
             StartIndex = style.StartIndex
         };
         PushElement(e.Index);
         return new AutoGrid();
+    }
+
+    public static (int columns, float cellWidth, float cellHeight) ResolveGridCellSize(
+        int columns, float cellWidth, float cellHeight,
+        float cellMinWidth, float cellHeightOffset,
+        float spacing, float availableWidth)
+    {
+        if (columns <= 0 && cellMinWidth > 0)
+            columns = Math.Max(1, (int)((availableWidth + spacing) / (cellMinWidth + spacing)));
+        columns = Math.Max(1, columns);
+
+        if (cellWidth <= 0)
+        {
+            cellWidth = Math.Max(0, (availableWidth - (columns - 1) * spacing) / columns);
+            cellHeight = cellWidth + cellHeightOffset;
+        }
+
+        return (columns, cellWidth, cellHeight);
     }
 
     public static void EndGrid() => EndElement(ElementType.Grid);

@@ -50,18 +50,22 @@ public static partial class UI
     private static void LayoutGrid(ref Element e)
     {
         ref readonly var grid = ref e.Data.Grid;
-        var cellSize = new Vector2(grid.CellWidth, grid.CellHeight);
-        var rowHeight = grid.CellHeight + grid.Spacing;
+        var (columns, cellWidth, cellHeight) = ResolveGridCellSize(
+            grid.Columns, grid.CellWidth, grid.CellHeight,
+            grid.CellMinWidth, grid.CellHeightOffset,
+            grid.Spacing, e.Rect.Width);
+
+        var cellSize = new Vector2(cellWidth, cellHeight);
+        var rowHeight = cellHeight + grid.Spacing;
         var elementIndex = e.Index + 1;
 
         for (var childIndex = 0; childIndex < e.ChildCount; childIndex++)
         {
-            // Position based on virtual index, not child index
             var virtualIndex = grid.StartIndex + childIndex;
-            var col = virtualIndex % grid.Columns;
-            var row = virtualIndex / grid.Columns;
+            var col = virtualIndex % columns;
+            var row = virtualIndex / columns;
             var offset = new Vector2(
-                col * (grid.CellWidth + grid.Spacing),
+                col * (cellWidth + grid.Spacing),
                 row * rowHeight);
 
             ref var child = ref GetElement(elementIndex);

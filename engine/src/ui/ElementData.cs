@@ -151,8 +151,12 @@ internal struct GridData
     public int Columns;
     public float CellWidth;
     public float CellHeight;
+    public float CellMinWidth;
+    public float CellHeightOffset;
     public int VirtualCount;
     public int StartIndex;
+
+    public readonly bool IsAutoWidth => CellWidth <= 0;
 
     public static GridData Default => new()
     {
@@ -160,6 +164,8 @@ internal struct GridData
         Columns = 3,
         CellWidth = 100,
         CellHeight = 100,
+        CellMinWidth = 0,
+        CellHeightOffset = 0,
         VirtualCount = 0,
         StartIndex = 0
     };

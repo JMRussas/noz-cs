@@ -107,11 +107,16 @@ public static partial class UI
     private static Vector2 MeasureGrid(ref readonly Element e, ref readonly Element p)
     {
         ref readonly var grid = ref e.Data.Grid;
-        // Use VirtualCount for total items if set, otherwise use actual child count
+        var availableWidth = p.ContentRect.Width;
+        var (columns, cellWidth, cellHeight) = ResolveGridCellSize(
+            grid.Columns, grid.CellWidth, grid.CellHeight,
+            grid.CellMinWidth, grid.CellHeightOffset,
+            grid.Spacing, availableWidth);
+
         var totalItems = grid.VirtualCount > 0 ? grid.VirtualCount : e.ChildCount;
-        var rowCount = (totalItems + grid.Columns - 1) / grid.Columns;
-        var width = grid.Columns * grid.CellWidth + (grid.Columns - 1) * grid.Spacing;
-        var height = rowCount * grid.CellHeight + Math.Max(0, rowCount - 1) * grid.Spacing;
+        var rowCount = (totalItems + columns - 1) / columns;
+        var width = grid.IsAutoWidth ? availableWidth : columns * cellWidth + (columns - 1) * grid.Spacing;
+        var height = rowCount * cellHeight + Math.Max(0, rowCount - 1) * grid.Spacing;
         return new Vector2(width, height);
     }
 

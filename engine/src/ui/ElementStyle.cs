@@ -111,6 +111,8 @@ public struct GridStyle()
     public int Columns = 3;
     public float CellWidth = 100;
     public float CellHeight = 100;
+    public float CellMinWidth = 0;
+    public float CellHeightOffset = 0;
     public int VirtualCount = 0;
     public int StartIndex = 0;
 }
