@@ -63,11 +63,12 @@ public static partial class UI
         // When multiple popups are open, determine which popup the mouse is over
         // so that child popups block input to elements in parent popups
         _inputPopupIndex = -1;
-        if (_popupCount > 1)
+        if (_activePopupCount > 1)
         {
             for (var i = _popupCount - 1; i >= 0; i--)
             {
                 ref var popup = ref _elements[_popups[i]];
+                if (!popup.Data.Popup.Interactive) continue;
                 var localMouse = Vector2.Transform(mouse, popup.WorldToLocal);
                 if (popup.Rect.Contains(localMouse))
                 {
@@ -85,15 +86,15 @@ public static partial class UI
 
         // Don't consume mouse buttons when hovering over a Scene element (pass-through),
         // but still consume when popups are open or scrollbar is being used.
-        if (!_mouseOverScene || _popupCount > 0)
+        if (!_mouseOverScene || _activePopupCount > 0)
         {
-            if ((_mouseLeftElementId != 0 || _popupCount > 0) && !_scrollbarDragging)
+            if ((_mouseLeftElementId != 0 || _activePopupCount > 0) && !_scrollbarDragging)
                 Input.ConsumeButton(InputCode.MouseLeft);
 
-            if (_mouseDoubleClickElementId != 0 || _popupCount > 0)
+            if (_mouseDoubleClickElementId != 0 || _activePopupCount > 0)
                 Input.ConsumeButton(InputCode.MouseLeftDoubleClick);
 
-            if (_mouseRightElementId != 0 || _popupCount > 0)
+            if (_mouseRightElementId != 0 || _activePopupCount > 0)
                 Input.ConsumeButton(InputCode.MouseRight);
         }
         HandleScrollableDrag(mouse);
@@ -194,7 +195,7 @@ public static partial class UI
                 continue;
 
             // When popups are open, only interact with scrollbars inside popups
-            if (_popupCount > 0 && !IsInsidePopup(i))
+            if (_activePopupCount > 0 && !IsInsidePopup(i))
                 continue;
 
             // Check if mouse is over the scrollbar thumb
@@ -266,6 +267,7 @@ public static partial class UI
         {
             var popupIndex = _popups[i];
             ref var popup = ref _elements[popupIndex];
+            if (!popup.Data.Popup.Interactive) continue;
             if (elementIndex >= popupIndex && elementIndex < popup.NextSiblingIndex)
                 return true;
         }
@@ -289,7 +291,7 @@ public static partial class UI
             es.LocalToWorld = e.LocalToWorld;
 
             // When popups are open, only process input for elements inside popups
-            if (_popupCount > 0 && !IsInsidePopup(elementIndex))
+            if (_activePopupCount > 0 && !IsInsidePopup(elementIndex))
             {
                 es.SetFlags(ElementFlags.Hovered | ElementFlags.Down | ElementFlags.Pressed | ElementFlags.DoubleClick | ElementFlags.RightClick | ElementFlags.HoverChanged, ElementFlags.None);
                 continue;
@@ -406,7 +408,7 @@ public static partial class UI
                 if (e.Type == ElementType.Scrollable && e.Id != 0)
                 {
                     // When popups are open, only allow starting scroll inside popups
-                    if (_popupCount > 0 && !IsInsidePopup(i - 1))
+                    if (_activePopupCount > 0 && !IsInsidePopup(i - 1))
                         continue;
 
                     ref var state = ref GetElementState(e.Id);
@@ -433,7 +435,7 @@ public static partial class UI
                 continue;
 
             // When popups are open, only allow scrolling inside popups
-            if (_popupCount > 0 && !IsInsidePopup(i - 1))
+            if (_activePopupCount > 0 && !IsInsidePopup(i - 1))
                 continue;
 
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
@@ -467,7 +469,7 @@ public static partial class UI
             if (e.Type != ElementType.Cursor)
                 continue;
 
-            if (_popupCount > 0 && !IsInsidePopup(i))
+            if (_activePopupCount > 0 && !IsInsidePopup(i))
                 continue;
 
             var localMouse = Vector2.Transform(_mousePosition, e.WorldToLocal);

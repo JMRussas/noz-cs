@@ -198,6 +198,7 @@ internal struct PopupData
     public Rect AnchorRect;
     public float MinWidth;
     public bool AutoClose;
+    public bool Interactive;
 
     public static PopupData Default => new()
     {

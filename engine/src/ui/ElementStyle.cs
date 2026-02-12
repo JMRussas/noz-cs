@@ -128,6 +128,7 @@ public struct PopupStyle()
     public Rect AnchorRect = Rect.Zero;
     public float MinWidth = 0;
     public bool AutoClose = true;
+    public bool Interactive = true;
 }
 
 public struct TextBoxStyle()

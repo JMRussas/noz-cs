@@ -55,6 +55,7 @@ public static partial class UI
     private static int _elementStackCount;
     private static int _elementIdStackCount;
     private static int _popupCount;
+    private static int _activePopupCount;
     private static int _focusElementId;
     private static int _pendingFocusElementId;
     private static Vector2 _size;
@@ -459,6 +460,7 @@ public static partial class UI
         _elementIdStackCount = 0;
         _elementCount = 0;
         _popupCount = 0;
+        _activePopupCount = 0;
         _currentTextBuffer = 1 - _currentTextBuffer;
         _textBuffers[_currentTextBuffer].Clear();
 
@@ -797,11 +799,14 @@ public static partial class UI
             ClampToScreen = style.ClampToScreen,
             AnchorRect = style.AnchorRect,
             MinWidth = style.MinWidth,
-            AutoClose = style.AutoClose
+            AutoClose = style.AutoClose,
+            Interactive = style.Interactive
         };
         SetId(ref e, id);
         PushElement(e.Index);
         _popups[_popupCount++] = e.Index;
+        if (style.Interactive)
+            _activePopupCount++;
         return new AutoPopup();
     }
 
