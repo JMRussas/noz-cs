@@ -299,4 +299,7 @@ public static class MathEx
         var projection = lineStart + t * line;
         return Vector2.Distance(point, projection);
     }
+
+    public static float RandomRange(float min, float max) =>
+        ((float)Random.Shared.NextDouble()) * (max - min) + min;
 }
