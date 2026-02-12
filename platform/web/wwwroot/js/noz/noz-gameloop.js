@@ -4,7 +4,6 @@ let dotNetRef = null;
 let animationFrameId = null;
 let lastTime = 0;
 let running = false;
-
 export function start(dotNet) {
     dotNetRef = dotNet;
     running = true;

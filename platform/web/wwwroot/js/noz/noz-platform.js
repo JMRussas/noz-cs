@@ -93,6 +93,11 @@ function onKeyDown(e) {
         e.preventDefault();
     }
     dotNetRef.invokeMethodAsync('OnKeyDown', e.key);
+
+    // Forward printable characters as text input (e.key is a single char for printable keys)
+    if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        dotNetRef.invokeMethodAsync('OnTextInput', e.key);
+    }
 }
 
 function onKeyUp(e) {

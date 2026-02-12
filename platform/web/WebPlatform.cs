@@ -160,6 +160,12 @@ public class WebPlatform : IPlatform
     }
 
     [JSInvokable]
+    public void OnTextInput(string text)
+    {
+        _eventQueue.Enqueue(PlatformEvent.TextInputEvent(text));
+    }
+
+    [JSInvokable]
     public void OnMouseDown(int button, int clickCount)
     {
         var code = MouseButtonToInputCode(button);

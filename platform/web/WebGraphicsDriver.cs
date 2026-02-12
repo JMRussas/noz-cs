@@ -864,14 +864,29 @@ public class WebGraphicsDriver : IGraphicsDriver
         WebGPUInterop.SetVertexBuffer(0, mesh.JsMeshId);
         WebGPUInterop.SetIndexBuffer(mesh.JsMeshId);
 
-        // Apply scissor (no Y flip needed - handled by projection matrix)
+        // Apply scissor (Y flip needed - WebGPU uses top-down, engine uses bottom-up)
         if (_state.ScissorEnabled)
         {
-            WebGPUInterop.SetScissorRect(_state.Scissor.X, _state.Scissor.Y, _state.Scissor.Width, _state.Scissor.Height);
+            WebGPUInterop.SetScissorRect(
+                _state.Scissor.X,
+                _state.Viewport.Height - _state.Scissor.Y - _state.Scissor.Height,
+                _state.Scissor.Width,
+                _state.Scissor.Height);
         }
         else
         {
-            WebGPUInterop.SetScissorRect(0, 0, _surfaceWidth, _surfaceHeight);
+            int width, height;
+            if (_activeRenderTexture != 0 && _renderTextures.TryGetValue(_activeRenderTexture, out var rt))
+            {
+                width = rt.Width;
+                height = rt.Height;
+            }
+            else
+            {
+                width = _surfaceWidth;
+                height = _surfaceHeight;
+            }
+            WebGPUInterop.SetScissorRect(0, 0, width, height);
         }
 
         // Draw
