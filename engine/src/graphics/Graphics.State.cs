@@ -145,6 +145,11 @@ public static unsafe partial class Graphics
         CurrentState.Transform = transform * CurrentState.Transform;
     }
 
+    public static void ScaleTransform(float scale)
+    {
+        CurrentState.Transform = Matrix3x2.CreateScale(scale) * CurrentState.Transform;
+    }
+
     public static void SetTransform(in Matrix3x2 transform)
     {
         CurrentState.Transform = transform;
