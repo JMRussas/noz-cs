@@ -446,6 +446,7 @@ public static class EditorStyle
             Border = new BorderStyle { Radius = Panel.BorderRadius }
         };
 
+        public readonly static ImageStyle NotificationIcon = Control.Icon;
         public readonly static LabelStyle NotificationText = Control.Text;
         public readonly static LabelStyle NotificationErrorText = Control.Text with { Color = EditorStyle.ErrorColor };
     }

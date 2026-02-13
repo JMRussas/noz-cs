@@ -22,10 +22,11 @@ public static class Notifications
         public string Text;
         public float Elapsed;
         public NotificationType Type;
+        public Sprite? Icon;
     }
 
     private static readonly Notification[] _notifications = new Notification[MaxNotifications];
-    private static readonly ConcurrentQueue<(NotificationType Type, string Text)> _pending = new();
+    private static readonly ConcurrentQueue<(NotificationType Type, string Text, Sprite? Icon)> _pending = new();
     private static int _head;
     private static int _count;
 
@@ -47,7 +48,7 @@ public static class Notifications
         AddDeferred(NotificationType.Info, $"imported '{doc.Name}'");
     }
 
-    public static void Add(NotificationType type, string text)
+    public static void Add(NotificationType type, string text, Sprite? icon = null)
     {
         if (_count == MaxNotifications)
             PopFront();
@@ -57,23 +58,24 @@ public static class Notifications
         {
             Text = text,
             Elapsed = 0.0f,
-            Type = type
+            Type = type,
+            Icon = icon
         };
         _count++;
     }
 
-    public static void Add(string text) => Add(NotificationType.Info, text);
-    public static void AddError(string text) => Add(NotificationType.Error, text);
+    public static void Add(string text, Sprite? icon = null) => Add(NotificationType.Info, text, icon);
+    public static void AddError(string text, Sprite? icon = null) => Add(NotificationType.Error, text, icon);
 
-    public static void AddDeferred(NotificationType type, string text)
+    public static void AddDeferred(NotificationType type, string text, Sprite? icon = null)
     {
-        _pending.Enqueue((type, text));
+        _pending.Enqueue((type, text, icon));
     }
 
     public static void Update()
     {
         while (_pending.TryDequeue(out var item))
-            Add(item.Type, item.Text);
+            Add(item.Type, item.Text, item.Icon);
 
         if (_count <= 0)
             return;
@@ -105,11 +107,15 @@ public static class Notifications
                 var index = (_head + i) % MaxNotifications;
                 ref var n = ref _notifications[index];                
                 using (UI.BeginContainer(EditorStyle.Notifications.Notification))
+                {
+                    if (n.Icon != null)
+                        UI.Image(n.Icon, EditorStyle.Notifications.NotificationIcon);
                     UI.Label(
                         n.Text,
                         n.Type == NotificationType.Error
                             ? EditorStyle.Notifications.NotificationErrorText
                             : EditorStyle.Notifications.NotificationText);
+                }
             }
         }
     }

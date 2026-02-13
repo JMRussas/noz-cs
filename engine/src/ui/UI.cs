@@ -275,10 +275,10 @@ public static partial class UI
 
         ref var es = ref GetElementState(elementId);
 
-        // Clear hover for elements not present in the previous frame to prevent
-        // stale/garbage flags from triggering false HoverChanged
+        // Reset state for elements not present in the previous frame to prevent
+        // stale UnsafeSpan references and garbage flags
         if (es.LastFrame != (ushort)(_frame - 1) && es.LastFrame != _frame)
-            es.SetFlags(ElementFlags.Hovered, ElementFlags.None);
+            es = default;
 
         es.LastFrame = _frame;
         es.Index = e.Index;
