@@ -254,6 +254,18 @@ public static partial class UI
         }
     }
 
+    private static bool IsInsideNonInteractivePopup(int elementIndex)
+    {
+        for (var i = 0; i < _popupCount; i++)
+        {
+            var popupIndex = _popups[i];
+            ref var popup = ref _elements[popupIndex];
+            if (!popup.Data.Popup.Interactive && elementIndex >= popupIndex && elementIndex < popup.NextSiblingIndex)
+                return true;
+        }
+        return false;
+    }
+
     private static bool IsInsidePopup(int elementIndex)
     {
         // When the mouse is over a specific popup, only that popup receives input
@@ -289,6 +301,13 @@ public static partial class UI
             ref var es = ref GetElementState(e.Id);
             es.Rect = e.Rect;
             es.LocalToWorld = e.LocalToWorld;
+
+            // Non-interactive popups and their children don't process input
+            if (IsInsideNonInteractivePopup(elementIndex))
+            {
+                es.SetFlags(ElementFlags.Hovered | ElementFlags.Down | ElementFlags.Pressed | ElementFlags.DoubleClick | ElementFlags.RightClick | ElementFlags.HoverChanged, ElementFlags.None);
+                continue;
+            }
 
             // When popups are open, only process input for elements inside popups
             if (_activePopupCount > 0 && !IsInsidePopup(elementIndex))
