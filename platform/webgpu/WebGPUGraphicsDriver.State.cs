@@ -246,10 +246,13 @@ public unsafe partial class WebGPUGraphicsDriver
                         return;
                     }
 
+                    ref var tex = ref _textures[(int)textureHandle];
+                    var view = (binding.Type != ShaderBindingType.Texture2DArray && tex.TextureView2D != null)
+                        ? tex.TextureView2D : tex.TextureView;
                     entries[validEntryCount++] = new BindGroupEntry
                     {
                         Binding = binding.Binding,
-                        TextureView = _textures[(int)textureHandle].TextureView,
+                        TextureView = view,
                     };
                     break;
                 }

@@ -118,17 +118,17 @@ public static partial class UI
         if (s.ScrollbarVisibility == ScrollbarVisibility.Auto && maxScroll <= 0)
             return;
 
-        // Calculate track position (right side of scrollable, in world space)
-        var pos = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
-        var trackX = pos.X + e.Rect.Width - s.ScrollbarWidth - s.ScrollbarPadding;
-        var trackY = pos.Y + s.ScrollbarPadding;
+        // Calculate track position (right side of scrollable, in local space)
+        var trackX = e.Rect.X + e.Rect.Width - s.ScrollbarWidth - s.ScrollbarPadding;
+        var trackY = e.Rect.Y + s.ScrollbarPadding;
         var trackH = viewportHeight - s.ScrollbarPadding * 2;
 
         // Draw track
-        DrawRect(
+        DrawTexturedRect(
             new Rect(trackX, trackY, s.ScrollbarWidth, trackH),
+            e.LocalToWorld, null,
             ApplyOpacity(s.ScrollbarTrackColor),
-            s.ScrollbarBorderRadius
+            BorderRadius.Circular(s.ScrollbarBorderRadius)
         );
 
         // Draw thumb if there's content to scroll
@@ -139,10 +139,11 @@ public static partial class UI
             var scrollRatio = s.Offset / maxScroll;
             var thumbY = trackY + scrollRatio * (trackH - thumbH);
 
-            DrawRect(
+            DrawTexturedRect(
                 new Rect(trackX, thumbY, s.ScrollbarWidth, thumbH),
+                e.LocalToWorld, null,
                 ApplyOpacity(s.ScrollbarThumbColor),
-                s.ScrollbarBorderRadius
+                BorderRadius.Circular(s.ScrollbarBorderRadius)
             );
         }
     }
@@ -179,10 +180,8 @@ public static partial class UI
         if (style.Color.IsTransparent && style.Border.Width <= 0)
             return;
 
-        var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
-        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
-        DrawRect(
-            new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y),
+        DrawTexturedRect(
+            e.Rect, e.LocalToWorld, null,
             ApplyOpacity(style.Color),
             style.Border.Radius,
             style.Border.Width,
@@ -291,10 +290,9 @@ public static partial class UI
         }
         else if (e.Asset is Texture texture)
         {
-            var topLeft = Vector2.Transform(offset, e.LocalToWorld);
-            var bottomRight = Vector2.Transform(offset + scaledSize, e.LocalToWorld);
-            DrawImage(
-                new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y),
+            DrawTexturedRect(
+                new Rect(offset.X, offset.Y, scaledSize.X, scaledSize.Y),
+                e.LocalToWorld,
                 texture,
                 ApplyOpacity(img.Color),
                 img.BorderRadius
@@ -345,44 +343,14 @@ public static partial class UI
         }
     }
 
-    private static void DrawRect(
-        in Rect rect,
-        Color color,
-        float borderRadius = 0,
-        float borderWidth = 0,
-        Color borderColor = default,
-        ushort order = 0)
-    {
-        DrawRect(rect, color, BorderRadius.Circular(borderRadius), borderWidth, borderColor, order: order);
-    }
-
-    private static void DrawRect(
-        in Rect rect,
-        Color color,
-        BorderRadius borderRadius,
-        float borderWidth = 0,
-        Color borderColor = default,
-        ushort order = 0)
-    {
-        DrawTexturedRect(rect, Graphics.WhiteTexture, color, borderRadius, borderWidth, borderColor, order: order);
-    }
-
-    private static void DrawImage(
-        in Rect rect,
-        Texture texture,
-        Color color,
-        BorderRadius borderRadius = default)
-    {
-        DrawTexturedRect(rect, texture, color, borderRadius, 0, default);
-    }
-
     private static void DrawTexturedRect(
         in Rect rect,
+        in Matrix3x2 transform,
         Texture? texture,
         Color color,
-        BorderRadius borderRadius,
-        float borderWidth,
-        Color borderColor,
+        BorderRadius borderRadius = default,
+        float borderWidth = 0,
+        Color borderColor = default,
         ushort order = 0)
     {
         var vertexOffset = _vertices.Length;
@@ -391,25 +359,27 @@ public static partial class UI
         if (!_vertices.CheckCapacity(4) || !_indices.CheckCapacity(6))
             return;
 
-        var x = rect.X;
-        var y = rect.Y;
         var w = rect.Width;
         var h = rect.Height;
 
         // Clamp radii to half the rect size to avoid overlap
         var maxR = MathF.Min(w, h) / 2;
-        var rTL = MathF.Min(borderRadius.TopLeft, maxR);
-        var rTR = MathF.Min(borderRadius.TopRight, maxR);
-        var rBL = MathF.Min(borderRadius.BottomLeft, maxR);
-        var rBR = MathF.Min(borderRadius.BottomRight, maxR);
-
-        var radii = new Vector4(rTL, rTR, rBL, rBR);
+        var radii = new Vector4(
+            MathF.Min(borderRadius.TopLeft, maxR),
+            MathF.Min(borderRadius.TopRight, maxR),
+            MathF.Min(borderRadius.BottomLeft, maxR),
+            MathF.Min(borderRadius.BottomRight, maxR));
         var rectSize = new Vector2(w, h);
+
+        var p0 = Vector2.Transform(new Vector2(rect.X, rect.Y), transform);
+        var p1 = Vector2.Transform(new Vector2(rect.X + w, rect.Y), transform);
+        var p2 = Vector2.Transform(new Vector2(rect.X + w, rect.Y + h), transform);
+        var p3 = Vector2.Transform(new Vector2(rect.X, rect.Y + h), transform);
 
         // Simple 4-vertex quad - shader handles everything
         _vertices.Add(new UIVertex
         {
-            Position = new Vector2(x, y),
+            Position = p0,
             UV = new Vector2(0, 0),
             Normal = rectSize,
             Color = color,
@@ -419,7 +389,7 @@ public static partial class UI
         });
         _vertices.Add(new UIVertex
         {
-            Position = new Vector2(x + w, y),
+            Position = p1,
             UV = new Vector2(1, 0),
             Normal = rectSize,
             Color = color,
@@ -429,7 +399,7 @@ public static partial class UI
         });
         _vertices.Add(new UIVertex
         {
-            Position = new Vector2(x + w, y + h),
+            Position = p2,
             UV = new Vector2(1, 1),
             Normal = rectSize,
             Color = color,
@@ -439,7 +409,7 @@ public static partial class UI
         });
         _vertices.Add(new UIVertex
         {
-            Position = new Vector2(x, y + h),
+            Position = p3,
             UV = new Vector2(0, 1),
             Normal = rectSize,
             Color = color,

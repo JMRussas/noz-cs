@@ -629,7 +629,7 @@ export function createBindGroupFromJson(layoutId, entriesJson, label) {
                 console.error(`Texture ${entry.textureId} not found for binding ${entry.binding}`);
                 return null;
             }
-            resolved.resource = tex.view;
+            resolved.resource = (entry.isArray === false && tex.view2d) ? tex.view2d : tex.view;
         } else if (entry.type === 'sampler') {
             resolved.resource = entry.useLinear ? linearSampler : nearestSampler;
         }
@@ -893,12 +893,13 @@ export function createRenderTexture(width, height, format, sampleCount, label) {
         format: gpuFormat
     });
 
-    // D2Array view for sampling (sprite shader expects texture_2d_array) - always from resolve texture
+    // Store both 2D and 2D-array views so this RT can be sampled by any shader
     const arrayView = texture.createView({ format: gpuFormat, dimension: '2d-array', arrayLayerCount: 1 });
 
     textures.set(id, {
         texture: texture,
         view: arrayView,
+        view2d: view,
         width: width,
         height: height,
         format: gpuFormat,

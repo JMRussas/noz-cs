@@ -114,6 +114,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     {
         public WGPUTexture* Texture;
         public TextureView* TextureView;
+        public TextureView* TextureView2D;
         public Sampler* Sampler;
         public int Width;
         public int Height;

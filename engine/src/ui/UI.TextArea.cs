@@ -17,8 +17,8 @@ public static partial class UI
         var isFocused = e.Id != 0 && IsFocused(ref e);
         var border = isFocused ? data.FocusBorder : data.Border;
 
-        DrawRect(
-            new Rect(Vector2.Transform(e.Rect.Position, e.LocalToWorld), e.Rect.Size),
+        DrawTexturedRect(
+            e.Rect, e.LocalToWorld, null,
             ApplyOpacity(data.BackgroundColor),
             border.Radius,
             border.Width,
@@ -557,9 +557,9 @@ public static partial class UI
 
                 if (selX1 <= selX0) continue;
 
-                var pos = Vector2.Transform(
-                    new Vector2(selX0 + padding.L + e.Rect.X, lineY + e.Rect.Y), e.LocalToWorld);
-                DrawRect(new Rect(pos.X, pos.Y, selX1 - selX0, lineHeight),
+                DrawTexturedRect(
+                    new Rect(selX0 + padding.L + e.Rect.X, lineY + e.Rect.Y, selX1 - selX0, lineHeight),
+                    e.LocalToWorld, null,
                     ApplyOpacity(data.SelectionColor));
             }
 
@@ -659,10 +659,10 @@ public static partial class UI
         // Skip if cursor is outside visible area
         if (cursorY + lineHeight < 0 || cursorY > contentHeight) return;
 
-        var pos = Vector2.Transform(
-            new Vector2(cursorX + padding.L + e.Rect.X, cursorY + padding.T + e.Rect.Y),
-            e.LocalToWorld);
-        DrawRect(new Rect(pos.X, pos.Y, 1f, lineHeight), ApplyOpacity(Color.White));
+        DrawTexturedRect(
+            new Rect(cursorX + padding.L + e.Rect.X, cursorY + padding.T + e.Rect.Y, 1f, lineHeight),
+            e.LocalToWorld, null,
+            ApplyOpacity(Color.White));
     }
 
     public static ReadOnlySpan<char> GetTextAreaText(int elementId)

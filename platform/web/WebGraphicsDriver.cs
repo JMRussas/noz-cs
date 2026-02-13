@@ -1016,10 +1016,13 @@ public class WebGraphicsDriver : IGraphicsDriver
                         return 0;
                     }
 
+                    var isArray = binding.Type == ShaderBindingType.Texture2DArray;
                     _jsonBuilder.Append("{\"type\":\"texture\",\"binding\":");
                     _jsonBuilder.Append(binding.Binding);
                     _jsonBuilder.Append(",\"textureId\":");
                     _jsonBuilder.Append(tex.JsTextureId);
+                    _jsonBuilder.Append(",\"isArray\":");
+                    _jsonBuilder.Append(isArray ? "true" : "false");
                     _jsonBuilder.Append('}');
                     break;
                 }

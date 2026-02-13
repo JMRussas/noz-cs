@@ -382,6 +382,12 @@ public unsafe partial class WebGPUGraphicsDriver
             texture.TextureView = null;
         }
 
+        if (texture.TextureView2D != null)
+        {
+            _wgpu.TextureViewRelease(texture.TextureView2D);
+            texture.TextureView2D = null;
+        }
+
         if (texture.Texture != null)
         {
             _wgpu.TextureRelease(texture.Texture);
@@ -606,7 +612,7 @@ public unsafe partial class WebGPUGraphicsDriver
     // Render Texture (for capturing to image)
     // ============================================================================
 
-    private const int MaxRenderTextures = 16;
+    private const int MaxRenderTextures = 128;
     private readonly RenderTextureInfo[] _renderTextures = new RenderTextureInfo[MaxRenderTextures];
     private readonly int[] _rtHandleToSlot = new int[MaxTextures]; // Maps texture handle → RT slot
     private readonly int[] _freeRtSlots = new int[MaxRenderTextures];
@@ -705,11 +711,12 @@ public unsafe partial class WebGPUGraphicsDriver
             Format = wgpuFormat,
         };
 
-        // D2Array view for sampling through the batch pipeline
+        // Store both D2Array and D2 views for sampling
         _textures[(int)handle] = new TextureInfo
         {
             Texture = texture,
             TextureView = arrayTextureView,
+            TextureView2D = textureView,
             Width = width,
             Height = height,
             Format = wgpuFormat,

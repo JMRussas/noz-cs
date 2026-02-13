@@ -19,8 +19,8 @@ public static partial class UI
         var isFocused = e.Id != 0 && IsFocused(ref e);
         var border = isFocused ? data.FocusBorder : data.Border;
 
-        DrawRect(
-            new Rect(Vector2.Transform(e.Rect.Position, e.LocalToWorld), e.Rect.Size),
+        DrawTexturedRect(
+            e.Rect, e.LocalToWorld, null,
             ApplyOpacity(data.BackgroundColor),
             border.Radius,
             border.Width,
@@ -363,9 +363,11 @@ public static partial class UI
 
         if (drawW <= 0) return;
 
-        var pos = Vector2.Transform(new Vector2(drawX + e.Rect.X, e.Rect.Y + padding.T), e.LocalToWorld);
         var selectionHeight = e.Rect.Height - padding.Vertical;
-        DrawRect(new Rect(pos.X, pos.Y, drawW, selectionHeight), ApplyOpacity(e.Data.TextBox.SelectionColor));
+        DrawTexturedRect(
+            new Rect(drawX + e.Rect.X, e.Rect.Y + padding.T, drawW, selectionHeight),
+            e.LocalToWorld, null,
+            ApplyOpacity(e.Data.TextBox.SelectionColor));
     }
 
     private static void DrawTextBoxText(
@@ -457,8 +459,10 @@ public static partial class UI
         var contentHeight = e.Rect.Height - padding.Vertical;
         var cursorY = (contentHeight - cursorH) * 0.5f + padding.T;
 
-        var pos = Vector2.Transform(new Vector2(cursorX + e.Rect.X, cursorY + e.Rect.Y), e.LocalToWorld);
-        DrawRect(new Rect(pos.X, pos.Y, cursorW, cursorH), ApplyOpacity(Color.White));
+        DrawTexturedRect(
+            new Rect(cursorX + e.Rect.X, cursorY + e.Rect.Y, cursorW, cursorH),
+            e.LocalToWorld, null,
+            ApplyOpacity(Color.White));
     }
 
     private static float MeasureText(

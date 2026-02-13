@@ -14,11 +14,13 @@ public class Texture : Asset
     public TextureFilter Filter { get; private set; }
     public TextureClamp Clamp { get; private set; }
     public byte[] Data { get; private init; } = [];
-    public bool IsArray { get; private set; }   
+    public bool IsArray { get; private set; }
+
+    private bool _ownsRenderTexture;
 
     private Texture(string name, bool isArray) : base(AssetType.Texture, name)
     {
-        IsArray = isArray;  
+        IsArray = isArray;
     }
 
     public static Texture Create(
@@ -39,6 +41,18 @@ public class Texture : Asset
             Data = data.ToArray()
         };
         texture.Upload();
+        return texture;
+    }
+
+    public static Texture CreateFromRenderTexture(RenderTexture rt, string name = "")
+    {
+        var texture = new Texture(name, false)
+        {
+            Width = rt.Width,
+            Height = rt.Height,
+        };
+        texture.Handle = rt.Handle;
+        texture._ownsRenderTexture = true;
         return texture;
     }
 
@@ -130,7 +144,10 @@ public class Texture : Asset
 
         if (Handle != nuint.Zero)
         {
-            Graphics.Driver.DestroyTexture(Handle);
+            if (_ownsRenderTexture)
+                Graphics.Driver.DestroyRenderTexture(Handle);
+            else
+                Graphics.Driver.DestroyTexture(Handle);
             Handle = nuint.Zero;
         }
 
