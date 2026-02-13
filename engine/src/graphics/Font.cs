@@ -44,7 +44,7 @@ public class Font : Asset
     {
         if (_glyphNameBuffer != null && _glyphs.TryGetValue(codepoint, out var glyph) && glyph.NameLength > 0)
             return _glyphNameBuffer.AsSpan(glyph.NameStart, glyph.NameLength);
-        return ReadOnlySpan<char>.Empty;
+        return [];
     }
 
     private Font(string name) : base(AssetType.Font, name)

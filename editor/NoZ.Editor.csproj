@@ -30,6 +30,10 @@
     <Content Remove="assets\**\*" />
     <None Remove="assets\**\*" />
   </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="src\TTF\UnicodeNames.txt" LogicalName="UnicodeNames.txt" />
+  </ItemGroup>
   
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
       <PublishAot>true</PublishAot>

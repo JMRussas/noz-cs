@@ -105,6 +105,8 @@ public class FontDocument : Document
 
         foreach (var ttfGlyph in source)
         {
+            if (ttfGlyph == null) continue;
+
             // Skip empty glyphs (space, etc.) for symbol fonts
             if (Symbol && ttfGlyph!.contours is not { Length: > 0 })
                 continue;
@@ -390,12 +392,12 @@ public class FontDocument : Document
         var bytes = atlas.AsByteSpan();
         writer.Write(bytes);
 
-        // Build packed glyph name buffer
+        // Build packed glyph name buffer using Unicode character names
         var nameBuffer = new System.Text.StringBuilder();
         var nameOffsets = new (ushort start, ushort length)[glyphs.Count];
         for (int i = 0; i < glyphs.Count; i++)
         {
-            var name = glyphs[i].Ttf.name;
+            var name = UnicodeNames.GetName(glyphs[i].Codepoint) ?? glyphs[i].Ttf.name;
             if (!string.IsNullOrEmpty(name))
             {
                 nameOffsets[i] = ((ushort)nameBuffer.Length, (ushort)name.Length);
