@@ -26,46 +26,36 @@ for (var i = 0; i < args.Length; i++)
     }
 }
 
-// Find the editor root - try current directory first, then assembly location
-var editorPath = Directory.GetCurrentDirectory();
-if (!Directory.Exists(Path.Combine(editorPath, "library")))
+// Find editor path by walking up from assembly location
+// Look for directory with BOTH library/ AND NoZ.Editor.csproj
+var assemblyPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!;
+var editorPath = assemblyPath;
+
+while (editorPath != null)
 {
-    // Try assembly location (for running from bin/Debug when IDE sets cwd there)
-    editorPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!;
+    if (Directory.Exists(Path.Combine(editorPath, "library")) &&
+        File.Exists(Path.Combine(editorPath, "NoZ.Editor.csproj")))
+    {
+        break;
+    }
+    editorPath = Path.GetDirectoryName(editorPath);
 }
 
-if (!Directory.Exists(Path.Combine(editorPath, "library")))
+if (editorPath == null)
 {
-    // If still not found, walk up to find library folder
     if (initProject)
     {
-        // For --init mode, walk up from assembly location to find editor directory
-        editorPath = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location)!;
-        editorPath = Path.GetDirectoryName(editorPath)!; // Debug
-        editorPath = Path.GetDirectoryName(editorPath)!; // bin
-        editorPath = Path.GetDirectoryName(editorPath)!; // editor
+        // For --init mode, we don't need library/ to exist yet
+        // Just walk up from bin/Debug/net10.0 to editor directory
+        editorPath = Path.GetFullPath(Path.Combine(assemblyPath, "../../.."));
+
+        // Create library folder for init mode
         Directory.CreateDirectory(Path.Combine(editorPath, "library"));
     }
     else
     {
-        Log.Info("Searching for editor root...");
-        var searchPath = editorPath;
-        while (searchPath != null)
-        {
-            Log.Info($"Tying {Path.Combine(searchPath, "library")}");
-            if (Directory.Exists(Path.Combine(searchPath, "library")))
-            {
-                editorPath = searchPath;
-                break;
-            }
-            searchPath = Path.GetDirectoryName(searchPath);
-        }
-
-        if (!Directory.Exists(Path.Combine(editorPath, "library")))
-        {
-            Log.Error($"Could not find editor root (no 'library' folder found)");
-            return;
-        }
+        Log.Error("Could not find editor directory. Expected to find library/ folder and NoZ.Editor.csproj");
+        return;
     }
 }
 
@@ -82,10 +72,8 @@ for (var i = 0; i < args.Length; i++)
 
 if (projectPath.StartsWith('.'))
 {
-    // For --init mode, resolve relative to current directory
-    // For normal editor mode, resolve relative to editor path (for IDE launch settings)
-    var basePath = initProject ? Directory.GetCurrentDirectory() : editorPath;
-    projectPath = Path.Combine(basePath, projectPath);
+    // Resolve relative paths relative to current directory
+    projectPath = Path.Combine(Directory.GetCurrentDirectory(), projectPath);
     projectPath = Path.GetFullPath(projectPath);
 }
 

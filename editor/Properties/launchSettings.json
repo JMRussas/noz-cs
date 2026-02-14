@@ -2,12 +2,13 @@
   "profiles": {
     "NoZ.Editor": {
       "commandName": "Project",
-      "commandLineArgs": "--project ../",
+      "workingDirectory": "$(ProjectDir)",
       "hotReloadEnabled": false
     },
     "NoZ.Editor (Game)": {
       "commandName": "Project",
-      "commandLineArgs": "--project ../../",
+      "workingDirectory": "$(ProjectDir)../../",
+      "commandLineArgs": "--project .",
       "hotReloadEnabled": false
     }
   }
