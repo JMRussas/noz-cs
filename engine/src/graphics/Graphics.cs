@@ -557,8 +557,13 @@ public static unsafe partial class Graphics
     
     private static void ExecuteCommands()
     {
+        // If no commands, just clear the screen and return early
         if (_commands.Length == 0)
+        {
+            Driver.BeginScenePass(ClearColor);
+            Driver.EndScenePass();
             return;
+        }
 
         TextRender.Flush();
         UI.Flush();

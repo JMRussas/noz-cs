@@ -21,13 +21,24 @@ public class GameVtable : IApplication
 
 public static class Game
 {
+    private static Camera _camera = null!;
+
     public static void Init()
     {
-        // Initialize your game here
+        // Set a pleasant "cornflower red" background color (inspired by XNA's cornflower blue)
+        Graphics.ClearColor = new Color(220, 100, 100);
+
+        // Create and configure the camera
+        _camera = new Camera();
+        _camera.SetSize(0, 10);
     }
 
     public static void Update()
     {
+        // Update and set the camera
+        _camera.Update();
+        Graphics.SetCamera(_camera);
+
         // Update game logic
     }
 
