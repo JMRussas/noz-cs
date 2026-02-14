@@ -82,8 +82,10 @@ for (var i = 0; i < args.Length; i++)
 
 if (projectPath.StartsWith('.'))
 {
-    // Resolve relative paths relative to the editor path (not current directory)
-    projectPath = Path.Combine(editorPath, projectPath);
+    // For --init mode, resolve relative to current directory
+    // For normal editor mode, resolve relative to editor path (for IDE launch settings)
+    var basePath = initProject ? Directory.GetCurrentDirectory() : editorPath;
+    projectPath = Path.Combine(basePath, projectPath);
     projectPath = Path.GetFullPath(projectPath);
 }
 

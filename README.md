@@ -66,6 +66,27 @@ dotnet run --project platform/desktop
 noz/editor/bin/Debug/net10.0/noz --project .
 ```
 
+### Running the Editor
+
+After creating your game project, you can open it in the NOZ editor:
+
+```bash
+# From your game project directory
+dotnet run --project noz/editor -- --project .
+```
+
+Or using the built executable:
+
+```bash
+noz/editor/bin/Debug/net10.0/noz --project .
+```
+
+The editor will load your game project and allow you to:
+- Import and manage assets (sprites, textures, sounds, etc.)
+- Edit game configuration
+- View and organize your asset library
+- Generate asset manifest files
+
 ### What Gets Created
 
 The `--init` command generates:
