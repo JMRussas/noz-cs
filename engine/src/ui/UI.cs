@@ -38,7 +38,7 @@ public static partial class UI
     public struct AutoCursor : IDisposable { readonly void IDisposable.Dispose() => EndCursor(); }
 
     private static Font? _defaultFont;
-    public static Font? DefaultFont => _defaultFont;
+    public static Font DefaultFont => _defaultFont!;
     public static UIConfig Config { get; private set; } = new();
 
     private static readonly Element[] _elements = new Element[MaxElements];

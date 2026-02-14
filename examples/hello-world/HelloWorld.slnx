@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/platform/" />
+  <Folder Name="/platform/desktop/">
+    <Project Path="platform/desktop/HelloWorld.Desktop.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/HelloWorld.csproj" />
+  </Folder>
+  <Project Path="../../engine/NoZ.csproj" />
+  <Project Path="../../generators/NoZ.Generators.csproj" />
+  <Project Path="../../platform/desktop/NoZ.Desktop.csproj" />
+  <Project Path="../../platform/webgpu/NoZ.WebGPU.csproj" />
+</Solution>
