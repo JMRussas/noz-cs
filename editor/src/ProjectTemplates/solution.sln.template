@@ -3,9 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.3.11408.92
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "{{PROJECT_NAME}}", "game\{{PROJECT_NAME}}.csproj", "{{GUID_GAME}}"
-EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "{{PROJECT_NAME}}.Desktop", "platform\desktop\{{PROJECT_NAME}}.Desktop.csproj", "{{GUID_DESKTOP}}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "{{PROJECT_NAME}}", "game\{{PROJECT_NAME}}.csproj", "{{GUID_GAME}}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NoZ", "noz\engine\NoZ.csproj", "{{GUID_NOZ}}"
 EndProject

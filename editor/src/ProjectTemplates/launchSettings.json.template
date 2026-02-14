@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "{{PROJECT_NAME}}.Desktop": {
+      "commandName": "Project",
+      "workingDirectory": "$(ProjectDir)../../"
+    }
+  }
+}

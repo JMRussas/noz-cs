@@ -91,6 +91,7 @@ internal static class ProjectInitializer
         GenerateFile(Path.Combine(projectPath, "game"), "GameConfig.cs", "GameConfigCs.template", context);
         GenerateFile(Path.Combine(projectPath, "game"), $"{projectName}Assets.cs", "GameAssetsCs.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "desktop"), "Program.cs", "ProgramDesktopCs.template", context);
+        GenerateFile(Path.Combine(projectPath, "platform", "desktop", "Properties"), "launchSettings.json", "launchSettings.json.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "web"), "Program.cs", "ProgramWebCs.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "web"), "App.razor", "AppRazor.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "web"), "_Imports.razor", "ImportsRazor.template", context);
@@ -113,6 +114,7 @@ internal static class ProjectInitializer
         {
             "game",
             "platform/desktop",
+            "platform/desktop/Properties",
             "platform/web",
             "platform/web/wwwroot",
             "library",
