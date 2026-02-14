@@ -15,9 +15,9 @@ assets
 noz/engine/assets
 
 [manifest]
-generate_cs = ./game/{{PROJECT_NAME}}Assets.cs
+generate_cs = ./game/GameAssets.cs
 cs_namespace = {{NAMESPACE}}
-cs_class = {{PROJECT_NAME}}Assets
+cs_class = GameAssets
 
 [animation]
 frame_rate=12
