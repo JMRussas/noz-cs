@@ -310,6 +310,35 @@ public static partial class Graphics
     public static void DrawText(in ReadOnlySpan<char> text, float fontSize, int order = 0) =>
         TextRender.Draw(text, UI.DefaultFont, fontSize, order);
 
+    public static void DrawText(in ReadOnlySpan<char> text, Font font, float fontSize, Rect rect, TextOverflow overflow, int order = 0)
+    {
+        switch (overflow)
+        {
+            case TextOverflow.Scale:
+            {
+                var textSize = TextRender.Measure(text, font, fontSize);
+                if (textSize.X > rect.Width && rect.Width > 0)
+                {
+                    var scale = rect.Width / textSize.X;
+                    fontSize *= scale;
+                    textSize *= scale;
+                }
+                using var _ = PushState();
+                MultiplyTransform(Matrix3x2.CreateTranslation(
+                    rect.X + (rect.Width - textSize.X) * 0.5f,
+                    rect.Y + (rect.Height - textSize.Y) * 0.5f));
+                TextRender.Draw(text, font, fontSize, order);
+                break;
+            }
+            default:
+                TextRender.Draw(text, font, fontSize, order);
+                break;
+        }
+    }
+
+    public static void DrawText(in ReadOnlySpan<char> text, float fontSize, Rect rect, TextOverflow overflow, int order = 0) =>
+        DrawText(text, UI.DefaultFont, fontSize, rect, overflow, order);
+
     public static Vector2 MeasureText(ReadOnlySpan<char> text, float fontSize) =>
         TextRender.Measure(text, UI.DefaultFont, fontSize);
 
