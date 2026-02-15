@@ -226,35 +226,74 @@ public static partial class UI
         var text = e.Data.Label.Text.AsReadOnlySpan();
         var fontSize = e.Data.Label.FontSize;
 
-        if (e.Data.Label.Wrap)
+        switch (e.Data.Label.Overflow)
         {
-            // Vertical alignment: offset the whole text block within the element
-            var wrappedHeight = TextRender.MeasureWrapped(text, font, fontSize, e.Rect.Width, cacheId: e.Id).Y;
-            var offsetY = (e.Rect.Height - wrappedHeight) * e.Data.Label.AlignY.ToFactor();
-            var displayScale = Application.Platform.DisplayScale;
-            offsetY = MathF.Round(offsetY * displayScale) / displayScale;
-
-            var transform = Matrix3x2.CreateTranslation(e.Rect.Position + new Vector2(0, offsetY)) * e.LocalToWorld;
-
-            using (Graphics.PushState())
+            case TextOverflow.Wrap:
             {
-                Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
-                Graphics.SetTransform(transform);
-                TextRender.DrawWrapped(text, font, fontSize, e.Rect.Width,
-                    e.Rect.Width, e.Data.Label.AlignX.ToFactor(), e.Rect.Height,
-                    order: e.Data.Label.Order, cacheId: e.Id);
+                // Vertical alignment: offset the whole text block within the element
+                var wrappedHeight = TextRender.MeasureWrapped(text, font, fontSize, e.Rect.Width, cacheId: e.Id).Y;
+                var offsetY = (e.Rect.Height - wrappedHeight) * e.Data.Label.AlignY.ToFactor();
+                var displayScale = Application.Platform.DisplayScale;
+                offsetY = MathF.Round(offsetY * displayScale) / displayScale;
+
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + new Vector2(0, offsetY)) * e.LocalToWorld;
+
+                using (Graphics.PushState())
+                {
+                    Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
+                    Graphics.SetTransform(transform);
+                    TextRender.DrawWrapped(text, font, fontSize, e.Rect.Width,
+                        e.Rect.Width, e.Data.Label.AlignX.ToFactor(), e.Rect.Height,
+                        order: e.Data.Label.Order, cacheId: e.Id);
+                }
+                break;
             }
-        }
-        else
-        {
-            var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
-            var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * e.LocalToWorld;
 
-            using (Graphics.PushState())
+            case TextOverflow.Scale:
             {
-                Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
-                Graphics.SetTransform(transform);
-                TextRender.Draw(text, font, fontSize, order: e.Data.Label.Order);
+                var textWidth = TextRender.Measure(text, font, fontSize).X;
+                var scaledFontSize = fontSize;
+                if (textWidth > e.Rect.Width && e.Rect.Width > 0)
+                    scaledFontSize = fontSize * (e.Rect.Width / textWidth);
+
+                var textOffset = GetTextOffset(text, font, scaledFontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * e.LocalToWorld;
+
+                using (Graphics.PushState())
+                {
+                    Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
+                    Graphics.SetTransform(transform);
+                    TextRender.Draw(text, font, scaledFontSize, order: e.Data.Label.Order);
+                }
+                break;
+            }
+
+            case TextOverflow.Ellipsis:
+            {
+                var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * e.LocalToWorld;
+
+                using (Graphics.PushState())
+                {
+                    Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
+                    Graphics.SetTransform(transform);
+                    TextRender.DrawEllipsized(text, font, fontSize, e.Rect.Width, order: e.Data.Label.Order);
+                }
+                break;
+            }
+
+            default: // TextOverflow.Overflow
+            {
+                var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, e.Data.Label.AlignX, e.Data.Label.AlignY);
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * e.LocalToWorld;
+
+                using (Graphics.PushState())
+                {
+                    Graphics.SetColor(ApplyOpacity(e.Data.Label.Color));
+                    Graphics.SetTransform(transform);
+                    TextRender.Draw(text, font, fontSize, order: e.Data.Label.Order);
+                }
+                break;
             }
         }
     }

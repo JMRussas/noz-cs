@@ -725,4 +725,73 @@ internal static class TextRender
             currentX += advance;
         }
     }
+
+    public static void DrawEllipsized(in ReadOnlySpan<char> text, Font font, float fontSize, float maxWidth, int order = 0)
+    {
+        Debug.Assert(order >= 0 && order <= ushort.MaxValue);
+
+        if (text.Length == 0 || _textShader == null)
+            return;
+
+        // If text fits, just draw normally
+        var textWidth = Measure(text, font, fontSize).X;
+        if (maxWidth <= 0 || textWidth <= maxWidth)
+        {
+            Draw(text, font, fontSize, order);
+            return;
+        }
+
+        var atlasTexture = font.AtlasTexture;
+        if (atlasTexture == null)
+            return;
+
+        using var _ = Graphics.PushState();
+        Graphics.SetShader(_textShader);
+        Graphics.SetTexture(atlasTexture, filter: TextureFilter.Linear);
+        Graphics.SetMesh(_mesh);
+
+        var currentX = 0f;
+        var baselineY = (font.Baseline + font.InternalLeading * 0.5f) * fontSize;
+        var baseIndex = _indices.Length;
+
+        var color = Graphics.Color.ToColor32();
+        var outlineColor = OutlineColor;
+        var outlineWidth = OutlineWidth;
+        var outlineSoftness = OutlineSoftness;
+
+        var ellipsisWidth = MeasureEllipsis(font, fontSize);
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var ch = text[i];
+            var glyph = font.GetGlyph(ch);
+
+            var advance = glyph.Advance * fontSize;
+            if (i + 1 < text.Length)
+                advance += font.GetKerning(ch, text[i + 1]) * fontSize;
+
+            // If this char + ellipsis would exceed maxWidth, draw ellipsis and stop
+            if (currentX + advance + ellipsisWidth > maxWidth)
+            {
+                DrawEllipsis(font, fontSize, ref currentX, 0, baselineY,
+                    color, outlineColor, outlineWidth, outlineSoftness,
+                    ref baseIndex, (ushort)order);
+                return;
+            }
+
+            if (glyph.UVMax.X > glyph.UVMin.X && glyph.UVMax.Y > glyph.UVMin.Y)
+            {
+                var x0 = currentX + glyph.Bearing.X * fontSize;
+                var x1 = x0 + glyph.Size.X * fontSize;
+                var y0 = baselineY + glyph.Bearing.Y * fontSize - glyph.Size.Y * fontSize;
+                var y1 = y0 + glyph.Size.Y * fontSize;
+
+                EmitGlyph(in glyph, x0, y0, x1, y1,
+                    color, outlineColor, outlineWidth, outlineSoftness,
+                    ref baseIndex, (ushort)order);
+            }
+
+            currentX += advance;
+        }
+    }
 }

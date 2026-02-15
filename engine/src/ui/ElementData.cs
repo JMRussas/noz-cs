@@ -52,7 +52,7 @@ internal struct LabelData
     public Align AlignX;
     public Align AlignY;
     public ushort Order;
-    public bool Wrap;
+    public TextOverflow Overflow;
     public UnsafeSpan<char> Text;
 
     public static LabelData Default => new()

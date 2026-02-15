@@ -186,7 +186,7 @@ public static partial class UI
 
         // Re-measure wrapped label height now that width is known.
         // Only when height resolved via Fit (Column parent, unconstrained Y) — not Percent.
-        if (e.Type == ElementType.Label && e.Data.Label.Wrap && e.Rect.Width > 0
+        if (e.Type == ElementType.Label && e.Data.Label.Overflow == TextOverflow.Wrap && e.Rect.Width > 0
             && p.Type == ElementType.Column && sizeOverride.Y >= AutoSize.Y)
         {
             e.Rect.Height = TextRender.MeasureWrapped(
