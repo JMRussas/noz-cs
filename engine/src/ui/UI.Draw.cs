@@ -20,6 +20,8 @@ public static partial class UI
     private static Shader _shader = null!;
     private static float _drawOpacity = 1.0f;
 
+    internal static RectInt? SceneViewport { get; private set; }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Color ApplyOpacity(Color c) => c.WithAlpha(c.A * _drawOpacity);
 
@@ -368,8 +370,11 @@ public static partial class UI
 
         Graphics.BeginPass(rt, scene.Color);
         Graphics.SetCamera(camera);
+        Graphics.SetTransform(Matrix3x2.Identity);
         Graphics.SetViewport(0, 0, rt.Width, rt.Height);
+        SceneViewport = new RectInt(0, 0, rt.Width, rt.Height);
         draw();
+        SceneViewport = null;
         Graphics.EndPass();
         Graphics.SetCamera(Camera);
 

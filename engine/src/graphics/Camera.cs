@@ -81,7 +81,11 @@ public class Camera
 
     public void Update()
     {
-        Update(Application.WindowSize);
+        var windowSize = UI.SceneViewport != null
+            ? UI.SceneViewport.Value.Size 
+            : Application.WindowSize;
+        
+        Update(windowSize);
     }
 
     public void Update(Vector2Int availableSize)

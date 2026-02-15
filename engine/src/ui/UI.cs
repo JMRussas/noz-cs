@@ -770,6 +770,9 @@ public static partial class UI
 
     public static void EndGrid() => EndElement(ElementType.Grid);
 
+    public static void Scene(int id, Camera camera, Action draw) =>
+        Scene(id, camera, draw, new SceneStyle());
+
     public static void Scene(int id, Camera camera, Action draw, SceneStyle style = default)
     {
         ref var e = ref CreateElement(ElementType.Scene);
@@ -783,6 +786,9 @@ public static partial class UI
         e.Asset = (camera, draw);
 
         SetId(ref e, id);
+
+        PushElement(e.Index);
+        PopElement();
     }
 
     public static void Scene(Camera camera, Action draw, SceneStyle style = default) => Scene(0, camera, draw, style);
