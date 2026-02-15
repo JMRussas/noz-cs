@@ -827,7 +827,7 @@ public static partial class UI
             AlignX = style.AlignX,
             AlignY = style.AlignY,
             Order = style.Order,
-            Wrap = style.Wrap,
+            Overflow = style.Overflow,
             Text = AddText(text)
         };
 
@@ -846,7 +846,7 @@ public static partial class UI
             AlignX = style.AlignX,
             AlignY = style.AlignY,
             Order = style.Order,
-            Wrap = true,
+            Overflow = TextOverflow.Wrap,
             Text = AddText(text)
         };
         SetId(ref e, id);

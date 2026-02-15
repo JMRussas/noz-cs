@@ -175,7 +175,7 @@ public static partial class UI
         var font = (Font)e.Asset!;
         var fontSize = e.Data.Label.FontSize;
 
-        if (e.Data.Label.Wrap)
+        if (e.Data.Label.Overflow == TextOverflow.Wrap)
         {
             var availableWidth = p.ContentRect.Width;
             if (availableWidth <= 0 && p.IsContainer && p.Data.Container.Size.Width.IsFixed)
