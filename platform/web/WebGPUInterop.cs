@@ -116,6 +116,13 @@ public static partial class WebGPUInterop
     internal static partial void DestroyBindGroup(int bindGroupId);
 
     // ============================================================================
+    // Command Buffer
+    // ============================================================================
+
+    [JSImport("executeCommandBuffer", ModuleName)]
+    internal static partial void ExecuteCommandBuffer([JSMarshalAs<JSType.MemoryView>] ArraySegment<byte> buffer, int count);
+
+    // ============================================================================
     // Frame Management
     // ============================================================================
 

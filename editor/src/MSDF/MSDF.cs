@@ -136,6 +136,15 @@ namespace NoZ.Editor
                 winding += dir;
         }
 
+        // Compute the total winding number across all contours at point p.
+        private static int ComputeTotalWinding(Shape shape, Vector2Double p)
+        {
+            int total = 0;
+            foreach (var contour in shape.contours)
+                total += ComputeWindingNumber(contour, p);
+            return total;
+        }
+
         private static void GenerateSDF(
             PixelData<byte> output,
             Vector2Int outputPosition,
@@ -150,95 +159,91 @@ namespace NoZ.Editor
 
             int w = outputSize.X;
             int h = outputSize.Y;
-            int contourCount = shape.contours.Length;
 
-            // Cache geometric winding direction per contour (positive = solid, negative = hole)
-            var contourGeomWinding = new int[contourCount];
-            bool hasHoles = false;
-            for (int ci = 0; ci < contourCount; ci++)
-            {
-                contourGeomWinding[ci] = shape.contours[ci].Winding();
-                if (contourGeomWinding[ci] < 0)
-                    hasHoles = true;
-            }
+            // Collect all edges from all contours into a flat list for distance queries.
+            int totalEdges = 0;
+            foreach (var contour in shape.contours)
+                totalEdges += contour.edges.Length;
+            var allEdges = new Edge[totalEdges];
+            int ei = 0;
+            foreach (var contour in shape.contours)
+                foreach (var edge in contour.edges)
+                    allEdges[ei++] = edge;
 
             Parallel.For(0, h, y =>
             {
                 int row = shape.InverseYAxis ? h - y - 1 : y;
-
-                // Per-contour signed distance reused across pixels in a row
-                var contourSD = new double[contourCount];
 
                 for (int x = 0; x < w; ++x)
                 {
                     double dummy = 0;
                     Vector2Double p = new Vector2Double(x + .5, y + .5) / scale - translate;
 
-                    // Compute per-contour signed distance: positive = inside, negative = outside
-                    for (int ci = 0; ci < contourCount; ci++)
+                    // Use winding number for inside/outside (handles all overlaps correctly)
+                    bool inside = ComputeTotalWinding(shape, p) != 0;
+
+                    // Find the minimum absolute distance to any edge
+                    double minAbsDist = double.PositiveInfinity;
+                    foreach (var edge in allEdges)
                     {
-                        var contour = shape.contours[ci];
-
-                        double minAbsDist = double.PositiveInfinity;
-                        foreach (var edge in contour.edges)
-                        {
-                            double absDist = Math.Abs(edge.GetSignedDistance(p, out dummy).distance);
-                            if (absDist < minAbsDist)
-                                minAbsDist = absDist;
-                        }
-
-                        bool insideContour = ComputeWindingNumber(contour, p) != 0;
-                        contourSD[ci] = insideContour ? minAbsDist : -minAbsDist;
+                        double absDist = Math.Abs(edge.GetSignedDistance(p, out dummy).distance);
+                        if (absDist < minAbsDist)
+                            minAbsDist = absDist;
                     }
 
-                    // Combine per-contour signed distances.
-                    // Single contour: use directly.
-                    // Multiple contours: union solid contours (max), subtract hole contours (min).
-                    // For overlapping same-winding contours (e.g. compound glyph components),
-                    // max correctly ignores internal edges between overlapping regions.
-                    double sd;
-                    if (contourCount == 1)
+                    // For inside pixels, check if the nearest edge is an internal overlap edge
+                    // by testing the winding at a point nudged toward the nearest edge. If moving
+                    // toward the nearest edge doesn't eventually cross outside, the edge is internal
+                    // and we should use the distance to the next-closest boundary edge instead.
+                    if (inside && minAbsDist < range)
                     {
-                        sd = contourSD[0];
-                    }
-                    else
-                    {
-                        // Union all positive-winding (solid) contours via max
-                        double solidSD = double.NegativeInfinity;
-                        for (int ci = 0; ci < contourCount; ci++)
-                        {
-                            if (contourGeomWinding[ci] >= 0 && contourSD[ci] > solidSD)
-                                solidSD = contourSD[ci];
-                        }
+                        // Sample a point just past the nearest edge (1 pixel beyond)
+                        // If it's still inside, the nearest edge is internal — find the real boundary
+                        double probeDistance = minAbsDist + 1.0;
+                        double bestBoundaryDist = double.PositiveInfinity;
 
-                        sd = solidSD > double.NegativeInfinity ? solidSD : contourSD[0];
-
-                        // Subtract hole contours: the final shape is the intersection of
-                        // the solid union with the complement of each hole.
-                        // hole contour SD is positive when inside the hole (= outside shape),
-                        // so we negate and take min.
-                        if (hasHoles)
+                        foreach (var edge in allEdges)
                         {
-                            for (int ci = 0; ci < contourCount; ci++)
+                            var sd = edge.GetSignedDistance(p, out double param);
+                            double absDist = Math.Abs(sd.distance);
+
+                            // Get the direction to this edge
+                            double clampedParam = Math.Clamp(param, 0, 1);
+                            Vector2Double edgePoint = edge.GetPoint(clampedParam);
+                            Vector2Double toEdge = edgePoint - p;
+                            double toEdgeMag = toEdge.Magnitude;
+
+                            if (toEdgeMag < 1e-10)
                             {
-                                if (contourGeomWinding[ci] < 0)
-                                {
-                                    double holeExteriorSD = -contourSD[ci];
-                                    if (holeExteriorSD < sd)
-                                        sd = holeExteriorSD;
-                                }
+                                // We're on the edge — this is a real boundary
+                                bestBoundaryDist = 0;
+                                break;
                             }
+
+                            // Probe a point slightly past this edge
+                            Vector2Double probeDir = toEdge * (1.0 / toEdgeMag);
+                            Vector2Double probe = p + probeDir * (toEdgeMag + 0.5);
+                            bool probeInside = ComputeTotalWinding(shape, probe) != 0;
+
+                            // If the probe is outside, this edge is a real boundary
+                            if (!probeInside && absDist < bestBoundaryDist)
+                                bestBoundaryDist = absDist;
                         }
+
+                        if (bestBoundaryDist < double.PositiveInfinity)
+                            minAbsDist = bestBoundaryDist;
                     }
+
+                    double finalSD = inside ? minAbsDist : -minAbsDist;
 
                     // Set the SDF value in the output image (R8 format)
-                    sd /= (range * 2.0f);
-                    sd = Math.Clamp(sd, -0.5, 0.5) + 0.5;
+                    finalSD /= (range * 2.0f);
+                    finalSD = Math.Clamp(finalSD, -0.5, 0.5) + 0.5;
 
                     output.Set(
                         x + outputPosition.X,
                         row + outputPosition.Y,
-                        (byte)(sd * 255.0f));
+                        (byte)(finalSD * 255.0f));
                 }
             });
         }

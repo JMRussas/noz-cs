@@ -840,6 +840,67 @@ export function draw(vertexCount, instanceCount, firstVertex, firstInstance) {
 }
 
 // ============================================================================
+// Command Buffer Replay
+// ============================================================================
+
+const CMD_SET_PIPELINE = 1;
+const CMD_SET_BIND_GROUP = 2;
+const CMD_SET_VERTEX_BUF = 3;
+const CMD_SET_INDEX_BUF = 4;
+const CMD_SET_SCISSOR = 5;
+const CMD_DRAW_INDEXED = 6;
+const CMD_SET_VIEWPORT = 7;
+
+export function executeCommandBuffer(buffer, count) {
+    if (!currentRenderPass) return;
+    const rp = currentRenderPass;
+
+    // Materialize WASM MemoryView into a real Uint8Array, then read as Int32Array
+    const bytes = new Uint8Array(buffer.slice());
+    const view = new Int32Array(bytes.buffer);
+
+    let i = 0;
+    while (i < count) {
+        switch (view[i++]) {
+            case CMD_SET_PIPELINE: {
+                const pipeline = renderPipelines.get(view[i++]);
+                if (pipeline) rp.setPipeline(pipeline);
+                break;
+            }
+            case CMD_SET_BIND_GROUP: {
+                const slot = view[i++];
+                const bg = bindGroups.get(view[i++]);
+                if (bg) rp.setBindGroup(slot, bg);
+                break;
+            }
+            case CMD_SET_VERTEX_BUF: {
+                const slot = view[i++];
+                const mesh = buffers.get(view[i++]);
+                if (mesh && mesh.type === 'mesh') rp.setVertexBuffer(slot, mesh.vertexBuffer);
+                break;
+            }
+            case CMD_SET_INDEX_BUF: {
+                const mesh = buffers.get(view[i++]);
+                if (mesh && mesh.type === 'mesh') rp.setIndexBuffer(mesh.indexBuffer, 'uint16');
+                break;
+            }
+            case CMD_SET_SCISSOR:
+                rp.setScissorRect(view[i++], view[i++], view[i++], view[i++]);
+                break;
+            case CMD_DRAW_INDEXED:
+                rp.drawIndexed(view[i++], view[i++], view[i++], view[i++], view[i++]);
+                break;
+            case CMD_SET_VIEWPORT:
+                rp.setViewport(view[i++], view[i++], view[i++], view[i++], 0, 1);
+                break;
+            default:
+                console.error('Unknown command buffer opcode:', view[i - 1], 'at index', i - 1, 'count', count);
+                return;
+        }
+    }
+}
+
+// ============================================================================
 // Offscreen Rendering
 // ============================================================================
 

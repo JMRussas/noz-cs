@@ -68,6 +68,17 @@ public class WebGraphicsDriver : IGraphicsDriver
     private readonly StringBuilder _jsonBuilder = new(512);
     private readonly JSObject[] _singleColorAttachment = new JSObject[1]; // Reusable array for render pass
 
+    // Command buffer — batch render pass encoder commands into a single interop call
+    private const int CMD_SET_PIPELINE = 1;    // +1 arg: pipelineId
+    private const int CMD_SET_BIND_GROUP = 2;  // +2 args: slot, bindGroupId
+    private const int CMD_SET_VERTEX_BUF = 3;  // +2 args: slot, meshId
+    private const int CMD_SET_INDEX_BUF = 4;   // +1 arg: meshId
+    private const int CMD_SET_SCISSOR = 5;     // +4 args: x, y, w, h
+    private const int CMD_DRAW_INDEXED = 6;    // +5 args: indexCount, instanceCount, firstIndex, baseVertex, firstInstance
+    private const int CMD_SET_VIEWPORT = 7;    // +4 args: x, y, w, h
+    private int[] _cmdBuffer = new int[8192];
+    private int _cmdPos;
+
     public string ShaderExtension => "";
 
     private struct CachedState
@@ -86,6 +97,8 @@ public class WebGraphicsDriver : IGraphicsDriver
         public int CurrentPassSampleCount;
         public int CurrentPipelineId;
         public int CurrentBindGroupId;
+        public int LastBoundJsMeshId;
+        public RectInt LastSetScissor;
 
         /// <summary>Reset all cached state to defaults, preserving allocated arrays.</summary>
         public void Reset()
@@ -104,6 +117,8 @@ public class WebGraphicsDriver : IGraphicsDriver
             CurrentPassSampleCount = 0;
             CurrentPipelineId = 0;
             CurrentBindGroupId = 0;
+            LastBoundJsMeshId = 0;
+            LastSetScissor = new RectInt(-1, -1, -1, -1);
         }
     }
 
@@ -241,6 +256,11 @@ public class WebGraphicsDriver : IGraphicsDriver
 
     public void EndFrame()
     {
+        // Clear bind group cache and release all cached bind groups
+        foreach (var bgId in _bindGroupCache.Values)
+            WebGPUInterop.DestroyBindGroup(bgId);
+        _bindGroupCache.Clear();
+
         WebGPUInterop.EndFrame();
     }
 
@@ -278,7 +298,7 @@ public class WebGraphicsDriver : IGraphicsDriver
             return;
 
         _state.Viewport = clampedViewport;
-        WebGPUInterop.SetViewport(clampedViewport.X, clampedViewport.Y, clampedViewport.Width, clampedViewport.Height, 0, 1);
+        EmitCmd(CMD_SET_VIEWPORT, clampedViewport.X, clampedViewport.Y, clampedViewport.Width, clampedViewport.Height);
     }
 
     public void SetScissor(in RectInt scissor)
@@ -306,27 +326,13 @@ public class WebGraphicsDriver : IGraphicsDriver
 
         _state.ScissorEnabled = true;
         _state.Scissor = clampedScissor;
-
-        WebGPUInterop.SetScissorRect(clampedScissor.X, clampedScissor.Y, clampedScissor.Width, clampedScissor.Height);
+        // Actual SetScissorRect call deferred to DrawElements (with correct Y-flip)
     }
 
     public void ClearScissor()
     {
         _state.ScissorEnabled = false;
-
-        // Use render texture dimensions if rendering to texture, otherwise surface dimensions
-        int width, height;
-        if (_activeRenderTexture != 0 && _renderTextures.TryGetValue(_activeRenderTexture, out var rt))
-        {
-            width = rt.Width;
-            height = rt.Height;
-        }
-        else
-        {
-            width = _surfaceWidth;
-            height = _surfaceHeight;
-        }
-        WebGPUInterop.SetScissorRect(0, 0, width, height);
+        // Actual SetScissorRect call deferred to DrawElements
     }
 
     // ============================================================================
@@ -841,33 +847,38 @@ public class WebGraphicsDriver : IGraphicsDriver
             var pipelineId = GetOrCreatePipeline(_state.BoundShader, _state.BlendMode, _meshes[_state.BoundMesh].Stride);
             if (pipelineId > 0)
             {
-                WebGPUInterop.SetPipeline(pipelineId);
+                EmitCmd(CMD_SET_PIPELINE, pipelineId);
                 _state.CurrentPipelineId = pipelineId;
             }
             _state.PipelineDirty = false;
         }
 
-        // Update bind group if needed
+        // Update bind group if needed (still individual interop — involves data payloads)
         if (_state.BindGroupDirty)
         {
             var bindGroupId = CreateBindGroup();
             if (bindGroupId > 0)
             {
-                WebGPUInterop.SetBindGroup(0, bindGroupId);
+                EmitCmd(CMD_SET_BIND_GROUP, 0, bindGroupId);
                 _state.CurrentBindGroupId = bindGroupId;
             }
             _state.BindGroupDirty = false;
         }
 
-        // Bind mesh buffers
+        // Bind mesh buffers (skip if unchanged)
         var mesh = _meshes[_state.BoundMesh];
-        WebGPUInterop.SetVertexBuffer(0, mesh.JsMeshId);
-        WebGPUInterop.SetIndexBuffer(mesh.JsMeshId);
+        if (mesh.JsMeshId != _state.LastBoundJsMeshId)
+        {
+            EmitCmd(CMD_SET_VERTEX_BUF, 0, mesh.JsMeshId);
+            EmitCmd(CMD_SET_INDEX_BUF, mesh.JsMeshId);
+            _state.LastBoundJsMeshId = mesh.JsMeshId;
+        }
 
         // Apply scissor (Y flip needed - WebGPU uses top-down, engine uses bottom-up)
+        RectInt scissorRect;
         if (_state.ScissorEnabled)
         {
-            WebGPUInterop.SetScissorRect(
+            scissorRect = new RectInt(
                 _state.Scissor.X,
                 _state.Viewport.Height - _state.Scissor.Y - _state.Scissor.Height,
                 _state.Scissor.Width,
@@ -886,11 +897,17 @@ public class WebGraphicsDriver : IGraphicsDriver
                 width = _surfaceWidth;
                 height = _surfaceHeight;
             }
-            WebGPUInterop.SetScissorRect(0, 0, width, height);
+            scissorRect = new RectInt(0, 0, width, height);
+        }
+
+        if (scissorRect != _state.LastSetScissor)
+        {
+            EmitCmd(CMD_SET_SCISSOR, scissorRect.X, scissorRect.Y, scissorRect.Width, scissorRect.Height);
+            _state.LastSetScissor = scissorRect;
         }
 
         // Draw
-        WebGPUInterop.DrawIndexed(indexCount, 1, firstIndex, baseVertex, 0);
+        EmitCmd(CMD_DRAW_INDEXED, indexCount, 1, firstIndex, baseVertex, 0);
     }
 
     private int GetOrCreatePipeline(nuint shaderHandle, BlendMode blendMode, int vertexStride)
@@ -931,6 +948,24 @@ public class WebGraphicsDriver : IGraphicsDriver
         return pipelineId;
     }
 
+    // Bind group cache — keyed on resource references (shader, globals, textures, filters)
+    // Buffer contents (uniforms) change independently via WriteBuffer without invalidating the bind group
+    private readonly Dictionary<int, int> _bindGroupCache = new();
+
+    private int ComputeBindGroupCacheKey()
+    {
+        // Hash shader + globals index + texture handles + filters into a single long
+        var hash = new HashCode();
+        hash.Add(_state.BoundShader);
+        hash.Add(_currentGlobalsIndex);
+        for (int i = 0; i < 8; i++)
+        {
+            hash.Add(_state.BoundTextures[i]);
+            hash.Add(_state.TextureFilters[i]);
+        }
+        return hash.ToHashCode();
+    }
+
     private int CreateBindGroup()
     {
         if (!_shaders.TryGetValue(_state.BoundShader, out var shader))
@@ -946,7 +981,31 @@ public class WebGraphicsDriver : IGraphicsDriver
             return 0;
         }
 
-        // Build JSON using StringBuilder to avoid allocations
+        // Write uniform data to GPU buffers (must happen even on cache hit)
+        for (int i = 0; i < bindings.Count; i++)
+        {
+            var binding = bindings[i];
+            if (binding.Type != ShaderBindingType.UniformBuffer || binding.Name == "globals")
+                continue;
+
+            if (!_uniformData.TryGetValue(binding.Name, out var uniformData))
+                continue;
+
+            if (!shader.UniformBuffers.TryGetValue(binding.Name, out var bufferId) || bufferId == 0)
+            {
+                bufferId = WebGPUInterop.CreateBuffer(uniformData.Length, (int)(WebGPUBufferUsage.Uniform | WebGPUBufferUsage.CopyDst), $"{shader.Name}_{binding.Name}");
+                shader.UniformBuffers[binding.Name] = bufferId;
+            }
+
+            WebGPUInterop.WriteBuffer(bufferId, 0, new ArraySegment<byte>(uniformData));
+        }
+
+        // Check bind group cache (keyed on resource references, not buffer contents)
+        var cacheKey = ComputeBindGroupCacheKey();
+        if (_bindGroupCache.TryGetValue(cacheKey, out var cachedId))
+            return cachedId;
+
+        // Cache miss — build and create bind group
         _jsonBuilder.Clear();
         _jsonBuilder.Append('[');
         bool first = true;
@@ -983,13 +1042,7 @@ public class WebGraphicsDriver : IGraphicsDriver
                             return 0;
                         }
 
-                        if (!shader.UniformBuffers.TryGetValue(binding.Name, out bufferId) || bufferId == 0)
-                        {
-                            bufferId = WebGPUInterop.CreateBuffer(uniformData.Length, (int)(WebGPUBufferUsage.Uniform | WebGPUBufferUsage.CopyDst), $"{shader.Name}_{binding.Name}");
-                            shader.UniformBuffers[binding.Name] = bufferId;
-                        }
-
-                        WebGPUInterop.WriteBuffer(bufferId, 0, new ArraySegment<byte>(uniformData));
+                        bufferId = shader.UniformBuffers[binding.Name];
                         bufferSize = uniformData.Length;
                     }
 
@@ -1045,6 +1098,9 @@ public class WebGraphicsDriver : IGraphicsDriver
 
         _jsonBuilder.Append(']');
         var bindGroupId = WebGPUInterop.CreateBindGroupFromJson(shader.BindGroupLayoutId, _jsonBuilder.ToString(), null);
+
+        // Cache the bind group (released at frame end via _bindGroupCache cleanup)
+        _bindGroupCache[cacheKey] = bindGroupId;
         return bindGroupId;
     }
 
@@ -1081,6 +1137,70 @@ public class WebGraphicsDriver : IGraphicsDriver
     public void DeleteFence(nuint fence) { }
 
     // ============================================================================
+    // Command Buffer
+    // ============================================================================
+
+    private void EnsureCmdCapacity(int needed)
+    {
+        if (_cmdPos + needed > _cmdBuffer.Length)
+            Array.Resize(ref _cmdBuffer, _cmdBuffer.Length * 2);
+    }
+
+    private void EmitCmd(int op, int a0)
+    {
+        EnsureCmdCapacity(2);
+        _cmdBuffer[_cmdPos++] = op;
+        _cmdBuffer[_cmdPos++] = a0;
+    }
+
+    private void EmitCmd(int op, int a0, int a1)
+    {
+        EnsureCmdCapacity(3);
+        _cmdBuffer[_cmdPos++] = op;
+        _cmdBuffer[_cmdPos++] = a0;
+        _cmdBuffer[_cmdPos++] = a1;
+    }
+
+    private void EmitCmd(int op, int a0, int a1, int a2, int a3)
+    {
+        EnsureCmdCapacity(5);
+        _cmdBuffer[_cmdPos++] = op;
+        _cmdBuffer[_cmdPos++] = a0;
+        _cmdBuffer[_cmdPos++] = a1;
+        _cmdBuffer[_cmdPos++] = a2;
+        _cmdBuffer[_cmdPos++] = a3;
+    }
+
+    private void EmitCmd(int op, int a0, int a1, int a2, int a3, int a4)
+    {
+        EnsureCmdCapacity(6);
+        _cmdBuffer[_cmdPos++] = op;
+        _cmdBuffer[_cmdPos++] = a0;
+        _cmdBuffer[_cmdPos++] = a1;
+        _cmdBuffer[_cmdPos++] = a2;
+        _cmdBuffer[_cmdPos++] = a3;
+        _cmdBuffer[_cmdPos++] = a4;
+    }
+
+    private void FlushCommandBuffer()
+    {
+        if (_cmdPos == 0)
+            return;
+
+        var byteSpan = MemoryMarshal.AsBytes(_cmdBuffer.AsSpan(0, _cmdPos));
+        var segment = ArrayPool<byte>.Shared.RentAndCopy(byteSpan, out var rented);
+        try
+        {
+            WebGPUInterop.ExecuteCommandBuffer(segment, _cmdPos);
+        }
+        finally
+        {
+            if (rented.Length > 0) ArrayPool<byte>.Shared.Return(rented);
+        }
+        _cmdPos = 0;
+    }
+
+    // ============================================================================
     // Render Passes
     // ============================================================================
 
@@ -1106,6 +1226,7 @@ public class WebGraphicsDriver : IGraphicsDriver
 
     public void EndScenePass()
     {
+        FlushCommandBuffer();
         WebGPUInterop.EndRenderPass();
     }
 
@@ -1210,6 +1331,7 @@ public class WebGraphicsDriver : IGraphicsDriver
 
     public void EndRenderTexturePass()
     {
+        FlushCommandBuffer();
         _activeRenderTexture = 0;
         WebGPUInterop.EndRenderTexturePass();
     }
