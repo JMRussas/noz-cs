@@ -469,6 +469,12 @@ public class FontDocument : Document
         }
     }
 
+    public override void Reload()
+    {
+        _font?.Dispose();
+        PostLoad();
+    }
+
     public override void Draw()
     {
         if (_font?.AtlasTexture == null)

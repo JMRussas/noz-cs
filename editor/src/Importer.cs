@@ -9,8 +9,10 @@ namespace NoZ.Editor;
 public static class Importer
 {
     private static readonly Queue<Document> _queue = [];
+    private static readonly Queue<Document> _deferred = [];
     private static readonly List<FileSystemWatcher> _watchers = [];
     private static readonly ConcurrentQueue<string> _watcherQueue = [];
+    private static bool _watching;
 
     public static event Action<Document>? OnImported;
 
@@ -27,6 +29,8 @@ public static class Importer
         foreach (var sourcePath in DocumentManager.SourcePaths)
             if (Directory.Exists(sourcePath))
                 StartWatching(sourcePath);
+
+        _watching = true;
     }
 
     public static void Shutdown()
@@ -74,12 +78,31 @@ public static class Importer
         Queue(DocumentManager.Find(def.Type, name) ?? DocumentManager.Create(path));
     }
 
+    private static bool IsFileReady(string path)
+    {
+        try
+        {
+            using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+            return stream.Length > 0;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static void Import(Document doc)
     {
         try
         {
             if (!File.Exists(doc.Path))
                 return;
+
+            if (_watching && !IsFileReady(doc.Path))
+            {
+                _deferred.Enqueue(doc);
+                return;
+            }
 
             var metaPath = doc.Path + ".meta";
             var meta = PropertySet.LoadFile(metaPath) ?? new PropertySet();
@@ -126,14 +149,17 @@ public static class Importer
 
     public static void Update()
     {
-        foreach (var path in _watcherQueue)
+        while (_watcherQueue.TryDequeue(out var path))
             Queue(path);
+
+        while (_deferred.Count > 0)
+            _queue.Enqueue(_deferred.Dequeue());
 
         while (_queue.Count > 0)
         {
             var doc = _queue.Dequeue();
             doc.IsQueuedForImport = false;
-            if (doc.IsDisposed) continue;                            
+            if (doc.IsDisposed) continue;
             Import(doc);
         }
     }

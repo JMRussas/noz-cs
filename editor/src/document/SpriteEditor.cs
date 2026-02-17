@@ -148,7 +148,7 @@ public partial class SpriteEditor : DocumentEditor
         Workspace.XrayModeChanged -= OnXrayModeChanged;
 
         if (Document.IsModified)
-            AtlasManager.UpdateSprite(Document);
+            AtlasManager.UpdateSource(Document);
 
         _rasterTexture.Dispose();
         _image.Dispose();
@@ -713,7 +713,7 @@ public partial class SpriteEditor : DocumentEditor
             _currentFrame = (ushort)newFrame;
             MarkRasterDirty();
             Document.MarkModified();
-            AtlasManager.UpdateSprite(Document);
+            AtlasManager.UpdateSource(Document);
         }
     }
 
@@ -726,7 +726,7 @@ public partial class SpriteEditor : DocumentEditor
             _currentFrame = (ushort)newFrame;
             MarkRasterDirty();
             Document.MarkModified();
-            AtlasManager.UpdateSprite(Document);
+            AtlasManager.UpdateSource(Document);
         }
     }
 
@@ -737,7 +737,7 @@ public partial class SpriteEditor : DocumentEditor
         _currentFrame = (ushort)Document.DeleteFrame(_currentFrame);
         MarkRasterDirty();
         Document.MarkModified();
-        AtlasManager.UpdateSprite(Document);
+        AtlasManager.UpdateSource(Document);
     }
 
     private void AddHoldFrame()

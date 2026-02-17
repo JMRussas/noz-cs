@@ -43,6 +43,8 @@ public class AnimationFrameData
 
 internal class AnimationDocument : Document
 {
+    public override bool CanSave => true;
+
     public const int MaxFrames = 64;
     private const float BoundsPadding = 0.1f;
     private const float BoneWidth = 0.15f;

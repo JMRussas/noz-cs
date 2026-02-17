@@ -9,6 +9,8 @@ namespace NoZ.Editor;
 
 public class VfxDocument : Document
 {
+    public override bool CanSave => true;
+
     private const int MaxEmittersPerVfx = 32;
 
     private Vfx? _vfx;

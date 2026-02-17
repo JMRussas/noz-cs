@@ -129,6 +129,7 @@ public class Sprite : Asset
         sprite.TextureFilter = filter;
         sprite.Meshes = meshes;
         sprite.FrameTable = frameTable;
+
         return sprite;
     }
 

@@ -1,4 +1,4 @@
-﻿//
+//
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
@@ -6,8 +6,13 @@ using System.Numerics;
 
 namespace NoZ.Editor;
 
-internal class TextureEditor : DocumentEditor
+internal partial class TextureEditor : DocumentEditor
 {
+    [ElementId("InspectorRoot")]
+    [ElementId("Field", 16)]
+    private static partial class ElementId { }
+
+    private int _nextFieldId;
     private float _savedScale;
     public new TextureDocument Document => (TextureDocument)base.Document;
 
@@ -15,8 +20,8 @@ internal class TextureEditor : DocumentEditor
     {
         var scaleCommand = new Command { Name = "Scale", Handler = HandleScale, Key = InputCode.KeyS };
         var exitEditCommand = new Command { Name = "Exit Edit Mode", Handler = Workspace.EndEdit, Key = InputCode.KeyTab };
-        
-        Commands = 
+
+        Commands =
         [
             scaleCommand,
             exitEditCommand
@@ -24,7 +29,7 @@ internal class TextureEditor : DocumentEditor
 
         ContextMenu = new PopupMenuDef
         {
-            Title = "Reference",
+            Title = "Texture",
             Items =
             [
                 PopupMenuItem.FromCommand(scaleCommand),
@@ -33,7 +38,6 @@ internal class TextureEditor : DocumentEditor
                 PopupMenuItem.FromCommand(exitEditCommand),
             ]
         };
-
     }
 
     public override void Update()
@@ -41,6 +45,45 @@ internal class TextureEditor : DocumentEditor
         Graphics.SetTransform(Document.Transform);
         Document.DrawBounds(selected: false);
         Document.Draw();
+    }
+
+    public override void UpdateUI()
+    {
+        _nextFieldId = ElementId.Field;
+
+        using (UI.BeginColumn(ElementId.InspectorRoot, EditorStyle.Inspector.Root))
+        {
+            using (UI.BeginColumn(EditorStyle.Inspector.Content))
+            {
+                var isSprite = Document.IsSprite;
+                if (EditorUI.ToggleField(NextFieldId(), "Sprite", ref isSprite))
+                {
+                    Document.IsSprite = isSprite;
+                    Document.MarkMetaModified();
+                    AssetManifest.IsModified = true;
+
+                    if (isSprite)
+                        AtlasManager.AddSource(Document);
+                    else
+                        AtlasManager.RemoveSource(Document);
+                }
+
+                var isReference = Document.IsEditorOnly;
+                if (EditorUI.ToggleField(NextFieldId(), "Reference", ref isReference))
+                {
+                    Document.IsEditorOnly = isReference;
+                    Document.MarkMetaModified();
+                    AssetManifest.IsModified = true;
+                }
+            }
+        }
+    }
+
+    private int NextFieldId(int count = 1)
+    {
+        var id = _nextFieldId;
+        _nextFieldId += count;
+        return id;
     }
 
     private void HandleScale()

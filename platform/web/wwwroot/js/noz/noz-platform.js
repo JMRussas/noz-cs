@@ -92,6 +92,10 @@ export function setCursor(cursorStyle) {
     }
 }
 
+export function openURL(url) {
+    window.open(url, '_blank');
+}
+
 function onWindowBlur() {
     // Release all modifier keys when window loses focus
     syncModifier(false, 'Control');

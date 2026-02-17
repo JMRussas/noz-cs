@@ -33,6 +33,41 @@ public static class AssetManifest
         return typeName + "s";
     }
 
+    private static List<(AssetType Type, Document Doc)> GetManifestEntries()
+    {
+        var entries = new List<(AssetType Type, Document Doc)>();
+
+        // Collect actual sprite names for conflict detection
+        var spriteNames = new HashSet<string>();
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (doc.IsEditorOnly) continue;
+            if (doc.Def.Type == AssetType.Sprite)
+                spriteNames.Add(doc.Name);
+        }
+
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (doc.IsEditorOnly) continue;
+
+            // Texture documents marked as sprites get remapped
+            if (doc is TextureDocument { IsSprite: true } texDoc)
+            {
+                if (spriteNames.Contains(texDoc.Name))
+                {
+                    Log.Warning($"Texture sprite '{texDoc.Name}' conflicts with sprite '{texDoc.Name}', skipping from manifest");
+                    continue;
+                }
+                entries.Add((AssetType.Sprite, doc));
+                continue;
+            }
+
+            entries.Add((doc.Def.Type, doc));
+        }
+
+        return entries;
+    }
+
     private static void GenerateCs(EditorConfig config)
     {
         var path = config.GenerateCs!;
@@ -51,10 +86,11 @@ public static class AssetManifest
         writer.WriteLine($"public static class {config.CsClass}");
         writer.WriteLine("{");
 
-        var documentsByType = DocumentManager.Documents
-            .Where(d => !d.IsEditorOnly)
-            .GroupBy(d => d.Def.Type)
+        var manifestEntries = GetManifestEntries();
+        var documentsByType = manifestEntries
+            .GroupBy(e => e.Type)
             .OrderBy(g => g.Key.ToString())
+            .Select(g => new { Key = g.Key, Docs = g.Select(e => e.Doc).ToList() })
             .ToList();
 
         var hasAtlases = documentsByType.Any(g => g.Key == AssetType.Atlas);
@@ -63,7 +99,7 @@ public static class AssetManifest
         writer.WriteLine("    public static class Names");
         writer.WriteLine("    {");
         var uniqueNames = documentsByType
-            .SelectMany(g => g)
+            .SelectMany(g => g.Docs)
             .Select(d => d.Name)
             .Distinct()
             .OrderBy(n => n);
@@ -95,7 +131,7 @@ public static class AssetManifest
             var typeName = group.Key.ToString();
             var pluralName = Pluralize(typeName);
             var runtimeType = Asset.GetDef(group.Key)?.RuntimeType.Name ?? "Asset";
-            var orderedDocs = group.OrderBy(d => d.Name).ToList();
+            var orderedDocs = group.Docs.OrderBy(d => d.Name).ToList();
 
             writer.WriteLine();
             writer.WriteLine($"    public static class {pluralName}");
@@ -187,7 +223,7 @@ public static class AssetManifest
         if (hasAtlases)
         {
             var atlasGroup = documentsByType.First(g => g.Key == AssetType.Atlas);
-            var atlasNames = atlasGroup.OrderBy(d => d.Name).Select(d => $"Atlases.{ToPascalCase(d.Name)}").ToList();
+            var atlasNames = atlasGroup.Docs.OrderBy(d => d.Name).Select(d => $"Atlases.{ToPascalCase(d.Name)}").ToList();
 
             writer.WriteLine();
             writer.WriteLine("        // Create texture array from all atlases");
@@ -245,10 +281,12 @@ public static class AssetManifest
         writer.WriteLine($"local {className} = {{}}");
         writer.WriteLine();
 
-        var documentsByType = DocumentManager.Documents
-            .Where(d => !d.IsEditorOnly)
-            .GroupBy(d => d.Def.Type)
-            .OrderBy(g => g.Key.ToString());
+        var manifestEntries = GetManifestEntries();
+        var documentsByType = manifestEntries
+            .GroupBy(e => e.Type)
+            .OrderBy(g => g.Key.ToString())
+            .Select(g => new { Key = g.Key, Docs = g.Select(e => e.Doc).ToList() })
+            .ToList();
 
         foreach (var group in documentsByType)
         {
@@ -256,7 +294,7 @@ public static class AssetManifest
             var pluralName = Pluralize(typeName);
             writer.WriteLine($"{className}.{pluralName} = {{");
 
-            foreach (var doc in group.OrderBy(d => d.Name))
+            foreach (var doc in group.Docs.OrderBy(d => d.Name))
             {
                 var constName = ToPascalCase(doc.Name);
                 writer.WriteLine($"    {constName} = \"{doc.Name}\",");

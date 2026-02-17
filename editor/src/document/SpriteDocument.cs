@@ -5,6 +5,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace NoZ.Editor;
 
@@ -19,8 +20,10 @@ public class SpriteFrame : IDisposable
     }
 }
 
-public class SpriteDocument : Document
+public class SpriteDocument : Document, ISpriteSource
 {
+    public override bool CanSave => true;
+
     public class SkeletonBinding
     {
         public StringId SkeletonName;
@@ -196,7 +199,9 @@ public class SpriteDocument : Document
     public bool ShowSkeletonOverlay { get; set; }
     public Vector2Int? ConstrainedSize { get; set; }
 
-    internal AtlasDocument? Atlas;
+    ushort ISpriteSource.FrameCount => FrameCount;
+    AtlasDocument? ISpriteSource.Atlas { get => Atlas; set => Atlas = value; }
+    internal AtlasDocument? Atlas { get; set; }
 
     public readonly SkeletonBinding Binding = new();
 
@@ -803,10 +808,110 @@ public class SpriteDocument : Document
         MarkMetaModified();
     }
 
+    void ISpriteSource.ClearAtlasUVs() => ClearAtlasUVs();
+
     internal void ClearAtlasUVs()
     {
         _atlasUV.Clear();
         MarkSpriteDirty();
+    }
+
+    void ISpriteSource.Rasterize(PixelData<Color32> image, in AtlasSpriteRect rect, int padding)
+    {
+        var palette = PaletteManager.GetPalette(Palette);
+        if (palette == null) return;
+
+        var frameIndex = rect.FrameIndex;
+        var frame = GetFrame(frameIndex);
+        var slots = GetMeshSlots(frameIndex);
+        var slotBounds = GetMeshSlotBounds(frameIndex);
+        var padding2 = padding * 2;
+        var xOffset = 0;
+
+        for (int slotIndex = 0; slotIndex < slots.Count; slotIndex++)
+        {
+            var slot = slots[slotIndex];
+            var slotRasterBounds = slotBounds[slotIndex];
+            if (slotRasterBounds.Width <= 0 || slotRasterBounds.Height <= 0)
+                slotRasterBounds = RasterBounds;
+
+            var slotWidth = slotRasterBounds.Size.X + padding2;
+
+            AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} Frame={frameIndex} Layer={slot.Layer} Bone={slot.Bone} Rect={rect.Rect} SlotBounds={slotRasterBounds}");
+
+            var outerRect = new RectInt(
+                rect.Rect.Position + new Vector2Int(xOffset, 0),
+                new Vector2Int(slotWidth, slotRasterBounds.Size.Y + padding2));
+            var rasterRect = new RectInt(
+                outerRect.Position + new Vector2Int(padding, padding),
+                slotRasterBounds.Size);
+
+            if (slot.PathIndices.Count > 0)
+            {
+                frame.Shape.Rasterize(
+                    image,
+                    rasterRect,
+                    -slotRasterBounds.Position,
+                    palette.Colors,
+                    CollectionsMarshal.AsSpan(slot.PathIndices),
+                    IsAntiAliased);
+            }
+
+            image.BleedColors(rasterRect);
+            for (int p = padding - 1; p >= 0; p--)
+            {
+                var padRect = new RectInt(
+                    outerRect.Position + new Vector2Int(p, p),
+                    outerRect.Size - new Vector2Int(p * 2, p * 2));
+                image.ExtrudeEdges(padRect);
+            }
+
+            xOffset += slotWidth;
+        }
+    }
+
+    void ISpriteSource.UpdateAtlasUVs(AtlasDocument atlas, ReadOnlySpan<AtlasSpriteRect> allRects, int padding)
+    {
+        ClearAtlasUVs();
+        var padding2 = padding * 2;
+        int uvIndex = 0;
+        var ts = (float)EditorApplication.Config.AtlasSize;
+
+        for (ushort frameIndex = 0; frameIndex < FrameCount; frameIndex++)
+        {
+            // Find the rect for this frame
+            int rectIndex = -1;
+            for (int i = 0; i < allRects.Length; i++)
+            {
+                if (allRects[i].Source == (ISpriteSource)this && allRects[i].FrameIndex == frameIndex)
+                {
+                    rectIndex = i;
+                    break;
+                }
+            }
+            if (rectIndex == -1) return;
+
+            ref readonly var rect = ref allRects[rectIndex];
+            var slots = GetMeshSlots(frameIndex);
+            var slotBounds = GetMeshSlotBounds(frameIndex);
+            var xOffset = 0;
+
+            for (int slotIndex = 0; slotIndex < slots.Count; slotIndex++)
+            {
+                var bounds = slotBounds[slotIndex];
+                var slotSize = (bounds.Width > 0 && bounds.Height > 0)
+                    ? bounds.Size
+                    : RasterBounds.Size;
+
+                var u = (rect.Rect.Left + padding + xOffset) / ts;
+                var v = (rect.Rect.Top + padding) / ts;
+                var s = u + slotSize.X / ts;
+                var t = v + slotSize.Y / ts;
+                SetAtlasUV(uvIndex, Rect.FromMinMax(u, v, s, t));
+                uvIndex++;
+                xOffset += slotSize.X + padding2;
+            }
+        }
     }
 
     internal void SetAtlasUV(int slotIndex, Rect uv)
@@ -958,7 +1063,7 @@ public class SpriteDocument : Document
     public override void OnUndoRedo()
     {
         UpdateBounds();
-        AtlasManager.UpdateSprite(this);
+        AtlasManager.UpdateSource(this);
         base.OnUndoRedo();
     }
 }

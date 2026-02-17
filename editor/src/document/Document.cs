@@ -14,7 +14,7 @@ public abstract class Document : IDisposable
     public string CollectionId { get; set; } = "";
     public virtual bool IsPlaying { get; } = false;
     public virtual bool CanPlay => false;
-    public virtual bool CanSave => true;
+    public virtual bool CanSave => false;
 
     public Vector2 Position { get; set; }
     public Vector2 SavedPosition { get; set; }

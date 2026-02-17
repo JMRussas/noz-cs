@@ -548,5 +548,14 @@ public unsafe partial class SDLPlatform : IPlatform
     }
 
     public void Log(string message) => System.Diagnostics.Debug.WriteLine(message);
+
+    public void OpenURL(string url)
+    {
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = url,
+            UseShellExecute = true
+        });
+    }
 }
 

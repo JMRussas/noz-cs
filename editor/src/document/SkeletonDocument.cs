@@ -49,6 +49,8 @@ public struct BoneHitResult
 
 public class SkeletonDocument : Document
 {
+    public override bool CanSave => true;
+
     private const float BoneWidth = 0.15f;
     private const float BoundsPadding = 0.1f;
 

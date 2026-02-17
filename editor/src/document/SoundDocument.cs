@@ -110,6 +110,12 @@ public class SoundDocument : Document
         base.PostLoad();
     }
 
+    public override void Reload()
+    {
+        _sound?.Dispose();
+        _sound = Asset.Load(AssetType.Sound, Name, useRegistry: false, libraryPath: EditorApplication.OutputPath) as Sound;
+    }
+
     public override bool CanPlay => _sound != null;
     public override bool IsPlaying => Audio.IsPlaying(_handle); 
 

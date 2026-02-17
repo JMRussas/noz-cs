@@ -11,7 +11,7 @@ namespace NoZ.Editor;
 public static class AtlasManager
 {
     private readonly static List<AtlasDocument> _atlases = new(32);
-    private readonly static List<SpriteDocument> _sprites = new(32);
+    private readonly static List<ISpriteSource> _sources = new(64);
 
     public static void Init()
     {
@@ -24,15 +24,23 @@ public static class AtlasManager
     public static void Shutdown()
     {
         _atlases.Clear();
-        _sprites.Clear();
+        _sources.Clear();
     }
 
     private static void HandleDocumentAdded(Document doc)
     {
-        if (doc is not SpriteDocument sprite) return;
-        _sprites.Add(sprite);
-        AddSprite(sprite);
-        Update();
+        if (doc is SpriteDocument sprite)
+        {
+            _sources.Add(sprite);
+            Add(sprite);
+            Update();
+        }
+        else if (doc is TextureDocument { IsSprite: true } texture)
+        {
+            _sources.Add(texture);
+            Add(texture);
+            Update();
+        }
     }
 
     private static string GetAtlasName(int index) => $"{EditorApplication.Config.AtlasPrefix}{index:000}.atlas";
@@ -70,13 +78,15 @@ public static class AtlasManager
                 _atlases.Add(atlas);
             }
             else if (doc is SpriteDocument sprite)
-                _sprites.Add(sprite);
+                _sources.Add(sprite);
+            else if (doc is TextureDocument { IsSprite: true } texture)
+                _sources.Add(texture);
         }
 
         if (!rebuild)
         {
-            for (int i = 0, c = _sprites.Count; !rebuild && i < c; i++)
-                rebuild = _sprites[i].Atlas == null;
+            for (int i = 0, c = _sources.Count; !rebuild && i < c; i++)
+                rebuild = _sources[i].Atlas == null;
 
             LogAtlas($"Rebuild: One or more unatlased sprites", () => rebuild);
         }
@@ -94,54 +104,80 @@ public static class AtlasManager
 
     public static void Update()
     {
-        for (int spriteIndex = 0; spriteIndex < _sprites.Count; spriteIndex++)
+        for (int i = 0; i < _sources.Count; i++)
         {
-            var sprite = _sprites[spriteIndex];
-            if (sprite.Atlas != null) 
+            if (_sources[i].Atlas != null)
                 continue;
 
-            AddSprite(sprite);
+            Add(_sources[i]);
         }
 
         for (int atlasIndex = 0; atlasIndex < _atlases.Count; atlasIndex++ )
             _atlases[atlasIndex].Update();
     }
 
-    public static void UpdateSprite(SpriteDocument sprite)
+    internal static void UpdateSource(ISpriteSource source)
     {
-        Debug.Assert(sprite.Atlas != null);
+        Debug.Assert(source.Atlas != null);
 
-        // See if the sprite can remain in its current atlas
-        if (sprite.Atlas.TryUpdate(sprite))
+        // See if the source can remain in its current atlas
+        if (source.Atlas.TryUpdate(source))
         {
-            sprite.Atlas.Update();
-            sprite.Reimport();
-            sprite.Atlas.Reimport();
+            source.Atlas.Update();
+            source.Reimport();
+            source.Atlas.Reimport();
             return;
         }
 
-        // Sprite no longer fits in its atlas, need to relocate it
-        var oldAtlas = sprite.Atlas;
-        sprite.Atlas = null;
-        AddSprite(sprite);
+        // Source no longer fits in its atlas, need to relocate it
+        var oldAtlas = source.Atlas;
+        source.Atlas = null;
+        Add(source);
 
         // Update both the old atlas (to clear the old rect) and the new one
         oldAtlas.Update();
         oldAtlas.Reimport();
-        if (sprite.Atlas != oldAtlas)
+        if (source.Atlas != oldAtlas)
         {
-            sprite.Atlas!.Update();
-            sprite.Atlas.Reimport();
+            source.Atlas!.Update();
+            source.Atlas.Reimport();
         }
     }
 
-    private static void AddSprite(SpriteDocument sprite)
+    internal static void AddSource(ISpriteSource source)
     {
-        Debug.Assert(sprite.Atlas == null);
+        if (!_sources.Contains(source))
+            _sources.Add(source);
+
+        if (source.Atlas != null)
+            return;
+
+        Add(source);
+        Update();
+    }
+
+    internal static void RemoveSource(ISpriteSource source)
+    {
+        if (source.Atlas != null)
+        {
+            source.Atlas.Remove(source);
+            source.Atlas.Update();
+            source.Atlas.Reimport();
+            source.Atlas = null;
+            source.ClearAtlasUVs();
+        }
+
+        _sources.Remove(source);
+        source.Reimport();
+    }
+
+    private static void Add(ISpriteSource source)
+    {
+        Debug.Assert(source.Atlas == null);
 
         for (int i = 0; i < _atlases.Count; i++)
         {
-            if (_atlases[i].TryAddSprite(sprite))
+            if (_atlases[i].TryAdd(source))
             {
                 _atlases[i].MarkModified();
                 return;
@@ -154,8 +190,8 @@ public static class AtlasManager
         atlas.IsVisible = false;
         _atlases.Add(atlas);
 
-        if (!atlas.TryAddSprite(sprite))
-            Log.Warning($"AddSprite: failed to add sprite '{sprite.Name}' to new atlas");
+        if (!atlas.TryAdd(source))
+            Log.Warning($"Add: failed to add '{source.Name}' to new atlas");
         else
             atlas.MarkModified();
     }
@@ -165,10 +201,10 @@ public static class AtlasManager
         for (int i = 0; i < _atlases.Count; i++)
             _atlases[i].Clear();
 
-        for (int spriteIndex = 0; spriteIndex < _sprites.Count; spriteIndex++)
+        for (int i = 0; i < _sources.Count; i++)
         {
-            Debug.Assert(_sprites[spriteIndex].Atlas == null);
-            AddSprite(_sprites[spriteIndex]);
+            Debug.Assert(_sources[i].Atlas == null);
+            Add(_sources[i]);
         }
 
         for (int atlasIndex = _atlases.Count - 1; atlasIndex > 1; atlasIndex--)
@@ -188,5 +224,3 @@ public static class AtlasManager
             Log.Debug($"[ATLAS] {msg}");
     }
 }
-
-

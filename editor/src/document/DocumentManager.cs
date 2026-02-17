@@ -9,6 +9,7 @@ public static class DocumentManager
     private static readonly List<Document> _documents = [];
     private static readonly List<string> _sourcePaths = [];
     private static string _outputPath = "";
+    private static bool _initialized;
 
     public static IReadOnlyList<Document> Documents => _documents;
     public static IReadOnlyList<string> SourcePaths => _sourcePaths;
@@ -20,6 +21,8 @@ public static class DocumentManager
     public delegate void DocumentAddedDelegate(Document doc);
 
     public static event DocumentAddedDelegate? DocumentAdded;
+
+    public static void NotifyDocumentAdded(Document doc) => DocumentAdded?.Invoke(doc);
 
     private static readonly Dictionary<AssetType, DocumentDef> _defsByType = new();
     private static readonly Dictionary<string, DocumentDef> _defsByExtension = new();
@@ -39,10 +42,14 @@ public static class DocumentManager
         Directory.CreateDirectory(outputPath);
 
         InitDocuments();
+
+        Importer.OnImported += OnImported;
     }
 
     public static void Shutdown()
     {
+        Importer.OnImported -= OnImported;
+        _initialized = false;
         _documents.Clear();
         _sourcePaths.Clear();
     }
@@ -187,6 +194,28 @@ public static class DocumentManager
                 doc.PostLoaded = true;
                 doc.PostLoad();
             }
+        }
+
+        _initialized = true;
+    }
+
+    private static void OnImported(Document doc)
+    {
+        if (!_initialized)
+            return;
+
+        if (!doc.Loaded)
+        {
+            doc.LoadMetadata();
+            doc.Loaded = true;
+            doc.Load();
+            doc.PostLoad();
+            doc.PostLoaded = true;
+            NotifyDocumentAdded(doc);
+        }
+        else
+        {
+            doc.Reload();
         }
     }
 

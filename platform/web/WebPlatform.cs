@@ -335,4 +335,9 @@ public class WebPlatform : IPlatform
     }
 
     public void Log(string message) => Console.WriteLine(message);
+
+    public void OpenURL(string url)
+    {
+        _module?.InvokeVoidAsync("openURL", url);
+    }
 }

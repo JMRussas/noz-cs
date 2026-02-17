@@ -77,5 +77,7 @@ public interface IPlatform
     void SavePersistentData(string name, Stream data, string? appName = null);
 
     void Log(string message);
+
+    void OpenURL(string url);
 }
 

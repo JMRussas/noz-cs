@@ -190,6 +190,8 @@ public static class Application
         _running = false;
     }
 
+    public static void OpenURL(string url) => Platform.OpenURL(url);
+
     private static void RenderFrame()
     {
         // Don't call Time.Update() during resize - this is an "extra" render frame
