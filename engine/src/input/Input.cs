@@ -223,6 +223,8 @@ public static class Input
                 {
                     ref var btn = ref Buttons[(int)evt.GamepadButton];
                     btn.Physical = true;
+                    if (!btn.Logical)
+                        btn.Pressed = true;
                     btn.Logical = true;
                 }
                 break;
@@ -233,6 +235,7 @@ public static class Input
                     ref var btn = ref Buttons[(int)evt.GamepadButton];
                     btn.Physical = false;
                     btn.Logical = false;
+                    btn.Released = true;
                 }
                 break;
 
@@ -244,20 +247,20 @@ public static class Input
                     switch (evt.GamepadAxis)
                     {
                         case InputCode.GamepadLeftStickX:
-                            Buttons[(int)InputCode.GamepadLeftStickLeft].Logical = evt.AxisValue < -0.5f;
-                            Buttons[(int)InputCode.GamepadLeftStickRight].Logical = evt.AxisValue > 0.5f;
+                            SetAxisButton(InputCode.GamepadLeftStickLeft, evt.AxisValue < -0.5f);
+                            SetAxisButton(InputCode.GamepadLeftStickRight, evt.AxisValue > 0.5f);
                             break;
                         case InputCode.GamepadLeftStickY:
-                            Buttons[(int)InputCode.GamepadLeftStickUp].Logical = evt.AxisValue < -0.5f;
-                            Buttons[(int)InputCode.GamepadLeftStickDown].Logical = evt.AxisValue > 0.5f;
+                            SetAxisButton(InputCode.GamepadLeftStickUp, evt.AxisValue < -0.5f);
+                            SetAxisButton(InputCode.GamepadLeftStickDown, evt.AxisValue > 0.5f);
                             break;
                         case InputCode.GamepadLeftTrigger:
                             AxisState[(int)evt.GamepadAxis] = (evt.AxisValue + 1f) / 2f;
-                            Buttons[(int)InputCode.GamepadLeftTriggerButton].Logical = evt.AxisValue > 0.5f;
+                            SetAxisButton(InputCode.GamepadLeftTriggerButton, evt.AxisValue > 0.5f);
                             break;
                         case InputCode.GamepadRightTrigger:
                             AxisState[(int)evt.GamepadAxis] = (evt.AxisValue + 1f) / 2f;
-                            Buttons[(int)InputCode.GamepadRightTriggerButton].Logical = evt.AxisValue > 0.5f;
+                            SetAxisButton(InputCode.GamepadRightTriggerButton, evt.AxisValue > 0.5f);
                             break;
                     }
                 }
@@ -278,6 +281,23 @@ public static class Input
                         Buttons[i].Consumed = true;
                 }
                 break;
+        }
+    }
+
+    private static void SetAxisButton(InputCode code, bool active)
+    {
+        ref var btn = ref Buttons[(int)code];
+        if (active && !btn.Logical)
+        {
+            btn.Physical = true;
+            btn.Pressed = true;
+            btn.Logical = true;
+        }
+        else if (!active && btn.Logical)
+        {
+            btn.Physical = false;
+            btn.Logical = false;
+            btn.Released = true;
         }
     }
 

@@ -17,6 +17,7 @@ public unsafe partial class SDLPlatform : IPlatform
 
     private readonly SDL_Cursor*[] _cursors = new SDL_Cursor*[Enum.GetValues<SystemCursor>().Length];
     private SystemCursor _currentCursor = SystemCursor.Default;
+    private SDL_Gamepad* _gamepad;
 
     public Vector2Int WindowSize { get; private set; }
 
@@ -88,37 +89,15 @@ public unsafe partial class SDLPlatform : IPlatform
         _instance = this;
         SDL_AddEventWatch(&ResizeEventWatch, nint.Zero);
 
-        if (!string.IsNullOrEmpty(config.IconPath) && File.Exists(config.IconPath))
-            SetWindowIcon(config.IconPath);
-
         InitNativeTextInput();
 
+        // Open any already-connected gamepads
+        int count;
+        var joysticks = SDL_GetGamepads(&count);
+        if (joysticks != null && count > 0)
+            _gamepad = SDL_OpenGamepad(joysticks[0]);
+        SDL_free(joysticks);
         SDL_StartTextInput(_window);
-    }
-
-    private void SetWindowIcon(string iconPath)
-    {
-#if false
-        using var stream = File.OpenRead(iconPath);
-        var image = ImageResult.FromStream(stream, ColorComponents.RedGreenBlueAlpha);
-
-        fixed (byte* pixels = image.Data)
-        {
-            var surface = SDL_CreateSurfaceFrom(
-                image.Width,
-                image.Height,
-                SDL_PixelFormat.SDL_PIXELFORMAT_RGBA8888,
-                (nint)pixels,
-                image.Width * 4
-            );
-
-            if (surface != null)
-            {
-                SDL_SetWindowIcon(_window, surface);
-                SDL_DestroySurface(surface);
-            }
-        }
-#endif
     }
 
     public void SetResizeCallback(Action? callback)
@@ -149,6 +128,12 @@ public unsafe partial class SDLPlatform : IPlatform
     public void Shutdown()
     {
         SDL_StopTextInput(_window);
+
+        if (_gamepad != null)
+        {
+            SDL_CloseGamepad(_gamepad);
+            _gamepad = null;
+        }
 
         SDL_RemoveEventWatch(&ResizeEventWatch, nint.Zero);
         _instance = null;
@@ -242,6 +227,23 @@ public unsafe partial class SDLPlatform : IPlatform
             case SDL_EventType.SDL_EVENT_MOUSE_WHEEL:
                 OnEvent?.Invoke(PlatformEvent.MouseScroll(evt.wheel.x, evt.wheel.y));
                 break;
+
+            case SDL_EventType.SDL_EVENT_GAMEPAD_ADDED:
+            {
+                if (_gamepad == null)
+                    _gamepad = SDL_OpenGamepad(evt.gdevice.which);
+                break;
+            }
+
+            case SDL_EventType.SDL_EVENT_GAMEPAD_REMOVED:
+            {
+                if (_gamepad != null)
+                {
+                    SDL_CloseGamepad(_gamepad);
+                    _gamepad = null;
+                }
+                break;
+            }
 
             case SDL_EventType.SDL_EVENT_GAMEPAD_BUTTON_DOWN:
             {
