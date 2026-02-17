@@ -3,6 +3,8 @@
 //
 
 using System.Diagnostics.CodeAnalysis;
+using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using NoZ;
 using NoZ.Platform;
 using NoZ.Editor;
@@ -14,6 +16,7 @@ using NoZ.Platform.WebGPU;
 
 // Check if running in init mode first
 var initProject = false;
+var importOnly = false;
 string? initProjectName = null;
 for (var i = 0; i < args.Length; i++)
 {
@@ -22,9 +25,17 @@ for (var i = 0; i < args.Length; i++)
         initProject = true;
         if (i + 1 < args.Length && !args[i + 1].StartsWith("--"))
             initProjectName = args[++i];
-        break;
+    }
+    else if (args[i] == "--import")
+    {
+        importOnly = true;
     }
 }
+
+// For CLI modes on Windows, attach to parent console so Console.WriteLine output is visible
+// (WinExe has no console by default; Linux/Mac don't need this)
+if ((importOnly || initProject) && OperatingSystem.IsWindows())
+    AttachConsole(-1);
 
 // Find editor path by walking up from assembly location
 // Look for directory with BOTH library/ AND NoZ.Editor.csproj
@@ -136,6 +147,14 @@ Log.Info($"Project Path: {projectPath}");
 
 EditorApplication.Init(editorPath, projectPath, clean);
 
+// Import-only mode: import assets and exit without launching GUI
+if (importOnly)
+{
+    Log.Info("Import complete.");
+    Importer.Shutdown();
+    return;
+}
+
 Application.Init(new ApplicationConfig
 {
     Title = "NoZ Editor",
@@ -163,3 +182,10 @@ Application.Run();
 
 EditorApplication.Shutdown();
 Application.Shutdown();
+
+partial class Program
+{
+    [LibraryImport("kernel32.dll")]
+    [SupportedOSPlatform("windows")]
+    private static partial void AttachConsole(int dwProcessId);
+}
