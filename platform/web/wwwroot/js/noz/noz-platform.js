@@ -4,6 +4,7 @@ let canvas = null;
 let dotNetRef = null;
 let lastClickTime = 0;
 let clickCount = 0;
+let hasMouseEntered = false;
 
 export function init(dotNet, width, height) {
     dotNetRef = dotNet;
@@ -182,9 +183,17 @@ function onMouseMove(e) {
     const x = (e.clientX - rect.left) * dpr;
     const y = (e.clientY - rect.top) * dpr;
     dotNetRef.invokeMethod('OnMouseMove', x, y);
+
+    // If mouse was already over the canvas on page load, mouseenter never fires.
+    // Synthesize it on the first mousemove so the custom cursor becomes visible.
+    if (!hasMouseEntered) {
+        hasMouseEntered = true;
+        dotNetRef.invokeMethod('OnMouseEnter');
+    }
 }
 
 function onMouseEnter(e) {
+    hasMouseEntered = true;
     const rect = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
     dotNetRef.invokeMethod('OnMouseMove', (e.clientX - rect.left) * dpr, (e.clientY - rect.top) * dpr);
@@ -192,6 +201,7 @@ function onMouseEnter(e) {
 }
 
 function onMouseLeave() {
+    hasMouseEntered = false;
     dotNetRef.invokeMethod('OnMouseLeave');
 }
 
