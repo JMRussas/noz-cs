@@ -79,7 +79,10 @@ public static partial class ConfirmDialog
 
         using (UI.BeginContainer(ElementId.Close))
             if (UI.WasPressed())
+            {
+                Input.ConsumeButton(InputCode.MouseLeft);
                 Close();
+            }
 
         using (UI.BeginColumn(EditorStyle.Confirm.Root))
         {
@@ -91,12 +94,16 @@ public static partial class ConfirmDialog
                     executed = _onConfirm;
 
                 if (EditorUI.Button(ElementId.No, _noText))
+                {
+                    Input.ConsumeButton(InputCode.MouseLeft);
                     Close();
+                }
             }
         }
         
         if (executed != null)
         {
+            Input.ConsumeButton(InputCode.MouseLeft);
             Close();
             executed();
         }

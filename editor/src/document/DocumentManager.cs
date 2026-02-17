@@ -396,17 +396,18 @@ public static class DocumentManager
         var doc = Find(source.Def.Type, newName);
         if (doc == null) return null;
 
-        doc.LoadMetadata();
-        doc.Load();
-        doc.PostLoad();
-        doc.PostLoaded = true;
+        // The importer already loads, post-loads, and fires DocumentAdded via OnImported.
+        // Only do it manually if the importer didn't get to it (e.g. skipped by timestamp).
+        if (!doc.PostLoaded)
+        {
+            doc.LoadMetadata();
+            doc.Load();
+            doc.PostLoad();
+            doc.PostLoaded = true;
+            DocumentAdded?.Invoke(doc);
+        }
+
         doc.Position = source.Position;
-
-        DocumentAdded?.Invoke(doc);
-
-        // Re-import after atlas assignment so the binary has correct atlas UVs
-        Importer.Queue(doc, force: true);
-        Importer.Update();
 
         return doc;
     }

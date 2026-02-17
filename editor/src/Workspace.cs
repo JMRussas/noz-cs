@@ -810,7 +810,7 @@ public static partial class Workspace
         if (SelectedCount == 0)
             return;
 
-        var message = SelectedCount == 1 ? "Delete selectd assets?" : $"Delete {SelectedCount} assets?";
+        var message = SelectedCount == 1 ? "Delete selected assets?" : $"Delete {SelectedCount} assets?";
         ConfirmDialog.Show(message, () =>
         {
             var toDelete = new List<Document>();
@@ -820,10 +820,10 @@ public static partial class Workspace
                     toDelete.Add(doc);
             }
 
+            ClearSelection();
+
             foreach (var doc in toDelete)
                 DocumentManager.Delete(doc);
-
-            SelectedCount = 0;
             Notifications.Add($"deleted {toDelete.Count} asset(s)");
         },
         yes: "Delete",
