@@ -694,7 +694,7 @@ internal static partial class EditorUI
             for (; frameIndex < frames.Length; frameIndex++)
             {
                 var selected = oldCurrentFrame == frameIndex;
-                using (UI.BeginRow(baseId + frameIndex, ContainerStyle.Fit))
+                using (UI.BeginRow(baseId + frameIndex))
                 {
                     if (UI.WasPressed())
                         currentFrame = frameIndex;
