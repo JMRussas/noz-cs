@@ -24,7 +24,21 @@ public class SkinGenerator : IIncrementalGenerator
                 transform: static (ctx, _) => GetSkinnableInfo(ctx))
             .Where(static info => info is not null);
 
-        context.RegisterSourceOutput(classDeclarations, static (ctx, info) => GenerateSource(ctx, info!));
+        // Find CSV files from AdditionalTexts
+        var csvFiles = context.AdditionalTextsProvider
+            .Where(static file => file.Path.EndsWith(".csv"));
+
+        // Combine: pair each [Skinnable] class with all CSV files
+        var combined = classDeclarations.Combine(csvFiles.Collect());
+
+        // Generate
+        context.RegisterSourceOutput(combined, static (ctx, pair) =>
+        {
+            var info = pair.Left;
+            var files = pair.Right;
+            if (info is null) return;
+            GenerateSource(ctx, info, files);
+        });
     }
 
     private static SkinnableInfo? GetSkinnableInfo(GeneratorAttributeSyntaxContext context)
@@ -32,86 +46,50 @@ public class SkinGenerator : IIncrementalGenerator
         var symbol = context.TargetSymbol as INamedTypeSymbol;
         if (symbol is null) return null;
 
-        var fields = new List<SkinFieldInfo>();
-        var skinNames = new HashSet<string>();
-        string? defaultSkin = null;
-
-        // Recursively walk nested types to find fields with [Skin] attributes
-        CollectSkinFields(symbol, new List<string>(), fields, skinNames, ref defaultSkin);
-
-        if (fields.Count == 0) return null;
-
-        // If no default was specified, use the first skin name found
-        if (defaultSkin == null && skinNames.Count > 0)
-            defaultSkin = skinNames.First();
+        var colorRefs = new List<SkinColorRef>();
+        CollectSkinColorRefs(symbol, new List<string>(), colorRefs);
 
         return new SkinnableInfo
         {
             Namespace = symbol.ContainingNamespace.ToDisplayString(),
             ClassName = symbol.Name,
-            Fields = fields,
-            SkinNames = skinNames.OrderBy(n => n).ToList(),
-            DefaultSkin = defaultSkin ?? "Default"
+            ColorRefs = colorRefs
         };
     }
 
-    private static void CollectSkinFields(
+    private static void CollectSkinColorRefs(
         INamedTypeSymbol type,
         List<string> nestedPath,
-        List<SkinFieldInfo> fields,
-        HashSet<string> skinNames,
-        ref string? defaultSkin)
+        List<SkinColorRef> colorRefs)
     {
-        // Check fields in this type
         foreach (var member in type.GetMembers())
         {
-            if (member is IFieldSymbol field)
+            if (member is not IFieldSymbol field)
+                continue;
+
+            foreach (var attr in field.GetAttributes())
             {
-                var overrides = new List<SkinOverride>();
-                foreach (var attr in field.GetAttributes())
+                if (attr.AttributeClass?.ToDisplayString() != "NoZ.SkinColorAttribute")
+                    continue;
+
+                if (attr.ConstructorArguments.Length < 1)
+                    continue;
+
+                var colorName = attr.ConstructorArguments[0].Value?.ToString() ?? "";
+                var propertyName = attr.ConstructorArguments.Length >= 2
+                    ? attr.ConstructorArguments[1].Value?.ToString() ?? "Color"
+                    : "Color";
+
+                var isColorType = field.Type.Name == "Color";
+
+                colorRefs.Add(new SkinColorRef
                 {
-                    if (attr.AttributeClass?.ToDisplayString() != "NoZ.SkinAttribute")
-                        continue;
-
-                    if (attr.ConstructorArguments.Length < 2)
-                        continue;
-
-                    string skinName, propName, value;
-                    if (attr.ConstructorArguments.Length >= 3)
-                    {
-                        skinName = attr.ConstructorArguments[0].Value?.ToString() ?? "";
-                        propName = attr.ConstructorArguments[1].Value?.ToString() ?? "";
-                        value = attr.ConstructorArguments[2].Value?.ToString() ?? "";
-                    }
-                    else
-                    {
-                        // 2-arg: (skinName, value) — direct field assignment
-                        skinName = attr.ConstructorArguments[0].Value?.ToString() ?? "";
-                        propName = "";
-                        value = attr.ConstructorArguments[1].Value?.ToString() ?? "";
-                    }
-
-                    if (string.IsNullOrEmpty(skinName))
-                        continue;
-
-                    skinNames.Add(skinName);
-                    overrides.Add(new SkinOverride
-                    {
-                        SkinName = skinName,
-                        PropertyName = propName,
-                        Value = value
-                    });
-                }
-
-                if (overrides.Count > 0)
-                {
-                    fields.Add(new SkinFieldInfo
-                    {
-                        NestedPath = new List<string>(nestedPath),
-                        FieldName = field.Name,
-                        Overrides = overrides
-                    });
-                }
+                    NestedPath = new List<string>(nestedPath),
+                    FieldName = field.Name,
+                    ColorName = colorName,
+                    PropertyName = propertyName,
+                    IsColorType = isColorType
+                });
             }
         }
 
@@ -119,13 +97,35 @@ public class SkinGenerator : IIncrementalGenerator
         foreach (var member in type.GetTypeMembers())
         {
             nestedPath.Add(member.Name);
-            CollectSkinFields(member, nestedPath, fields, skinNames, ref defaultSkin);
+            CollectSkinColorRefs(member, nestedPath, colorRefs);
             nestedPath.RemoveAt(nestedPath.Count - 1);
         }
     }
 
-    private static void GenerateSource(SourceProductionContext context, SkinnableInfo info)
+    private static void GenerateSource(
+        SourceProductionContext ctx,
+        SkinnableInfo info,
+        ImmutableArray<AdditionalText> csvFiles)
     {
+        // Find the colors.csv file
+        AdditionalText? colorsFile = null;
+        foreach (var file in csvFiles)
+        {
+            if (file.Path.EndsWith("colors.csv"))
+            {
+                colorsFile = file;
+                break;
+            }
+        }
+
+        if (colorsFile is null) return;
+
+        var text = colorsFile.GetText(ctx.CancellationToken)?.ToString();
+        if (string.IsNullOrEmpty(text)) return;
+
+        var csv = ParseCsv(text!);
+        if (csv is null || csv.Entries.Count == 0) return;
+
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
         sb.AppendLine();
@@ -144,15 +144,25 @@ public class SkinGenerator : IIncrementalGenerator
         // Generate Skins class with const names
         sb.AppendLine("    public static class Skins");
         sb.AppendLine("    {");
-        foreach (var name in info.SkinNames)
+        foreach (var skin in csv.Skins)
         {
-            sb.AppendLine($"        public const string {name} = \"{name}\";");
+            sb.AppendLine($"        public const string {skin} = \"{skin}\";");
+        }
+        sb.AppendLine("    }");
+        sb.AppendLine();
+
+        // Generate Skin class with Color fields
+        sb.AppendLine("    public static class Skin");
+        sb.AppendLine("    {");
+        foreach (var entry in csv.Entries)
+        {
+            sb.AppendLine($"        public static Color {entry.Name};");
         }
         sb.AppendLine("    }");
         sb.AppendLine();
 
         // CurrentSkin property
-        sb.AppendLine($"    public static string CurrentSkin {{ get; private set; }}");
+        sb.AppendLine("    public static string CurrentSkin { get; private set; }");
         sb.AppendLine();
 
         // SetSkin method
@@ -160,37 +170,46 @@ public class SkinGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
         sb.AppendLine("        CurrentSkin = name;");
 
+        // Phase 1: Set skin color table from CSV
         bool first = true;
-        foreach (var skinName in info.SkinNames)
+        foreach (var skin in csv.Skins)
         {
             var prefix = first ? "if" : "else if";
-            sb.AppendLine($"        {prefix} (name == Skins.{skinName})");
+            sb.AppendLine($"        {prefix} (name == Skins.{skin})");
             sb.AppendLine("        {");
 
-            foreach (var field in info.Fields)
+            foreach (var entry in csv.Entries)
             {
-                foreach (var ov in field.Overrides.Where(o => o.SkinName == skinName))
-                {
-                    var path = field.NestedPath.Count > 0
-                        ? string.Join(".", field.NestedPath) + "." + field.FieldName
-                        : field.FieldName;
-
-                    var colorExpr = ParseColorValue(ov.Value);
-                    if (string.IsNullOrEmpty(ov.PropertyName))
-                        sb.AppendLine($"            {path} = {colorExpr};");
-                    else
-                        sb.AppendLine($"            {path}.{ov.PropertyName} = {colorExpr};");
-                }
+                var value = entry.Values.ContainsKey(skin) ? entry.Values[skin] : "";
+                var colorExpr = ParseColorValue(value);
+                sb.AppendLine($"            Skin.{entry.Name} = {colorExpr};");
             }
 
             sb.AppendLine("        }");
             first = false;
         }
 
+        // Phase 2: Propagate to [SkinColor] fields
+        if (info.ColorRefs.Count > 0)
+        {
+            sb.AppendLine();
+            foreach (var cref in info.ColorRefs)
+            {
+                var path = cref.NestedPath.Count > 0
+                    ? string.Join(".", cref.NestedPath) + "." + cref.FieldName
+                    : cref.FieldName;
+
+                if (cref.IsColorType)
+                    sb.AppendLine($"        {path} = Skin.{cref.ColorName};");
+                else
+                    sb.AppendLine($"        {path}.{cref.PropertyName} = Skin.{cref.ColorName};");
+            }
+        }
+
         sb.AppendLine("    }");
         sb.AppendLine("}");
 
-        context.AddSource($"{info.ClassName}.Skin.g.cs", sb.ToString());
+        ctx.AddSource($"{info.ClassName}.Skin.g.cs", sb.ToString());
     }
 
     private static string ParseColorValue(string value)
@@ -205,30 +224,147 @@ public class SkinGenerator : IIncrementalGenerator
                 return $"Color.FromRgba(0x{hex})";
         }
 
+        // Handle CSS rgba(r, g, b, a) syntax
+        if (value.StartsWith("rgba(") && value.EndsWith(")"))
+        {
+            var inner = value.Substring(5, value.Length - 6);
+            var parts = inner.Split(',');
+            if (parts.Length == 4)
+            {
+                var r = parts[0].Trim();
+                var g = parts[1].Trim();
+                var b = parts[2].Trim();
+                var a = parts[3].Trim();
+
+                // Convert r,g,b (0-255) to hex and use FromRgba(uint rgb, float alpha)
+                if (int.TryParse(r, out var ri) && int.TryParse(g, out var gi) && int.TryParse(b, out var bi))
+                {
+                    var hex = $"{ri:X2}{gi:X2}{bi:X2}";
+                    return $"Color.FromRgba(0x{hex}, {a}f)";
+                }
+            }
+        }
+
         // Fallback: emit as-is
         return value;
     }
 
-    private class SkinOverride
+    private static CsvData? ParseCsv(string text)
     {
-        public string SkinName { get; set; } = "";
-        public string PropertyName { get; set; } = "";
-        public string Value { get; set; } = "";
+        var lines = text.Split(new[] { "\r\n", "\n" }, System.StringSplitOptions.None);
+        if (lines.Length < 2) return null;
+
+        var header = ParseCsvLine(lines[0]);
+        if (header.Count < 2) return null;
+
+        // First column is "Name", rest are skin names
+        var skins = new List<string>();
+        for (int i = 1; i < header.Count; i++)
+            skins.Add(header[i].Trim());
+
+        var entries = new List<CsvEntry>();
+        for (int i = 1; i < lines.Length; i++)
+        {
+            var line = lines[i].Trim();
+            if (string.IsNullOrEmpty(line)) continue;
+
+            var fields = ParseCsvLine(line);
+            if (fields.Count < 2) continue;
+
+            var name = fields[0].Trim();
+            if (string.IsNullOrEmpty(name)) continue;
+
+            var values = new Dictionary<string, string>();
+            for (int j = 1; j < fields.Count && j <= skins.Count; j++)
+                values[skins[j - 1]] = fields[j].Trim();
+
+            entries.Add(new CsvEntry { Name = name, Values = values });
+        }
+
+        return new CsvData { Skins = skins, Entries = entries };
     }
 
-    private class SkinFieldInfo
+    private static List<string> ParseCsvLine(string line)
+    {
+        var fields = new List<string>();
+        var sb = new StringBuilder();
+        bool inQuotes = false;
+        int i = 0;
+
+        while (i < line.Length)
+        {
+            char c = line[i];
+            if (inQuotes)
+            {
+                if (c == '"')
+                {
+                    if (i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        sb.Append('"');
+                        i += 2;
+                    }
+                    else
+                    {
+                        inQuotes = false;
+                        i++;
+                    }
+                }
+                else
+                {
+                    sb.Append(c);
+                    i++;
+                }
+            }
+            else
+            {
+                if (c == '"')
+                {
+                    inQuotes = true;
+                    i++;
+                }
+                else if (c == ',')
+                {
+                    fields.Add(sb.ToString());
+                    sb.Clear();
+                    i++;
+                }
+                else
+                {
+                    sb.Append(c);
+                    i++;
+                }
+            }
+        }
+
+        fields.Add(sb.ToString());
+        return fields;
+    }
+
+    private class SkinColorRef
     {
         public List<string> NestedPath { get; set; } = new();
         public string FieldName { get; set; } = "";
-        public List<SkinOverride> Overrides { get; set; } = new();
+        public string ColorName { get; set; } = "";
+        public string PropertyName { get; set; } = "Color";
+        public bool IsColorType { get; set; } = false;
     }
 
     private class SkinnableInfo
     {
         public string Namespace { get; set; } = "";
         public string ClassName { get; set; } = "";
-        public List<SkinFieldInfo> Fields { get; set; } = new();
-        public List<string> SkinNames { get; set; } = new();
-        public string DefaultSkin { get; set; } = "";
+        public List<SkinColorRef> ColorRefs { get; set; } = new();
+    }
+
+    private class CsvData
+    {
+        public List<string> Skins { get; set; } = new();
+        public List<CsvEntry> Entries { get; set; } = new();
+    }
+
+    private class CsvEntry
+    {
+        public string Name { get; set; } = "";
+        public Dictionary<string, string> Values { get; set; } = new();
     }
 }
