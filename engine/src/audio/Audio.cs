@@ -26,7 +26,7 @@ public static class Audio
 
     public static SoundHandle Play(Sound sound, float volume = 1f, float pitch = 1f, bool loop = false, bool debounce=true)
     {
-        if (volume <= 0f || sound.PlatformHandle == 0)
+        if (sound == null || volume <= 0f || sound.PlatformHandle == 0)
             return default;
 
         if (debounce)
