@@ -62,6 +62,7 @@ internal static class MsdfSprite
         }
 
         shape.Normalize();
+        shape.OrientContours();
         EdgeColoring.ColorSimple(shape, 3.0);
 
         return shape;
@@ -69,7 +70,9 @@ internal static class MsdfSprite
 
     /// <summary>
     /// Generate an MSDF for a set of sprite paths and write the result into the target pixel data.
-    /// Each path is treated as a contour. Subtract paths negate their distance contribution.
+    /// All paths are combined into a single shape. The generator uses the OverlappingContourCombiner
+    /// algorithm to correctly handle multiple disjoint contours. Subtract paths are generated
+    /// separately and carved out via intersection (min of inverted).
     /// </summary>
     public static void RasterizeMSDF(
         NoZ.Editor.Shape spriteShape,
@@ -97,22 +100,16 @@ internal static class MsdfSprite
                 addPaths.Add(pi);
         }
 
-        // Build msdf2 shape from additive paths
+        // Build msdf2 shape from all additive paths (one contour per path)
         var addShape = addPaths.Count > 0
             ? FromSpritePaths(spriteShape, addPaths.ToArray())
             : null;
 
-        // Build msdf2 shape from subtract paths
+        // Build msdf2 shape from all subtract paths
         var subShape = subtractPaths.Count > 0
             ? FromSpritePaths(spriteShape, subtractPaths.ToArray())
             : null;
 
-        // Compute bounds and scale for the msdf2 generator
-        // The generator works in shape-space (units), and we need to map
-        // pixel coordinates to shape-space.
-        // pixel = (shapePos + translate) * scale
-        // shapePos = pixel / scale - translate
-        // We want: translate = -sourceOffset/dpi offset, scale = dpi
         var scale = new Vector2Double(dpi, dpi);
         var translate = new Vector2Double(
             (double)sourceOffset.X / dpi,
@@ -122,15 +119,13 @@ internal static class MsdfSprite
         int h = targetRect.Height;
         double rangeInShapeUnits = range / dpi * 2.0;
 
-        // Generate MSDF for additive shape
+        // Generate MSDF for additive shape (generator handles multi-contour via
+        // OverlappingContourCombiner algorithm)
         MsdfBitmap? addBitmap = null;
         if (addShape != null)
         {
             addBitmap = new MsdfBitmap(w, h);
             MsdfGenerator.GenerateMSDF(addBitmap, addShape, rangeInShapeUnits, scale, translate);
-            // Error correction disabled for now — the legacy detectClash approach is too aggressive
-            // and can replace multi-channel data with median, destroying corner sharpness.
-            // TODO: Port the modern error correction (MSDFErrorCorrection class) which protects corners.
         }
 
         // Generate MSDF for subtract shape
@@ -166,14 +161,9 @@ internal static class MsdfSprite
                 if (subBitmap != null)
                 {
                     var spx = subBitmap[x, y];
-                    // Invert subtract channels (inside becomes outside)
-                    float sr = 1f - spx[0];
-                    float sg = 1f - spx[1];
-                    float sb = 1f - spx[2];
-                    // Intersection (min) for carving out
-                    r = Math.Min(r, sr);
-                    g = Math.Min(g, sg);
-                    b = Math.Min(b, sb);
+                    r = Math.Min(r, 1f - spx[0]);
+                    g = Math.Min(g, 1f - spx[1]);
+                    b = Math.Min(b, 1f - spx[2]);
                 }
 
                 // Clamp to [0, 1]

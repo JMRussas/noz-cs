@@ -21,20 +21,22 @@ MSDF solves this by encoding distance information across three channels (R, G, B
 | `Msdf2.Contour.cs` | Closed edge loop with shoelace winding calculation |
 | `Msdf2.Shape.cs` | Contour collection with validate, normalize, orient contours |
 | `Msdf2.EdgeColoring.cs` | `EdgeColoring.ColorSimple` — assigns R/G/B to edges at sharp corners |
-| `Msdf2.Generator.cs` | `MsdfGenerator.GenerateMSDF` (legacy algorithm) and `ErrorCorrection` |
+| `Msdf2.Generator.cs` | `MsdfGenerator.GenerateMSDF` (OverlappingContourCombiner algorithm) and `ErrorCorrection` |
 | `Msdf2.Sprite.cs` | Bridge: converts NoZ sprite paths to msdf2 shapes and runs generation |
 
 ### Pipeline
 
-1. **Shape conversion** (`MsdfSprite.FromSpritePaths`): Sprite paths and anchors are converted to msdf2 `Shape`/`Contour`/`EdgeSegment` objects. Linear anchors become `LinearSegment`, curved anchors become `QuadraticSegment` with the control point computed from the curve value.
+1. **Shape conversion** (`MsdfSprite.FromSpritePaths`): Sprite paths and anchors are converted to msdf2 `Shape`/`Contour`/`EdgeSegment` objects. Linear anchors become `LinearSegment`, curved anchors become `QuadraticSegment` with the control point computed from the curve value. Each sprite path becomes one contour.
 
 2. **Normalize** (`Shape.Normalize`): Single-edge contours are split into thirds so edge coloring has enough edges to assign distinct colors.
 
-3. **Edge coloring** (`EdgeColoring.ColorSimple`): Edges are assigned R/G/B channel colors. At sharp corners (where `dot(dir_a, dir_b) <= 0` or `|cross(dir_a, dir_b)| > sin(3.0)`), adjacent edges get different colors. This is the key step that creates multi-channel differentiation.
+3. **Orient contours** (`Shape.OrientContours`): Ensures all outer contours have consistent winding direction. This is critical for multi-contour shapes — without it, paths drawn with opposite winding would be treated as holes instead of additive shapes by the OverlappingContourCombiner. Uses scanline intersection counting to determine which contours are inside others and reverses any that have incorrect orientation.
 
-4. **MSDF generation** (`MsdfGenerator.GenerateMSDF`): For each pixel, the generator finds the nearest edge per channel and computes a signed distance using perpendicular distance extension (pseudo-SDF) at edge endpoints. Output is a float RGB bitmap with values in [0, 1] where 0.5 = on edge.
+4. **Edge coloring** (`EdgeColoring.ColorSimple`): Edges are assigned R/G/B channel colors. At sharp corners (where `dot(dir_a, dir_b) <= 0` or `|cross(dir_a, dir_b)| > sin(3.0)`), adjacent edges get different colors. This is the key step that creates multi-channel differentiation.
 
-5. **Compositing** (`MsdfSprite.RasterizeMSDF`): Additive and subtract paths are generated separately, then composited. Subtract shapes are inverted and intersected (min) with the additive result.
+5. **MSDF generation** (`MsdfGenerator.GenerateMSDF`): Uses the OverlappingContourCombiner algorithm (ported from msdfgen) to correctly handle multiple disjoint contours. For each pixel, per-contour distances are computed independently, then the combiner uses winding direction and distance sign to resolve which contour "owns" the pixel. Output is a float RGB bitmap with values in [0, 1] where 0.5 = on edge.
+
+6. **Compositing** (`MsdfSprite.RasterizeMSDF`): Additive and subtract paths are generated as separate shapes, then composited. Subtract shapes are inverted and intersected (min) with the additive result.
 
 ### Integration Point
 
@@ -87,6 +89,31 @@ The sprite binary format uses `SdfMode` to distinguish rendering modes:
 
 MSDF uses the same atlas space as regular sprites (RGBA8). Three channels encode distance; the alpha channel is unused (set to 0).
 
+## Multi-Contour / Multi-Shape Support
+
+The generator uses msdfgen's **OverlappingContourCombiner** algorithm to correctly handle shapes with multiple disjoint contours (e.g., separate sprite paths, or font glyphs like "i" with a dot and body).
+
+### The Problem with Simple Generation
+
+The legacy/simple algorithm finds the globally nearest colored edge across all contours for each channel. This breaks with multiple disjoint contours because:
+- Edge coloring from one contour interferes with another contour's distance field
+- Pixels between two shapes pick up distance info from the wrong shape's edges
+- This causes inversion artifacts and noise around the second shape
+
+### OverlappingContourCombiner Algorithm
+
+The solution computes distances **per-contour**, then resolves which contour "wins" at each pixel:
+
+1. **Per-contour distances**: Each contour's edges only contribute to that contour's R/G/B distances. A global shape-level distance is also tracked as a fallback.
+2. **Winding classification**: Contours are pre-classified by winding direction (via `Contour.Winding()` shoelace formula). Positive winding = outer boundary, negative = hole.
+3. **Inner/outer grouping**: At each pixel, contours where the point is inside (positive winding, positive median distance) are grouped as "inner"; contours where the point is outside (negative winding, negative median) are grouped as "outer".
+4. **Winner selection**: Whichever group (inner vs outer) has a median closer to the boundary wins. The algorithm then refines within that group and checks opposite-winding contours that might be even closer.
+5. **Full RGB preservation**: The winning contour's complete RGB triplet is used, preserving the multi-channel edge coloring relationship.
+
+### OrientContours is Required
+
+`Shape.OrientContours()` must be called before edge coloring. Sprite paths drawn by the user may have arbitrary winding direction. Without orientation normalization, a path wound clockwise would be treated as a hole by the OverlappingContourCombiner, causing it to render inverted. `OrientContours` uses scanline intersection analysis to ensure all outer contours have consistent positive winding.
+
 ## Error Correction
 
 The msdf2 port includes a legacy error correction pass (`MsdfGenerator.ErrorCorrection`) that detects "clashing" texels where bilinear interpolation between adjacent pixels would produce incorrect median values. **This is currently disabled** because the legacy `detectClash` algorithm is too aggressive for sprite use — it replaces multi-channel data with the median, destroying the corner sharpness that makes MSDF work.
@@ -106,8 +133,8 @@ The angle threshold of 3.0 radians (~172 degrees) means any junction sharper tha
 ## Subtract Path Handling
 
 Subtract paths (holes) are handled by generating a separate MSDF and compositing:
-1. Additive paths produce an MSDF where inside > 0.5
-2. Subtract paths produce a separate MSDF
+1. Additive paths are combined into one shape (one contour per path) and produce an MSDF where inside > 0.5
+2. Subtract paths are combined into a separate shape and produce their own MSDF
 3. The subtract MSDF is inverted (1 - value) so its inside becomes outside
 4. The two are intersected per-channel via `min(add, inverted_sub)`
 

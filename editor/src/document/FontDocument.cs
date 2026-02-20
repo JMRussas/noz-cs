@@ -12,6 +12,7 @@ public class FontDocument : Document
 
     public int FontSize { get; set; } = 48;
     public string Characters { get; set; } = DefaultCharacters;
+    public string Ranges { get; set; } = "";
     public float SdfRange { get; set; } = 4f;
     public int Padding { get; set; } = 1;
     public bool Symbol { get; set; }
@@ -37,15 +38,18 @@ public class FontDocument : Document
         Padding = meta.GetInt("font", "padding", 1);
         Symbol = meta.GetBool("font", "symbol", false);
 
-        var ranges = meta.GetString("font", "ranges", "");
-        if (!string.IsNullOrEmpty(ranges))
-            Characters = MergeCharacterRanges(ranges, Characters);
+        Ranges = meta.GetString("font", "ranges", "");
+        if (!string.IsNullOrEmpty(Ranges))
+            Characters = MergeCharacterRanges(Ranges, Characters);
     }
 
     public override void SaveMetadata(PropertySet meta)
     {
         if (FontSize != 48) meta.SetInt("font", "size", FontSize);
-        if (Characters != DefaultCharacters) meta.SetString("font", "characters", Characters);
+        if (!string.IsNullOrEmpty(Ranges))
+            meta.SetString("font", "ranges", Ranges);
+        else if (Characters != DefaultCharacters)
+            meta.SetString("font", "characters", Characters);
         if (Math.Abs(SdfRange - 4f) > 0.001f) meta.SetFloat("sdf", "range", SdfRange);
         if (Padding != 1) meta.SetInt("font", "padding", Padding);
         if (Symbol) meta.SetBool("font", "symbol", Symbol);

@@ -31,12 +31,25 @@ internal class MsdfBitmap
 internal static class MsdfGenerator
 {
     /// <summary>
-    /// Generate a multi-channel signed distance field using the legacy algorithm.
-    /// This is a direct, faithful port of msdfgen's generateMSDF_legacy.
+    /// Per-contour multi-channel distance result.
+    /// </summary>
+    private struct ContourMSD
+    {
+        public double r, g, b;
+
+        public double Median() => MsdfMath.Median(r, g, b);
+    }
+
+    /// <summary>
+    /// Generate a multi-channel signed distance field with overlap support.
+    /// This ports msdfgen's OverlappingContourCombiner algorithm, which computes
+    /// per-contour distances and uses winding direction to correctly resolve
+    /// which contour "owns" each pixel. This is required for shapes with multiple
+    /// disjoint contours (e.g. the dots on "i" or separate sprite paths).
     ///
     /// scale: pixels per shape unit
     /// translate: shape-space offset to apply before scaling
-    /// range: the distance range in shape units (e.g. Range(-4, 4) means 8 units total)
+    /// range: the distance range in shape units
     /// </summary>
     public static void GenerateMSDF(
         MsdfBitmap output,
@@ -55,55 +68,205 @@ internal static class MsdfGenerator
         int h = output.height;
         bool flipY = shape.inverseYAxis;
 
+        int contourCount = shape.contours.Count;
+
+        // Pre-compute winding direction for each contour
+        var windings = new int[contourCount];
+        for (int i = 0; i < contourCount; ++i)
+            windings[i] = shape.contours[i].Winding();
+
         Parallel.For(0, h, y =>
         {
             int row = flipY ? h - 1 - y : y;
+
+            // Per-contour distance storage (allocated per row for thread safety)
+            var contourDists = new ContourMSD[contourCount];
 
             for (int x = 0; x < w; ++x)
             {
                 var p = new Vector2Double(x + 0.5, y + 0.5) / scale - translate;
 
-                SignedDistance rMinDist = new(), gMinDist = new(), bMinDist = new();
-                EdgeSegment? rNearEdge = null, gNearEdge = null, bNearEdge = null;
-                double rNearParam = 0, gNearParam = 0, bNearParam = 0;
+                // --- Compute per-contour multi-channel distances ---
+                // Also track the global nearest edges (for the "shape" fallback)
+                SignedDistance shapeRMin = new(), shapeGMin = new(), shapeBMin = new();
+                EdgeSegment? shapeREdge = null, shapeGEdge = null, shapeBEdge = null;
+                double shapeRParam = 0, shapeGParam = 0, shapeBParam = 0;
 
-                foreach (var contour in shape.contours)
+                for (int ci = 0; ci < contourCount; ++ci)
                 {
-                    foreach (var edge in contour.edges)
+                    SignedDistance rMin = new(), gMin = new(), bMin = new();
+                    EdgeSegment? rEdge = null, gEdge = null, bEdge = null;
+                    double rParam = 0, gParam = 0, bParam = 0;
+
+                    foreach (var edge in shape.contours[ci].edges)
                     {
                         var distance = edge.GetSignedDistance(p, out double param);
 
-                        if (((int)edge.color & (int)EdgeColor.RED) != 0 && distance < rMinDist)
+                        if (((int)edge.color & (int)EdgeColor.RED) != 0 && distance < rMin)
                         {
-                            rMinDist = distance;
-                            rNearEdge = edge;
-                            rNearParam = param;
+                            rMin = distance;
+                            rEdge = edge;
+                            rParam = param;
                         }
-                        if (((int)edge.color & (int)EdgeColor.GREEN) != 0 && distance < gMinDist)
+                        if (((int)edge.color & (int)EdgeColor.GREEN) != 0 && distance < gMin)
                         {
-                            gMinDist = distance;
-                            gNearEdge = edge;
-                            gNearParam = param;
+                            gMin = distance;
+                            gEdge = edge;
+                            gParam = param;
                         }
-                        if (((int)edge.color & (int)EdgeColor.BLUE) != 0 && distance < bMinDist)
+                        if (((int)edge.color & (int)EdgeColor.BLUE) != 0 && distance < bMin)
                         {
-                            bMinDist = distance;
-                            bNearEdge = edge;
-                            bNearParam = param;
+                            bMin = distance;
+                            bEdge = edge;
+                            bParam = param;
+                        }
+
+                        // Track global shape-level nearest
+                        if (((int)edge.color & (int)EdgeColor.RED) != 0 && distance < shapeRMin)
+                        {
+                            shapeRMin = distance;
+                            shapeREdge = edge;
+                            shapeRParam = param;
+                        }
+                        if (((int)edge.color & (int)EdgeColor.GREEN) != 0 && distance < shapeGMin)
+                        {
+                            shapeGMin = distance;
+                            shapeGEdge = edge;
+                            shapeGParam = param;
+                        }
+                        if (((int)edge.color & (int)EdgeColor.BLUE) != 0 && distance < shapeBMin)
+                        {
+                            shapeBMin = distance;
+                            shapeBEdge = edge;
+                            shapeBParam = param;
+                        }
+                    }
+
+                    // Apply perpendicular distance extension
+                    rEdge?.DistanceToPerpendicularDistance(ref rMin, p, rParam);
+                    gEdge?.DistanceToPerpendicularDistance(ref gMin, p, gParam);
+                    bEdge?.DistanceToPerpendicularDistance(ref bMin, p, bParam);
+
+                    contourDists[ci] = new ContourMSD
+                    {
+                        r = rMin.distance,
+                        g = gMin.distance,
+                        b = bMin.distance
+                    };
+                }
+
+                // Shape-level perpendicular distances (fallback)
+                shapeREdge?.DistanceToPerpendicularDistance(ref shapeRMin, p, shapeRParam);
+                shapeGEdge?.DistanceToPerpendicularDistance(ref shapeGMin, p, shapeGParam);
+                shapeBEdge?.DistanceToPerpendicularDistance(ref shapeBMin, p, shapeBParam);
+
+                var shapeDist = new ContourMSD
+                {
+                    r = shapeRMin.distance,
+                    g = shapeGMin.distance,
+                    b = shapeBMin.distance,
+                };
+
+                // --- OverlappingContourCombiner logic ---
+                // Classify contours into inner (positive winding, point inside)
+                // and outer (negative winding, point outside)
+                var innerDist = new ContourMSD { r = -double.MaxValue, g = -double.MaxValue, b = -double.MaxValue };
+                var outerDist = new ContourMSD { r = -double.MaxValue, g = -double.MaxValue, b = -double.MaxValue };
+
+                for (int ci = 0; ci < contourCount; ++ci)
+                {
+                    double med = contourDists[ci].Median();
+                    if (windings[ci] > 0 && med >= 0)
+                        MergeMSD(ref innerDist, contourDists[ci]);
+                    if (windings[ci] < 0 && med <= 0)
+                        MergeMSD(ref outerDist, contourDists[ci]);
+                }
+
+                double innerMed = innerDist.Median();
+                double outerMed = outerDist.Median();
+                ContourMSD result;
+
+                if (innerMed >= 0 && Math.Abs(innerMed) <= Math.Abs(outerMed))
+                {
+                    result = innerDist;
+                    // Refine: among positive-winding contours, pick the one closest
+                    // to the border but still within the outer boundary
+                    for (int ci = 0; ci < contourCount; ++ci)
+                    {
+                        if (windings[ci] > 0)
+                        {
+                            double cMed = contourDists[ci].Median();
+                            if (Math.Abs(cMed) < Math.Abs(outerMed) && cMed > result.Median())
+                                result = contourDists[ci];
+                        }
+                    }
+                    // Check opposite-winding contours that might be closer
+                    for (int ci = 0; ci < contourCount; ++ci)
+                    {
+                        if (windings[ci] <= 0)
+                        {
+                            double cMed = contourDists[ci].Median();
+                            double rMed = result.Median();
+                            if (cMed * rMed >= 0 && Math.Abs(cMed) < Math.Abs(rMed))
+                                result = contourDists[ci];
                         }
                     }
                 }
+                else if (outerMed <= 0 && Math.Abs(outerMed) < Math.Abs(innerMed))
+                {
+                    result = outerDist;
+                    // Refine: among negative-winding contours, pick the one closest
+                    // to the border but still outside the inner boundary
+                    for (int ci = 0; ci < contourCount; ++ci)
+                    {
+                        if (windings[ci] < 0)
+                        {
+                            double cMed = contourDists[ci].Median();
+                            if (Math.Abs(cMed) < Math.Abs(innerMed) && cMed < result.Median())
+                                result = contourDists[ci];
+                        }
+                    }
+                    // Check opposite-winding contours that might be closer
+                    for (int ci = 0; ci < contourCount; ++ci)
+                    {
+                        if (windings[ci] >= 0)
+                        {
+                            double cMed = contourDists[ci].Median();
+                            double rMed = result.Median();
+                            if (cMed * rMed >= 0 && Math.Abs(cMed) < Math.Abs(rMed))
+                                result = contourDists[ci];
+                        }
+                    }
+                }
+                else
+                {
+                    // Fallback: use the global shape distance (simple combiner behavior)
+                    result = shapeDist;
+                }
 
-                rNearEdge?.DistanceToPerpendicularDistance(ref rMinDist, p, rNearParam);
-                gNearEdge?.DistanceToPerpendicularDistance(ref gMinDist, p, gNearParam);
-                bNearEdge?.DistanceToPerpendicularDistance(ref bMinDist, p, bNearParam);
+                if (result.Median() == shapeDist.Median())
+                    result = shapeDist;
 
                 var pixel = output[x, row];
-                pixel[0] = (float)(distScale * (rMinDist.distance + distTranslate));
-                pixel[1] = (float)(distScale * (gMinDist.distance + distTranslate));
-                pixel[2] = (float)(distScale * (bMinDist.distance + distTranslate));
+                pixel[0] = (float)(distScale * (result.r + distTranslate));
+                pixel[1] = (float)(distScale * (result.g + distTranslate));
+                pixel[2] = (float)(distScale * (result.b + distTranslate));
             }
         });
+    }
+
+    /// <summary>
+    /// Merge multi-channel distance: take the closer (smaller absolute) distance per channel.
+    /// This matches msdfgen's MultiDistanceSelector::merge behavior.
+    /// </summary>
+    private static void MergeMSD(ref ContourMSD target, ContourMSD source)
+    {
+        if (Math.Abs(source.r) < Math.Abs(target.r) || (Math.Abs(source.r) == Math.Abs(target.r) && source.r > target.r))
+            target.r = source.r;
+        if (Math.Abs(source.g) < Math.Abs(target.g) || (Math.Abs(source.g) == Math.Abs(target.g) && source.g > target.g))
+            target.g = source.g;
+        if (Math.Abs(source.b) < Math.Abs(target.b) || (Math.Abs(source.b) == Math.Abs(target.b) && source.b > target.b))
+            target.b = source.b;
     }
 
     /// <summary>
