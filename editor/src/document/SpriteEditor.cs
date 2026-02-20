@@ -19,6 +19,7 @@ public partial class SpriteEditor : DocumentEditor
     [ElementId("OpacityPopup")]
     [ElementId("SubtractButton")]
     [ElementId("AntiAliasButton")]
+    [ElementId("SDFButton")]
     [ElementId("FirstOpacity")]
     [ElementId("PreviewButton")]
     [ElementId("SkeletonOverlayButton")]
@@ -242,6 +243,18 @@ public partial class SpriteEditor : DocumentEditor
             MarkRasterDirty();
             Document.MarkModified();
             Document.IsAntiAliased = !Document.IsAntiAliased;
+        }
+
+        if (EditorUI.Button(
+            ElementId.SDFButton,
+            EditorAssets.Sprites.IconCircle,
+            Document.IsSDF,
+            toolbar: true))
+        {
+            Undo.Record(Document);
+            MarkRasterDirty();
+            Document.MarkModified();
+            Document.IsSDF = !Document.IsSDF;
         }
 
         if (EditorUI.Button(ElementId.TileButton, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))

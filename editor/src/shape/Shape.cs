@@ -1792,7 +1792,7 @@ public sealed unsafe partial class Shape : IDisposable
             _layers[_paths[p].Layer] = true;
     }
 
-    public RectInt GetRasterBoundsFor(byte layer, StringId bone)
+    public RectInt GetRasterBoundsFor(byte layer, StringId bone, byte? fillColor = null)
     {
         var dpi = EditorApplication.Config.PixelsPerUnit;
         var min = new Vector2(float.MaxValue, float.MaxValue);
@@ -1806,6 +1806,8 @@ public sealed unsafe partial class Shape : IDisposable
         {
             ref var path = ref _paths[p];
             if (path.Layer != layer || path.Bone != bone)
+                continue;
+            if (fillColor != null && path.FillColor != fillColor.Value)
                 continue;
 
             hasContent = true;

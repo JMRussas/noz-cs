@@ -135,12 +135,15 @@ public static partial class Graphics
         using (PushState())
         {
             SetTexture(SpriteAtlas);
-            SetShader(_spriteShader!);
+            SetShader(sprite.IsSDF && _spriteSdfShader != null ? _spriteSdfShader : _spriteShader!);
             SetTextureFilter(sprite.TextureFilter);
 
             for (int i = fi.MeshStart; i < fi.MeshStart + fi.MeshCount; i++)
             {
                 ref readonly var mesh = ref sprite.Meshes[i];
+
+                if (sprite.IsSDF)
+                    SetColor(mesh.FillColor);
 
                 // Use per-mesh bounds if available, otherwise fall back to sprite bounds
                 Rect bounds;
@@ -185,12 +188,16 @@ public static partial class Graphics
         using (PushState())
         {
             SetTexture(SpriteAtlas);
-            SetShader(_spriteShader!);
+            SetShader(sprite.IsSDF && _spriteSdfShader != null ? _spriteSdfShader : _spriteShader!);
             SetTextureFilter(sprite.TextureFilter);
 
             for (int i = fi.MeshStart; i < fi.MeshStart + fi.MeshCount; i++)
             {
                 ref readonly var mesh = ref sprite.Meshes[i];
+
+                if (sprite.IsSDF)
+                    SetColor(mesh.FillColor);
+
                 var uv = mesh.UV;
                 var meshBounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
                 var p0 = new Vector2(meshBounds.Left, meshBounds.Top);
@@ -218,12 +225,15 @@ public static partial class Graphics
         using (PushState())
         {
             SetTexture(SpriteAtlas);
-            SetShader(_spriteShader!);
+            SetShader(sprite.IsSDF && _spriteSdfShader != null ? _spriteSdfShader : _spriteShader!);
             SetTextureFilter(sprite.TextureFilter);
 
             for (int i = fi.MeshStart; i < fi.MeshStart + fi.MeshCount; i++)
             {
                 ref readonly var mesh = ref sprite.Meshes[i];
+
+                if (sprite.IsSDF)
+                    SetColor(mesh.FillColor);
 
                 // Use per-mesh bounds if available, otherwise fall back to sprite bounds
                 Rect bounds;
@@ -266,6 +276,10 @@ public static partial class Graphics
         for (int i = fi.MeshStart; i < fi.MeshStart + fi.MeshCount; i++)
         {
             ref readonly var mesh = ref sprite.Meshes[i];
+
+            if (sprite.IsSDF)
+                SetColor(mesh.FillColor);
+
             var uv = mesh.UV;
             var bounds = sprite.Bounds.ToRect().Scale(sprite.PixelsPerUnitInv);
             var p0 = new Vector2(bounds.Left, bounds.Top);

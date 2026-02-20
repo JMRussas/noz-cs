@@ -246,6 +246,7 @@ public class TextureDocument : Document, ISpriteSource
         writer.Write((short)-1);
         writer.Write((ushort)1);
         writer.Write(12.0f);
+        writer.Write((byte)0);  // IsSDF = false (Version 8)
 
         // Mesh
         writer.Write(AtlasUV.Left);

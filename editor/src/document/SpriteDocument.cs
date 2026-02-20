@@ -64,17 +64,23 @@ public class SpriteDocument : Document, ISpriteSource
 
     /// <summary>
     /// Represents a mesh slot - a run of paths with the same layer and bone.
+    /// When IsSDF, also splits on fill color boundaries.
     /// </summary>
-    public sealed class MeshSlot(byte layer, StringId bone)
+    public sealed class MeshSlot(byte layer, StringId bone, byte fillColor = 0)
     {
         public readonly byte Layer = layer;
         public readonly StringId Bone = bone;
+        public readonly byte FillColor = fillColor;
         public readonly List<ushort> PathIndices = new();
     }
 
     private BitMask256 _layers = new();
     private readonly List<Rect> _atlasUV = new();
     private Sprite? _sprite;
+    private static Shader? _textureSdfShader;
+
+    private static Shader GetTextureSdfShader() =>
+        _textureSdfShader ??= Asset.Get<Shader>(AssetType.Shader, "texture_sdf");
 
     public readonly SpriteFrame[] Frames = new SpriteFrame[Sprite.MaxFrames];
     public ushort FrameCount;
@@ -89,6 +95,8 @@ public class SpriteDocument : Document, ISpriteSource
     public float CurrentStrokeOpacity = 0.0f;
     public byte CurrentLayer = 0;
     public StringId CurrentBone;
+
+    public bool IsSDF { get; set; }
 
     public ref readonly BitMask256 Layers => ref _layers;
 
@@ -115,17 +123,18 @@ public class SpriteDocument : Document, ISpriteSource
             return a.CompareTo(b);
         });
 
-        // Build runs - new slot whenever layer or bone changes
+        // Build runs - new slot whenever layer, bone, or (when SDF) fill color changes
         MeshSlot? currentSlot = null;
 
         foreach (var pathIndex in sortedPaths)
         {
             ref readonly var path = ref shape.GetPath(pathIndex);
 
-            if (currentSlot == null || path.Layer != currentSlot.Layer || path.Bone != currentSlot.Bone)
+            if (currentSlot == null || path.Layer != currentSlot.Layer || path.Bone != currentSlot.Bone
+                || (IsSDF && path.FillColor != currentSlot.FillColor))
             {
                 // Start new slot
-                currentSlot = new MeshSlot(path.Layer, path.Bone);
+                currentSlot = new MeshSlot(path.Layer, path.Bone, path.FillColor);
                 slots.Add(currentSlot);
             }
 
@@ -157,7 +166,7 @@ public class SpriteDocument : Document, ISpriteSource
             for (ushort fi = 0; fi < FrameCount; fi++)
             {
                 var shape = Frames[fi].Shape;
-                var slotBounds = shape.GetRasterBoundsFor(slot.Layer, slot.Bone);
+                var slotBounds = shape.GetRasterBoundsFor(slot.Layer, slot.Bone, IsSDF ? slot.FillColor : null);
                 if (slotBounds.Width <= 0 || slotBounds.Height <= 0)
                     continue;
                 bounds = bounds.Width <= 0 ? slotBounds : RectInt.Union(bounds, slotBounds);
@@ -166,14 +175,14 @@ public class SpriteDocument : Document, ISpriteSource
         }
         return result;
     }
-    
+
     public List<RectInt> GetMeshSlotBounds(ushort frameIndex)
     {
         var slots = GetMeshSlots(frameIndex);
         var result = new List<RectInt>(slots.Count);
         var shape = Frames[frameIndex].Shape;
         foreach (var slot in slots)
-            result.Add(shape.GetRasterBoundsFor(slot.Layer, slot.Bone));
+            result.Add(shape.GetRasterBoundsFor(slot.Layer, slot.Bone, IsSDF ? slot.FillColor : null));
         return result;
     }
 
@@ -388,6 +397,10 @@ public class SpriteDocument : Document, ISpriteSource
             {
                 IsAntiAliased = tk.ExpectBool();
             }
+            else if (tk.ExpectIdentifier("sdf"))
+            {
+                IsSDF = tk.ExpectBool();
+            }
             else
             {
                 tk.ExpectToken(out var badToken);
@@ -567,6 +580,7 @@ public class SpriteDocument : Document, ISpriteSource
             writer.WriteLine($"skeleton \"{Binding.SkeletonName}\"");
 
         writer.WriteLine($"antialias {(IsAntiAliased ? "true" : "false")}");
+        writer.WriteLine($"sdf {(IsSDF ? "true" : "false")}");
 
         if (PaletteManager.TryGetPaletteByRow(Palette, out var paletteDef))
             writer.WriteLine($"palette \"{paletteDef.Id}\"");
@@ -654,7 +668,7 @@ public class SpriteDocument : Document, ISpriteSource
         using (Graphics.PushState())
         {
             Graphics.SetTexture(Atlas.Texture);
-            Graphics.SetShader(EditorAssets.Shaders.Texture);
+            Graphics.SetShader(IsSDF ? GetTextureSdfShader() : EditorAssets.Shaders.Texture);
             Graphics.SetColor(Color.White.WithAlpha(alpha * Workspace.XrayAlpha));
             Graphics.SetTextureFilter(sprite.TextureFilter);
 
@@ -662,6 +676,9 @@ public class SpriteDocument : Document, ISpriteSource
             for (int i = fi.MeshStart; i < fi.MeshStart + fi.MeshCount; i++)
             {
                 ref readonly var mesh = ref sprite.Meshes[i];
+
+                if (IsSDF)
+                    Graphics.SetColor(mesh.FillColor.WithAlpha(mesh.FillColor.A * alpha * Workspace.XrayAlpha));
 
                 // Use per-mesh bounds if available, otherwise fall back to sprite bounds
                 Rect bounds;
@@ -693,7 +710,7 @@ public class SpriteDocument : Document, ISpriteSource
         using (Graphics.PushState())
         {
             Graphics.SetTexture(Atlas.Texture);
-            Graphics.SetShader(EditorAssets.Shaders.Texture);
+            Graphics.SetShader(IsSDF ? GetTextureSdfShader() : EditorAssets.Shaders.Texture);
             Graphics.SetColor(tint ?? Color.White);
             Graphics.SetTextureFilter(sprite.TextureFilter);
 
@@ -717,6 +734,9 @@ public class SpriteDocument : Document, ISpriteSource
                     bounds = RasterBounds.ToRect().Scale(Graphics.PixelsPerUnitInv);
                 }
 
+                if (IsSDF)
+                    Graphics.SetColor(mesh.FillColor);
+
                 var boneIndex = mesh.BoneIndex >= 0 ? mesh.BoneIndex : 0;
                 var transform = bindPose[boneIndex] * animatedPose[boneIndex] * baseTransform;
                 Graphics.SetTransform(transform);
@@ -739,6 +759,7 @@ public class SpriteDocument : Document, ISpriteSource
         CurrentStrokeOpacity = src.CurrentStrokeOpacity;
         CurrentLayer = src.CurrentLayer;
         CurrentBone = src.CurrentBone;
+        IsSDF = src.IsSDF;
 
         Binding.CopyFrom(src.Binding);
 
@@ -848,22 +869,39 @@ public class SpriteDocument : Document, ISpriteSource
 
             if (slot.PathIndices.Count > 0)
             {
-                frame.Shape.Rasterize(
-                    image,
-                    rasterRect,
-                    -slotRasterBounds.Position,
-                    palette.Colors,
-                    CollectionsMarshal.AsSpan(slot.PathIndices),
-                    IsAntiAliased);
+                if (IsSDF)
+                {
+                    // Rasterize SDF into the full outer rect (including padding)
+                    // so the distance field extends naturally into the padding area
+                    frame.Shape.RasterizeSDF(
+                        image,
+                        outerRect,
+                        -slotRasterBounds.Position + new Vector2Int(padding, padding),
+                        CollectionsMarshal.AsSpan(slot.PathIndices));
+                }
+                else
+                {
+                    frame.Shape.Rasterize(
+                        image,
+                        rasterRect,
+                        -slotRasterBounds.Position,
+                        palette.Colors,
+                        CollectionsMarshal.AsSpan(slot.PathIndices),
+                        IsAntiAliased);
+                }
             }
 
-            image.BleedColors(rasterRect);
-            for (int p = padding - 1; p >= 0; p--)
+            if (!IsSDF)
             {
-                var padRect = new RectInt(
-                    outerRect.Position + new Vector2Int(p, p),
-                    outerRect.Size - new Vector2Int(p * 2, p * 2));
-                image.ExtrudeEdges(padRect);
+                image.BleedColors(rasterRect);
+
+                for (int p = padding - 1; p >= 0; p--)
+                {
+                    var padRect = new RectInt(
+                        outerRect.Position + new Vector2Int(p, p),
+                        outerRect.Size - new Vector2Int(p * 2, p * 2));
+                    image.ExtrudeEdges(padRect);
+                }
             }
 
             xOffset += slotWidth;
@@ -961,12 +999,26 @@ public class SpriteDocument : Document, ISpriteSource
                 if (Binding.IsBound && Binding.Skeleton != null)
                     boneIndex = slot.Bone.IsNone ? (short)0 : (short)Binding.Skeleton.FindBoneIndex(slot.Bone.ToString());
 
+                var fillColor = Color.White;
+                if (IsSDF)
+                {
+                    var palette = PaletteManager.GetPalette(Palette);
+                    if (palette != null)
+                    {
+                        var c = palette.Colors[slot.FillColor % palette.Colors.Length];
+                        // Find the fill opacity from the first path in this slot
+                        var firstPath = Frames[frameIndex].Shape.GetPath(slot.PathIndices[0]);
+                        fillColor = c.WithAlpha(firstPath.FillOpacity);
+                    }
+                }
+
                 allMeshes.Add(new SpriteMesh(
                     uv,
                     (short)slot.Layer,
                     boneIndex,
                     bounds.Position,
-                    bounds.Size));
+                    bounds.Size,
+                    fillColor));
             }
 
             frameTable[frameIndex] = new SpriteFrameInfo(meshStart, (ushort)frameSlots.Count);
@@ -976,11 +1028,12 @@ public class SpriteDocument : Document, ISpriteSource
             name: Name,
             bounds: RasterBounds,
             pixelsPerUnit: EditorApplication.Config.PixelsPerUnit,
-            filter: TextureFilter.Point,
+            filter: IsSDF ? TextureFilter.Linear : TextureFilter.Point,
             boneIndex: -1,
             meshes: allMeshes.ToArray(),
             frameTable: frameTable,
-            frameRate: 12.0f);
+            frameRate: 12.0f,
+            isSDF: IsSDF);
     }
 
     internal void MarkSpriteDirty()
@@ -1012,6 +1065,7 @@ public class SpriteDocument : Document, ISpriteSource
         writer.Write((short)-1);  // Legacy bone index field (no longer used)
         writer.Write(totalMeshes);
         writer.Write(12.0f);  // Frame rate
+        writer.Write((byte)(IsSDF ? 1 : 0));  // SDF flag (Version 8)
 
         // Write all meshes per frame
         int uvIndex = 0;
@@ -1047,6 +1101,28 @@ public class SpriteDocument : Document, ISpriteSource
                 writer.Write((short)bounds.Y);
                 writer.Write((short)bounds.Width);
                 writer.Write((short)bounds.Height);
+
+                if (IsSDF)
+                {
+                    var palette = PaletteManager.GetPalette(Palette);
+                    if (palette != null)
+                    {
+                        var c = palette.Colors[slot.FillColor % palette.Colors.Length].ToColor32();
+                        var firstPath = Frames[frameIndex].Shape.GetPath(slot.PathIndices[0]);
+                        var alpha = (byte)(MathEx.Clamp01(firstPath.FillOpacity) * 255);
+                        writer.Write(c.R);
+                        writer.Write(c.G);
+                        writer.Write(c.B);
+                        writer.Write(alpha);
+                    }
+                    else
+                    {
+                        writer.Write((byte)255);
+                        writer.Write((byte)255);
+                        writer.Write((byte)255);
+                        writer.Write((byte)255);
+                    }
+                }
             }
 
             meshOffset += (ushort)frameSlots.Count;
