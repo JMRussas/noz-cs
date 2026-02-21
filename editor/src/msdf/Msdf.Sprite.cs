@@ -62,7 +62,7 @@ internal static class MsdfSprite
         }
 
         shape.Normalize();
-        shape.OrientContours();
+        // No OrientContours — the OverlappingContourCombiner uses natural windings.
         EdgeColoring.ColorSimple(shape, 3.0);
 
         return shape;

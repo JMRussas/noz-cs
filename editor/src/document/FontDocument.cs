@@ -286,7 +286,7 @@ public class FontDocument : Document
 
             var translate = new Vector2Double(
                 -glyph.Ttf.bearing.x + (SdfRange + centerX) / s,
-                glyph.Ttf.bearing.y + (SdfRange + centerY) / s
+                -glyph.Ttf.bearing.y + glyph.Ttf.size.y + (SdfRange + centerY) / s
             );
 
             Msdf.MsdfFont.RenderGlyph(
@@ -514,7 +514,13 @@ public class FontDocument : Document
         {
             Graphics.SetLayer(EditorLayer.Document);
             Graphics.SetColor(Color.White);
+#if false
+            Graphics.SetShader(EditorAssets.Shaders.Texture);
+            Graphics.SetTexture(_font.AtlasTexture);
+            Graphics.Draw(Bounds);
+#else
             TextRender.DrawAtlas(_font, Bounds);
+#endif
         }
     }
 }
