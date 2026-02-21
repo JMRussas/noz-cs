@@ -597,13 +597,14 @@ internal static class MsdfGenerator
 
         Span<double> ix = stackalloc double[3];
         Span<int> idy = stackalloc int[3];
+        var intersections = new List<(double x, int direction)>(totalEdges);
 
         for (int y = 0; y < h; ++y)
         {
             int row = flipY ? h - 1 - y : y;
             double shapeY = (y + 0.5) / scale.y - translate.y;
 
-            var intersections = new List<(double x, int direction)>();
+            intersections.Clear();
             for (int e = 0; e < totalEdges; ++e)
             {
                 int n = allEdges[e].ScanlineIntersections(ix, idy, shapeY);
@@ -623,14 +624,19 @@ internal static class MsdfGenerator
             {
                 double shapeX = (x + 0.5) / scale.x - translate.x;
 
+                // Binary search for winding at this X position
                 int winding = 0;
-                for (int j = intersections.Count - 1; j >= 0; --j)
+                int lo = 0, hi = intersections.Count - 1;
+                while (lo <= hi)
                 {
-                    if (intersections[j].x <= shapeX)
+                    int mid = (lo + hi) >> 1;
+                    if (intersections[mid].x <= shapeX)
                     {
-                        winding = intersections[j].direction;
-                        break;
+                        winding = intersections[mid].direction;
+                        lo = mid + 1;
                     }
+                    else
+                        hi = mid - 1;
                 }
                 bool fill = winding != 0;
 
@@ -825,9 +831,10 @@ internal static class MsdfGenerator
         float dRadius = (float)(PROTECTION_RADIUS_TOLERANCE * Math.Sqrt(1.0 / (rangeValue * rangeValue * scale.x * scale.x) + 1.0 / (rangeValue * rangeValue * scale.y * scale.y)));
 
         // All writes are |= STENCIL_PROTECTED (same bit), safe to parallelize by rows.
-        // Horizontal texel pairs
+        // Combined pass: horizontal, vertical, and diagonal texel pairs in one Parallel.For.
         Parallel.For(0, h, y =>
         {
+            // Horizontal texel pairs
             for (int x = 0; x < w - 1; x++)
             {
                 var left = sdf[x, y];
@@ -841,48 +848,45 @@ internal static class MsdfGenerator
                     ProtectExtremeChannels(stencil, y * w + x + 1, right, rm, mask);
                 }
             }
-        });
-        // Vertical texel pairs — writes to row y and y+1, but all OR same bit
-        Parallel.For(0, h - 1, y =>
-        {
-            for (int x = 0; x < w; x++)
+
+            // Vertical and diagonal texel pairs (uses row y and y+1)
+            if (y < h - 1)
             {
-                var bottom = sdf[x, y];
-                var top = sdf[x, y + 1];
-                float bm = MathF.Max(MathF.Min(bottom[0], bottom[1]), MathF.Min(MathF.Max(bottom[0], bottom[1]), bottom[2]));
-                float tm = MathF.Max(MathF.Min(top[0], top[1]), MathF.Min(MathF.Max(top[0], top[1]), top[2]));
-                if (MathF.Abs(bm - 0.5f) + MathF.Abs(tm - 0.5f) < vRadius)
+                for (int x = 0; x < w; x++)
                 {
-                    int mask = EdgeBetweenTexels(bottom, top);
-                    ProtectExtremeChannels(stencil, y * w + x, bottom, bm, mask);
-                    ProtectExtremeChannels(stencil, (y + 1) * w + x, top, tm, mask);
-                }
-            }
-        });
-        // Diagonal texel pairs — writes across 2 rows, all OR same bit
-        Parallel.For(0, h - 1, y =>
-        {
-            for (int x = 0; x < w - 1; x++)
-            {
-                var lb = sdf[x, y];
-                var rb = sdf[x + 1, y];
-                var lt = sdf[x, y + 1];
-                var rt = sdf[x + 1, y + 1];
-                float mlb = MathF.Max(MathF.Min(lb[0], lb[1]), MathF.Min(MathF.Max(lb[0], lb[1]), lb[2]));
-                float mrb = MathF.Max(MathF.Min(rb[0], rb[1]), MathF.Min(MathF.Max(rb[0], rb[1]), rb[2]));
-                float mlt = MathF.Max(MathF.Min(lt[0], lt[1]), MathF.Min(MathF.Max(lt[0], lt[1]), lt[2]));
-                float mrt = MathF.Max(MathF.Min(rt[0], rt[1]), MathF.Min(MathF.Max(rt[0], rt[1]), rt[2]));
-                if (MathF.Abs(mlb - 0.5f) + MathF.Abs(mrt - 0.5f) < dRadius)
-                {
-                    int mask = EdgeBetweenTexels(lb, rt);
-                    ProtectExtremeChannels(stencil, y * w + x, lb, mlb, mask);
-                    ProtectExtremeChannels(stencil, (y + 1) * w + x + 1, rt, mrt, mask);
-                }
-                if (MathF.Abs(mrb - 0.5f) + MathF.Abs(mlt - 0.5f) < dRadius)
-                {
-                    int mask = EdgeBetweenTexels(rb, lt);
-                    ProtectExtremeChannels(stencil, y * w + x + 1, rb, mrb, mask);
-                    ProtectExtremeChannels(stencil, (y + 1) * w + x, lt, mlt, mask);
+                    var bottom = sdf[x, y];
+                    var top = sdf[x, y + 1];
+                    float bm = MathF.Max(MathF.Min(bottom[0], bottom[1]), MathF.Min(MathF.Max(bottom[0], bottom[1]), bottom[2]));
+                    float tm = MathF.Max(MathF.Min(top[0], top[1]), MathF.Min(MathF.Max(top[0], top[1]), top[2]));
+                    if (MathF.Abs(bm - 0.5f) + MathF.Abs(tm - 0.5f) < vRadius)
+                    {
+                        int mask = EdgeBetweenTexels(bottom, top);
+                        ProtectExtremeChannels(stencil, y * w + x, bottom, bm, mask);
+                        ProtectExtremeChannels(stencil, (y + 1) * w + x, top, tm, mask);
+                    }
+
+                    // Diagonal (only for x < w-1)
+                    if (x < w - 1)
+                    {
+                        var rb = sdf[x + 1, y];
+                        var rt = sdf[x + 1, y + 1];
+                        float mlb = bm; // reuse from vertical check above
+                        float mrb = MathF.Max(MathF.Min(rb[0], rb[1]), MathF.Min(MathF.Max(rb[0], rb[1]), rb[2]));
+                        float mlt = tm; // reuse from vertical check above
+                        float mrt = MathF.Max(MathF.Min(rt[0], rt[1]), MathF.Min(MathF.Max(rt[0], rt[1]), rt[2]));
+                        if (MathF.Abs(mlb - 0.5f) + MathF.Abs(mrt - 0.5f) < dRadius)
+                        {
+                            int mask = EdgeBetweenTexels(bottom, rt);
+                            ProtectExtremeChannels(stencil, y * w + x, bottom, mlb, mask);
+                            ProtectExtremeChannels(stencil, (y + 1) * w + x + 1, rt, mrt, mask);
+                        }
+                        if (MathF.Abs(mrb - 0.5f) + MathF.Abs(mlt - 0.5f) < dRadius)
+                        {
+                            int mask = EdgeBetweenTexels(rb, top);
+                            ProtectExtremeChannels(stencil, y * w + x + 1, rb, mrb, mask);
+                            ProtectExtremeChannels(stencil, (y + 1) * w + x, top, mlt, mask);
+                        }
+                    }
                 }
             }
         });

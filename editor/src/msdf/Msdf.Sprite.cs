@@ -9,76 +9,57 @@ namespace NoZ.Editor.Msdf;
 
 internal static class MsdfSprite
 {
-    // Convert NoZ sprite paths into an msdf Shape ready for generation.
-    public static Shape FromSpritePaths(
+    // Append a single sprite path as a contour to an existing shape.
+    // Raw conversion only — no Clipper2 union, no normalize, no edge coloring.
+    // Winding is normalized to positive for NonZero fill rule.
+    private static void AppendContour(
+        Shape shape,
         NoZ.Editor.Shape spriteShape,
-        ReadOnlySpan<ushort> pathIndices)
+        ushort pathIndex)
     {
-        var shape = new Shape();
+        if (pathIndex >= spriteShape.PathCount) return;
+        ref readonly var path = ref spriteShape.GetPath(pathIndex);
+        if (path.AnchorCount < 3) return;
 
-        foreach (var pathIndex in pathIndices)
+        var contour = shape.AddContour();
+
+        for (ushort a = 0; a < path.AnchorCount; a++)
         {
-            if (pathIndex >= spriteShape.PathCount) continue;
-            ref readonly var path = ref spriteShape.GetPath(pathIndex);
-            if (path.AnchorCount < 3) continue;
+            var a0Idx = (ushort)(path.AnchorStart + a);
+            var a1Idx = (ushort)(path.AnchorStart + ((a + 1) % path.AnchorCount));
 
-            var contour = shape.AddContour();
+            ref readonly var anchor0 = ref spriteShape.GetAnchor(a0Idx);
+            ref readonly var anchor1 = ref spriteShape.GetAnchor(a1Idx);
 
-            for (ushort a = 0; a < path.AnchorCount; a++)
+            var p0 = new Vector2Double(anchor0.Position.X, anchor0.Position.Y);
+            var p1 = new Vector2Double(anchor1.Position.X, anchor1.Position.Y);
+
+            if (Math.Abs(anchor0.Curve) < 0.0001)
             {
-                var a0Idx = (ushort)(path.AnchorStart + a);
-                var a1Idx = (ushort)(path.AnchorStart + ((a + 1) % path.AnchorCount));
-
-                ref readonly var anchor0 = ref spriteShape.GetAnchor(a0Idx);
-                ref readonly var anchor1 = ref spriteShape.GetAnchor(a1Idx);
-
-                var p0 = new Vector2Double(anchor0.Position.X, anchor0.Position.Y);
-                var p1 = new Vector2Double(anchor1.Position.X, anchor1.Position.Y);
-
-                if (Math.Abs(anchor0.Curve) < 0.0001)
-                {
-                    contour.AddEdge(new LinearSegment(p0, p1));
-                }
+                contour.AddEdge(new LinearSegment(p0, p1));
+            }
+            else
+            {
+                // cp = midpoint(p0,p1) + perpendicular * curve
+                var mid = new Vector2Double(
+                    0.5 * (p0.x + p1.x),
+                    0.5 * (p0.y + p1.y));
+                var dir = p1 - p0;
+                double perpMag = MsdfMath.Length(dir);
+                Vector2Double perp;
+                if (perpMag > 1e-10)
+                    perp = new Vector2Double(-dir.y / perpMag, dir.x / perpMag);
                 else
-                {
-                    // cp = midpoint(p0,p1) + perpendicular * curve
-                    var mid = new Vector2Double(
-                        0.5 * (p0.x + p1.x),
-                        0.5 * (p0.y + p1.y));
-                    var dir = p1 - p0;
-                    double perpMag = MsdfMath.Length(dir);
-                    Vector2Double perp;
-                    if (perpMag > 1e-10)
-                        perp = new Vector2Double(-dir.y / perpMag, dir.x / perpMag);
-                    else
-                        perp = new Vector2Double(0, 1);
-                    var cp = mid + perp * anchor0.Curve;
-                    contour.AddEdge(new QuadraticSegment(p0, cp, p1));
-                }
+                    perp = new Vector2Double(0, 1);
+                var cp = mid + perp * anchor0.Curve;
+                contour.AddEdge(new QuadraticSegment(p0, cp, p1));
             }
         }
 
-        // Normalize all contour windings to the same direction before union.
-        // Fresh sprite paths may have inconsistent windings depending on how
-        // they were drawn. NonZero fill rule treats opposite-wound overlapping
-        // contours as cancelling (winding=0) instead of merging.
-        // NOTE: This must NOT be done in ShapeClipper.Union itself because
-        // post-Difference shapes have intentional holes with opposite winding.
-        foreach (var contour in shape.contours)
-        {
-            if (contour.Winding() < 0)
-                contour.Reverse();
-        }
-
-        var sw = Stopwatch.StartNew();
-        shape = ShapeClipper.Union(shape);
-        var unionMs = sw.ElapsedMilliseconds;
-
-        shape.Normalize();
-        EdgeColoring.ColorSimple(shape, 3.0);
-        Log.Info($"[SDF Sprite] FromSpritePaths: {pathIndices.Length} paths, union {unionMs}ms, normalize+color {sw.ElapsedMilliseconds - unionMs}ms");
-
-        return shape;
+        // Normalize winding to positive for NonZero fill rule.
+        // Must be done before any Clipper2 operation.
+        if (contour.Winding() < 0)
+            contour.Reverse();
     }
 
     // Rasterize MSDF for sprite paths. Paths are processed in draw order so that
@@ -96,15 +77,10 @@ internal static class MsdfSprite
         var totalSw = Stopwatch.StartNew();
         var dpi = EditorApplication.Config.PixelsPerUnit;
 
-        // Walk paths in draw order. Collect consecutive add paths, flush them
-        // into the shape when a subtract is encountered, apply the subtract,
-        // then continue. Add paths after a subtract are unioned onto the
-        // already-subtracted shape.
-        Shape? shape = null;
-        var pendingAdds = new System.Collections.Generic.List<ushort>();
-        long shapeMs = 0, diffMs = 0;
-
-        var sw = Stopwatch.StartNew();
+        // Walk paths in draw order. Add paths accumulate raw contours.
+        // Subtract paths trigger a Clipper2 Difference on the accumulated shape.
+        // Clipper2 handles overlapping add contours internally via NonZero fill rule.
+        var shape = new Shape();
 
         foreach (var pi in pathIndices)
         {
@@ -114,40 +90,29 @@ internal static class MsdfSprite
 
             if (path.IsSubtract)
             {
-                // Flush pending adds before applying subtract
-                if (pendingAdds.Count > 0)
+                if (shape.contours.Count > 0)
                 {
-                    shape = FlushAdds(spriteShape, shape, pendingAdds);
-                    pendingAdds.Clear();
-                }
-                shapeMs = sw.ElapsedMilliseconds;
-
-                // Apply subtract to accumulated shape
-                if (shape != null)
-                {
-                    sw.Restart();
-                    var subShape = FromSpritePaths(spriteShape, new ushort[] { pi });
+                    var subShape = new Shape();
+                    AppendContour(subShape, spriteShape, pi);
                     shape = ShapeClipper.Difference(shape, subShape);
-                    shape.Normalize();
-                    EdgeColoring.ColorSimple(shape, 3.0);
-                    diffMs += sw.ElapsedMilliseconds;
                 }
             }
             else
             {
-                pendingAdds.Add(pi);
+                AppendContour(shape, spriteShape, pi);
             }
         }
 
-        // Flush remaining adds
-        if (pendingAdds.Count > 0)
-        {
-            shape = FlushAdds(spriteShape, shape, pendingAdds);
-            pendingAdds.Clear();
-        }
-        if (shapeMs == 0) shapeMs = sw.ElapsedMilliseconds;
+        var shapeMs = totalSw.ElapsedMilliseconds;
 
-        if (shape == null) return;
+        if (shape.contours.Count == 0) return;
+
+        // Final cleanup: union resolves any remaining overlaps, then prepare for generation
+        var sw = Stopwatch.StartNew();
+        shape = ShapeClipper.Union(shape);
+        shape.Normalize();
+        EdgeColoring.ColorSimple(shape, 3.0);
+        var prepMs = sw.ElapsedMilliseconds;
 
         var scale = new Vector2Double(dpi, dpi);
         var translate = new Vector2Double(
@@ -192,25 +157,6 @@ internal static class MsdfSprite
         var contourCount = shape.contours.Count;
         var edgeCount = 0;
         foreach (var c in shape.contours) edgeCount += c.edges.Count;
-        Log.Info($"[SDF Sprite] {w}x{h} px, {pathIndices.Length} paths, {contourCount} contours, {edgeCount} edges | shape {shapeMs}ms, diff {diffMs}ms, generate {genMs}ms, signCorr {signMs}ms, errCorr {errMs}ms, copy {copyMs}ms, total {totalSw.ElapsedMilliseconds}ms");
-    }
-
-    // Union pending add paths into the accumulated shape.
-    private static Shape FlushAdds(
-        NoZ.Editor.Shape spriteShape,
-        Shape? existing,
-        System.Collections.Generic.List<ushort> addPaths)
-    {
-        var addShape = FromSpritePaths(spriteShape, addPaths.ToArray());
-        if (existing == null)
-            return addShape;
-
-        // Merge new contours into existing shape and re-union
-        foreach (var c in addShape.contours)
-            existing.AddContour(c);
-        existing = ShapeClipper.Union(existing);
-        existing.Normalize();
-        EdgeColoring.ColorSimple(existing, 3.0);
-        return existing;
+        Log.Info($"[SDF Sprite] {w}x{h} px, {pathIndices.Length} paths, {contourCount} contours, {edgeCount} edges | shape {shapeMs}ms, prep {prepMs}ms, generate {genMs}ms, signCorr {signMs}ms, errCorr {errMs}ms, copy {copyMs}ms, total {totalSw.ElapsedMilliseconds}ms");
     }
 }
