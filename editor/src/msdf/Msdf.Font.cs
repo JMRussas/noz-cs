@@ -155,7 +155,12 @@ internal static class MsdfFont
 
         // Create a sub-bitmap view for the glyph region
         var glyphBitmap = new MsdfBitmap(outputSize.X, outputSize.Y);
-        MsdfGenerator.GenerateMSDF(glyphBitmap, shape, range * 2.0, scale, translate);
+        MsdfGenerator.GenerateMSDFSimple(glyphBitmap, shape, range * 2.0, scale, translate);
+
+        // Scanline sign correction: fixes distance sign for overlapping contours
+        // where the simple combiner gets the sign wrong. OrientContours ensures
+        // correct winding for non-overlapping regions; this pass fixes the rest.
+        MsdfGenerator.DistanceSignCorrection(glyphBitmap, shape, scale, translate);
 
         // Error correction: fix interpolation artifacts at contour boundaries by converting
         // clashing texels to single-channel (median). This matches msdfgen's behavior where

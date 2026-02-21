@@ -21,7 +21,7 @@ MSDF solves this by encoding distance across three channels (R, G, B). Each edge
 | `Msdf.Contour.cs` | Closed edge loop with shoelace winding calculation |
 | `Msdf.Shape.cs` | Contour collection with validate, normalize, orient contours |
 | `Msdf.EdgeColoring.cs` | `EdgeColoring.ColorSimple` — assigns R/G/B to edges at sharp corners |
-| `Msdf.Generator.cs` | `GenerateMSDF` (OverlappingContourCombiner), `GenerateMSDFSimple`, and `ErrorCorrection` |
+| `Msdf.Generator.cs` | `PerpendicularDistanceSelectorBase`, `MultiDistanceSelector`, `GenerateMSDF` (OverlappingContourCombiner), `GenerateMSDFSimple`, `DistanceSignCorrection`, and `ErrorCorrection` |
 | `Msdf.Sprite.cs` | Bridge: converts NoZ sprite paths to msdf shapes and runs generation |
 | `Msdf.Font.cs` | Bridge: converts TTF glyph contours to msdf shapes and runs generation |
 
@@ -36,30 +36,37 @@ MSDF solves this by encoding distance across three channels (R, G, B). Each edge
 ### 2. Shape Preparation
 
 - **Normalize** (`Shape.Normalize`): Single-edge contours are split into thirds so edge coloring has enough edges to assign distinct colors.
-- **Orient contours** (`Shape.OrientContours`): Ensures all outer contours have consistent winding direction using scanline intersection analysis. Critical for multi-contour shapes — without it, paths with opposite winding would be treated as holes by the OverlappingContourCombiner.
+- **Orient contours** (`Shape.OrientContours`): Ensures all outer contours have consistent winding direction using scanline intersection analysis. Used for fonts; sprites may or may not need it depending on path construction.
 - **Edge coloring** (`EdgeColoring.ColorSimple`): Edges are assigned R/G/B channel colors. At sharp corners (where `dot(dir_a, dir_b) <= 0` or `|cross(dir_a, dir_b)| > sin(3.0)`), adjacent edges get different colors.
 
-### 3. MSDF Generation (`MsdfGenerator.GenerateMSDF`)
+### 3. MSDF Generation
 
-Uses the **OverlappingContourCombiner** algorithm (matching msdfgen's default behavior). For each pixel:
+Two generators are available:
 
-1. Per-contour distances are computed for each color channel (R, G, B)
-2. A global shape-level distance is tracked as a fallback
-3. Contours are pre-classified by winding direction (positive = outer, negative = hole)
-4. The combiner classifies each pixel as inner or outer based on which contours contain it
-5. The winning contour's complete RGB triplet is used, preserving multi-channel edge coloring
+- **`GenerateMSDFSimple`**: Simple nearest-edge-per-channel approach. Iterates all edges across all contours and picks the closest per channel. Suitable when contour winding is correct (after `OrientContours`). Used for **fonts**.
 
-Both sprites and fonts use `GenerateMSDF` (the OverlappingContourCombiner version).
+- **`GenerateMSDF`**: Uses the **OverlappingContourCombiner** algorithm. Computes per-contour distances separately, then classifies contours as inner/outer based on winding direction and resolves which contour "owns" each pixel. Used for **sprites**.
 
-### 4. Error Correction (`MsdfGenerator.ErrorCorrection`)
+Both generators use the full `PerpendicularDistanceSelectorBase` / `MultiDistanceSelector` system ported from msdfgen, which tracks three distances per channel:
+- `minTrueDistance` — the closest edge by signed distance
+- `minNegativePerpendicularDistance` — closest negative perpendicular from any edge endpoint
+- `minPositivePerpendicularDistance` — closest positive perpendicular from any edge endpoint
 
-**Fonts only.** After MSDF generation, a legacy error correction pass detects "clashing" texels where bilinear interpolation between adjacent pixels would produce incorrect median values. These texels are converted to single-channel (all RGB set to median), which eliminates interpolation artifacts at the cost of losing sharp corners at those specific texels.
+Edge iteration uses prev/next edge context for perpendicular extension at edge junctions (bisector directions).
 
-This matches msdfgen's behavior where `msdfErrorCorrection` is always called after `generateMSDF`.
+### 4. Scanline Sign Correction (`MsdfGenerator.DistanceSignCorrection`)
 
-Sprites do not currently use error correction.
+**Fonts only.** After MSDF generation, a scanline-based sign correction pass fixes distance signs for overlapping contours. For each pixel, scanline intersection determines the correct fill state (non-zero winding rule). If the MSDF median disagrees with the fill state, all three channels are flipped (`1.0 - value`). An ambiguity resolution pass uses neighbor voting for pixels exactly at the 0.5 boundary.
 
-### 5. Subtract Path Handling (Sprites Only)
+This matches msdfgen's `distanceSignCorrection` / `multiDistanceSignCorrection` in `rasterization.cpp`.
+
+### 5. Error Correction (`MsdfGenerator.ErrorCorrection`)
+
+**Fonts only.** After sign correction, a legacy error correction pass detects "clashing" texels where bilinear interpolation between adjacent pixels would produce incorrect median values. These texels are converted to single-channel (all RGB set to median), which eliminates interpolation artifacts at the cost of losing sharp corners at those specific texels.
+
+Sprites do not currently use error correction or sign correction.
+
+### 6. Subtract Path Handling (Sprites Only)
 
 Subtract paths are handled by generating a separate MSDF and compositing:
 1. Additive paths produce an MSDF where inside > 0.5
@@ -74,6 +81,38 @@ The generator maps pixel coordinates to shape-space:
 shapePos = (pixel + 0.5) / scale - translate
 ```
 Where `scale` and `translate` are provided by the caller. The distance range is symmetric around 0 and normalized to [0, 1] in the output.
+
+## msdfgen Pipeline Comparison
+
+msdfgen has two main modes for handling overlapping contours:
+
+| Mode | OrientContours | Generator | Scanline Pass | Error Correction |
+|------|---------------|-----------|---------------|-----------------|
+| **NO_PREPROCESS** (default without Skia) | No | OverlappingContourCombiner | Yes (`distanceSignCorrection`) | After sign correction |
+| **WINDING_PREPROCESS** | Yes | SimpleContourCombiner (`overlapSupport=false`) | No | After generation |
+| **FULL_PREPROCESS** (Skia) | Yes (via `resolveShapeGeometry`) | SimpleContourCombiner | No | After generation |
+
+**Key insight**: `OrientContours` and the `OverlappingContourCombiner` are **mutually exclusive** strategies in msdfgen. The combiner relies on natural winding to classify inner/outer contours; `OrientContours` rewrites windings which breaks that classification.
+
+Our current font pipeline uses: `OrientContours` + `GenerateMSDFSimple` + `DistanceSignCorrection` + `ErrorCorrection`. This is closest to a hybrid of WINDING_PREPROCESS (for the orient + simple combiner) with the scanline pass from NO_PREPROCESS (to handle overlapping contours that `OrientContours` can't resolve).
+
+## Known Issue: Overlapping Contour Artifacts (WIP)
+
+**Status**: Partially resolved. The scanline sign correction fixes the fill/hole classification for overlapping contours but produces visible artifacts at the overlap boundaries (edges where the sign flip meets the non-flipped region).
+
+**Root cause**: The simple combiner computes distances relative to the nearest edge across ALL contours. In overlap regions, the nearest edge may belong to a different contour than the one that "owns" the pixel. When the scanline pass flips the sign (`1.0 - value`), the flipped distance doesn't smoothly transition to the non-flipped distance in the adjacent pixel, creating a visible seam.
+
+**Approaches tried**:
+1. OverlappingContourCombiner without OrientContours — correct overlap resolution but inverted glyphs (Y-flip reverses all windings, combiner sees everything as "outside")
+2. OverlappingContourCombiner with OrientContours — OrientContours breaks the combiner's inner/outer classification, producing the original artifacts
+3. Simple combiner + OrientContours + scanline sign correction — closest to correct, but seam artifacts at overlap boundaries
+
+**Next steps to investigate**:
+- The NO_PREPROCESS path (OverlappingContourCombiner + scanline, no OrientContours) produced artifacts at overlap boundaries too. The combiner may have a subtle bug in how it resolves which contour owns boundary pixels. Compare the OverlappingContourCombiner's `distance()` logic byte-for-byte against msdfgen's `contour-combiners.cpp:78-134`.
+- The inverted glyph issue (approach 1) suggests the Y-flip winding may not match what the combiner expects. msdfgen handles Y-axis via `shape.inverseYAxis` + `output.reorient()` rather than explicit coordinate negation. Try setting `shape.inverseYAxis = true` instead of negating Y in `FromGlyph`, and let the generator handle the flip via its existing `flipY` logic. This might give the combiner the correct winding context.
+- msdfgen's NO_PREPROCESS path uses `output.reorient(shape.getYAxisOrientation())` which flips the output bitmap rows when `inverseYAxis` is true. Our generator already has `flipY` logic for row ordering — verify it matches.
+- Consider whether the `DistanceSignCorrection` needs to account for `flipY` differently. Currently it maps `y → row` using `flipY` for pixel access but computes `shapeY` from `y` directly. Verify this matches msdfgen's `projection.unprojectY(y+.5)`.
+- The error correction threshold uses `1.001` (vs msdfgen's default `1.0`). This is unlikely to cause visible artifacts but could be slightly more conservative.
 
 ## Shaders
 
@@ -146,10 +185,13 @@ Sprite paths / TTF glyph contours
 Shape conversion (FromSpritePaths / FromGlyph)
   |
   v
-Normalize → OrientContours → EdgeColoring.ColorSimple
+Normalize → OrientContours (fonts) → EdgeColoring.ColorSimple
   |
   v
-GenerateMSDF (OverlappingContourCombiner)
+GenerateMSDFSimple (fonts) / GenerateMSDF (sprites)
+  |  (fonts only)
+  v
+DistanceSignCorrection (scanline-based sign fix for overlapping contours)
   |  (fonts only)
   v
 ErrorCorrection (legacy clash detection)
