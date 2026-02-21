@@ -132,8 +132,10 @@ internal static class MsdfFont
             }
         }
 
-        // Match msdfgen's default font pipeline (NO_PREPROCESS):
-        // No OrientContours — the OverlappingContourCombiner uses natural windings.
+        // Boolean-union all contours to eliminate overlaps before MSDF generation.
+        shape = ShapeClipper.Union(shape);
+        shape.inverseYAxis = true;
+
         shape.Normalize();
         EdgeColoring.ColorSimple(shape, 3.0);
 

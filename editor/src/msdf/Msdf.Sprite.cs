@@ -61,8 +61,10 @@ internal static class MsdfSprite
             }
         }
 
+        // Boolean-union all contours to eliminate overlaps.
+        shape = ShapeClipper.Union(shape);
+
         shape.Normalize();
-        // No OrientContours — the OverlappingContourCombiner uses natural windings.
         EdgeColoring.ColorSimple(shape, 3.0);
 
         return shape;

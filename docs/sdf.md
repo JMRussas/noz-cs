@@ -21,9 +21,12 @@ MSDF solves this by encoding distance across three channels (R, G, B). Each edge
 | `Msdf.Contour.cs` | Closed edge loop with shoelace winding calculation |
 | `Msdf.Shape.cs` | Contour collection with validate, normalize, orient contours |
 | `Msdf.EdgeColoring.cs` | `EdgeColoring.ColorSimple` — assigns R/G/B to edges at sharp corners |
+| `Msdf.ShapeClipper.cs` | Clipper2 boolean union — flattens curves and merges overlapping/self-intersecting contours |
 | `Msdf.Generator.cs` | `PerpendicularDistanceSelectorBase`, `MultiDistanceSelector`, `GenerateMSDF` (OverlappingContourCombiner), `GenerateMSDFSimple`, `DistanceSignCorrection`, and `ErrorCorrection` |
+| `Msdf.GeneratorRemora.cs` | Bridge: converts our Shape types to CSGL's MSDFGen types and calls their generator |
 | `Msdf.Sprite.cs` | Bridge: converts NoZ sprite paths to msdf shapes and runs generation |
 | `Msdf.Font.cs` | Bridge: converts TTF glyph contours to msdf shapes and runs generation |
+| `csgl/` | Third-party CSGL MSDFGen library (used via `MsdfGeneratorRemora`) |
 
 ## Generation Pipeline
 
@@ -31,40 +34,47 @@ MSDF solves this by encoding distance across three channels (R, G, B). Each edge
 
 **Sprites** (`MsdfSprite.FromSpritePaths`): NoZ sprite paths are converted to `Shape`/`Contour`/`EdgeSegment` objects. Linear segments become `LinearSegment`, quadratic curves become `QuadraticSegment`. Each path becomes one contour. Sprite coordinates are already in screen-space (Y-down).
 
-**Fonts** (`MsdfFont.FromGlyph`): TTF glyph contours are converted similarly. TTF uses Y-up coordinates, so Y values are negated during conversion (`flipY`) to produce screen-space Y-down coordinates. This ensures correct winding direction for the MSDF generator without needing `shape.inverseYAxis`.
+**Fonts** (`MsdfFont.FromGlyph`): TTF glyph contours are converted similarly. TTF uses Y-up coordinates; coordinates are kept in native Y-up space and the shape is marked with `inverseYAxis = true` so the generator flips output rows for screen Y-down rendering. This preserves natural contour windings.
 
-### 2. Shape Preparation
+### 2. Clipper2 Boolean Union (`ShapeClipper.Union`)
+
+Before MSDF generation, all shapes are passed through `ShapeClipper.Union()` which uses the [Clipper2](https://github.com/AngusJohnson/Clipper2) library to resolve overlapping and self-intersecting contours.
+
+**Why this is needed**: TTF fonts often use overlapping contours as a design technique (e.g., a separate contour for the stem and arch of "n" that overlap where they join). Some glyphs have self-intersecting single contours. MSDF generation produces artifacts at overlap/intersection boundaries because the distance field is ambiguous there.
+
+**How it works**:
+1. **Flatten curves**: All `QuadraticSegment` and `CubicSegment` edges are tessellated to polylines (8 uniform samples per curve). Clipper2 only operates on line segments.
+2. **Boolean union**: `Clipper.BooleanOp(ClipType.Union, FillRule.NonZero)` merges all paths, resolving overlaps and self-intersections into clean non-overlapping outer contours and holes.
+3. **PolyTree traversal**: The `PolyTreeD` output is recursively converted back to `Shape` contours with `LinearSegment` edges.
+4. **Winding correction**: All output contours are reversed because Clipper2's winding convention (positive area = CCW in Y-up) is opposite to our MSDF generator's convention (positive winding = CW via shoelace `(b.X-a.X)*(a.Y+b.Y)`).
+
+**Key details**:
+- Runs for ALL shapes, including single-contour glyphs (which may self-intersect)
+- Only skipped for empty shapes (0 contours)
+- Output is always all-linear (no curves) — this is fine for MSDF since `LinearSegment` distance computation is exact
+- Uses `ClipperPrecision = 6` (6 decimal places, giving sub-pixel accuracy for glyph coordinates in the 0-2048 range)
+- The `FillRule.NonZero` matches TTF's non-zero winding fill rule
+
+### 3. Shape Preparation
 
 - **Normalize** (`Shape.Normalize`): Single-edge contours are split into thirds so edge coloring has enough edges to assign distinct colors.
-- **Orient contours** (`Shape.OrientContours`): Ensures all outer contours have consistent winding direction using scanline intersection analysis. Used for fonts; sprites skip this since the OverlappingContourCombiner handles winding natively.
 - **Edge coloring** (`EdgeColoring.ColorSimple`): Edges are assigned R/G/B channel colors. At sharp corners (where `dot(dir_a, dir_b) <= 0` or `|cross(dir_a, dir_b)| > sin(3.0)`), adjacent edges get different colors.
 
-### 3. MSDF Generation
+Note: `OrientContours` is no longer needed since the Clipper2 union already produces correctly-oriented contours.
 
-Two generators are available:
+### 4. MSDF Generation
 
-- **`GenerateMSDFSimple`**: Simple nearest-edge-per-channel approach. Iterates all edges across all contours and picks the closest per channel. Suitable when contour winding is correct (after `OrientContours`). Used for **fonts**.
+Both fonts and sprites use the CSGL MSDFGen library via `MsdfGeneratorRemora`. The bridge converts our `Shape` to CSGL's `MSDFGen.Shape`, calls `MSDFGen.MSDF.GenerateMSDF()`, and copies the result back to our `MsdfBitmap`.
 
-- **`GenerateMSDF`**: Uses the **OverlappingContourCombiner** algorithm. Computes per-contour distances separately, then classifies contours as inner/outer based on winding direction and resolves which contour "owns" each pixel. Has an `invertWinding` parameter for cases where Y-negation reverses computed windings. Used for **sprites**.
+CSGL internally performs its own `Normalize()` and `EdgeColoringSimple()` on the converted shape.
 
-Both generators use the full `PerpendicularDistanceSelectorBase` / `MultiDistanceSelector` system ported from msdfgen, which tracks three distances per channel:
-- `minTrueDistance` — the closest edge by signed distance
-- `minNegativePerpendicularDistance` — closest negative perpendicular from any edge endpoint
-- `minPositivePerpendicularDistance` — closest positive perpendicular from any edge endpoint
+The `shape.InverseYAxis` flag is passed through so CSGL flips output rows for fonts (TTF Y-up to screen Y-down).
 
-Edge iteration uses prev/next edge context for perpendicular extension at edge junctions (bisector directions).
+### 5. Error Correction
 
-### 4. Scanline Sign Correction (`MsdfGenerator.DistanceSignCorrection`)
+**Fonts only.** After generation, `MsdfGeneratorRemora.CorrectErrors` runs CSGL's pixel clash detection to fix bilinear interpolation artifacts.
 
-**Fonts only.** After MSDF generation, a scanline-based sign correction pass fixes distance signs for overlapping contours. For each pixel, scanline intersection determines the correct fill state (non-zero winding rule). If the MSDF median disagrees with the fill state, all three channels are flipped (`1.0 - value`). An ambiguity resolution pass uses neighbor voting for pixels exactly at the 0.5 boundary.
-
-This matches msdfgen's `distanceSignCorrection` / `multiDistanceSignCorrection` in `rasterization.cpp`.
-
-### 5. Error Correction (`MsdfGenerator.ErrorCorrection`)
-
-**Fonts only.** After sign correction, a legacy error correction pass detects "clashing" texels where bilinear interpolation between adjacent pixels would produce incorrect median values. These texels are converted to single-channel (all RGB set to median), which eliminates interpolation artifacts at the cost of losing sharp corners at those specific texels.
-
-Sprites do not currently use error correction or sign correction.
+Sprites do not currently use error correction.
 
 ### 6. Subtract Path Handling (Sprites Only)
 
@@ -82,59 +92,41 @@ shapePos = (pixel + 0.5) / scale - translate
 ```
 Where `scale` and `translate` are provided by the caller. This matches msdfgen's `Projection::unproject()`. The distance range is symmetric around 0 and normalized to [0, 1] in the output.
 
-## msdfgen Pipeline Comparison
+## Data Flow
 
-msdfgen has two main modes for handling overlapping contours:
-
-| Mode | OrientContours | Generator | Scanline Pass | Error Correction |
-|------|---------------|-----------|---------------|-----------------|
-| **NO_PREPROCESS** (default without Skia) | No | OverlappingContourCombiner | Yes (`distanceSignCorrection`) | After sign correction |
-| **WINDING_PREPROCESS** | Yes | SimpleContourCombiner (`overlapSupport=false`) | No | After generation |
-| **FULL_PREPROCESS** (Skia) | Yes (via `resolveShapeGeometry`) | SimpleContourCombiner | No | After generation |
-
-**Key insight**: `OrientContours` and the `OverlappingContourCombiner` are **mutually exclusive** strategies in msdfgen. The combiner relies on natural winding to classify inner/outer contours; `OrientContours` rewrites windings which breaks that classification.
-
-Our pipelines:
-
-| Asset | OrientContours | Generator | Scanline Pass | Error Correction |
-|-------|---------------|-----------|---------------|-----------------|
-| **Fonts** | Yes | `GenerateMSDFSimple` | Yes | Yes |
-| **Sprites** | No | `GenerateMSDF` (OverlappingContourCombiner) | No | No |
-
-The font pipeline is a hybrid of WINDING_PREPROCESS (orient + simple combiner) with the scanline pass from NO_PREPROCESS (to fix overlapping contours that `OrientContours` can't fully resolve). The sprite pipeline matches NO_PREPROCESS minus the scanline pass, since sprites typically have well-formed non-overlapping paths.
-
-## msdfgen Code Correspondence
-
-The C# port was verified against the C++ reference. Key correspondences:
-
-| msdfgen C++ | NoZ C# |
-|-------------|--------|
-| `Vector2` (`core/Vector2.hpp`) | `Vector2Double` (`engine/src/math/Vector2Double.cs`) — same semantics, component-wise operators |
-| `MultiDistanceSelector` (`core/edge-selectors.h`) | `MultiDistanceSelector` (`Msdf.Generator.cs`) |
-| `PerpendicularDistanceSelectorBase` (`core/edge-selectors.h`) | `PerpendicularDistanceSelectorBase` (`Msdf.Generator.cs`) |
-| `OverlappingContourCombiner` (`core/contour-combiners.cpp`) | Inline in `GenerateMSDF` (`Msdf.Generator.cs`) |
-| `generateDistanceField` (`core/msdfgen.cpp`) | `GenerateMSDF` / `GenerateMSDFSimple` (`Msdf.Generator.cs`) |
-| `multiDistanceSignCorrection` (`core/rasterization.cpp`) | `DistanceSignCorrection` (`Msdf.Generator.cs`) |
-| `msdfErrorCorrection` (`core/MSDFErrorCorrection.cpp`) | `ErrorCorrection` (`Msdf.Generator.cs`) — legacy clash detection only |
-| `Projection::unproject` (`core/Projection.cpp`) | Inline: `(pixel + 0.5) / scale - translate` |
-
-**Minor difference**: The C# `QuadraticSegment` constructor has a degenerate control point check (pushes collinear control point to midpoint) that the C++ constructor lacks. In msdfgen, the factory method `EdgeSegment::create` handles this by returning a `LinearSegment` instead. This is cosmetic — our `FromGlyph` creates segments directly, so the constructor guard is extra safety.
-
-## Known Issue: Overlapping Contour Artifacts
-
-**Status**: Glyphs with overlapping contours (e.g. "A" in some fonts) show visible seam artifacts at overlap boundaries. The current pipeline (OrientContours + GenerateMSDFSimple + DistanceSignCorrection) handles most cases correctly but the transition at overlap boundaries is not perfectly smooth.
-
-**Root cause**: The simple combiner computes distances relative to the nearest edge across ALL contours. In overlap regions, the nearest edge may belong to a different contour than the one that "owns" the pixel. When the scanline pass flips the sign (`1.0 - value`), the flipped distance doesn't smoothly transition to the non-flipped distance in the adjacent pixel, creating a visible seam.
-
-**Approaches tried**:
-1. `GenerateMSDF` (OverlappingContourCombiner) without OrientContours — inverted glyphs because Y-negation reverses all windings and the combiner sees everything as "outside"
-2. `GenerateMSDF` with `invertWinding=true` + scanline — staircase/grid artifacts at overlap boundaries (scanline fights the combiner)
-3. `GenerateMSDF` with `invertWinding=true`, no scanline — hollow/patchy glyphs (combiner alone insufficient)
-4. Current: `GenerateMSDFSimple` + OrientContours + scanline — best results so far, minor seam artifacts remain
-
-**Potential next steps**:
-- Try `shape.inverseYAxis = true` instead of Y negation in `FromGlyph`, with `GenerateMSDF` (no OrientContours, no invertWinding). This would let the combiner see correct natural windings and use msdfgen's `reorient` logic for row flipping. Requires adjusting the translate coordinates computed by the caller (which currently assume Y-negated space).
-- Compare byte-for-byte output of the OverlappingContourCombiner against msdfgen for a simple test glyph to isolate where the distance values diverge.
+```
+Sprite paths / TTF glyph contours
+  |
+  v
+Shape conversion (FromSpritePaths / FromGlyph)
+  |
+  v
+ShapeClipper.Union (Clipper2 boolean union — resolves overlaps + self-intersections)
+  |
+  v
+Normalize → EdgeColoring.ColorSimple
+  |
+  v
+MsdfGeneratorRemora.GenerateMSDF (via CSGL library)
+  |  (fonts only)
+  v
+MsdfGeneratorRemora.CorrectErrors (pixel clash detection)
+  |  (sprites only)
+  v
+Subtract compositing (invert + min)
+  |
+  v
+RGBA8 atlas (R=ch0, G=ch1, B=ch2, A=255)
+  |
+  v
+Binary asset (.sprite / .font) with IsSDF flag
+  |
+  v
+Runtime: sprite_sdf.wgsl / text.wgsl — median(r,g,b) reconstruction
+  |
+  v
+Screen: sharp edges at any scale
+```
 
 ## Shaders
 
@@ -198,44 +190,20 @@ SDF encodes distance, not color. Each fill color gets its own mesh slot with its
 
 The angle threshold of 3.0 radians (~172 degrees) means any junction sharper than ~172 degrees triggers a color change.
 
-## Data Flow
+## Clipper2 Winding Convention
 
-```
-Sprite paths / TTF glyph contours
-  |
-  v
-Shape conversion (FromSpritePaths / FromGlyph)
-  |
-  v
-Normalize → OrientContours (fonts only) → EdgeColoring.ColorSimple
-  |
-  v
-GenerateMSDFSimple (fonts) / GenerateMSDF (sprites)
-  |  (fonts only)
-  v
-DistanceSignCorrection (scanline-based sign fix for overlapping contours)
-  |  (fonts only)
-  v
-ErrorCorrection (legacy clash detection)
-  |  (sprites only)
-  v
-Subtract compositing (invert + min)
-  |
-  v
-RGBA8 atlas (R=ch0, G=ch1, B=ch2, A=255)
-  |
-  v
-Binary asset (.sprite / .font) with IsSDF flag
-  |
-  v
-Runtime: sprite_sdf.wgsl / text.wgsl — median(r,g,b) reconstruction
-  |
-  v
-Screen: sharp edges at any scale
-```
+Clipper2 and our MSDF generator use opposite winding conventions:
+
+| Convention | Positive area | Outer contour direction (Y-up) |
+|-----------|--------------|-------------------------------|
+| Clipper2 | `(a.Y+b.Y) * (a.X-b.X)` | CCW |
+| Our MSDF (shoelace) | `(b.X-a.X) * (a.Y+b.Y)` | CW |
+
+These are negations of each other. After Clipper2 union, all contours must be reversed to match MSDF expectations. This is handled automatically in `ShapeClipper.Union()`.
 
 ## References
 
 - [msdfgen by Viktor Chlumsky](https://github.com/Chlumsky/msdfgen) — the reference C++ implementation this port is based on
+- [Clipper2 by Angus Johnson](https://github.com/AngusJohnson/Clipper2) — polygon boolean operations used for contour merging
 - Chlumsky, V. (2015). "Shape Decomposition for Multi-channel Distance Fields" — the original thesis
 - [Valve SDF paper](https://steamcdn-a.akamaihd.net/apps/valve/2007/SIGGRAPH2007_AlphaTestedMagnification.pdf) — the original single-channel SDF technique
