@@ -23,6 +23,8 @@ internal class EditorApplicationInstance : IApplication
 
 public static class EditorApplication
 {
+    private static readonly Queue<Action> _mainThreadQueue = new();
+
     public static EditorConfig Config { get; private set; } = null!;
     public static string OutputPath { get; private set; } = null!;
     public static string EditorPath { get; private set; } = null!;
@@ -100,8 +102,18 @@ public static class EditorApplication
         Config = null!;
     }
 
+    public static void RunOnMainThread(Action action)
+    {
+        lock (_mainThreadQueue)
+            _mainThreadQueue.Enqueue(action);
+    }
+
     public static void Update()
     {
+        lock (_mainThreadQueue)
+            while (_mainThreadQueue.Count > 0)
+                _mainThreadQueue.Dequeue().Invoke();
+
         Importer.Update();
         ConfirmDialog.Update();
         CommandPalette.Update();

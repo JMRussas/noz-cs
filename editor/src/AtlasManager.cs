@@ -5,6 +5,7 @@
 #define NOZ_ATLAS_DEBUG
 
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace NoZ.Editor;
 
@@ -104,18 +105,20 @@ public static class AtlasManager
             Add(_sources[i]);
         }
 
-        for (int atlasIndex = 0; atlasIndex < _atlases.Count; atlasIndex++ )
+        for (int atlasIndex = 0; atlasIndex < _atlases.Count; atlasIndex++)
             _atlases[atlasIndex].Update();
     }
 
-    internal static void UpdateSource(ISpriteSource source)
+    internal static void UpdateSource(ISpriteSource source) => UpdateSource(source, null);
+
+    internal static void UpdateSource(ISpriteSource source, PixelData<Color32>?[]? pixels)
     {
         Debug.Assert(source.Atlas != null);
 
         // See if the source can remain in its current atlas
         if (source.Atlas.TryUpdate(source))
         {
-            source.Atlas.Update();
+            source.Atlas.Update(source, pixels);
             source.Reimport();
             source.Atlas.Reimport();
             return;
@@ -131,7 +134,7 @@ public static class AtlasManager
         oldAtlas.Reimport();
         if (source.Atlas != oldAtlas)
         {
-            source.Atlas!.Update();
+            source.Atlas!.Update(source, pixels);
             source.Atlas.Reimport();
         }
     }
@@ -145,7 +148,11 @@ public static class AtlasManager
             return;
 
         Add(source);
-        Update();
+
+        if (source is SpriteDocument { IsSDF: true } spriteDoc)
+            spriteDoc.UpdateAtlas();
+        else
+            Update();
     }
 
     internal static void RemoveSource(ISpriteSource source)

@@ -115,9 +115,20 @@ internal static class MsdfSprite
         if (shape == null) return;
 
         var dpi = EditorApplication.Config.PixelsPerUnit;
-        var sw = Stopwatch.StartNew();
+        RasterizeMSDF(shape, target, targetRect, sourceOffset, dpi, range);
+    }
 
-        var tUnion = sw.Elapsed.TotalMilliseconds; sw.Restart();
+    // Rasterize a pre-built MSDF shape. Use when the shape has been built on the
+    // main thread and generation runs on a background thread.
+    public static void RasterizeMSDF(
+        Shape shape,
+        PixelData<Color32> target,
+        RectInt targetRect,
+        Vector2Int sourceOffset,
+        int dpi,
+        float range = 1.5f)
+    {
+        var sw = Stopwatch.StartNew();
 
         shape.Normalize();
         EdgeColoring.ColorSimple(shape, 3.0);
@@ -160,7 +171,7 @@ internal static class MsdfSprite
 
         int totalEdges = 0;
         foreach (var c in shape.contours) totalEdges += c.edges.Count;
-        var total = tUnion + tPrepare + tGenerate + tSignCorr + tErrorCorr + tCopy;
-        NoZ.Log.Info($"[MSDF Sprite] {w}x{h} {shape.contours.Count}c {totalEdges}e | Union={tUnion:F2} Prep={tPrepare:F2} Gen={tGenerate:F2} Sign={tSignCorr:F2} Err={tErrorCorr:F2} Copy={tCopy:F2} Total={total:F2}ms");
+        var total = tPrepare + tGenerate + tSignCorr + tErrorCorr + tCopy;
+        NoZ.Log.Info($"[MSDF Sprite] {w}x{h} {shape.contours.Count}c {totalEdges}e | Prep={tPrepare:F2} Gen={tGenerate:F2} Sign={tSignCorr:F2} Err={tErrorCorr:F2} Copy={tCopy:F2} Total={total:F2}ms");
     }
 }

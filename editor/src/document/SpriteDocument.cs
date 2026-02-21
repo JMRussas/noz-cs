@@ -847,12 +847,106 @@ public class SpriteDocument : Document, ISpriteSource
         MarkSpriteDirty();
     }
 
+    /// <summary>
+    /// Updates the atlas for this sprite. For SDF sprites, MSDF generation runs on
+    /// a background thread and the atlas is updated on the main thread when done.
+    /// For non-SDF sprites, the atlas is updated synchronously.
+    /// </summary>
+    internal void UpdateAtlas()
+    {
+        if (!IsSDF)
+        {
+            AtlasManager.UpdateSource(this);
+            return;
+        }
+
+        // Snapshot shapes on the main thread
+        var padding = Atlas?.Padding ?? EditorApplication.Config.AtlasPadding;
+        var padding2 = padding * 2;
+        var dpi = EditorApplication.Config.PixelsPerUnit;
+
+        var frameWork = new List<(ushort FrameIndex, PixelData<Color32> Image,
+            List<(Msdf.Shape Shape, RectInt Rect, Vector2Int Offset)> Items)>();
+
+        for (ushort fi = 0; fi < FrameCount; fi++)
+        {
+            var frame = GetFrame(fi);
+            var slots = GetMeshSlots(fi);
+            var slotBounds = GetMeshSlotBounds(fi);
+
+            var items = new List<(Msdf.Shape, RectInt, Vector2Int)>();
+            var xOffset = 0;
+
+            for (int si = 0; si < slots.Count; si++)
+            {
+                var slot = slots[si];
+                var slotRasterBounds = slotBounds[si];
+                if (slotRasterBounds.Width <= 0 || slotRasterBounds.Height <= 0)
+                    slotRasterBounds = RasterBounds;
+
+                var slotWidth = slotRasterBounds.Size.X + padding2;
+
+                var outerRect = new RectInt(
+                    new Vector2Int(xOffset, 0),
+                    new Vector2Int(slotWidth, slotRasterBounds.Size.Y + padding2));
+
+                if (slot.PathIndices.Count > 0)
+                {
+                    var shape = Msdf.MsdfSprite.BuildShape(frame.Shape, CollectionsMarshal.AsSpan(slot.PathIndices));
+                    if (shape != null)
+                        items.Add((shape, outerRect, -slotRasterBounds.Position + new Vector2Int(padding, padding)));
+                }
+
+                xOffset += slotWidth;
+            }
+
+            if (items.Count == 0) continue;
+
+            var size = GetFrameAtlasSize(fi);
+            var tempImage = new PixelData<Color32>(size);
+            frameWork.Add((fi, tempImage, items));
+        }
+
+        if (frameWork.Count == 0)
+        {
+            AtlasManager.UpdateSource(this);
+            return;
+        }
+
+        // Generate MSDF on background thread, update atlas on main thread when done
+        Task.Run(() =>
+        {
+            foreach (var (fi, image, items) in frameWork)
+                foreach (var (shape, rect, offset) in items)
+                    Msdf.MsdfSprite.RasterizeMSDF(shape, image, rect, offset, dpi);
+        }).ContinueWith(task =>
+        {
+            EditorApplication.RunOnMainThread(() =>
+            {
+                if (task.IsFaulted || IsDisposed)
+                {
+                    if (task.IsFaulted)
+                        Log.Error($"[ATLAS] MSDF background task failed: {task.Exception}");
+                    foreach (var (_, image, _) in frameWork)
+                        image.Dispose();
+                    return;
+                }
+
+                var pixels = new PixelData<Color32>?[FrameCount];
+                foreach (var (fi, image, _) in frameWork)
+                    pixels[fi] = image;
+
+                AtlasManager.UpdateSource(this, pixels);
+            });
+        });
+    }
+
     void ISpriteSource.Rasterize(PixelData<Color32> image, in AtlasSpriteRect rect, int padding)
     {
+        var frameIndex = rect.FrameIndex;
         var palette = PaletteManager.GetPalette(Palette);
         if (palette == null) return;
 
-        var frameIndex = rect.FrameIndex;
         var frame = GetFrame(frameIndex);
         var slots = GetMeshSlots(frameIndex);
         var slotBounds = GetMeshSlotBounds(frameIndex);
@@ -1149,7 +1243,7 @@ public class SpriteDocument : Document, ISpriteSource
     public override void OnUndoRedo()
     {
         UpdateBounds();
-        AtlasManager.UpdateSource(this);
+        UpdateAtlas();
         base.OnUndoRedo();
     }
 }

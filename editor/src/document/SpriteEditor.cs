@@ -151,7 +151,7 @@ public partial class SpriteEditor : DocumentEditor
         Workspace.XrayModeChanged -= OnXrayModeChanged;
 
         if (Document.IsModified)
-            AtlasManager.UpdateSource(Document);
+            Document.UpdateAtlas();
 
         _rasterTexture.Dispose();
         _image.Dispose();

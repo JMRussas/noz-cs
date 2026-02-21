@@ -384,7 +384,7 @@ internal class AtlasDocument : Document
         return true;
     }
 
-    private void UpdateInternal(bool rebuild)
+    private void UpdateInternal(bool rebuild, ISpriteSource? pixelSource = null, PixelData<Color32>?[]? pixels = null)
     {
         var rects = CollectionsMarshal.AsSpan(_rects);
         RectInt? updateRect = null;
@@ -407,7 +407,24 @@ internal class AtlasDocument : Document
             if (rect.Source == null) continue;
 
             dirtySources.Add(rect.Source);
-            rect.Source.Rasterize(_image, in rect, Padding);
+
+            // Use precomputed pixels if available for this source
+            if (rect.Source == pixelSource && pixels != null &&
+                rect.FrameIndex < pixels.Length && pixels[rect.FrameIndex] != null)
+            {
+                var pre = pixels[rect.FrameIndex]!;
+                var copyW = Math.Min(pre.Width, rect.Rect.Width);
+                var copyH = Math.Min(pre.Height, rect.Rect.Height);
+                for (int y = 0; y < copyH; y++)
+                    for (int x = 0; x < copyW; x++)
+                        _image[rect.Rect.X + x, rect.Rect.Y + y] = pre[x, y];
+                pre.Dispose();
+                pixels[rect.FrameIndex] = null;
+            }
+            else
+            {
+                rect.Source.Rasterize(_image, in rect, Padding);
+            }
         }
 
         // Update UVs once per dirty source
@@ -416,9 +433,22 @@ internal class AtlasDocument : Document
 
         if (updateRect != null)
             _texture?.Update(_image.AsByteSpan(), updateRect.Value, _image.Width);
+
+        // Dispose any unused pixel data
+        if (pixels != null)
+            foreach (var p in pixels)
+                p?.Dispose();
     }
 
     public void Update() => UpdateInternal(false);
+
+    internal void Update(ISpriteSource source, PixelData<Color32>?[]? pixels)
+    {
+        if (pixels == null)
+            UpdateInternal(false);
+        else
+            UpdateInternal(false, source, pixels);
+    }
 
     public void Rebuild()
     {
