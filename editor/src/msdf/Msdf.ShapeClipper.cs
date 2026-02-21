@@ -1,5 +1,5 @@
 //
-//  Boolean-union overlapping contours using Clipper2 before MSDF generation.
+//  Boolean operations on MSDF shapes using Clipper2 before MSDF generation.
 //
 
 using Clipper2Lib;
@@ -21,15 +21,7 @@ internal static class ShapeClipper
         if (shape.contours.Count == 0)
             return shape;
 
-        // Flatten all contours to polyline paths
-        var paths = new PathsD();
-        foreach (var contour in shape.contours)
-        {
-            var path = ContourToPath(contour, stepsPerCurve);
-            if (path.Count >= 3)
-                paths.Add(path);
-        }
-
+        var paths = ShapeToPaths(shape, stepsPerCurve);
         if (paths.Count == 0)
             return shape;
 
@@ -37,14 +29,61 @@ internal static class ShapeClipper
         var tree = new PolyTreeD();
         Clipper.BooleanOp(ClipType.Union, paths, null, tree, FillRule.NonZero, ClipperPrecision);
 
-        // Convert PolyTree back to Shape
+        return TreeToShape(tree, shape) ?? shape;
+    }
+
+    /// <summary>
+    /// Boolean-difference: subject minus clip. Produces a new shape with
+    /// the clip regions carved out of the subject (all linear edges).
+    /// </summary>
+    public static Shape Difference(Shape subject, Shape clip, int stepsPerCurve = DefaultStepsPerCurve)
+    {
+        if (subject.contours.Count == 0)
+            return subject;
+        if (clip.contours.Count == 0)
+            return subject;
+
+        var subjectPaths = ShapeToPaths(subject, stepsPerCurve);
+        var clipPaths = ShapeToPaths(clip, stepsPerCurve);
+
+        if (subjectPaths.Count == 0)
+            return subject;
+        if (clipPaths.Count == 0)
+            return subject;
+
+        var tree = new PolyTreeD();
+        Clipper.BooleanOp(ClipType.Difference, subjectPaths, clipPaths, tree, FillRule.NonZero, ClipperPrecision);
+
+        return TreeToShape(tree, subject) ?? subject;
+    }
+
+    /// <summary>
+    /// Flatten all contours of a shape into Clipper2 PathsD.
+    /// </summary>
+    private static PathsD ShapeToPaths(Shape shape, int stepsPerCurve)
+    {
+        var paths = new PathsD();
+        foreach (var contour in shape.contours)
+        {
+            var path = ContourToPath(contour, stepsPerCurve);
+            if (path.Count >= 3)
+                paths.Add(path);
+        }
+        return paths;
+    }
+
+    /// <summary>
+    /// Convert a PolyTree result back to a Shape with reversed winding.
+    /// Returns null if the tree produced no contours.
+    /// </summary>
+    private static Shape? TreeToShape(PolyTreeD tree, Shape reference)
+    {
         var result = new Shape();
-        result.inverseYAxis = shape.inverseYAxis;
+        result.inverseYAxis = reference.inverseYAxis;
         CollectContours(tree, result);
 
-        // If the union produced nothing, return the original
         if (result.contours.Count == 0)
-            return shape;
+            return null;
 
         // Clipper2's winding convention is opposite to our MSDF generator's
         // convention (Clipper2 positive area = our negative winding).

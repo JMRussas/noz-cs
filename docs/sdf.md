@@ -21,7 +21,7 @@ MSDF solves this by encoding distance across three channels (R, G, B). Each edge
 | `Msdf.Contour.cs` | Closed edge loop with shoelace winding calculation |
 | `Msdf.Shape.cs` | Contour collection with validate, normalize, orient contours |
 | `Msdf.EdgeColoring.cs` | `EdgeColoring.ColorSimple` — assigns R/G/B to edges at sharp corners |
-| `Msdf.ShapeClipper.cs` | Clipper2 boolean union — flattens curves and merges overlapping/self-intersecting contours |
+| `Msdf.ShapeClipper.cs` | Clipper2 boolean operations (union, difference) — flattens curves and merges/carves contours |
 | `Msdf.Generator.cs` | `PerpendicularDistanceSelectorBase`, `MultiDistanceSelector`, `GenerateMSDF` (OverlappingContourCombiner), `GenerateMSDFSimple`, `DistanceSignCorrection`, and `ErrorCorrection` |
 | `Msdf.Sprite.cs` | Bridge: converts NoZ sprite paths to msdf shapes and runs generation |
 | `Msdf.Font.cs` | Bridge: converts TTF glyph contours to msdf shapes and runs generation |
@@ -42,7 +42,7 @@ Before MSDF generation, all shapes are passed through `ShapeClipper.Union()` whi
 
 **How it works**:
 1. **Flatten curves**: All `QuadraticSegment` and `CubicSegment` edges are tessellated to polylines (8 uniform samples per curve). Clipper2 only operates on line segments.
-2. **Boolean union**: `Clipper.BooleanOp(ClipType.Union, FillRule.NonZero)` merges all paths, resolving overlaps and self-intersections into clean non-overlapping outer contours and holes.
+2. **Boolean operation**: `Clipper.BooleanOp(ClipType.Union, FillRule.NonZero)` merges all paths, resolving overlaps and self-intersections into clean non-overlapping outer contours and holes. For sprites with subtract paths, `Clipper.BooleanOp(ClipType.Difference, ...)` then carves the subtract regions out of the unioned add shape.
 3. **PolyTree traversal**: The `PolyTreeD` output is recursively converted back to `Shape` contours with `LinearSegment` edges.
 4. **Winding correction**: All output contours are reversed because Clipper2's winding convention (positive area = CCW in Y-up) is opposite to our MSDF generator's convention (positive winding = CW via shoelace `(b.X-a.X)*(a.Y+b.Y)`).
 
@@ -77,11 +77,14 @@ Sprites do not currently use error correction.
 
 ### 6. Subtract Path Handling (Sprites Only)
 
-Subtract paths are handled by generating a separate MSDF and compositing:
-1. Additive paths produce an MSDF where inside > 0.5
-2. Subtract paths produce their own MSDF
-3. The subtract MSDF is inverted (`1 - value`) so its inside becomes outside
-4. The two are intersected per-channel via `min(add, inverted_sub)`
+Subtract paths carve holes out of additive paths using Clipper2 boolean difference, producing a single clean shape for MSDF generation:
+
+1. Additive paths are unioned via `ShapeClipper.Union` into one shape
+2. Subtract paths are unioned via `ShapeClipper.Union` into a separate shape
+3. `ShapeClipper.Difference(addShape, subShape)` carves the subtract regions out
+4. The result is re-normalized and edge-colored, then a single MSDF is generated
+
+**Mesh slot distribution**: Subtract paths apply to all mesh slots created *before* them in draw order. When `GetMeshSlots` encounters a subtract path, it appends that path's index to every slot that already exists. Slots created after the subtract are unaffected. This means a subtract path between a white shape and a blue shape carves holes in both, but a shape added after the subtract is untouched.
 
 ## Coordinate Mapping
 
@@ -101,6 +104,9 @@ Shape conversion (FromSpritePaths / FromGlyph)
   |
   v
 ShapeClipper.Union (Clipper2 boolean union — resolves overlaps + self-intersections)
+  |  (sprites with subtract paths)
+  v
+ShapeClipper.Difference (Clipper2 boolean difference — carves subtract paths out)
   |
   v
 Normalize → EdgeColoring.ColorSimple
@@ -110,9 +116,6 @@ MsdfGenerator.GenerateMSDF (OverlappingContourCombiner + PerpendicularDistanceSe
   |  (fonts only)
   v
 MsdfGenerator.DistanceSignCorrection + ErrorCorrection
-  |  (sprites only)
-  v
-Subtract compositing (invert + min)
   |
   v
 RGBA8 atlas (R=ch0, G=ch1, B=ch2, A=255)
@@ -198,7 +201,7 @@ Clipper2 and our MSDF generator use opposite winding conventions:
 | Clipper2 | `(a.Y+b.Y) * (a.X-b.X)` | CCW |
 | Our MSDF (shoelace) | `(b.X-a.X) * (a.Y+b.Y)` | CW |
 
-These are negations of each other. After Clipper2 union, all contours must be reversed to match MSDF expectations. This is handled automatically in `ShapeClipper.Union()`.
+These are negations of each other. After any Clipper2 operation, all contours must be reversed to match MSDF expectations. This is handled automatically in `ShapeClipper.Union()` and `ShapeClipper.Difference()`.
 
 ## References
 

@@ -123,12 +123,22 @@ public class SpriteDocument : Document, ISpriteSource
             return a.CompareTo(b);
         });
 
-        // Build runs - new slot whenever layer, bone, or (when SDF) fill color changes
+        // Build runs - new slot whenever layer, bone, or (when SDF) fill color changes.
+        // When a subtract path is encountered, it is appended to all slots that
+        // were created before it (subtracts carve holes in everything above them).
         MeshSlot? currentSlot = null;
 
         foreach (var pathIndex in sortedPaths)
         {
             ref readonly var path = ref shape.GetPath(pathIndex);
+
+            if (path.IsSubtract)
+            {
+                // Apply this subtract to all existing slots
+                foreach (var slot in slots)
+                    slot.PathIndices.Add(pathIndex);
+                continue;
+            }
 
             if (currentSlot == null || path.Layer != currentSlot.Layer || path.Bone != currentSlot.Bone
                 || (IsSDF && path.FillColor != currentSlot.FillColor))

@@ -72,9 +72,8 @@ internal static class MsdfSprite
 
     /// <summary>
     /// Generate an MSDF for a set of sprite paths and write the result into the target pixel data.
-    /// All paths are combined into a single shape. The generator uses the OverlappingContourCombiner
-    /// algorithm to correctly handle multiple disjoint contours. Subtract paths are generated
-    /// separately and carved out via intersection (min of inverted).
+    /// Add paths are unioned, subtract paths are unioned, then subtract is carved out of add
+    /// via Clipper2 boolean difference. The result is a single clean shape for MSDF generation.
     /// </summary>
     public static void RasterizeMSDF(
         NoZ.Editor.Shape spriteShape,
@@ -102,15 +101,19 @@ internal static class MsdfSprite
                 addPaths.Add(pi);
         }
 
-        // Build msdf shape from all additive paths (one contour per path)
-        var addShape = addPaths.Count > 0
-            ? FromSpritePaths(spriteShape, addPaths.ToArray())
-            : null;
+        if (addPaths.Count == 0) return;
 
-        // Build msdf shape from all subtract paths
-        var subShape = subtractPaths.Count > 0
-            ? FromSpritePaths(spriteShape, subtractPaths.ToArray())
-            : null;
+        // Build msdf shapes (each already Clipper-unioned internally)
+        var shape = FromSpritePaths(spriteShape, addPaths.ToArray());
+
+        // Carve out subtract paths via Clipper2 boolean difference
+        if (subtractPaths.Count > 0)
+        {
+            var subShape = FromSpritePaths(spriteShape, subtractPaths.ToArray());
+            shape = ShapeClipper.Difference(shape, subShape);
+            shape.Normalize();
+            EdgeColoring.ColorSimple(shape, 3.0);
+        }
 
         var scale = new Vector2Double(dpi, dpi);
         var translate = new Vector2Double(
@@ -121,63 +124,22 @@ internal static class MsdfSprite
         int h = targetRect.Height;
         double rangeInShapeUnits = range / dpi * 2.0;
 
-        // Generate MSDF using our own generator (OverlappingContourCombiner).
-        MsdfBitmap? addBitmap = null;
-        if (addShape != null)
-        {
-            addBitmap = new MsdfBitmap(w, h);
-            MsdfGenerator.GenerateMSDF(addBitmap, addShape, rangeInShapeUnits, scale, translate);
-        }
+        // Generate single MSDF from the combined shape
+        var bitmap = new MsdfBitmap(w, h);
+        MsdfGenerator.GenerateMSDF(bitmap, shape, rangeInShapeUnits, scale, translate);
 
-        // Generate MSDF for subtract shape
-        MsdfBitmap? subBitmap = null;
-        if (subShape != null)
-        {
-            subBitmap = new MsdfBitmap(w, h);
-            MsdfGenerator.GenerateMSDF(subBitmap, subShape, rangeInShapeUnits, scale, translate);
-        }
-
-        // Composite into target pixel data
+        // Write to target pixel data
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
             {
-                float r, g, b;
-
-                if (addBitmap != null)
-                {
-                    var px = addBitmap[x, y];
-                    r = px[0];
-                    g = px[1];
-                    b = px[2];
-                }
-                else
-                {
-                    r = 0f;
-                    g = 0f;
-                    b = 0f;
-                }
-
-                // Subtract: the subtract shape's distance inverts and mins
-                if (subBitmap != null)
-                {
-                    var spx = subBitmap[x, y];
-                    r = Math.Min(r, 1f - spx[0]);
-                    g = Math.Min(g, 1f - spx[1]);
-                    b = Math.Min(b, 1f - spx[2]);
-                }
-
-                // Clamp to [0, 1]
-                r = Math.Clamp(r, 0f, 1f);
-                g = Math.Clamp(g, 0f, 1f);
-                b = Math.Clamp(b, 0f, 1f);
-
+                var px = bitmap[x, y];
                 int tx = targetRect.X + x;
                 int ty = targetRect.Y + y;
                 target[tx, ty] = new Color32(
-                    (byte)(r * 255f),
-                    (byte)(g * 255f),
-                    (byte)(b * 255f),
+                    (byte)(Math.Clamp(px[0], 0f, 1f) * 255f),
+                    (byte)(Math.Clamp(px[1], 0f, 1f) * 255f),
+                    (byte)(Math.Clamp(px[2], 0f, 1f) * 255f),
                     255);
             }
         }
