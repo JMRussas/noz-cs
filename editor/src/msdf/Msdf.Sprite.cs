@@ -130,9 +130,13 @@ internal static class MsdfSprite
 
         sw.Restart();
         MsdfGenerator.DistanceSignCorrection(bitmap, shape, scale, translate);
-        MsdfGenerator.ErrorCorrection(bitmap, shape, scale, translate, rangeInShapeUnits);
-        var corrMs = sw.ElapsedMilliseconds;
+        var signMs = sw.ElapsedMilliseconds;
 
+        sw.Restart();
+        MsdfGenerator.ErrorCorrection(bitmap, shape, scale, translate, rangeInShapeUnits);
+        var errMs = sw.ElapsedMilliseconds;
+
+        sw.Restart();
         for (int y = 0; y < h; y++)
         {
             for (int x = 0; x < w; x++)
@@ -147,11 +151,12 @@ internal static class MsdfSprite
                     255);
             }
         }
+        var copyMs = sw.ElapsedMilliseconds;
 
         totalSw.Stop();
         var contourCount = shape.contours.Count;
         var edgeCount = 0;
         foreach (var c in shape.contours) edgeCount += c.edges.Count;
-        Log.Info($"[SDF Sprite] {w}x{h} px, {pathIndices.Length} paths, {contourCount} contours, {edgeCount} edges | shape {shapeMs}ms, diff {diffMs}ms, generate {genMs}ms, correct {corrMs}ms, total {totalSw.ElapsedMilliseconds}ms");
+        Log.Info($"[SDF Sprite] {w}x{h} px, {pathIndices.Length} paths, {contourCount} contours, {edgeCount} edges | shape {shapeMs}ms, diff {diffMs}ms, generate {genMs}ms, signCorr {signMs}ms, errCorr {errMs}ms, copy {copyMs}ms, total {totalSw.ElapsedMilliseconds}ms");
     }
 }

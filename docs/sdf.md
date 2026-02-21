@@ -22,7 +22,7 @@ MSDF solves this by encoding distance across three channels (R, G, B). Each edge
 | `Msdf.Shape.cs` | Contour collection with validate, normalize, orient contours |
 | `Msdf.EdgeColoring.cs` | `EdgeColoring.ColorSimple` — assigns R/G/B to edges at sharp corners |
 | `Msdf.ShapeClipper.cs` | Clipper2 boolean operations (union, difference) — flattens curves and merges/carves contours |
-| `Msdf.Generator.cs` | `PerpendicularDistanceSelectorBase`, `MultiDistanceSelector`, `GenerateMSDF` (OverlappingContourCombiner), `GenerateMSDFSimple`, `DistanceSignCorrection`, and `ErrorCorrection` |
+| `Msdf.Generator.cs` | `GenerateMSDF` (OverlappingContourCombiner for fonts), `GenerateMSDFBasic` (grid-accelerated for sprites), `DistanceSignCorrection`, `ErrorCorrection` |
 | `Msdf.Sprite.cs` | Bridge: converts NoZ sprite paths to msdf shapes and runs generation |
 | `Msdf.Font.cs` | Bridge: converts TTF glyph contours to msdf shapes and runs generation |
 
@@ -62,18 +62,16 @@ Note: `OrientContours` is no longer needed since the Clipper2 union already prod
 
 ### 4. MSDF Generation
 
-Both fonts and sprites use our own `MsdfGenerator.GenerateMSDF` — a faithful port of msdfgen's OverlappingContourCombiner with `MultiDistanceSelector` / `PerpendicularDistanceSelectorBase`. This uses perpendicular distance at shared edge endpoints for precise channel separation.
+**Fonts** use `MsdfGenerator.GenerateMSDF` — a faithful port of msdfgen's OverlappingContourCombiner with `MultiDistanceSelector` / `PerpendicularDistanceSelectorBase`. This uses perpendicular distance at shared edge endpoints for precise channel separation. The `shape.inverseYAxis` flag controls row flipping: the generator writes to `row = flipY ? h-1-y : y`, producing screen Y-down output from TTF Y-up coordinates.
 
-The `shape.inverseYAxis` flag controls row flipping: the generator writes to `row = flipY ? h-1-y : y`, producing screen Y-down output from TTF Y-up coordinates.
+**Sprites** use `MsdfGenerator.GenerateMSDFBasic` — a simplified generator that uses only true signed distance (no perpendicular distance extension). The perpendicular extension causes artifacts between separated contours in multi-shape sprites, where channel disagreements at Voronoi boundaries produce visible squiggly lines. By using true distance only and relying on error correction to clean up artifacts, sprites render cleanly even with many separated shapes.
 
 ### 5. Error Correction
 
-**Fonts only.** After generation, two correction passes run:
+After generation, both fonts and sprites run two correction passes:
 
-1. **`DistanceSignCorrection`** — scanline-based sign verification using non-zero winding fill rule. Flips pixels where the MSDF sign disagrees with the actual fill state.
-2. **`ErrorCorrection`** — modern artifact detection with corner and edge protection. Detects linear and diagonal interpolation artifacts and replaces error-flagged texels with single-channel median.
-
-Sprites do not currently use error correction.
+1. **`DistanceSignCorrection`** — scanline-based sign verification using non-zero winding fill rule. For each row, computes scanline intersections with all edges to determine the correct inside/outside state, then flips pixels where the MSDF sign disagrees.
+2. **`ErrorCorrection`** — modern artifact detection with corner and edge protection. Protects texels near shape corners and edges, then detects linear and diagonal interpolation artifacts and replaces error-flagged texels with single-channel median. Sub-steps: `ProtectCorners` → `ProtectEdges` → `FindErrors` → `ApplyCorrection`.
 
 ### 6. Subtract Path Handling (Sprites Only)
 
@@ -111,11 +109,12 @@ ShapeClipper.Difference (Clipper2 boolean difference — carves subtract paths o
   v
 Normalize → EdgeColoring.ColorSimple
   |
+  +--- Fonts: GenerateMSDF (OverlappingContourCombiner + PerpendicularDistanceSelector)
+  |
+  +--- Sprites: GenerateMSDFBasic (true distance only, spatial grid acceleration)
+  |
   v
-MsdfGenerator.GenerateMSDF (OverlappingContourCombiner + PerpendicularDistanceSelector)
-  |  (fonts only)
-  v
-MsdfGenerator.DistanceSignCorrection + ErrorCorrection
+DistanceSignCorrection + ErrorCorrection (both fonts and sprites)
   |
   v
 RGBA8 atlas (R=ch0, G=ch1, B=ch2, A=255)
@@ -202,6 +201,40 @@ Clipper2 and our MSDF generator use opposite winding conventions:
 | Our MSDF (shoelace) | `(b.X-a.X) * (a.Y+b.Y)` | CW |
 
 These are negations of each other. After any Clipper2 operation, all contours must be reversed to match MSDF expectations. This is handled automatically in `ShapeClipper.Union()` and `ShapeClipper.Difference()`.
+
+## Performance Optimization
+
+Sprite SDF generation runs every time you leave the sprite editor, so it needs to be fast enough for interactive use. The key optimizations:
+
+### Spatial Grid (`GenerateMSDFBasic`)
+
+The naive approach checks every pixel against every edge — O(pixels × edges). For a 250×200 image with 500 edges, that's 25M distance calculations.
+
+`GenerateMSDFBasic` builds a spatial grid over the shape, with cell size equal to the SDF range. Each edge is inserted into all grid cells its expanded bounding box overlaps (expanded by half the SDF range). At render time, each pixel looks up its single grid cell and only checks the few edges in that cell.
+
+After the Clipper2 union, all edges are short linear segments (~8 per original curve). Each segment covers only 2-4 grid cells. Most cells contain 0-5 edges, so the per-pixel work drops from hundreds of distance calculations to single digits.
+
+This reduced the generate step from ~320ms to ~1-3ms (100x+ speedup).
+
+### Parallelization
+
+All pixel-level passes use `Parallel.For` on rows:
+
+- **`GenerateMSDFBasic`**: Each row's pixels are independent (read-only grid, write to own pixel)
+- **`DistanceSignCorrection`**: Sequential (scanline intersection state is cumulative per-row), but already fast at ~2-3ms
+- **`ProtectEdges`**: Three sub-passes (horizontal, vertical, diagonal) each parallelized. Writes are `|= STENCIL_PROTECTED` (same bit OR), so cross-row races are benign.
+- **`FindErrors`**: Each pixel writes only to its own stencil entry, safe to parallelize.
+
+### Timing Debug
+
+Both `Msdf.Sprite.cs` and `Msdf.Generator.cs` include `Log.Info` timing for each step. Example output:
+
+```
+[SDF GenBasic] 249x214, 14 contours, 503 edges, grid 82x70 (5740 cells, 4265 entries) | precompute 0ms, generate 1ms
+[SDF SignCorr] 249x214, 503 edges | scanlines 2ms, total 2ms
+[SDF ErrCorr] 249x214 | corners 0ms, protEdges 1ms, findErr 4ms, apply 0ms
+[SDF Sprite] 249x214 px, 33 paths, 14 contours, 503 edges | shape 1ms, diff 1ms, generate 2ms, signCorr 3ms, errCorr 7ms, copy 1ms, total 16ms
+```
 
 ## References
 

@@ -401,6 +401,8 @@ internal static class MsdfGenerator
 
     // Basic nearest-edge-per-channel MSDF using only true signed distance.
     // No perpendicular distance extension — avoids artifacts between separated contours.
+    // Spatial grid acceleration: edges indexed by cell, pixels check only nearby edges.
+    // Pixels beyond the range are left at default (sign correction fixes them).
     public static void GenerateMSDFBasic(
         MsdfBitmap output,
         Shape shape,
@@ -408,6 +410,8 @@ internal static class MsdfGenerator
         Vector2Double scale,
         Vector2Double translate)
     {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         double rangeLower = -0.5 * rangeValue;
         double rangeUpper = 0.5 * rangeValue;
         double rangeWidth = rangeUpper - rangeLower;
@@ -417,27 +421,130 @@ internal static class MsdfGenerator
         int w = output.width;
         int h = output.height;
 
+        // Flatten all edges into arrays with bounding boxes
+        int contourCount = shape.contours.Count;
+        int totalEdges = 0;
+        for (int ci = 0; ci < contourCount; ci++)
+            totalEdges += shape.contours[ci].edges.Count;
+
+        var edges = new EdgeSegment[totalEdges];
+        var eXMin = new double[totalEdges];
+        var eYMin = new double[totalEdges];
+        var eXMax = new double[totalEdges];
+        var eYMax = new double[totalEdges];
+
+        double tightMinX = double.MaxValue, tightMinY = double.MaxValue;
+        double tightMaxX = double.MinValue, tightMaxY = double.MinValue;
+
+        int edgeIdx = 0;
+        for (int ci = 0; ci < contourCount; ci++)
+        {
+            var contourEdges = shape.contours[ci].edges;
+            for (int j = 0; j < contourEdges.Count; j++)
+            {
+                edges[edgeIdx] = contourEdges[j];
+                double xMin = double.MaxValue, yMin = double.MaxValue;
+                double xMax = double.MinValue, yMax = double.MinValue;
+                contourEdges[j].Bound(ref xMin, ref yMin, ref xMax, ref yMax);
+                eXMin[edgeIdx] = xMin;
+                eYMin[edgeIdx] = yMin;
+                eXMax[edgeIdx] = xMax;
+                eYMax[edgeIdx] = yMax;
+
+                if (xMin < tightMinX) tightMinX = xMin;
+                if (yMin < tightMinY) tightMinY = yMin;
+                if (xMax > tightMaxX) tightMaxX = xMax;
+                if (yMax > tightMaxY) tightMaxY = yMax;
+                edgeIdx++;
+            }
+        }
+
+        // Spatial grid: each cell contains edge indices for nearby edges.
+        // Cell size = rangeValue. Edge bboxes expanded by margin = 0.5*rangeValue
+        // so any pixel within threshold distance finds all relevant edges in its cell.
+        double margin = 0.5 * rangeValue;
+        double cellSize = rangeValue;
+        if (cellSize < 1e-10) cellSize = 1e-10;
+        double invCellSize = 1.0 / cellSize;
+
+        double gridMinX = tightMinX - margin;
+        double gridMinY = tightMinY - margin;
+        double gridMaxX = tightMaxX + margin;
+        double gridMaxY = tightMaxY + margin;
+
+        int gridW = Math.Max(1, (int)Math.Ceiling((gridMaxX - gridMinX) * invCellSize));
+        int gridH = Math.Max(1, (int)Math.Ceiling((gridMaxY - gridMinY) * invCellSize));
+        int gridCells = gridW * gridH;
+
+        // Pass 1: count edges per cell
+        var cellCounts = new int[gridCells];
+        for (int e = 0; e < totalEdges; e++)
+        {
+            int cxMin = Math.Clamp((int)((eXMin[e] - margin - gridMinX) * invCellSize), 0, gridW - 1);
+            int cyMin = Math.Clamp((int)((eYMin[e] - margin - gridMinY) * invCellSize), 0, gridH - 1);
+            int cxMax = Math.Clamp((int)((eXMax[e] + margin - gridMinX) * invCellSize), 0, gridW - 1);
+            int cyMax = Math.Clamp((int)((eYMax[e] + margin - gridMinY) * invCellSize), 0, gridH - 1);
+            for (int cy = cyMin; cy <= cyMax; cy++)
+                for (int cx = cxMin; cx <= cxMax; cx++)
+                    cellCounts[cy * gridW + cx]++;
+        }
+
+        // Pass 2: compute offsets
+        var cellOffsets = new int[gridCells + 1];
+        for (int i = 0; i < gridCells; i++)
+            cellOffsets[i + 1] = cellOffsets[i] + cellCounts[i];
+
+        // Pass 3: fill edge indices
+        var cellEdges = new int[cellOffsets[gridCells]];
+        Array.Clear(cellCounts, 0, gridCells);
+        for (int e = 0; e < totalEdges; e++)
+        {
+            int cxMin = Math.Clamp((int)((eXMin[e] - margin - gridMinX) * invCellSize), 0, gridW - 1);
+            int cyMin = Math.Clamp((int)((eYMin[e] - margin - gridMinY) * invCellSize), 0, gridH - 1);
+            int cxMax = Math.Clamp((int)((eXMax[e] + margin - gridMinX) * invCellSize), 0, gridW - 1);
+            int cyMax = Math.Clamp((int)((eYMax[e] + margin - gridMinY) * invCellSize), 0, gridH - 1);
+            for (int cy = cyMin; cy <= cyMax; cy++)
+                for (int cx = cxMin; cx <= cxMax; cx++)
+                {
+                    int ci = cy * gridW + cx;
+                    cellEdges[cellOffsets[ci] + cellCounts[ci]++] = e;
+                }
+        }
+
+        var precomputeMs = sw.ElapsedMilliseconds;
+        sw.Restart();
+
         Parallel.For(0, h, y =>
         {
             for (int x = 0; x < w; ++x)
             {
                 var p = new Vector2Double(x + 0.5, y + 0.5) / scale - translate;
 
+                // Look up grid cell for this pixel
+                int cx = (int)((p.x - gridMinX) * invCellSize);
+                int cy = (int)((p.y - gridMinY) * invCellSize);
+
                 var minDistR = new SignedDistance();
                 var minDistG = new SignedDistance();
                 var minDistB = new SignedDistance();
 
-                foreach (var contour in shape.contours)
+                if (cx >= 0 && cx < gridW && cy >= 0 && cy < gridH)
                 {
-                    foreach (var edge in contour.edges)
-                    {
-                        SignedDistance dist = edge.GetSignedDistance(p, out _);
+                    int cellIdx = cy * gridW + cx;
+                    int start = cellOffsets[cellIdx];
+                    int end = cellOffsets[cellIdx + 1];
 
-                        if (((int)edge.color & (int)EdgeColor.RED) != 0 && dist < minDistR)
+                    for (int j = start; j < end; ++j)
+                    {
+                        int e = cellEdges[j];
+                        SignedDistance dist = edges[e].GetSignedDistance(p, out _);
+                        int color = (int)edges[e].color;
+
+                        if ((color & (int)EdgeColor.RED) != 0 && dist < minDistR)
                             minDistR = dist;
-                        if (((int)edge.color & (int)EdgeColor.GREEN) != 0 && dist < minDistG)
+                        if ((color & (int)EdgeColor.GREEN) != 0 && dist < minDistG)
                             minDistG = dist;
-                        if (((int)edge.color & (int)EdgeColor.BLUE) != 0 && dist < minDistB)
+                        if ((color & (int)EdgeColor.BLUE) != 0 && dist < minDistB)
                             minDistB = dist;
                     }
                 }
@@ -448,6 +555,9 @@ internal static class MsdfGenerator
                 pixel[2] = (float)(distScale * (minDistB.distance + distTranslate));
             }
         });
+
+        var genMs = sw.ElapsedMilliseconds;
+        Log.Info($"[SDF GenBasic] {w}x{h}, {contourCount} contours, {totalEdges} edges, grid {gridW}x{gridH} ({gridCells} cells, {cellOffsets[gridCells]} entries) | precompute {precomputeMs}ms, generate {genMs}ms");
     }
 
     // Scanline-based sign correction. Flips MSDF pixels where the sign disagrees
@@ -462,6 +572,8 @@ internal static class MsdfGenerator
         if (w == 0 || h == 0)
             return;
 
+        var totalSw = System.Diagnostics.Stopwatch.StartNew();
+
         bool flipY = shape.inverseYAxis;
         float sdfZeroValue = 0.5f;
         float doubleSdfZeroValue = 1.0f;
@@ -470,6 +582,18 @@ internal static class MsdfGenerator
         var matchMap = new sbyte[w * h];
 
         bool ambiguous = false;
+
+        // Precompute all edges into a flat array for faster iteration
+        int totalEdges = 0;
+        foreach (var contour in shape.contours)
+            totalEdges += contour.edges.Count;
+        var allEdges = new EdgeSegment[totalEdges];
+        int ei = 0;
+        foreach (var contour in shape.contours)
+            foreach (var edge in contour.edges)
+                allEdges[ei++] = edge;
+
+        var precomputeMs = totalSw.ElapsedMilliseconds;
 
         Span<double> ix = stackalloc double[3];
         Span<int> idy = stackalloc int[3];
@@ -480,14 +604,11 @@ internal static class MsdfGenerator
             double shapeY = (y + 0.5) / scale.y - translate.y;
 
             var intersections = new List<(double x, int direction)>();
-            foreach (var contour in shape.contours)
+            for (int e = 0; e < totalEdges; ++e)
             {
-                foreach (var edge in contour.edges)
-                {
-                    int n = edge.ScanlineIntersections(ix, idy, shapeY);
-                    for (int k = 0; k < n; ++k)
-                        intersections.Add((ix[k], idy[k]));
-                }
+                int n = allEdges[e].ScanlineIntersections(ix, idy, shapeY);
+                for (int k = 0; k < n; ++k)
+                    intersections.Add((ix[k], idy[k]));
             }
 
             intersections.Sort((a, b) => a.x.CompareTo(b.x));
@@ -537,6 +658,8 @@ internal static class MsdfGenerator
             }
         }
 
+        var scanlineMs = totalSw.ElapsedMilliseconds - precomputeMs;
+
         // Resolve ambiguous pixels by neighbor majority
         if (ambiguous)
         {
@@ -564,6 +687,9 @@ internal static class MsdfGenerator
                 }
             }
         }
+
+        totalSw.Stop();
+        Log.Info($"[SDF SignCorr] {w}x{h}, {totalEdges} edges | scanlines {scanlineMs}ms, total {totalSw.ElapsedMilliseconds}ms");
     }
 
     // --- Error Correction (port of msdfgen's MSDFErrorCorrection) ---
@@ -587,12 +713,26 @@ internal static class MsdfGenerator
         if (w == 0 || h == 0)
             return;
 
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
         var stencil = new byte[w * h];
 
         ProtectCorners(stencil, w, h, shape, scale, translate);
+        var cornersMs = sw.ElapsedMilliseconds;
+
+        sw.Restart();
         ProtectEdges(stencil, sdf, w, h, scale, rangeValue);
+        var edgesMs = sw.ElapsedMilliseconds;
+
+        sw.Restart();
         FindErrors(stencil, sdf, w, h, scale, rangeValue);
+        var findMs = sw.ElapsedMilliseconds;
+
+        sw.Restart();
         ApplyCorrection(stencil, sdf, w, h);
+        var applyMs = sw.ElapsedMilliseconds;
+
+        Log.Info($"[SDF ErrCorr] {w}x{h} | corners {cornersMs}ms, protEdges {edgesMs}ms, findErr {findMs}ms, apply {applyMs}ms");
     }
 
     private static void ProtectCorners(
@@ -684,8 +824,9 @@ internal static class MsdfGenerator
         float vRadius = (float)(PROTECTION_RADIUS_TOLERANCE / (rangeValue * scale.y));
         float dRadius = (float)(PROTECTION_RADIUS_TOLERANCE * Math.Sqrt(1.0 / (rangeValue * rangeValue * scale.x * scale.x) + 1.0 / (rangeValue * rangeValue * scale.y * scale.y)));
 
+        // All writes are |= STENCIL_PROTECTED (same bit), safe to parallelize by rows.
         // Horizontal texel pairs
-        for (int y = 0; y < h; y++)
+        Parallel.For(0, h, y =>
         {
             for (int x = 0; x < w - 1; x++)
             {
@@ -700,9 +841,9 @@ internal static class MsdfGenerator
                     ProtectExtremeChannels(stencil, y * w + x + 1, right, rm, mask);
                 }
             }
-        }
-        // Vertical texel pairs
-        for (int y = 0; y < h - 1; y++)
+        });
+        // Vertical texel pairs — writes to row y and y+1, but all OR same bit
+        Parallel.For(0, h - 1, y =>
         {
             for (int x = 0; x < w; x++)
             {
@@ -717,9 +858,9 @@ internal static class MsdfGenerator
                     ProtectExtremeChannels(stencil, (y + 1) * w + x, top, tm, mask);
                 }
             }
-        }
-        // Diagonal texel pairs
-        for (int y = 0; y < h - 1; y++)
+        });
+        // Diagonal texel pairs — writes across 2 rows, all OR same bit
+        Parallel.For(0, h - 1, y =>
         {
             for (int x = 0; x < w - 1; x++)
             {
@@ -744,7 +885,7 @@ internal static class MsdfGenerator
                     ProtectExtremeChannels(stencil, (y + 1) * w + x, lt, mlt, mask);
                 }
             }
-        }
+        });
     }
 
     private static bool HasLinearArtifactInner(double span, bool isProtected, float am, float bm, Span<float> a, Span<float> b, float dA, float dB)
@@ -872,7 +1013,8 @@ internal static class MsdfGenerator
         double vSpan = DEFAULT_MIN_DEVIATION_RATIO / (rangeValue * scale.y);
         double dSpan = DEFAULT_MIN_DEVIATION_RATIO * Math.Sqrt(1.0 / (rangeValue * rangeValue * scale.x * scale.x) + 1.0 / (rangeValue * rangeValue * scale.y * scale.y));
 
-        for (int y = 0; y < h; y++)
+        // Each pixel only writes to its own stencil[y*w+x], safe to parallelize by rows.
+        Parallel.For(0, h, y =>
         {
             for (int x = 0; x < w; x++)
             {
@@ -893,7 +1035,7 @@ internal static class MsdfGenerator
                 if (isError)
                     stencil[y * w + x] |= STENCIL_ERROR;
             }
-        }
+        });
     }
 
     // Replace error-flagged texels with single-channel median.
