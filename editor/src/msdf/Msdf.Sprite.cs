@@ -3,6 +3,7 @@
 //
 
 using System;
+using System.Diagnostics;
 
 namespace NoZ.Editor.Msdf;
 
@@ -57,10 +58,13 @@ internal static class MsdfSprite
             }
         }
 
+        var sw = Stopwatch.StartNew();
         shape = ShapeClipper.Union(shape);
+        var unionMs = sw.ElapsedMilliseconds;
 
         shape.Normalize();
         EdgeColoring.ColorSimple(shape, 3.0);
+        Log.Info($"[SDF Sprite] FromSpritePaths: {pathIndices.Length} paths, union {unionMs}ms, normalize+color {sw.ElapsedMilliseconds - unionMs}ms");
 
         return shape;
     }
@@ -77,6 +81,7 @@ internal static class MsdfSprite
     {
         if (pathIndices.Length == 0) return;
 
+        var totalSw = Stopwatch.StartNew();
         var dpi = EditorApplication.Config.PixelsPerUnit;
 
         var addPaths = new System.Collections.Generic.List<ushort>();
@@ -94,14 +99,19 @@ internal static class MsdfSprite
 
         if (addPaths.Count == 0) return;
 
+        var sw = Stopwatch.StartNew();
         var shape = FromSpritePaths(spriteShape, addPaths.ToArray());
+        var shapeMs = sw.ElapsedMilliseconds;
 
+        long diffMs = 0;
         if (subtractPaths.Count > 0)
         {
+            sw.Restart();
             var subShape = FromSpritePaths(spriteShape, subtractPaths.ToArray());
             shape = ShapeClipper.Difference(shape, subShape);
             shape.Normalize();
             EdgeColoring.ColorSimple(shape, 3.0);
+            diffMs = sw.ElapsedMilliseconds;
         }
 
         var scale = new Vector2Double(dpi, dpi);
@@ -114,7 +124,14 @@ internal static class MsdfSprite
         double rangeInShapeUnits = range / dpi * 2.0;
 
         var bitmap = new MsdfBitmap(w, h);
-        MsdfGenerator.GenerateMSDF(bitmap, shape, rangeInShapeUnits, scale, translate);
+        sw.Restart();
+        MsdfGenerator.GenerateMSDFBasic(bitmap, shape, rangeInShapeUnits, scale, translate);
+        var genMs = sw.ElapsedMilliseconds;
+
+        sw.Restart();
+        MsdfGenerator.DistanceSignCorrection(bitmap, shape, scale, translate);
+        MsdfGenerator.ErrorCorrection(bitmap, shape, scale, translate, rangeInShapeUnits);
+        var corrMs = sw.ElapsedMilliseconds;
 
         for (int y = 0; y < h; y++)
         {
@@ -130,5 +147,11 @@ internal static class MsdfSprite
                     255);
             }
         }
+
+        totalSw.Stop();
+        var contourCount = shape.contours.Count;
+        var edgeCount = 0;
+        foreach (var c in shape.contours) edgeCount += c.edges.Count;
+        Log.Info($"[SDF Sprite] {w}x{h} px, {pathIndices.Length} paths, {contourCount} contours, {edgeCount} edges | shape {shapeMs}ms, diff {diffMs}ms, generate {genMs}ms, correct {corrMs}ms, total {totalSw.ElapsedMilliseconds}ms");
     }
 }

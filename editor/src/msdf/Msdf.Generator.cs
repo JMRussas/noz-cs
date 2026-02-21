@@ -399,6 +399,57 @@ internal static class MsdfGenerator
         });
     }
 
+    // Basic nearest-edge-per-channel MSDF using only true signed distance.
+    // No perpendicular distance extension — avoids artifacts between separated contours.
+    public static void GenerateMSDFBasic(
+        MsdfBitmap output,
+        Shape shape,
+        double rangeValue,
+        Vector2Double scale,
+        Vector2Double translate)
+    {
+        double rangeLower = -0.5 * rangeValue;
+        double rangeUpper = 0.5 * rangeValue;
+        double rangeWidth = rangeUpper - rangeLower;
+        double distScale = 1.0 / rangeWidth;
+        double distTranslate = -rangeLower;
+
+        int w = output.width;
+        int h = output.height;
+
+        Parallel.For(0, h, y =>
+        {
+            for (int x = 0; x < w; ++x)
+            {
+                var p = new Vector2Double(x + 0.5, y + 0.5) / scale - translate;
+
+                var minDistR = new SignedDistance();
+                var minDistG = new SignedDistance();
+                var minDistB = new SignedDistance();
+
+                foreach (var contour in shape.contours)
+                {
+                    foreach (var edge in contour.edges)
+                    {
+                        SignedDistance dist = edge.GetSignedDistance(p, out _);
+
+                        if (((int)edge.color & (int)EdgeColor.RED) != 0 && dist < minDistR)
+                            minDistR = dist;
+                        if (((int)edge.color & (int)EdgeColor.GREEN) != 0 && dist < minDistG)
+                            minDistG = dist;
+                        if (((int)edge.color & (int)EdgeColor.BLUE) != 0 && dist < minDistB)
+                            minDistB = dist;
+                    }
+                }
+
+                var pixel = output[x, y];
+                pixel[0] = (float)(distScale * (minDistR.distance + distTranslate));
+                pixel[1] = (float)(distScale * (minDistG.distance + distTranslate));
+                pixel[2] = (float)(distScale * (minDistB.distance + distTranslate));
+            }
+        });
+    }
+
     // Scanline-based sign correction. Flips MSDF pixels where the sign disagrees
     // with the non-zero winding fill state.
     public static void DistanceSignCorrection(
