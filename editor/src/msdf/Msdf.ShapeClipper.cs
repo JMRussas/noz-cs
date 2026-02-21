@@ -128,4 +128,16 @@ internal static class ShapeClipper
         for (int i = 0; i < node.Count; i++)
             CollectContours(node[i], shape);
     }
+
+    // Ensure all contours wind in the same direction (positive).
+    // Sprites have no holes, so all paths should be outer contours
+    // with consistent winding for NonZero fill rule to union correctly.
+    private static void NormalizeWindings(Shape shape)
+    {
+        foreach (var contour in shape.contours)
+        {
+            if (contour.Winding() < 0)
+                contour.Reverse();
+        }
+    }
 }
