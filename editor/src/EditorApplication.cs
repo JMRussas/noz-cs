@@ -44,6 +44,7 @@ public static class EditorApplication
         SkeletonDocument.RegisterDef();
         AnimationDocument.RegisterDef();
         VfxDocument.RegisterDef();
+        BinDocument.RegisterDef();
 
         Config = EditorConfig.Load(Path.Combine(ProjectPath, "editor.cfg"))!;           
         if (Config == null)

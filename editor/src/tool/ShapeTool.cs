@@ -211,30 +211,50 @@ public class ShapeTool(
     private void AddCircleAnchors(ushort pathIndex, Vector2 min, Vector2 max)
     {
         var center = (min + max) * 0.5f;
-        var radiusX = (max.X - min.X) * 0.5f;
-        var radiusY = (max.Y - min.Y) * 0.5f;
+        var rx = (max.X - min.X) * 0.5f;
+        var ry = (max.Y - min.Y) * 0.5f;
 
-        var right = center + new Vector2(radiusX, 0);
-        var bottom = center + new Vector2(0, radiusY);
-        var left = center + new Vector2(-radiusX, 0);
-        var top = center + new Vector2(0, -radiusY);
+        // 8 anchor points at 45-degree intervals for much better circle approximation.
+        // Quadratic bezier error drops from ~2.7% (90-degree arcs) to ~0.17% (45-degree arcs).
+        const float cos45 = 0.7071067812f;
+        Span<Vector2> anchors =
+        [
+            center + new Vector2(rx, 0),                    // 0°
+            center + new Vector2(rx * cos45, ry * cos45),   // 45°
+            center + new Vector2(0, ry),                    // 90°
+            center + new Vector2(-rx * cos45, ry * cos45),  // 135°
+            center + new Vector2(-rx, 0),                   // 180°
+            center + new Vector2(-rx * cos45, -ry * cos45), // 225°
+            center + new Vector2(0, -ry),                   // 270°
+            center + new Vector2(rx * cos45, -ry * cos45),  // 315°
+        ];
 
-        var curveX = CalculateCircleCurve(radiusY);
-        var curveY = CalculateCircleCurve(radiusX);
+        for (var i = 0; i < 8; i++)
+        {
+            var p0 = anchors[i];
+            var p1 = anchors[(i + 1) % 8];
 
-        _shape.AddAnchor(pathIndex, right, curveX);
-        _shape.AddAnchor(pathIndex, bottom, curveY);
-        _shape.AddAnchor(pathIndex, left, curveX);
-        _shape.AddAnchor(pathIndex, top, curveY);
+            // Arc midpoint on the ellipse at the angle halfway between the two anchors
+            var midAngle = (i + 0.5f) * MathF.PI * 2f / 8f;
+            var arcMid = center + new Vector2(MathF.Cos(midAngle) * rx, MathF.Sin(midAngle) * ry);
+
+            var curve = CalculateSegmentCurve(p0, p1, arcMid);
+            _shape.AddAnchor(pathIndex, p0, curve);
+        }
     }
 
-    private static float CalculateCircleCurve(float radius)
+    private static float CalculateSegmentCurve(Vector2 p0, Vector2 p1, Vector2 arcMidpoint)
     {
-        // For a quadratic bezier circle approximation with 4 points,
-        // we need the bezier to pass through the arc midpoint.
-        // The curve value is the perpendicular offset from the chord midpoint.
-        // For a 90-degree arc, curve ≈ 0.586 * radius (negative for CCW winding)
-        return -0.586f * radius;
+        // Find the curve value (perpendicular offset) that makes the quadratic bezier
+        // pass through the arc midpoint at t=0.5.
+        // At t=0.5: P(0.5) = chordMid + 0.5 * perp * curve
+        // Solving: curve = 2 * dot(arcMid - chordMid, perp)
+        var chordMid = (p0 + p1) * 0.5f;
+        var dir = p1 - p0;
+        var len = dir.Length();
+        if (len < 0.0001f) return 0f;
+        var perp = new Vector2(-dir.Y, dir.X) / len;
+        return 2f * Vector2.Dot(arcMidpoint - chordMid, perp);
     }
 
     private void Finish()

@@ -25,7 +25,7 @@ noz/
 │   │   ├── EditorApplication.cs
 │   │   ├── document/           # Per-asset-type editors (Sprite, Texture, Font, Animation, Atlas, Vfx, etc.)
 │   │   ├── tool/               # Move, Rotate, Scale, Pen, Knife, BoxSelect, etc.
-│   │   ├── MSDF/               # SDF font generation
+│   │   ├── msdf/               # MSDF generation (sprites and fonts)
 │   │   ├── TTF/                # TrueType font parsing
 │   │   └── shape/              # Vector shape editing
 │   └── assets/                 # Editor UI assets
@@ -149,9 +149,11 @@ WGSL (WebGPU Shading Language). Located in `engine/assets/shader/`.
 | Shader | Purpose |
 |--------|---------|
 | `sprite.wgsl` | Standard sprite rendering with bone transforms, UV animation, texture array, vertex color |
+| `sprite_sdf.wgsl` | SDF sprite rendering — median(r,g,b) reconstruction with adaptive antialiasing |
 | `text.wgsl` | SDF text rendering with outline support |
-| `ui.wgsl` | UI elements with border radius, shadows, gradients |
 | `texture.wgsl` | Simple texture display |
+| `texture_sdf.wgsl` | SDF texture display (editor single-atlas path) |
+| `ui.wgsl` | UI elements with border radius, shadows, gradients |
 | `composite.wgsl` | Post-processing / screen-space effects |
 
 Globals uniform: `projection: mat4x4<f32>`, `time: f32`.
@@ -168,8 +170,8 @@ Globals uniform: `projection: mat4x4<f32>`, `time: f32`.
 
 - **Document editors**: Texture, Sprite, Font, Skeleton, Animation, Atlas, Shader, Sound, Vfx
 - **Tools**: Move, Rotate, Scale, Pen, Knife, BoxSelect, SpriteSelect, BoneSelect, Rename, Curve
-- **Font import**: TTF parsing (`TTF/TrueTypeFont.Reader.cs`) → SDF generation (`MSDF/MSDF.cs`) → binary font asset
-- **SDF**: Boundary-probe technique for overlapping contours. Range: 4px, font size: 48px.
+- **Font import**: TTF parsing (`TTF/TrueTypeFont.Reader.cs`) → SDF generation (`msdf/Msdf.Font.cs`) → binary font asset (RGBA8 atlas)
+- **SDF generation**: Multi-channel signed distance fields (MSDF algorithm) for sprites and fonts. Port of msdfgen by Viktor Chlumsky. See `docs/sdf.md`.
 - **Asset pipeline**: Source files → Importer → binary assets. AtlasManager for texture packing. AssetManifest for registry.
 - **Project init**: `--init --project .` scaffolds game project from embedded templates
 - **Style**: `EditorStyle.cs` for editor UI theme

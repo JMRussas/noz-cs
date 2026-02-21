@@ -120,6 +120,7 @@ public static class Application
         Shader.RegisterDef();
         Font.RegisterDef();
         Vfx.RegisterDef();
+        Bin.RegisterDef();
     }
 
     public static void Run()

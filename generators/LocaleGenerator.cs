@@ -112,8 +112,10 @@ public class LocaleGenerator : IIncrementalGenerator
         sb.AppendLine("    }");
         sb.AppendLine();
 
-        // CurrentLocale property
+        // CurrentLocale, CurrentLocaleName, CurrentLocaleIndex properties
         sb.AppendLine("    public static string CurrentLocale { get; private set; }");
+        sb.AppendLine("    public static string CurrentLocaleName { get; private set; }");
+        sb.AppendLine("    public static int CurrentLocaleIndex { get; private set; }");
         sb.AppendLine();
 
         // Static string properties with default values from first locale
@@ -132,12 +134,15 @@ public class LocaleGenerator : IIncrementalGenerator
         sb.AppendLine("        CurrentLocale = locale;");
 
         bool first = true;
+        int localeIndex = 0;
         foreach (var locale in csv.Locales)
         {
             var constName = CapitalizeFirst(locale.Code);
             var prefix = first ? "if" : "else if";
             sb.AppendLine($"        {prefix} (locale == Locales.{constName})");
             sb.AppendLine("        {");
+            sb.AppendLine($"            CurrentLocaleName = {EscapeString(locale.Name)};");
+            sb.AppendLine($"            CurrentLocaleIndex = {localeIndex};");
 
             foreach (var entry in csv.Entries)
             {
@@ -149,6 +154,7 @@ public class LocaleGenerator : IIncrementalGenerator
 
             sb.AppendLine("        }");
             first = false;
+            localeIndex++;
         }
 
         sb.AppendLine("    }");

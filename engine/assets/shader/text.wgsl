@@ -1,7 +1,7 @@
 //
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
-//  SDF text shader with per-vertex outline support
+//  MSDF text shader with per-vertex outline support
 
 // Bind group 0: Globals and font texture
 struct Globals {
@@ -33,6 +33,10 @@ struct VertexOutput {
     @location(4) outline_softness: f32,
 }
 
+fn median(r: f32, g: f32, b: f32) -> f32 {
+    return max(min(r, g), min(max(r, g), b));
+}
+
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
     var output: VertexOutput;
@@ -47,7 +51,8 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
-    let dist = textureSample(font_texture, font_sampler, input.uv).r;
+    let msd = textureSample(font_texture, font_sampler, input.uv);
+    let dist = median(msd.r, msd.g, msd.b);
 
     let dx = dpdx(dist);
     let dy = dpdy(dist);

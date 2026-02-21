@@ -637,4 +637,95 @@ public sealed partial class Shape
         for (int i = 0; i < width; i++)
             target[x + i, y] = Color32.Transparent;
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static double Median(double a, double b, double c)
+        => Math.Max(Math.Min(a, b), Math.Min(Math.Max(a, b), c));
+
+    /// <summary>
+    /// Rasterize paths as a multi-channel signed distance field (MSDF).
+    /// Uses msdf — a faithful port of msdfgen by Viktor Chlumsky.
+    /// </summary>
+    public void RasterizeMSDF(
+        PixelData<Color32> target,
+        RectInt targetRect,
+        Vector2Int sourceOffset,
+        ReadOnlySpan<ushort> pathIndices,
+        float range = 1.5f)
+    {
+        Msdf.MsdfSprite.RasterizeMSDF(this, target, targetRect, sourceOffset, pathIndices, range);
+    }
+
+    /// <summary>
+    /// Rasterize paths as a signed distance field. SDF value stored in R channel.
+    /// Each path is evaluated independently and results are unioned (max) for
+    /// non-subtract paths, then subtract paths carve out. This prevents nearby
+    /// shapes from interfering with each other's distance fields.
+    /// </summary>
+    public void RasterizeSDF(
+        PixelData<Color32> target,
+        RectInt targetRect,
+        Vector2Int sourceOffset,
+        ReadOnlySpan<ushort> pathIndices,
+        float range = 1.5f)
+    {
+        if (pathIndices.Length == 0) return;
+
+        var dpi = EditorApplication.Config.PixelsPerUnit;
+        var dpiInv = 1.0f / dpi;
+
+        // Copy path indices to an array for use in the parallel loop
+        var indices = pathIndices.ToArray();
+
+        Parallel.For(0, targetRect.Height, y =>
+        {
+            for (int x = 0; x < targetRect.Width; x++)
+            {
+                // Convert pixel coordinate to shape space
+                var sx = -sourceOffset.X + x;
+                var sy = -sourceOffset.Y + y;
+                var worldPoint = new Vector2((sx + 0.5f) * dpiInv, (sy + 0.5f) * dpiInv);
+
+                // Compute SDF per-path independently, then union.
+                // For signed distance: positive = inside, negative = outside.
+                // Union of shapes = max of signed distances.
+                // Subtract = min(base, -subtract).
+                var unionDist = float.MinValue;
+
+                foreach (var pathIndex in indices)
+                {
+                    if (pathIndex >= PathCount) continue;
+
+                    ref var path = ref _paths[pathIndex];
+                    if (path.AnchorCount < 3) continue;
+
+                    // GetPathSignedDistance returns negative inside, positive outside
+                    // We flip sign so positive = inside for union (max) to work
+                    var pathDist = -GetPathSignedDistance(worldPoint, pathIndex);
+
+                    if (path.IsSubtract)
+                    {
+                        // Subtract: carve out by intersecting with negation
+                        // subtract means "remove interior", so negate the distance
+                        unionDist = MathF.Min(unionDist, -pathDist);
+                    }
+                    else
+                    {
+                        // Union: max of signed distances
+                        unionDist = MathF.Max(unionDist, pathDist);
+                    }
+                }
+
+                // Convert to pixel distance
+                var pixelDist = unionDist * dpi;
+
+                // Normalize to [0, 1] with 0.5 = on edge
+                var sdf = Math.Clamp(pixelDist / (range * 2.0f) + 0.5f, 0f, 1f);
+
+                var targetX = targetRect.X + x;
+                var targetY = targetRect.Y + y;
+                target[targetX, targetY] = new Color32((byte)(sdf * 255f), 0, 0, 0);
+            }
+        });
+    }
 }

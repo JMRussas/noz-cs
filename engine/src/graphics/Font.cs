@@ -19,7 +19,7 @@ public struct FontGlyph
 
 public class Font : Asset
 {
-    internal const ushort Version = 5;
+    internal const ushort Version = 6;
 
     public int FontSize { get; private init; }
     public int AtlasWidth { get; private init; }
@@ -139,11 +139,11 @@ public class Font : Asset
             font._kerning[key] = amount;
         }
 
-        // Read atlas texture data (R8 format)
-        var atlasDataSize = atlasWidth * atlasHeight;
-        var r8Data = reader.ReadBytes(atlasDataSize);
+        // Read atlas texture data (RGBA8 format for MSDF)
+        var atlasDataSize = atlasWidth * atlasHeight * 4;
+        var rgbaData = reader.ReadBytes(atlasDataSize);
 
-        font._atlasTexture = Texture.Create(atlasWidth, atlasHeight, r8Data, TextureFormat.R8, name: name + "_atlas");
+        font._atlasTexture = Texture.Create(atlasWidth, atlasHeight, rgbaData, TextureFormat.RGBA8, name: name + "_atlas");
 
         // Read glyph names (appended after atlas in v5+)
         if (reader.BaseStream.Position < reader.BaseStream.Length)
