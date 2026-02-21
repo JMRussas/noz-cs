@@ -76,8 +76,8 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     // Alpha: fade out at boundary (branchless)
     let alpha = 1.0 - smoothstep(-edge, edge, dist);
 
-    // Border blend (branchless)
-    let border_blend = smoothstep(-edge, edge, dist + input.border_width);
+    // Border blend (branchless) - sharp inner border edge
+    let border_blend = step(0.0, dist + input.border_width);
     let has_border = step(0.001, input.border_width) * step(0.001, input.border_color.a);
     let base_color = input.color * tex_color;
     let final_color = mix(base_color, input.border_color, border_blend * has_border);

@@ -79,7 +79,7 @@ public class SpriteDocument : Document, ISpriteSource
     private Sprite? _sprite;
     private static Shader? _textureSdfShader;
 
-    private static Shader GetTextureSdfShader() =>
+    internal static Shader GetTextureSdfShader() =>
         _textureSdfShader ??= Asset.Get<Shader>(AssetType.Shader, "texture_sdf")!;
 
     public readonly SpriteFrame[] Frames = new SpriteFrame[Sprite.MaxFrames];

@@ -3,7 +3,6 @@
 //
 
 using System;
-using System.Diagnostics;
 
 namespace NoZ.Editor.Msdf;
 
@@ -127,14 +126,11 @@ internal static class MsdfFont
             }
         }
 
-        var sw = Stopwatch.StartNew();
         shape = ShapeClipper.Union(shape);
-        var unionMs = sw.ElapsedMilliseconds;
         shape.inverseYAxis = true;
 
         shape.Normalize();
         EdgeColoring.ColorSimple(shape, 3.0);
-        Log.Info($"[SDF Font] FromGlyph '{glyph.name}': {glyph.contours?.Length ?? 0} contours, union {unionMs}ms, normalize+color {sw.ElapsedMilliseconds - unionMs}ms");
 
         return shape;
     }
@@ -149,28 +145,16 @@ internal static class MsdfFont
         in Vector2Double scale,
         in Vector2Double translate)
     {
-        var totalSw = Stopwatch.StartNew();
-
-        var sw = Stopwatch.StartNew();
         var shape = FromGlyph(glyph);
-        var shapeMs = sw.ElapsedMilliseconds;
         if (shape == null)
             return;
 
         var glyphBitmap = new MsdfBitmap(outputSize.X, outputSize.Y);
         double rangeValue = range * 2.0;
 
-        sw.Restart();
         MsdfGenerator.GenerateMSDF(glyphBitmap, shape, rangeValue, scale, translate);
-        var genMs = sw.ElapsedMilliseconds;
-
-        sw.Restart();
         MsdfGenerator.DistanceSignCorrection(glyphBitmap, shape, scale, translate);
-        var signMs = sw.ElapsedMilliseconds;
-
-        sw.Restart();
         MsdfGenerator.ErrorCorrection(glyphBitmap, shape, scale, translate, rangeValue);
-        var errMs = sw.ElapsedMilliseconds;
 
         for (int y = 0; y < outputSize.Y; y++)
         {
@@ -184,7 +168,5 @@ internal static class MsdfFont
             }
         }
 
-        totalSw.Stop();
-        Log.Info($"[SDF Font] glyph '{glyph.name}' {outputSize.X}x{outputSize.Y} | shape {shapeMs}ms, generate {genMs}ms, signCorr {signMs}ms, errCorr {errMs}ms, total {totalSw.ElapsedMilliseconds}ms");
     }
 }

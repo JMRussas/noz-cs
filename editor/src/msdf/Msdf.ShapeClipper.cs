@@ -8,7 +8,7 @@ namespace NoZ.Editor.Msdf;
 
 internal static class ShapeClipper
 {
-    const int DefaultStepsPerCurve = 8;
+    const int DefaultStepsPerCurve = 16;
     const int ClipperPrecision = 6;
 
     // Boolean-union all contours, producing non-overlapping linear contours.

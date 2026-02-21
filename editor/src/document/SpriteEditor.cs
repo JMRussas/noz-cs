@@ -3,6 +3,7 @@
 //
 
 using System.Numerics;
+using System.Runtime.InteropServices;
 
 namespace NoZ.Editor;
 
@@ -46,6 +47,15 @@ public partial class SpriteEditor : DocumentEditor
     private bool _rasterDirty = true;
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
     private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
+
+    // SDF preview: per-slot info for multi-draw with SDF shader
+    private struct SdfSlotInfo
+    {
+        public RectInt Region;       // pixel region in _image (for UV calc)
+        public RectInt ShapeBounds;  // shape-space bounds (for quad position)
+        public Color FillColor;      // palette color + opacity
+    }
+    private readonly System.Collections.Generic.List<SdfSlotInfo> _sdfSlots = new();
 
     public SpriteEditor(SpriteDocument doc) : base(doc)
     {
@@ -650,32 +660,103 @@ public partial class SpriteEditor : DocumentEditor
         var size = bounds.Size;
         if (bounds.Width <= 0 || bounds.Height <= 0)
         {
+            _sdfSlots.Clear();
             _rasterDirty = false;
             return;
         }
 
-        var rasterRect = new RectInt(0, 0, size.X + Padding * 2, size.Y + Padding * 2);
-        _image.Clear(rasterRect);
-        var palette = PaletteManager.GetPalette(Document.Palette);
-        if (palette != null)
-            shape.Rasterize(
-                _image,
-                rasterRect.Expand(-Padding),
-                -Document.RasterBounds.Position,
-                palette.Colors,
-                options: new Shape.RasterizeOptions {
-                    AntiAlias = Document.IsAntiAliased,
-                    Color = Color.White
-                });
+        if (Document.IsSDF)
+        {
+            UpdateRasterSDF(shape);
+        }
+        else
+        {
+            _sdfSlots.Clear();
 
-        for (int p = Padding - 1; p >= 0; p--)
-            _image.ExtrudeEdges(new RectInt(
-                p,
-                p,
-                size.X + (Padding - p) * 2, size.Y + (Padding - p) * 2));
+            var rasterRect = new RectInt(0, 0, size.X + Padding * 2, size.Y + Padding * 2);
+            _image.Clear(rasterRect);
+            var palette = PaletteManager.GetPalette(Document.Palette);
+            if (palette != null)
+                shape.Rasterize(
+                    _image,
+                    rasterRect.Expand(-Padding),
+                    -Document.RasterBounds.Position,
+                    palette.Colors,
+                    options: new Shape.RasterizeOptions {
+                        AntiAlias = Document.IsAntiAliased,
+                        Color = Color.White
+                    });
 
-        _rasterTexture.Update(_image.AsByteSpan(), rasterRect, _image.Width);
+            for (int p = Padding - 1; p >= 0; p--)
+                _image.ExtrudeEdges(new RectInt(
+                    p,
+                    p,
+                    size.X + (Padding - p) * 2, size.Y + (Padding - p) * 2));
+
+            _rasterTexture.Update(_image.AsByteSpan(), rasterRect, _image.Width);
+        }
+
         _rasterDirty = false;
+    }
+
+    private void UpdateRasterSDF(Shape shape)
+    {
+        _sdfSlots.Clear();
+
+        var palette = PaletteManager.GetPalette(Document.Palette);
+        if (palette == null) return;
+
+        var slots = Document.GetMeshSlots(_currentFrame);
+        var slotBounds = Document.GetMeshSlotBounds(_currentFrame);
+        if (slots.Count == 0) return;
+
+        var padding2 = Padding * 2;
+        var xOffset = 0;
+        var maxHeight = 0;
+
+        for (int i = 0; i < slots.Count; i++)
+        {
+            var slot = slots[i];
+            var sb = slotBounds[i];
+            if (sb.Width <= 0 || sb.Height <= 0)
+                sb = Document.RasterBounds;
+
+            var slotWidth = sb.Size.X + padding2;
+            var slotHeight = sb.Size.Y + padding2;
+
+            var outerRect = new RectInt(xOffset, 0, slotWidth, slotHeight);
+            _image.Clear(outerRect);
+
+            if (slot.PathIndices.Count > 0)
+            {
+                shape.RasterizeMSDF(
+                    _image,
+                    outerRect,
+                    -sb.Position + new Vector2Int(Padding, Padding),
+                    CollectionsMarshal.AsSpan(slot.PathIndices));
+            }
+
+            // Get fill color from palette (same as atlas export in SpriteDocument)
+            var c = palette.Colors[slot.FillColor % palette.Colors.Length];
+            var firstPath = shape.GetPath(slot.PathIndices[0]);
+            var fillColor = c.WithAlpha(firstPath.FillOpacity);
+
+            _sdfSlots.Add(new SdfSlotInfo
+            {
+                Region = outerRect,
+                ShapeBounds = sb,
+                FillColor = fillColor
+            });
+
+            xOffset += slotWidth;
+            if (slotHeight > maxHeight) maxHeight = slotHeight;
+        }
+
+        if (xOffset > 0 && maxHeight > 0)
+        {
+            var totalRect = new RectInt(0, 0, xOffset, maxHeight);
+            _rasterTexture.Update(_image.AsByteSpan(), totalRect, _image.Width);
+        }
     }
 
     public void MarkRasterDirty()
@@ -1554,29 +1635,60 @@ public partial class SpriteEditor : DocumentEditor
 
         var dpi = EditorApplication.Config.PixelsPerUnit;
         var invDpi = 1f / dpi;
-        var quad = new Rect(
-            rb.X * invDpi,
-            rb.Y * invDpi,
-            rb.Width * invDpi,
-            rb.Height * invDpi);
-
         var texSizeInv = 1.0f / (float)_image.Width;
-
-        var uv = new Rect(
-            Padding * texSizeInv,
-            Padding * texSizeInv,
-            rb.Width * texSizeInv,
-            rb.Height * texSizeInv);
 
         using (Graphics.PushState())
         {
             Graphics.SetSortGroup(3);
             Graphics.SetLayer(EditorLayer.DocumentEditor);
-            Graphics.SetShader(EditorAssets.Shaders.Texture);
             Graphics.SetTransform(Document.Transform);
-            Graphics.SetColor(Color.White.WithAlpha(Workspace.XrayAlpha));
             Graphics.SetTexture(_rasterTexture);
-            Graphics.Draw(quad, uv);
+
+            // Raster bounds quad/uv (used for tiling and raster mode)
+            var quad = new Rect(
+                rb.X * invDpi,
+                rb.Y * invDpi,
+                rb.Width * invDpi,
+                rb.Height * invDpi);
+
+            var uv = new Rect(
+                Padding * texSizeInv,
+                Padding * texSizeInv,
+                rb.Width * texSizeInv,
+                rb.Height * texSizeInv);
+
+            if (_sdfSlots.Count > 0)
+            {
+                // SDF mode: draw each slot with SDF shader + per-slot fill color
+                Graphics.SetShader(SpriteDocument.GetTextureSdfShader());
+                Graphics.SetTextureFilter(TextureFilter.Linear);
+
+                foreach (var slot in _sdfSlots)
+                {
+                    var slotQuad = new Rect(
+                        slot.ShapeBounds.X * invDpi,
+                        slot.ShapeBounds.Y * invDpi,
+                        slot.ShapeBounds.Width * invDpi,
+                        slot.ShapeBounds.Height * invDpi);
+
+                    var slotUv = new Rect(
+                        (slot.Region.X + Padding) * texSizeInv,
+                        (slot.Region.Y + Padding) * texSizeInv,
+                        slot.ShapeBounds.Width * texSizeInv,
+                        slot.ShapeBounds.Height * texSizeInv);
+
+                    Graphics.SetColor(slot.FillColor.WithAlpha(
+                        slot.FillColor.A * Workspace.XrayAlpha));
+                    Graphics.Draw(slotQuad, slotUv);
+                }
+            }
+            else
+            {
+                // Raster mode: single quad with normal texture shader
+                Graphics.SetShader(EditorAssets.Shaders.Texture);
+                Graphics.SetColor(Color.White.WithAlpha(Workspace.XrayAlpha));
+                Graphics.Draw(quad, uv);
+            }
 
             if (Document.ShowTiling)
             {
