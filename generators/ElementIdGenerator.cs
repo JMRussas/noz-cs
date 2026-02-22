@@ -24,10 +24,25 @@ public class ElementIdGenerator : IIncrementalGenerator
                 transform: static (ctx, _) => GetClassInfo(ctx))
             .Where(static info => info is not null);
 
-        // Combine all class infos and generate
-        var collected = classDeclarations.Collect();
+        // Extract the range start from [assembly: ElementIdRange(start, end)]
+        var rangeStart = context.CompilationProvider.Select(static (compilation, _) =>
+        {
+            foreach (var attr in compilation.Assembly.GetAttributes())
+            {
+                if (attr.AttributeClass?.Name == "ElementIdRangeAttribute" &&
+                    attr.ConstructorArguments.Length >= 1 &&
+                    attr.ConstructorArguments[0].Value is int start)
+                {
+                    return start;
+                }
+            }
+            return 1;
+        });
 
-        context.RegisterSourceOutput(collected, GenerateSource);
+        // Combine class infos with range start
+        var combined = classDeclarations.Collect().Combine(rangeStart);
+
+        context.RegisterSourceOutput(combined, GenerateSource);
     }
 
     private static ClassInfo? GetClassInfo(GeneratorAttributeSyntaxContext context)
@@ -79,10 +94,10 @@ public class ElementIdGenerator : IIncrementalGenerator
 
     private static void GenerateSource(
         SourceProductionContext context,
-        ImmutableArray<ClassInfo?> classes)
+        (ImmutableArray<ClassInfo?> Classes, int RangeStart) input)
     {
         // Sort by full type path to ensure deterministic ID assignment
-        var validClasses = classes
+        var validClasses = input.Classes
             .Where(c => c is not null)
             .Cast<ClassInfo>()
             .OrderBy(c => c.Namespace)
@@ -90,7 +105,7 @@ public class ElementIdGenerator : IIncrementalGenerator
             .ThenBy(c => c.ClassName)
             .ToList();
 
-        int nextId = 1;
+        int nextId = input.RangeStart;
 
         foreach (var classInfo in validClasses)
         {

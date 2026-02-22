@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\engine\NoZ.csproj" />
+    <ProjectReference Include="..\widgets\NoZ.Widgets.csproj" />
     <ProjectReference Include="..\generators\NoZ.Generators.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />

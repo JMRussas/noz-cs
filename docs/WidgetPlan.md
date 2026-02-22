@@ -73,7 +73,7 @@ Add project reference in `game/HighriseStudio.csproj`:
 
 Pattern: Pre-built `internal static` style structs. Public setters mutate specific fields in those structs. Style access in the render loop is just reading a static field (zero cost). Customization cost is paid once at init time.
 
-**Key design**: No `Control` sub-class. Every widget IS a control, so the shared base styling (fill, text, icon, dimensions) lives at the top level of `WidgetStyle`. Only widget-specific styles nest (e.g. `WidgetStyle.Button`, `WidgetStyle.Slider`).
+**Key design**: No `Control` sub-class. Every widget IS a control, so the shared base styling (fill, text, icon, dimensions) lives at the top level of `WidgetStyle`. Only widget-specific styles nest (e.g. `WidgetStyle.Button`, `WidgetStyle.Slider`, `WidgetStyle.ColorPicker`).
 
 ```csharp
 namespace NoZ;
@@ -135,6 +135,7 @@ WidgetStyle.Slider.Track = WidgetStyle.Slider.Track with { Color = myPalette.Gre
 - `noz/widgets/src/Widget.ToolTip.cs` - Tooltips
 - `noz/widgets/src/Widget.Dialog.cs` - Dialog/modal
 - `noz/widgets/src/Widget.Tab.cs` - Tab bar
+- `noz/widgets/src/Widget.ColorPicker.cs` - HSV color picker (ported from EditorUI)
 
 ```csharp
 namespace NoZ;
@@ -168,9 +169,11 @@ Widget methods follow the exact GameUI pattern:
 - Use `WidgetStyle.*` static fields for styling (zero-cost read, no `Control` nesting)
 - Internal popups/tooltips use their own `ElementId.*` constants (in the 8192+ range)
 
-### Step 6: Initial widget set (start with Button + Slider)
+### Step 6: Initial widget set
 
-Start with `Widget.Button` and `Widget.Slider` as the first two widgets to validate the architecture end-to-end. Then expand to the remaining widgets.
+Start with `Widget.Button` and `Widget.Slider` to validate the architecture end-to-end, then implement the remaining widgets including Toggle, Popup, ToolTip, Dialog, Tab, and ColorPicker.
+
+The ColorPicker is ported from `EditorUI.ColorPicker` (`noz/editor/src/EditorUI.ColorPicker.cs`) and includes HSV state management, SV gradient + hue bar texture generation, alpha bar, hex input, swatch grid, and preview/commit semantics. Widget assets (`icon_nofill`, `icon_opacity`, `icon_opacity_overlay`) live in `noz/widgets/assets/sprite/` and are loaded by `Widget.Init()` via `Asset.Load()`.
 
 ## Key Files Modified
 
@@ -190,6 +193,12 @@ Start with `Widget.Button` and `Widget.Slider` as the first two widgets to valid
 | `noz/widgets/src/Widget.cs` | Main class, ElementId, hooks, shared widget state (BeginWidget/EndWidget/WidgetFill/WidgetIcon/WidgetText) |
 | `noz/widgets/src/Widget.Button.cs` | Button widget |
 | `noz/widgets/src/Widget.Slider.cs` | Slider widget |
+| `noz/widgets/src/Widget.Toggle.cs` | Toggle widget |
+| `noz/widgets/src/Widget.Popup.cs` | Popup widget |
+| `noz/widgets/src/Widget.ToolTip.cs` | Tooltip widget |
+| `noz/widgets/src/Widget.Dialog.cs` | Dialog widget |
+| `noz/widgets/src/Widget.Tab.cs` | Tab widget |
+| `noz/widgets/src/Widget.ColorPicker.cs` | HSV color picker (ported from EditorUI) |
 
 ## Verification
 
