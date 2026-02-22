@@ -74,6 +74,7 @@ public static partial class UI
 
     public static float UserScale { get; set; } = 1.0f;
     public static UIScaleMode? ScaleMode { get; set; }
+    public static Vector2Int? ReferenceResolution { get; set; }
 
     public static float GetUIScale() => Application.Platform.DisplayScale * UserScale;
 
@@ -94,7 +95,7 @@ public static partial class UI
 
             case UIScaleMode.ScaleWithScreenSize:
             default:
-                var refRes = Config.ReferenceResolution;
+                var refRes = ReferenceResolution ?? Config.ReferenceResolution;
                 var logWidth = MathF.Log2(screenSize.X / refRes.X);
                 var logHeight = MathF.Log2(screenSize.Y / refRes.Y);
 
