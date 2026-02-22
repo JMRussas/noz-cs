@@ -46,11 +46,10 @@ public sealed class PathClipboardData
 {
     public struct PathData
     {
-        public byte FillColor;
-        public float FillOpacity;
-        public float StrokeOpacity;
-        public byte StrokeColor;
+        public Color32 FillColor;
+        public Color32 StrokeColor;
         public byte StrokeWidth;
+        public bool IsSubtract;
         public Vector2[] Anchors;
         public float[] Curves;
     }
@@ -86,10 +85,9 @@ public sealed class PathClipboardData
             pathList.Add(new PathData
             {
                 FillColor = srcPath.FillColor,
-                FillOpacity = srcPath.FillOpacity,
                 StrokeColor = srcPath.StrokeColor,
-                StrokeOpacity = srcPath.StrokeOpacity,
                 StrokeWidth = srcPath.StrokeWidth,
+                IsSubtract = srcPath.IsSubtract,
                 Anchors = [.. selectedAnchors],
                 Curves = [.. selectedCurves]
             });
@@ -116,10 +114,9 @@ public sealed class PathClipboardData
         {
             var newPathIndex = shape.AddPath(
                 fillColor: pathData.FillColor,
-                fillOpacity: pathData.FillOpacity,
                 strokeColor: pathData.StrokeColor,
-                strokeOpacity: pathData.StrokeOpacity,
-                strokeWidth: pathData.StrokeWidth);
+                strokeWidth: pathData.StrokeWidth,
+                subtract: pathData.IsSubtract);
             if (newPathIndex == ushort.MaxValue)
                 break;
 

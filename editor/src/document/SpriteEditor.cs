@@ -204,14 +204,14 @@ public partial class SpriteEditor : DocumentEditor
     {
         using var _ = UI.BeginRow(EditorStyle.Toolbar.Root);
 
-        var color = (int)Document.CurrentFillColor;
-        var opacity = Document.CurrentFillOpacity;
+        var color = (int)Document.CurrentFillColorIndex;
+        var opacity = Document.CurrentFillAlpha / 255f;
 
         if (EditorUI.ColorButton(ElementId.FillColorButton, Document.Palette, ref color, ref opacity, EditorAssets.Sprites.IconFill))
             SetFillColor((byte)color, opacity);
 
-        var strokeColor = (int)Document.CurrentStrokeColor;
-        var strokeOpacity = Document.CurrentStrokeOpacity;
+        var strokeColor = (int)Document.CurrentStrokeColorIndex;
+        var strokeOpacity = Document.CurrentStrokeAlpha / 255f;
         var strokeWidth = (int)Document.CurrentStrokeWidth;
         if (EditorUI.ColorButton(ElementId.StrokeColorButton, Document.Palette, ref strokeColor, ref strokeOpacity, ref strokeWidth, EditorAssets.Sprites.IconStroke))
             SetStroke((byte)strokeColor, strokeOpacity, (byte)strokeWidth);
@@ -393,10 +393,10 @@ public partial class SpriteEditor : DocumentEditor
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
 
-            Document.CurrentFillColor = path.FillColor;
-            Document.CurrentFillOpacity = path.FillOpacity;
-            Document.CurrentStrokeColor = path.StrokeColor;
-            Document.CurrentStrokeOpacity = path.StrokeOpacity;
+            Document.CurrentFillColorIndex = PaletteManager.FindColorIndex(Document.Palette, path.FillColor);
+            Document.CurrentFillAlpha = path.FillColor.A;
+            Document.CurrentStrokeColorIndex = PaletteManager.FindColorIndex(Document.Palette, path.StrokeColor);
+            Document.CurrentStrokeAlpha = path.StrokeColor.A;
             Document.CurrentLayer = path.Layer;
             Document.CurrentBone = path.Bone;
             Document.CurrentStrokeWidth = (byte)int.Max(1, (int)path.StrokeWidth);
@@ -667,17 +667,14 @@ public partial class SpriteEditor : DocumentEditor
 
             var rasterRect = new RectInt(0, 0, size.X + Padding * 2, size.Y + Padding * 2);
             _image.Clear(rasterRect);
-            var palette = PaletteManager.GetPalette(Document.Palette);
-            if (palette != null)
-                shape.Rasterize(
-                    _image,
-                    rasterRect.Expand(-Padding),
-                    -Document.RasterBounds.Position,
-                    palette.Colors,
-                    options: new Shape.RasterizeOptions {
-                        AntiAlias = Document.IsAntiAliased,
-                        Color = Color.White
-                    });
+            shape.Rasterize(
+                _image,
+                rasterRect.Expand(-Padding),
+                -Document.RasterBounds.Position,
+                options: new Shape.RasterizeOptions {
+                    AntiAlias = Document.IsAntiAliased,
+                    Color = Color.White
+                });
 
             for (int p = Padding - 1; p >= 0; p--)
                 _image.ExtrudeEdges(new RectInt(
@@ -783,10 +780,12 @@ public partial class SpriteEditor : DocumentEditor
         Document.MarkModified();
     }
 
-    public void SetFillColor(byte color, float opacity)
+    public void SetFillColor(byte colorIndex, float opacity)
     {
-        Document.CurrentFillColor = color;
-        Document.CurrentFillOpacity = opacity;
+        Document.CurrentFillColorIndex = colorIndex;
+        Document.CurrentFillAlpha = (byte)(MathEx.Clamp01(opacity) * 255);
+        var resolvedColor = PaletteManager.GetColor(Document.Palette, colorIndex).ToColor32()
+            .WithAlpha(Document.CurrentFillAlpha);
 
         Undo.Record(Document);
 
@@ -795,18 +794,20 @@ public partial class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathFillColor(p, Document.CurrentFillColor, Document.CurrentFillOpacity);
+            shape.SetPathFillColor(p, resolvedColor);
         }
 
         Document.MarkModified();
         MarkRasterDirty();
     }
 
-    public void SetStroke(byte color, float opacity, int width)
+    public void SetStroke(byte colorIndex, float opacity, int width)
     {
-        Document.CurrentStrokeColor = color;
-        Document.CurrentStrokeOpacity = opacity;
+        Document.CurrentStrokeColorIndex = colorIndex;
+        Document.CurrentStrokeAlpha = (byte)(MathEx.Clamp01(opacity) * 255);
         Document.CurrentStrokeWidth = (byte)Math.Max(1, width);
+        var resolvedColor = PaletteManager.GetColor(Document.Palette, colorIndex).ToColor32()
+            .WithAlpha(Document.CurrentStrokeAlpha);
 
         Undo.Record(Document);
 
@@ -815,11 +816,7 @@ public partial class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathStroke(
-                p,
-                Document.CurrentStrokeColor,
-                Document.CurrentStrokeOpacity,
-                Document.CurrentStrokeWidth);
+            shape.SetPathStroke(p, resolvedColor, Document.CurrentStrokeWidth);
         }
 
         Document.MarkModified();
@@ -882,11 +879,10 @@ public partial class SpriteEditor : DocumentEditor
             var srcPath = shape.GetPath(pathsToDuplicate[i]);
             var newPathIndex = shape.AddPath(
                 fillColor: srcPath.FillColor,
-                fillOpacity: srcPath.FillOpacity,
                 strokeColor: srcPath.StrokeColor,
                 strokeWidth: srcPath.StrokeWidth,
-                strokeOpacity: srcPath.StrokeOpacity,
-                layer: srcPath.Layer);
+                layer: srcPath.Layer,
+                subtract: srcPath.IsSubtract);
             if (newPathIndex == ushort.MaxValue)
                 break;
 
@@ -1484,7 +1480,9 @@ public partial class SpriteEditor : DocumentEditor
     private void BeginPenTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        Workspace.BeginTool(new PenTool(this, shape, Document.CurrentFillColor));
+        var fillColor = PaletteManager.GetColor(Document.Palette, Document.CurrentFillColorIndex).ToColor32()
+            .WithAlpha(Document.CurrentFillAlpha);
+        Workspace.BeginTool(new PenTool(this, shape, fillColor));
     }
 
     private void BeginKnifeTool()
@@ -1501,23 +1499,17 @@ public partial class SpriteEditor : DocumentEditor
     private void BeginRectangleTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        Workspace.BeginTool(new ShapeTool(
-            this,
-            shape,
-            Document.CurrentFillColor,
-            ShapeType.Rectangle,
-            opacity: Document.CurrentFillOpacity));
+        var fillColor = PaletteManager.GetColor(Document.Palette, Document.CurrentFillColorIndex).ToColor32()
+            .WithAlpha(Document.CurrentFillAlpha);
+        Workspace.BeginTool(new ShapeTool(this, shape, fillColor, ShapeType.Rectangle));
     }
 
     private void BeginCircleTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        Workspace.BeginTool(new ShapeTool(
-            this,
-            shape,
-            Document.CurrentFillColor,
-            ShapeType.Circle,
-            opacity: Document.CurrentFillOpacity));
+        var fillColor = PaletteManager.GetColor(Document.Palette, Document.CurrentFillColorIndex).ToColor32()
+            .WithAlpha(Document.CurrentFillAlpha);
+        Workspace.BeginTool(new ShapeTool(this, shape, fillColor, ShapeType.Circle));
     }
 
     private void InsertAnchorAtHover()

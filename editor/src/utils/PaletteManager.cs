@@ -152,6 +152,18 @@ public static class PaletteManager
         return palette.Colors[colorId];
     }
 
+    public static byte FindColorIndex(int paletteRow, Color32 color)
+    {
+        var palette = GetPalette(paletteRow);
+        for (int i = 0; i < palette.Colors.Length; i++)
+        {
+            var pc = palette.Colors[i].ToColor32();
+            if (pc.R == color.R && pc.G == color.G && pc.B == color.B)
+                return (byte)i;
+        }
+        return 0;
+    }
+
     public static void ReloadPaletteColors()
     {
         if (string.IsNullOrEmpty(_paletteTextureName))

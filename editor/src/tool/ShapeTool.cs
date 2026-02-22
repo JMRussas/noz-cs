@@ -15,20 +15,19 @@ public enum ShapeType
 public class ShapeTool(
     SpriteEditor editor,
     Shape shape,
-    byte fillColor,
+    Color32 fillColor,
     ShapeType shapeType,
-    float opacity = 1.0f) : Tool
+    bool subtract = false) : Tool
 {
     private readonly SpriteEditor _editor = editor;
     private readonly Shape _shape = shape;
-    private readonly byte _fillColor = fillColor;
+    private readonly Color32 _fillColor = fillColor;
     private readonly ShapeType _shapeType = shapeType;
+    private readonly bool _isSubtract = subtract;
 
     private Vector2 _startLocal;
     private Vector2 _currentLocal;
     private bool _isDragging;
-    private bool _isSubtract = opacity <= float.MinValue;
-    private float _opacity = opacity;
 
     public override void Begin()
     {
@@ -175,7 +174,7 @@ public class ShapeTool(
         _shape.ClearAnchorSelection();
 
         var firstAnchor = _shape.AnchorCount;
-        var pathIndex = _shape.AddPath(_fillColor, fillOpacity: _opacity);
+        var pathIndex = _shape.AddPath(_fillColor, subtract: _isSubtract);
         if (pathIndex == ushort.MaxValue)
         {
             Finish();

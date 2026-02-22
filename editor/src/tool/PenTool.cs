@@ -18,7 +18,7 @@ public class PenTool : Tool
 
     private readonly SpriteEditor _editor;
     private readonly Shape _shape;
-    private readonly byte _fillColor;
+    private readonly Color32 _fillColor;
     private readonly PenPoint[] _points = new PenPoint[MaxPoints];
     private int _pointCount;
 
@@ -31,7 +31,7 @@ public class PenTool : Tool
     private bool _snappingToGrid;
     private Vector2 _gridSnapPosition;
 
-    public PenTool(SpriteEditor editor, Shape shape, byte fillColor)
+    public PenTool(SpriteEditor editor, Shape shape, Color32 fillColor)
     {
         _editor = editor;
         _shape = shape;

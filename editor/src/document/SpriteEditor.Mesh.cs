@@ -37,9 +37,6 @@ public partial class SpriteEditor
     {
         _meshSlots.Clear();
 
-        var palette = PaletteManager.GetPalette(Document.Palette);
-        if (palette == null) return;
-
         var slots = Document.GetMeshSlots(_currentFrame);
         var slotBounds = Document.GetMeshSlotBounds(_currentFrame);
         if (slots.Count == 0) return;
@@ -104,10 +101,9 @@ public partial class SpriteEditor
                 _meshIndices[indexOffset + e * 3 + 2] = (ushort)tess.Elements[e * 3 + 2];
             }
 
-            // Get fill color from palette
-            var c = palette.Colors[slot.FillColor % palette.Colors.Length];
+            // Get fill color directly from path
             var firstPath = shape.GetPath(slot.PathIndices[0]);
-            var fillColor = c.WithAlpha(firstPath.FillOpacity);
+            var fillColor = firstPath.FillColor.ToColor();
 
             _meshSlots.Add(new MeshSlotData
             {

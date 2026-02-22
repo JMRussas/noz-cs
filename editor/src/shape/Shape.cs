@@ -81,19 +81,17 @@ public sealed unsafe partial class Shape : IDisposable
     {
         public ushort AnchorStart;
         public ushort AnchorCount;
-        public byte FillColor;
-        public byte StrokeColor;
+        public Color32 FillColor;
+        public Color32 StrokeColor;
         public byte StrokeWidth;
         public byte Layer;
         public StringId Bone;  // bone name (None = root when skeleton bound)
         public PathFlags Flags;
-        public float FillOpacity;
-        public float StrokeOpacity;
 
         public readonly bool IsSelected => (Flags & PathFlags.Selected) != 0;
         public readonly bool IsSubtract => (Flags & PathFlags.Subtract) != 0;
 
-        public static readonly Path Default = new() { FillOpacity = 1.0f, StrokeOpacity = 0.0f };
+        public static readonly Path Default = new() { FillColor = Color32.White, StrokeColor = new Color32(0, 0, 0, 0) };
     }
 
     public Shape()
@@ -199,9 +197,9 @@ public sealed unsafe partial class Shape : IDisposable
         for (ushort p = 0; p < PathCount; p++)
         {
             ref var path = ref _paths[p];
-            stroke |= path.StrokeOpacity > float.Epsilon;
+            stroke |= path.StrokeColor.A > 0;
 
-            if (path.StrokeWidth > 0 && path.StrokeOpacity > float.Epsilon)
+            if (path.StrokeWidth > 0 && path.StrokeColor.A > 0)
                 maxHalfStroke = MathF.Max(maxHalfStroke, path.StrokeWidth * StrokeScale);
 
             for (ushort a = 0; a < path.AnchorCount; a++)
@@ -831,21 +829,25 @@ public sealed unsafe partial class Shape : IDisposable
     public ref readonly Anchor GetNextAnchor(ushort anchorIndex) =>
         ref GetAnchor(GetNextAnchorIndex(anchorIndex));
 
-    public void SetPathFillColor(ushort pathIndex, byte color, float opacity)
+    public void SetPathFillColor(ushort pathIndex, Color32 color)
     {
         ref var path = ref _paths[pathIndex];
         path.FillColor = color;
-        path.FillOpacity = opacity;
-        path.Flags &= ~PathFlags.Subtract;
-        if (opacity <= float.MinValue)
-            path.Flags |= PathFlags.Subtract;
     }
 
-    public void SetPathStroke(ushort pathIndex, byte color, float opacity, byte width)
+    public void SetPathSubtract(ushort pathIndex, bool subtract)
+    {
+        ref var path = ref _paths[pathIndex];
+        if (subtract)
+            path.Flags |= PathFlags.Subtract;
+        else
+            path.Flags &= ~PathFlags.Subtract;
+    }
+
+    public void SetPathStroke(ushort pathIndex, Color32 color, byte width)
     {
         ref var path = ref _paths[pathIndex];
         path.StrokeColor = color;
-        path.StrokeOpacity = opacity;
         path.StrokeWidth = width;
     }
 
@@ -861,13 +863,12 @@ public sealed unsafe partial class Shape : IDisposable
     }
 
     public ushort AddPath(
-        byte fillColor = 0,
-        float fillOpacity = 1.0f,
-        byte strokeColor = 0,
-        float strokeOpacity = 0.0f,
+        Color32 fillColor,
+        Color32 strokeColor = default,
         byte strokeWidth = 1,
         byte layer = 0,
-        StringId bone = default)
+        StringId bone = default,
+        bool subtract = false)
     {
         if (PathCount >= MaxPaths) return ushort.MaxValue;
 
@@ -877,13 +878,11 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorStart = AnchorCount,
             AnchorCount = 0,
             FillColor = fillColor,
-            FillOpacity = fillOpacity,
             StrokeColor = strokeColor,
-            StrokeOpacity = strokeOpacity,
             StrokeWidth = strokeWidth,
             Layer = layer,
             Bone = bone,
-            Flags = PathFlags.None | (fillOpacity <= float.MinValue ? PathFlags.Subtract : PathFlags.None),
+            Flags = subtract ? PathFlags.Subtract : PathFlags.None,
         };
 
         UpdateLayers();
@@ -1590,9 +1589,7 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorStart = AnchorCount,
             AnchorCount = (ushort)path2Count,
             FillColor = srcPath.FillColor,
-            FillOpacity = srcPath.FillOpacity,
             StrokeColor = srcPath.StrokeColor,
-            StrokeOpacity = srcPath.StrokeOpacity,
             Layer = srcPath.Layer,
             Bone = srcPath.Bone,
             Flags = srcPath.Flags & PathFlags.Subtract
@@ -1792,7 +1789,7 @@ public sealed unsafe partial class Shape : IDisposable
             _layers[_paths[p].Layer] = true;
     }
 
-    public RectInt GetRasterBoundsFor(byte layer, StringId bone, byte? fillColor = null)
+    public RectInt GetRasterBoundsFor(byte layer, StringId bone, Color32? fillColor = null)
     {
         var dpi = EditorApplication.Config.PixelsPerUnit;
         var min = new Vector2(float.MaxValue, float.MaxValue);
@@ -1811,9 +1808,9 @@ public sealed unsafe partial class Shape : IDisposable
                 continue;
 
             hasContent = true;
-            stroke |= path.StrokeOpacity > float.Epsilon;
+            stroke |= path.StrokeColor.A > 0;
 
-            if (path.StrokeWidth > 0 && path.StrokeOpacity > float.Epsilon)
+            if (path.StrokeWidth > 0 && path.StrokeColor.A > 0)
                 maxHalfStroke = MathF.Max(maxHalfStroke, path.StrokeWidth * StrokeScale);
 
             for (ushort a = 0; a < path.AnchorCount; a++)

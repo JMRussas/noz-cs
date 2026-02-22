@@ -66,11 +66,11 @@ public class SpriteDocument : Document, ISpriteSource
     /// Represents a mesh slot - a run of paths with the same layer and bone.
     /// When IsSDF, also splits on fill color boundaries.
     /// </summary>
-    public sealed class MeshSlot(byte layer, StringId bone, byte fillColor = 0)
+    public sealed class MeshSlot(byte layer, StringId bone, Color32 fillColor = default)
     {
         public readonly byte Layer = layer;
         public readonly StringId Bone = bone;
-        public readonly byte FillColor = fillColor;
+        public readonly Color32 FillColor = fillColor;
         public readonly List<ushort> PathIndices = new();
     }
 
@@ -88,11 +88,11 @@ public class SpriteDocument : Document, ISpriteSource
     public float Depth;
     public RectInt RasterBounds { get; private set; }
 
-    public byte CurrentFillColor = 0;
-    public byte CurrentStrokeColor = 0;
+    public byte CurrentFillColorIndex = 0;
+    public byte CurrentStrokeColorIndex = 0;
     public byte CurrentStrokeWidth = 1;
-    public float CurrentFillOpacity = 1.0f;
-    public float CurrentStrokeOpacity = 0.0f;
+    public byte CurrentFillAlpha = 255;
+    public byte CurrentStrokeAlpha = 0;
     public byte CurrentLayer = 0;
     public StringId CurrentBone;
 
@@ -425,12 +425,11 @@ public class SpriteDocument : Document, ISpriteSource
 
     private void ParsePath(SpriteFrame f, ref Tokenizer tk)
     {
-        var pathIndex = f.Shape.AddPath();
-        byte fillColor = 0;
-        var fillOpacity = 1.0f;
-        byte strokeColor = 0;
-        var strokeOpacity = 0.0f;
+        var pathIndex = f.Shape.AddPath(Color32.White);
+        var fillColor = Color32.White;
+        var strokeColor = new Color32(0, 0, 0, 0);
         var strokeWidth = 1;
+        var subtract = false;
         byte layer = 0;
         var bone = StringId.None;
 
@@ -438,19 +437,36 @@ public class SpriteDocument : Document, ISpriteSource
         {
             if (tk.ExpectIdentifier("fill"))
             {
-                fillColor = (byte)tk.ExpectInt();
-                fillOpacity = MathEx.Clamp01(tk.ExpectFloat(fillOpacity));
+                // Support: rgba(r,g,b,a), #RRGGBB, #RRGGBBAA, or legacy int palette index
+                if (tk.ExpectColor(out var color))
+                {
+                    fillColor = color.ToColor32();
+                }
+                else
+                {
+                    fillColor = PaletteManager.GetColor(Palette, tk.ExpectInt()).ToColor32();
+                    // Legacy format had separate opacity float after the index
+                    var legacyOpacity = tk.ExpectFloat(1.0f);
+                    fillColor = fillColor.WithAlpha(legacyOpacity);
+                }
             }
             else if (tk.ExpectIdentifier("stroke"))
             {
-                strokeColor = (byte)tk.ExpectInt();
-                strokeOpacity = MathEx.Clamp01(tk.ExpectFloat(strokeOpacity));
+                if (tk.ExpectColor(out var color))
+                {
+                    strokeColor = color.ToColor32();
+                }
+                else
+                {
+                    strokeColor = PaletteManager.GetColor(Palette, tk.ExpectInt()).ToColor32();
+                    var legacyOpacity = tk.ExpectFloat(0.0f);
+                    strokeColor = strokeColor.WithAlpha(legacyOpacity);
+                }
                 strokeWidth = tk.ExpectInt(strokeWidth);
             }
             else if (tk.ExpectIdentifier("subtract"))
             {
-                if (tk.ExpectBool())
-                    fillOpacity = float.MinValue;
+                subtract = tk.ExpectBool();
             }
             else if (tk.ExpectIdentifier("layer"))
                 layer = EditorApplication.Config.TryGetSpriteLayer(tk.ExpectQuotedString(), out var sg)
@@ -458,7 +474,6 @@ public class SpriteDocument : Document, ISpriteSource
                     : (byte)0;
             else if (tk.ExpectIdentifier("bone"))
             {
-                // Bone name - stored directly as Name
                 var boneName = tk.ExpectQuotedString();
                 if (!string.IsNullOrEmpty(boneName))
                     bone = StringId.Get(boneName);
@@ -469,8 +484,10 @@ public class SpriteDocument : Document, ISpriteSource
                 break;
         }
 
-        f.Shape.SetPathFillColor(pathIndex, fillColor, fillOpacity);
-        f.Shape.SetPathStroke(pathIndex, strokeColor, strokeOpacity, (byte)strokeWidth);
+        f.Shape.SetPathFillColor(pathIndex, fillColor);
+        f.Shape.SetPathStroke(pathIndex, strokeColor, (byte)strokeWidth);
+        if (subtract)
+            f.Shape.SetPathSubtract(pathIndex, true);
         f.Shape.SetPathLayer(pathIndex, layer);
         f.Shape.SetPathBone(pathIndex, bone);
     }
@@ -625,11 +642,10 @@ public class SpriteDocument : Document, ISpriteSource
             writer.WriteLine("path");
             if (path.IsSubtract)
                 writer.WriteLine("subtract true");
-            else
-                writer.WriteLine($"fill {path.FillColor} {path.FillOpacity}");
+            writer.WriteLine($"fill {FormatColor(path.FillColor)}");
 
-            if (path.StrokeOpacity > float.Epsilon)
-                writer.WriteLine($"stroke {path.StrokeColor} {path.StrokeOpacity} {path.StrokeWidth}");
+            if (path.StrokeColor.A > 0)
+                writer.WriteLine($"stroke {FormatColor(path.StrokeColor)} {path.StrokeWidth}");
 
             if (EditorApplication.Config.TryGetSpriteLayer(path.Layer, out var layerDef))
                 writer.WriteLine($"layer \"{layerDef.Id}\"");
@@ -648,6 +664,13 @@ public class SpriteDocument : Document, ISpriteSource
 
             writer.WriteLine();
         }
+    }
+
+    private static string FormatColor(Color32 c)
+    {
+        if (c.A < 255)
+            return $"rgba({c.R},{c.G},{c.B},{c.A / 255f:G})";
+        return $"#{c.R:X2}{c.G:X2}{c.B:X2}";
     }
 
     public override void Draw()
@@ -762,11 +785,11 @@ public class SpriteDocument : Document, ISpriteSource
         Palette = src.Palette;
         Depth = src.Depth;
         Bounds = src.Bounds;
-        CurrentFillColor = src.CurrentFillColor;
-        CurrentStrokeColor = src.CurrentStrokeColor;
+        CurrentFillColorIndex = src.CurrentFillColorIndex;
+        CurrentStrokeColorIndex = src.CurrentStrokeColorIndex;
         CurrentStrokeWidth = src.CurrentStrokeWidth;
-        CurrentFillOpacity = src.CurrentFillOpacity;
-        CurrentStrokeOpacity = src.CurrentStrokeOpacity;
+        CurrentFillAlpha = src.CurrentFillAlpha;
+        CurrentStrokeAlpha = src.CurrentStrokeAlpha;
         CurrentLayer = src.CurrentLayer;
         CurrentBone = src.CurrentBone;
         IsSDF = src.IsSDF;
@@ -850,8 +873,6 @@ public class SpriteDocument : Document, ISpriteSource
     void ISpriteSource.Rasterize(PixelData<Color32> image, in AtlasSpriteRect rect, int padding)
     {
         var frameIndex = rect.FrameIndex;
-        var palette = PaletteManager.GetPalette(Palette);
-        if (palette == null) return;
 
         var frame = GetFrame(frameIndex);
         var slots = GetMeshSlots(frameIndex);
@@ -895,7 +916,6 @@ public class SpriteDocument : Document, ISpriteSource
                         image,
                         rasterRect,
                         -slotRasterBounds.Position,
-                        palette.Colors,
                         CollectionsMarshal.AsSpan(slot.PathIndices),
                         IsAntiAliased);
                 }
@@ -1012,14 +1032,8 @@ public class SpriteDocument : Document, ISpriteSource
                 var fillColor = Color.White;
                 if (IsSDF)
                 {
-                    var palette = PaletteManager.GetPalette(Palette);
-                    if (palette != null)
-                    {
-                        var c = palette.Colors[slot.FillColor % palette.Colors.Length];
-                        // Find the fill opacity from the first path in this slot
-                        var firstPath = Frames[frameIndex].Shape.GetPath(slot.PathIndices[0]);
-                        fillColor = c.WithAlpha(firstPath.FillOpacity);
-                    }
+                    var firstPath = Frames[frameIndex].Shape.GetPath(slot.PathIndices[0]);
+                    fillColor = firstPath.FillColor.ToColor();
                 }
 
                 allMeshes.Add(new SpriteMesh(
@@ -1114,24 +1128,11 @@ public class SpriteDocument : Document, ISpriteSource
 
                 if (IsSDF)
                 {
-                    var palette = PaletteManager.GetPalette(Palette);
-                    if (palette != null)
-                    {
-                        var c = palette.Colors[slot.FillColor % palette.Colors.Length].ToColor32();
-                        var firstPath = Frames[frameIndex].Shape.GetPath(slot.PathIndices[0]);
-                        var alpha = (byte)(MathEx.Clamp01(firstPath.FillOpacity) * 255);
-                        writer.Write(c.R);
-                        writer.Write(c.G);
-                        writer.Write(c.B);
-                        writer.Write(alpha);
-                    }
-                    else
-                    {
-                        writer.Write((byte)255);
-                        writer.Write((byte)255);
-                        writer.Write((byte)255);
-                        writer.Write((byte)255);
-                    }
+                    var firstPath = Frames[frameIndex].Shape.GetPath(slot.PathIndices[0]);
+                    writer.Write(firstPath.FillColor.R);
+                    writer.Write(firstPath.FillColor.G);
+                    writer.Write(firstPath.FillColor.B);
+                    writer.Write(firstPath.FillColor.A);
                 }
             }
 

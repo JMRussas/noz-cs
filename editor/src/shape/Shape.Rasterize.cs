@@ -39,10 +39,8 @@ public sealed partial class Shape
     public void Rasterize(
         PixelData<Color32> target,
         RectInt targetRect,
-        Vector2Int sourceOffset,
-        Color[] palette,
-        Vector2Int offset)
-        => Rasterize(target, targetRect, sourceOffset, palette, RasterizeOptions.Default);
+        Vector2Int sourceOffset)
+        => Rasterize(target, targetRect, sourceOffset, RasterizeOptions.Default);
 
     /// <summary>
     /// Rasterize specific paths by index.
@@ -51,7 +49,6 @@ public sealed partial class Shape
         PixelData<Color32> target,
         RectInt targetRect,
         Vector2Int sourceOffset,
-        Color[] palette,
         ReadOnlySpan<ushort> pathIndices,
         bool antiAlias = false)
     {
@@ -71,9 +68,7 @@ public sealed partial class Shape
                 if (vertCount < 3) continue;
 
                 var subtract = path.IsSubtract;
-                var fillColor = subtract
-                    ? Color32.Transparent
-                    : palette[path.FillColor % palette.Length].ToColor32().WithAlpha(path.FillOpacity);
+                var fillColor = subtract ? Color32.Transparent : path.FillColor;
 
                 RasterizePath(
                     target,
@@ -85,10 +80,8 @@ public sealed partial class Shape
                     subtract,
                     antiAlias);
 
-                var strokeColor = palette[path.StrokeColor % palette.Length]
-                    .ToColor32()
-                    .WithAlpha(path.StrokeOpacity);
-                if (strokeColor.A > float.Epsilon)
+                var strokeColor = path.StrokeColor;
+                if (strokeColor.A > 0)
                 {
                     RasterizeStroke(
                         target,
@@ -111,7 +104,6 @@ public sealed partial class Shape
         PixelData<Color32> target,
         RectInt targetRect,
         Vector2Int sourceOffset,
-        Color[] palette,
         RasterizeOptions options)
     {
         if (PathCount == 0) return;
@@ -119,7 +111,7 @@ public sealed partial class Shape
         Span<ushort> sortedPaths = stackalloc ushort[PathCount];
         var pathCount = GetSortedPathIndicies(sortedPaths, options.Layer, options.Bone);
 
-        Rasterize(target, targetRect, sourceOffset, palette, sortedPaths[..pathCount], options.AntiAlias);
+        Rasterize(target, targetRect, sourceOffset, sortedPaths[..pathCount], options.AntiAlias);
     }
 
     private int GetSortedPathIndicies(Span<ushort> results, byte? layer = null, StringId? bone = null)
