@@ -66,7 +66,7 @@ export async function init(dotNet, width, height) {
     canvas.focus();
 
     // Return actual window size and DPR so C# can use it
-    return { width: actualWidth, height: actualHeight, dpr: dpr, isMobile: navigator.maxTouchPoints > 0 };
+    return { width: actualWidth, height: actualHeight, dpr: dpr, isMobile: window.matchMedia('(pointer: coarse)').matches };
 }
 
 export function shutdown() {
