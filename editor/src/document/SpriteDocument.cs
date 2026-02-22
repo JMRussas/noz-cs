@@ -84,15 +84,12 @@ public class SpriteDocument : Document, ISpriteSource
 
     public readonly SpriteFrame[] Frames = new SpriteFrame[Sprite.MaxFrames];
     public ushort FrameCount;
-    public byte Palette;
     public float Depth;
     public RectInt RasterBounds { get; private set; }
 
-    public byte CurrentFillColorIndex = 0;
-    public byte CurrentStrokeColorIndex = 0;
+    public Color32 CurrentFillColor = Color32.White;
+    public Color32 CurrentStrokeColor = new(0, 0, 0, 0);
     public byte CurrentStrokeWidth = 1;
-    public byte CurrentFillAlpha = 255;
-    public byte CurrentStrokeAlpha = 0;
     public byte CurrentLayer = 0;
     public StringId CurrentBone;
 
@@ -388,10 +385,8 @@ public class SpriteDocument : Document, ISpriteSource
             }
             else if (tk.ExpectIdentifier("palette"))
             {
-                var paletteId = tk.ExpectQuotedString();
-                Palette = PaletteManager.TryGetPalette(paletteId, out var paletteDef)
-                    ? (byte)paletteDef.Row
-                    : (byte)0;
+                // Legacy: palette keyword is ignored, colors are stored directly
+                tk.ExpectQuotedString();
             }
             else if (tk.ExpectIdentifier("frame"))
             {
@@ -444,7 +439,7 @@ public class SpriteDocument : Document, ISpriteSource
                 }
                 else
                 {
-                    fillColor = PaletteManager.GetColor(Palette, tk.ExpectInt()).ToColor32();
+                    fillColor = PaletteManager.GetColor(0, tk.ExpectInt()).ToColor32();
                     // Legacy format had separate opacity float after the index
                     var legacyOpacity = tk.ExpectFloat(1.0f);
                     fillColor = fillColor.WithAlpha(legacyOpacity);
@@ -458,7 +453,7 @@ public class SpriteDocument : Document, ISpriteSource
                 }
                 else
                 {
-                    strokeColor = PaletteManager.GetColor(Palette, tk.ExpectInt()).ToColor32();
+                    strokeColor = PaletteManager.GetColor(0, tk.ExpectInt()).ToColor32();
                     var legacyOpacity = tk.ExpectFloat(0.0f);
                     strokeColor = strokeColor.WithAlpha(legacyOpacity);
                 }
@@ -608,9 +603,6 @@ public class SpriteDocument : Document, ISpriteSource
 
         writer.WriteLine($"antialias {(IsAntiAliased ? "true" : "false")}");
         writer.WriteLine($"sdf {(IsSDF ? "true" : "false")}");
-
-        if (PaletteManager.TryGetPaletteByRow(Palette, out var paletteDef))
-            writer.WriteLine($"palette \"{paletteDef.Id}\"");
 
         writer.WriteLine();
 
@@ -782,14 +774,11 @@ public class SpriteDocument : Document, ISpriteSource
     {
         var src = (SpriteDocument)source;
         FrameCount = src.FrameCount;
-        Palette = src.Palette;
         Depth = src.Depth;
         Bounds = src.Bounds;
-        CurrentFillColorIndex = src.CurrentFillColorIndex;
-        CurrentStrokeColorIndex = src.CurrentStrokeColorIndex;
+        CurrentFillColor = src.CurrentFillColor;
+        CurrentStrokeColor = src.CurrentStrokeColor;
         CurrentStrokeWidth = src.CurrentStrokeWidth;
-        CurrentFillAlpha = src.CurrentFillAlpha;
-        CurrentStrokeAlpha = src.CurrentStrokeAlpha;
         CurrentLayer = src.CurrentLayer;
         CurrentBone = src.CurrentBone;
         IsSDF = src.IsSDF;

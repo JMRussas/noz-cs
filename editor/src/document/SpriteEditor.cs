@@ -12,7 +12,6 @@ public partial class SpriteEditor : DocumentEditor
     private const int Padding = 8;
 
     [ElementId("Root")]
-    [ElementId("PaletteButton")]
     [ElementId("TileButton")]
     [ElementId("BoneBindButton")]
     [ElementId("BoneUnbindButton")]
@@ -47,6 +46,8 @@ public partial class SpriteEditor : DocumentEditor
     private bool _rasterDirty = true;
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
     private readonly float[] _savedCurves = new float[Shape.MaxAnchors];
+    private Action<Color32>? _previewFillColor;
+    private Action<Color32>? _previewStrokeColor;
 
 
     public SpriteEditor(SpriteDocument doc) : base(doc)
@@ -204,20 +205,29 @@ public partial class SpriteEditor : DocumentEditor
     {
         using var _ = UI.BeginRow(EditorStyle.Toolbar.Root);
 
-        var color = (int)Document.CurrentFillColorIndex;
-        var opacity = Document.CurrentFillAlpha / 255f;
+        // Fill color picker
+        var fillColor = Document.CurrentFillColor;
+        if (EditorUI.ColorPickerButton(
+            ElementId.FillColorButton,
+            ref fillColor,
+            onPreview: _previewFillColor ??= PreviewFillColor,
+            icon: EditorAssets.Sprites.IconFill))
+        {
+            SetFill(fillColor);
+        }
 
-        if (EditorUI.ColorButton(ElementId.FillColorButton, Document.Palette, ref color, ref opacity, EditorAssets.Sprites.IconFill))
-            SetFillColor((byte)color, opacity);
+        // Stroke color picker
+        var strokeColor = Document.CurrentStrokeColor;
+        if (EditorUI.ColorPickerButton(
+            ElementId.StrokeColorButton,
+            ref strokeColor,
+            onPreview: _previewStrokeColor ??= PreviewStrokeColor,
+            icon: EditorAssets.Sprites.IconStroke))
+        {
+            SetStroke(strokeColor);
+        }
 
-        var strokeColor = (int)Document.CurrentStrokeColorIndex;
-        var strokeOpacity = Document.CurrentStrokeAlpha / 255f;
-        var strokeWidth = (int)Document.CurrentStrokeWidth;
-        if (EditorUI.ColorButton(ElementId.StrokeColorButton, Document.Palette, ref strokeColor, ref strokeOpacity, ref strokeWidth, EditorAssets.Sprites.IconStroke))
-            SetStroke((byte)strokeColor, strokeOpacity, (byte)strokeWidth);
-
-        // Palette 
-        PaletteButtonUI();
+        StrokeWidthButtonUI();
 
         EditorUI.ToolbarSpacer();
 
@@ -291,25 +301,6 @@ public partial class SpriteEditor : DocumentEditor
         }
     }
 
-    private void PaletteButtonUI()
-    {
-        if (PaletteManager.Palettes.Count < 2) return;
-
-        void ButtonContent()
-        {
-            EditorUI.ControlIcon(EditorAssets.Sprites.IconPalette);
-            EditorUI.ControlText(PaletteManager.GetPalette(Document.Palette).Label);
-            UI.Spacer(EditorStyle.Control.Spacing);
-        }
-
-        if (EditorUI.Control(
-            ElementId.PaletteButton,
-            ButtonContent,
-            selected: EditorUI.IsPopupOpen(ElementId.PaletteButton)))
-            EditorUI.TogglePopup(ElementId.PaletteButton);
-
-        PalettePopupUI();
-    }
 
     private void SkeletonBindingUI()
     {
@@ -393,10 +384,8 @@ public partial class SpriteEditor : DocumentEditor
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
 
-            Document.CurrentFillColorIndex = PaletteManager.FindColorIndex(Document.Palette, path.FillColor);
-            Document.CurrentFillAlpha = path.FillColor.A;
-            Document.CurrentStrokeColorIndex = PaletteManager.FindColorIndex(Document.Palette, path.StrokeColor);
-            Document.CurrentStrokeAlpha = path.StrokeColor.A;
+            Document.CurrentFillColor = path.FillColor;
+            Document.CurrentStrokeColor = path.StrokeColor;
             Document.CurrentLayer = path.Layer;
             Document.CurrentBone = path.Bone;
             Document.CurrentStrokeWidth = (byte)int.Max(1, (int)path.StrokeWidth);
@@ -415,27 +404,6 @@ public partial class SpriteEditor : DocumentEditor
         return false;
     }
 
-    private void PalettePopupUI()
-    {
-        void Content()
-        {
-            for (int i=0; i<PaletteManager.Palettes.Count; i++)
-            {
-                if (EditorUI.PopupItem(
-                    PaletteManager.Palettes[i].Label,
-                    selected: PaletteManager.Palettes[i].Row == Document.Palette))
-                {
-                    Undo.Record(Document);
-                    Document.Palette = (byte)PaletteManager.Palettes[i].Row;
-                    Document.MarkModified();
-                    MarkRasterDirty();
-                    EditorUI.ClosePopup();
-                }
-            }
-        }
-
-        EditorUI.Popup(ElementId.PaletteButton, Content);
-    }
 
     private void ConstraintsButtonUI()
     {
@@ -780,12 +748,33 @@ public partial class SpriteEditor : DocumentEditor
         Document.MarkModified();
     }
 
-    public void SetFillColor(byte colorIndex, float opacity)
+    private void PreviewFillColor(Color32 color)
     {
-        Document.CurrentFillColorIndex = colorIndex;
-        Document.CurrentFillAlpha = (byte)(MathEx.Clamp01(opacity) * 255);
-        var resolvedColor = PaletteManager.GetColor(Document.Palette, colorIndex).ToColor32()
-            .WithAlpha(Document.CurrentFillAlpha);
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort p = 0; p < shape.PathCount; p++)
+        {
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathFillColor(p, color);
+        }
+        MarkRasterDirty();
+    }
+
+    private void PreviewStrokeColor(Color32 color)
+    {
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort p = 0; p < shape.PathCount; p++)
+        {
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathStroke(p, color, Document.CurrentStrokeWidth);
+        }
+        MarkRasterDirty();
+    }
+
+    public void SetFill(Color32 color)
+    {
+        Document.CurrentFillColor = color;
 
         Undo.Record(Document);
 
@@ -794,20 +783,16 @@ public partial class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathFillColor(p, resolvedColor);
+            shape.SetPathFillColor(p, color);
         }
 
         Document.MarkModified();
         MarkRasterDirty();
     }
 
-    public void SetStroke(byte colorIndex, float opacity, int width)
+    public void SetStroke(Color32 color)
     {
-        Document.CurrentStrokeColorIndex = colorIndex;
-        Document.CurrentStrokeAlpha = (byte)(MathEx.Clamp01(opacity) * 255);
-        Document.CurrentStrokeWidth = (byte)Math.Max(1, width);
-        var resolvedColor = PaletteManager.GetColor(Document.Palette, colorIndex).ToColor32()
-            .WithAlpha(Document.CurrentStrokeAlpha);
+        Document.CurrentStrokeColor = color;
 
         Undo.Record(Document);
 
@@ -816,11 +801,62 @@ public partial class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathStroke(p, resolvedColor, Document.CurrentStrokeWidth);
+            shape.SetPathStroke(p, color, Document.CurrentStrokeWidth);
         }
 
         Document.MarkModified();
         MarkRasterDirty();
+    }
+
+    private void SetStrokeWidth(byte width)
+    {
+        Document.CurrentStrokeWidth = width;
+
+        Undo.Record(Document);
+
+        var shape = Document.GetFrame(_currentFrame).Shape;
+        for (ushort p = 0; p < shape.PathCount; p++)
+        {
+            ref readonly var path = ref shape.GetPath(p);
+            if (!path.IsSelected) continue;
+            shape.SetPathStroke(p, path.StrokeColor, width);
+        }
+
+        Document.MarkModified();
+        MarkRasterDirty();
+    }
+
+    private void StrokeWidthButtonUI()
+    {
+        void ButtonContent()
+        {
+            EditorUI.ControlText($"{Document.CurrentStrokeWidth}px");
+        }
+
+        if (EditorUI.Control(
+            ElementId.StrokeWidth,
+            ButtonContent,
+            selected: EditorUI.IsPopupOpen(ElementId.StrokeWidth)))
+            EditorUI.TogglePopup(ElementId.StrokeWidth);
+
+        StrokeWidthPopupUI();
+    }
+
+    private void StrokeWidthPopupUI()
+    {
+        void Content()
+        {
+            for (var i = 1; i <= 8; i++)
+            {
+                if (EditorUI.PopupItem($"{i}px", selected: Document.CurrentStrokeWidth == i))
+                {
+                    SetStrokeWidth((byte)i);
+                    EditorUI.ClosePopup();
+                }
+            }
+        }
+
+        EditorUI.Popup(ElementId.StrokeWidth, Content);
     }
 
     public void SetPathLayer(byte layer)
@@ -1480,9 +1516,7 @@ public partial class SpriteEditor : DocumentEditor
     private void BeginPenTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        var fillColor = PaletteManager.GetColor(Document.Palette, Document.CurrentFillColorIndex).ToColor32()
-            .WithAlpha(Document.CurrentFillAlpha);
-        Workspace.BeginTool(new PenTool(this, shape, fillColor));
+        Workspace.BeginTool(new PenTool(this, shape, Document.CurrentFillColor));
     }
 
     private void BeginKnifeTool()
@@ -1499,17 +1533,13 @@ public partial class SpriteEditor : DocumentEditor
     private void BeginRectangleTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        var fillColor = PaletteManager.GetColor(Document.Palette, Document.CurrentFillColorIndex).ToColor32()
-            .WithAlpha(Document.CurrentFillAlpha);
-        Workspace.BeginTool(new ShapeTool(this, shape, fillColor, ShapeType.Rectangle));
+        Workspace.BeginTool(new ShapeTool(this, shape, Document.CurrentFillColor, ShapeType.Rectangle));
     }
 
     private void BeginCircleTool()
     {
         var shape = Document.GetFrame(_currentFrame).Shape;
-        var fillColor = PaletteManager.GetColor(Document.Palette, Document.CurrentFillColorIndex).ToColor32()
-            .WithAlpha(Document.CurrentFillAlpha);
-        Workspace.BeginTool(new ShapeTool(this, shape, fillColor, ShapeType.Circle));
+        Workspace.BeginTool(new ShapeTool(this, shape, Document.CurrentFillColor, ShapeType.Circle));
     }
 
     private void InsertAnchorAtHover()

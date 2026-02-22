@@ -98,6 +98,10 @@ Immediate-mode hierarchical UI. Key files: `UI.cs`, `UI.Layout.cs`, `UI.Draw.cs`
 - **Building pattern**: `UI.BeginContainer(id, style)` ... `UI.EndContainer()`. Supports `using` auto-dispose.
 - **Style structs**: `ContainerStyle`, `LabelStyle`, `ImageStyle`, `TextBoxStyle`, etc.
 - **Input**: `UI.IsHovered()`, `UI.WasPressed()`, `UI.HasFocus()`, `UI.SetFocus()`
+- **Input inside popups**: Use `UI.IsDown()` / `UI.WasPressed()` instead of `Input.IsButtonDown()`. When popups are open, the UI system consumes the mouse button via `Input.ConsumeButton()` (UI.Input.cs), making raw `Input.IsButtonDown()` return false. `UI.IsDown()` checks the pre-consumption state.
+- **Element positioning**: During the UI build phase, the current frame's elements have uninitialized `WorldToLocal` matrices. Use `UI.GetElementWorldRect(id)` to get the previous frame's laid-out rect. For mouse position in the same coordinate space, use `UI.MouseWorldPosition` (not `UI.ScreenToUI()` which differs on the X axis due to aspect ratio handling).
+- **EdgeInsets constructor**: `EdgeInsets(top, left, bottom, right)` — note the TLBR order, **not** TRBL. `L` is the 2nd parameter, `R` is the 4th.
+- **Margin-based positioning in Containers**: For a plain Container (not Row/Column), children overlap and are positioned via `Align + Margin`. With `Align = Align.Min` (default), `Margin.L` directly sets X position and `Margin.T` directly sets Y position. In Row layouts, `Margin.L` is consumed by sequential layout (not alignment). In Column layouts, `Margin.T` is consumed by sequential layout.
 - **Rendering**: Custom `UIVertex` mesh, renders on layer 12. Commands with custom meshes need contiguous index merging.
 - **Limits**: 4096 elements, 128-depth stack, 4 popups, 64KB text buffer
 - **Scaling**: `UIScaleMode` with reference resolution for responsive design

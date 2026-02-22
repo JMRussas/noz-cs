@@ -17,12 +17,13 @@ public static partial class UI
     private static bool _mouseRightPressed;
     private static bool _mouseLeftDown;
     private static bool _mouseLeftDoubleClickPressed;
-    private static Vector2 _mousePosition;
+
+    public static Vector2 MouseWorldPosition { get; private set; }
 
     private static void HandleInput()
     {
         var mouse = Camera!.ScreenToWorld(Input.MousePosition);
-        _mousePosition = mouse;
+        MouseWorldPosition = mouse;
         _mouseLeftPressed = Input.WasButtonPressedRaw(InputCode.MouseLeft);
         _mouseLeftDown = Input.IsButtonDownRaw(InputCode.MouseLeft);
         _mouseLeftDoubleClickPressed = Input.WasButtonPressedRaw(InputCode.MouseLeftDoubleClick);
@@ -512,7 +513,7 @@ public static partial class UI
             if (_activePopupCount > 0 && !IsInsidePopup(i))
                 continue;
 
-            var localMouse = Vector2.Transform(_mousePosition, e.WorldToLocal);
+            var localMouse = Vector2.Transform(MouseWorldPosition, e.WorldToLocal);
             if (!e.Rect.Contains(localMouse))
                 continue;
 
