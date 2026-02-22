@@ -81,5 +81,7 @@ public interface IPlatform
     void Log(string message);
 
     void OpenURL(string url);
+
+    bool IsMobile => false;
 }
 

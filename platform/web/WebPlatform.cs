@@ -64,12 +64,15 @@ public class WebPlatform : IPlatform
         var result = await _module.InvokeAsync<InitResult>("init", _dotNetRef, config.Width, config.Height);
         _windowSize = new Vector2(result.Width, result.Height);
         _displayScale = result.Dpr;
+        IsMobile = result.IsMobile;
         _initialized = true;
 
         // _isMouseInWindow defaults to false so custom cursor is hidden until real mouse events arrive
     }
 
-    private record InitResult(int Width, int Height, float Dpr);
+    public bool IsMobile { get; private set; }
+
+    private record InitResult(int Width, int Height, float Dpr, bool IsMobile);
 
     public void Shutdown()
     {

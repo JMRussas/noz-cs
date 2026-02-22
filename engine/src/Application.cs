@@ -31,6 +31,7 @@ public static class Application
     public static void SetWindowPosition(int x, int y) => Platform.SetWindowPosition(x, y);
 
     public static bool IsFullscreen => Platform.IsFullscreen;
+    public static bool IsMobile => Platform.IsMobile;
     public static void SetFullscreen(bool fullscreen) => Platform.SetFullscreen(fullscreen);
 
     public static void SetVSync(bool vsync)
