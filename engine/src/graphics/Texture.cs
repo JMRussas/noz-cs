@@ -138,7 +138,7 @@ public class Texture : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Texture, typeof(Texture), Load, Version));
+        RegisterDef(new AssetDef(AssetType.Texture, "Texture", typeof(Texture), Load, Version));
     }
 
     public override void Dispose()

@@ -21,6 +21,6 @@ public class Bin : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Bin, typeof(Bin), Load, Version));
+        RegisterDef(new AssetDef(AssetType.Bin, "Bin", typeof(Bin), Load, Version));
     }
 }

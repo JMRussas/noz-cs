@@ -77,7 +77,7 @@ public class Animation : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Animation, typeof(Animation), Load));
+        RegisterDef(new AssetDef(AssetType.Animation, "Animation", typeof(Animation), Load));
     }
 
     private static Animation? Load(Stream stream, string name)

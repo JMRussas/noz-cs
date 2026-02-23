@@ -120,7 +120,7 @@ public static class Importer
 
             doc.Import(targetDir,  meta);
 
-            Log.Info($"Imported {doc.Def.Type.ToString().ToLowerInvariant()}/{doc.Name}");
+            Log.Info($"Imported {(Asset.GetDef(doc.Def.Type)?.Name ?? doc.Def.Type.ToString()).ToLowerInvariant()}/{doc.Name}");
             OnImported?.Invoke(doc);
             AssetManifest.IsModified = true;
         }

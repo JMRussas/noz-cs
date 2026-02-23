@@ -12,15 +12,14 @@ public class Asset : IDisposable {
     protected internal nuint Handle { get; protected set; }
     public string Name { get; private set; }
     public StringId Id { get; private set; }
-    private static readonly AssetDef[] Defs = new AssetDef[Constants.AssetTypeCount];
+    private static readonly Dictionary<AssetType, AssetDef> Defs = new();
     private static readonly Dictionary<(AssetType, string), Asset> _registry = new();
 
     internal Asset(AssetType type, string name)
     {
         Id = StringId.Get(name);
         Name = name;
-        Def = Defs[(int)type];
-        Debug.Assert(Def != null);
+        Def = GetDef(type) ?? throw new InvalidOperationException($"No AssetDef registered for type {type}");
     }
 
     public static Asset? Load(AssetType type, string name, bool useRegistry=true, string? libraryPath = null)
@@ -86,7 +85,7 @@ public class Asset : IDisposable {
         if (stream != null)
             return stream;
 
-        var typeName = assetType.ToString().ToLowerInvariant();
+        var typeName = GetDef(assetType)?.Name.ToLowerInvariant() ?? assetType.ToString().ToLowerInvariant();
         var fileName = string.IsNullOrEmpty(extension) ? assetName : assetName + extension;
         return LoadEmbeddedResource($"assets.library.{typeName}.{fileName}");
     }
@@ -121,11 +120,11 @@ public class Asset : IDisposable {
     {
         using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
 
-        var signature = reader.ReadUInt32();
-        if (signature != Constants.AssetSignature)
+        var sig = reader.ReadUInt32();
+        if (sig != Constants.AssetSignature)
             return false;
 
-        var type = (AssetType)reader.ReadByte();
+        var type = new AssetType(reader.ReadUInt32());
         if (type != expectedType)
             return false;
 
@@ -141,10 +140,9 @@ public class Asset : IDisposable {
         {
             using var stream = File.OpenRead(path);
             using var reader = new BinaryReader(stream);
-            if (stream.Length < 9) return 0;
-            var signature = reader.ReadUInt32();
-            if (signature != Constants.AssetSignature) return 0;
-            reader.ReadByte(); // type
+            if (stream.Length < 12) return 0;
+            reader.ReadUInt32(); // signature
+            reader.ReadUInt32(); // type FourCC
             return reader.ReadUInt16();
         }
         catch
@@ -153,17 +151,16 @@ public class Asset : IDisposable {
         }
     }
 
-    internal static void RegisterDef(AssetDef def)
+    public static void RegisterDef(AssetDef def)
     {
-        Debug.Assert(Defs[(int)def.Type] == null);
-        Defs[(int)def.Type] = def;
+        Debug.Assert(!Defs.ContainsKey(def.Type));
+        Defs[def.Type] = def;
     }
 
     public static AssetDef? GetDef(AssetType type)
-    {
-        var index = (int)type;
-        return index >= 0 && index < Defs.Length ? Defs[index] : null;
-    }
+        => Defs.TryGetValue(type, out var def) ? def : null;
+
+    public static IEnumerable<AssetDef> GetAllDefs() => Defs.Values;
 
     protected void Register() => _registry[(Def.Type, Name)] = this;
     protected void Unregister() => _registry.Remove((Def.Type, Name));
@@ -178,7 +175,7 @@ public static class AssetExtensions
     public static void WriteAssetHeader(this BinaryWriter writer, AssetType type, ushort version, ushort flags=0)
     {
         writer.Write(Constants.AssetSignature);
-        writer.Write((byte)type);
+        writer.Write(type.Value);
         writer.Write(version);
         writer.Write(flags);
     }

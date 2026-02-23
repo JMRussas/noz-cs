@@ -141,7 +141,7 @@ public static partial class Workspace
             doc.MarkMetaModified();
             ClearSelection();
             SetSelected(doc, true);
-            Notifications.Add($"created {assetType.ToString().ToLowerInvariant()} '{doc.Name}'");
+            Notifications.Add($"created {(Asset.GetDef(assetType)?.Name ?? assetType.ToString()).ToLowerInvariant()} '{doc.Name}'");
         }
     }
 

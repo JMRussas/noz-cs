@@ -44,7 +44,7 @@ public class Skeleton : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Skeleton, typeof(Skeleton), Load));
+        RegisterDef(new AssetDef(AssetType.Skeleton, "Skeleton", typeof(Skeleton), Load));
     }
 
     private static Skeleton? Load(Stream stream, string name)

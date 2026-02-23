@@ -117,14 +117,14 @@ public static class DocumentManager
         if (_sourcePaths.Count == 0)
             return null;
 
-        name = name ?? MakeCanonicalName($"new_{assetType.ToString()}");
+        name = name ?? MakeCanonicalName($"new_{(Asset.GetDef(assetType)?.Name ?? assetType.ToString()).ToLowerInvariant()}");
         name = GenerateUniqueName(assetType, name);
 
         var canonicalName = MakeCanonicalName(name);
         if (Find(assetType, canonicalName) != null)
             return null;
 
-        var typeName = assetType.ToString().ToLowerInvariant();
+        var typeName = (Asset.GetDef(assetType)?.Name ?? assetType.ToString()).ToLowerInvariant();
         var path = Path.Combine(_sourcePaths[0], typeName, canonicalName + def.Extension);
         if (File.Exists(path))
             return null;
@@ -324,7 +324,7 @@ public static class DocumentManager
 
     public static string GetTargetPath(Document doc)
     {
-        var typeName = doc.Def.Type.ToString().ToLowerInvariant();
+        var typeName = (Asset.GetDef(doc.Def.Type)?.Name ?? doc.Def.Type.ToString()).ToLowerInvariant();
         var filename = Path.GetFileNameWithoutExtension(doc.Path);
         var safeName = MakeCanonicalName(filename);
         return Path.Combine(_outputPath, typeName, safeName);

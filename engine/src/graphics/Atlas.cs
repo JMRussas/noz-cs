@@ -48,7 +48,7 @@ public class Atlas : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Atlas, typeof(Atlas), Load, Version));
+        RegisterDef(new AssetDef(AssetType.Atlas, "Atlas", typeof(Atlas), Load, Version));
     }
 
     public override void Dispose()

@@ -89,6 +89,6 @@ public class Shader : Asset
 
     internal static void RegisterDef()
     {
-        RegisterDef(new AssetDef(AssetType.Shader, typeof(Shader), Load, Version));
+        RegisterDef(new AssetDef(AssetType.Shader, "Shader", typeof(Shader), Load, Version));
     }
 }

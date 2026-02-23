@@ -4,7 +4,7 @@
 
 using System.Numerics;
 
-namespace NoZ.Editor;
+namespace NoZ;
 
 public class PropertySet
 {
@@ -76,7 +76,7 @@ public class PropertySet
         _properties.TryGetValue(group, out var g)
             ? g.GetValueOrDefault(key, defaultValue)
             : defaultValue;
-    
+
     public int GetInt(string group, string key, int defaultValue)
     {
         var str = GetString(group, key, "");
@@ -224,7 +224,7 @@ public class PropertySet
 
     public static PropertySet? LoadFile(string path) =>
         File.Exists(path) ? Load(File.ReadAllText(path)) : null;
-    
+
     public void Save(string path)
     {
         using var writer = new StreamWriter(path);

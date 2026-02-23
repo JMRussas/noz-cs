@@ -1,14 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0</TargetFramework>
-    <AssemblyName>noz</AssemblyName>
+    <AssemblyName>NoZ.Editor</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <ApplicationIcon>res\windows\nozed.ico</ApplicationIcon>
-    <DefaultItemExcludes>$(DefaultItemExcludes);library\**</DefaultItemExcludes>
+    <DefaultItemExcludes>$(DefaultItemExcludes);library\**;program\**</DefaultItemExcludes>
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
   </PropertyGroup>
 
@@ -20,9 +18,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\engine\NoZ.csproj" />
-    <ProjectReference Include="..\generators\NoZ.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\platform\desktop\NoZ.Desktop.csproj" />
     <ProjectReference Include="..\platform\webgpu\NoZ.WebGPU.csproj" />
+    <ProjectReference Include="..\generators\NoZ.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>
@@ -38,13 +36,5 @@
   <ItemGroup>
     <EmbeddedResource Include="src\ProjectTemplates\*.template" LogicalName="ProjectTemplates.%(Filename)%(Extension)" />
   </ItemGroup>
-
-  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-      <PublishAot>true</PublishAot>
-      <RuntimeIdentifier>win-x64</RuntimeIdentifier>
-      <StripSymbols>true</StripSymbols>
-      <InvariantGlobalization>true</InvariantGlobalization>
-      <IlcTrimMetadata>true</IlcTrimMetadata>
-  </PropertyGroup>
 
 </Project>

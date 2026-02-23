@@ -26,6 +26,17 @@ public static class AssetManifest
         DocumentManager.DocumentAdded += doc => { IsModified = true; };
     }
 
+    private static string GetAssetTypeName(AssetType type)
+        => Asset.GetDef(type)?.Name ?? type.ToString();
+
+    private static string GetAssetTypeExpr(AssetType type)
+    {
+        var def = Asset.GetDef(type);
+        if (def != null)
+            return $"AssetType.{def.Name}";
+        return $"AssetType.FromString(\"{type}\")";
+    }
+
     private static string Pluralize(string typeName)
     {
         if (typeName.EndsWith("s", StringComparison.Ordinal))
@@ -128,9 +139,10 @@ public static class AssetManifest
         // Static classes grouped by type, each with Load() and Unload() methods
         foreach (var group in documentsByType)
         {
-            var typeName = group.Key.ToString();
+            var typeName = GetAssetTypeName(group.Key);
             var pluralName = Pluralize(typeName);
             var runtimeType = Asset.GetDef(group.Key)?.RuntimeType.Name ?? "Asset";
+            var assetTypeExpr = GetAssetTypeExpr(group.Key);
             var orderedDocs = group.Docs.OrderBy(d => d.Name).ToList();
 
             writer.WriteLine();
@@ -151,7 +163,7 @@ public static class AssetManifest
             foreach (var doc in orderedDocs)
             {
                 var fieldName = ToPascalCase(doc.Name);
-                writer.WriteLine($"            {fieldName} = ({runtimeType})Asset.Load(AssetType.{group.Key}, Names.{fieldName})!;");
+                writer.WriteLine($"            {fieldName} = ({runtimeType})Asset.Load({assetTypeExpr}, Names.{fieldName})!;");
             }
             writer.WriteLine("        }");
 
@@ -215,7 +227,7 @@ public static class AssetManifest
         writer.WriteLine("    {");
         foreach (var group in documentsByType)
         {
-            var pluralName = Pluralize(group.Key.ToString());
+            var pluralName = Pluralize(GetAssetTypeName(group.Key));
             writer.WriteLine($"        {pluralName}.Load();");
         }
 
@@ -255,7 +267,7 @@ public static class AssetManifest
 
         foreach (var group in documentsByType)
         {
-            var pluralName = Pluralize(group.Key.ToString());
+            var pluralName = Pluralize(GetAssetTypeName(group.Key));
             writer.WriteLine($"        {pluralName}.Unload();");
         }
         writer.WriteLine("    }");
@@ -290,7 +302,7 @@ public static class AssetManifest
 
         foreach (var group in documentsByType)
         {
-            var typeName = group.Key.ToString();
+            var typeName = GetAssetTypeName(group.Key);
             var pluralName = Pluralize(typeName);
             writer.WriteLine($"{className}.{pluralName} = {{");
 
