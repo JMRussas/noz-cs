@@ -39,6 +39,8 @@ public static class Application
         Graphics.Driver.SetVSync(vsync);
     }
 
+    public static void SetHighRefreshRate(bool enabled) => Platform.SetHighRefreshRate(enabled);
+
     public static Stream? LoadPersistentData(string name, string? appName = null) => Platform.LoadPersistentData(name, appName);
     public static void SavePersistentData(string name, Stream data, string? appName = null) => Platform.SavePersistentData(name, data, appName);
 
