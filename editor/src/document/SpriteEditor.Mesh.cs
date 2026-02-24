@@ -60,33 +60,52 @@ public partial class SpriteEditor
             // Internal stroke: the fill tessellation below draws the full shape with stroke color.
             // We then overlay a contracted fill on top. The stroke band is the ring between them.
             // For non-stroked slots, fillColor is used directly.
+            // When fill is transparent (A==0), we only draw the stroke ring (no fill overlay).
             var hasStroke = slot.HasStroke;
-            Color strokeColor = default;
-            PathsD? contractedPaths = null;
+            var fillColor = shape.GetPath(slot.PathIndices[0]).FillColor;
+            var hasFill = fillColor.A > 0;
 
             if (hasStroke)
             {
-                strokeColor = slot.StrokeColor.ToColor();
+                var strokeColor = slot.StrokeColor.ToColor();
                 var halfStroke = slot.StrokeWidth * Shape.StrokeScale;
                 var originalPaths = ShapeClipper.ShapeToPaths(msdfShape, 8);
+                PathsD? contractedPaths = null;
                 if (originalPaths.Count > 0)
                 {
                     // Contract inward by half-stroke width (precision 6 matches ShapeClipper)
                     contractedPaths = Clipper.InflatePaths(originalPaths, -halfStroke,
                         JoinType.Round, EndType.Polygon, precision: 6);
                 }
+
+                if (hasFill)
+                {
+                    // Tessellate full shape as stroke background, then overlay contracted fill
+                    if (!TessellatePaths(msdfShape, ref vertexOffset, ref indexOffset, strokeColor))
+                        continue;
+                    if (contractedPaths is { Count: > 0 })
+                        TessellateClipper(contractedPaths, ref vertexOffset, ref indexOffset, fillColor.ToColor());
+                }
+                else
+                {
+                    // Stroke only — tessellate the ring (full shape minus contracted interior)
+                    if (contractedPaths is { Count: > 0 })
+                    {
+                        var strokeRing = Clipper.BooleanOp(ClipType.Difference,
+                            originalPaths, contractedPaths, FillRule.NonZero, precision: 6);
+                        if (strokeRing.Count > 0)
+                            TessellateClipper(strokeRing, ref vertexOffset, ref indexOffset, strokeColor);
+                    }
+                    else
+                    {
+                        // Contracted paths collapsed — stroke fills the entire shape
+                        TessellatePaths(msdfShape, ref vertexOffset, ref indexOffset, strokeColor);
+                    }
+                }
             }
-
-            // Tessellate full shape — used as stroke background (if stroked) or fill
-            if (!TessellatePaths(msdfShape, ref vertexOffset, ref indexOffset,
-                    hasStroke ? strokeColor : shape.GetPath(slot.PathIndices[0]).FillColor.ToColor()))
-                continue;
-
-            // For stroked slots, tessellate the contracted fill on top
-            if (hasStroke && contractedPaths is { Count: > 0 })
+            else if (hasFill)
             {
-                TessellateClipper(contractedPaths, ref vertexOffset, ref indexOffset,
-                    shape.GetPath(slot.PathIndices[0]).FillColor.ToColor());
+                TessellatePaths(msdfShape, ref vertexOffset, ref indexOffset, fillColor.ToColor());
             }
         }
     }
