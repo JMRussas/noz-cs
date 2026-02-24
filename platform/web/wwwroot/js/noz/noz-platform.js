@@ -108,6 +108,18 @@ export function openURL(url) {
     window.open(url, '_blank');
 }
 
+export function enableHighRefreshRate() {
+    if (document.getElementById('noz-hfr')) return;
+    const style = document.createElement('style');
+    style.id = 'noz-hfr';
+    style.textContent = '@keyframes noz-hfr{from{opacity:.999}to{opacity:1}}canvas{animation:noz-hfr 1s linear infinite}';
+    document.head.appendChild(style);
+}
+
+export function disableHighRefreshRate() {
+    document.getElementById('noz-hfr')?.remove();
+}
+
 function onWindowBlur() {
     // Release all modifier keys when window loses focus
     syncModifier(false, 'Control');

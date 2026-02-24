@@ -72,6 +72,7 @@ public interface IPlatform
     bool IsFullscreen { get; }
     void SetFullscreen(bool fullscreen);
     void SetVSync(bool vsync);
+    void SetHighRefreshRate(bool enabled) { }
 
     nint WindowHandle { get; }
     nint GetGraphicsProcAddress(string name);

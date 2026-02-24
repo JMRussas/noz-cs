@@ -154,6 +154,10 @@ public class WebPlatform : IPlatform
     public bool IsFullscreen => false;
     public void SetFullscreen(bool fullscreen) { }
     public void SetVSync(bool vsync) { }
+    public void SetHighRefreshRate(bool enabled)
+    {
+        _module?.InvokeVoidAsync(enabled ? "enableHighRefreshRate" : "disableHighRefreshRate");
+    }
 
     public void SetCursor(SystemCursor cursor)
     {
