@@ -758,11 +758,10 @@ public class SpriteDocument : Document, ISpriteSource
             if (slot.PathIndices.Count > 0)
                 RasterizeSlot(frame.Shape, slot, image, targetRect, sourceOffset, dpi);
 
-            // Bleed RGB into transparent pixels to prevent fringing with linear filtering
-            var rasterRect = new RectInt(
-                targetRect.X + padding, targetRect.Y + padding,
-                slotRasterBounds.Size.X, slotRasterBounds.Size.Y);
-            image.BleedColors(rasterRect);
+            // Bleed RGB into transparent pixels to prevent fringing with linear filtering.
+            // Use the full targetRect (including padding) so bleed extends into the
+            // padding region — linear filtering can sample there.
+            image.BleedColors(targetRect);
 
             xOffset += slotWidth;
         }
