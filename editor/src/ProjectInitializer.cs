@@ -102,11 +102,8 @@ internal static class ProjectInitializer
         GenerateFile(projectPath, "nuget.config", "nuget.config.template", context);
         GenerateFile(projectPath, ".editorconfig", "editorconfig.template", context);
 
-        // Copy segui font from editor
+        // Copy segui font source from editor
         CopyFont(editorPath, projectPath);
-
-        // Copy default palette from editor
-        CopyPalette(editorPath, projectPath);
 
         Log.Info("Project structure created successfully");
     }
@@ -189,21 +186,23 @@ internal static class ProjectInitializer
 
     private static void CopyFont(string editorPath, string projectPath)
     {
-        var sourceFontDir = Path.Combine(editorPath, "library", "font");
-        var destFontDir = Path.Combine(projectPath, "library", "font");
+        var sourceFontDir = Path.Combine(editorPath, "assets", "fonts");
+        var destFontDir = Path.Combine(projectPath, "assets", "font");
 
         if (!Directory.Exists(sourceFontDir))
         {
-            Log.Warning($"  Warning: Font directory not found at {sourceFontDir}");
+            Log.Warning($"  Warning: Font source directory not found at {sourceFontDir}");
             return;
         }
 
         var fontFiles = Directory.GetFiles(sourceFontDir, "seguisb*");
         if (fontFiles.Length == 0)
         {
-            Log.Warning("  Warning: seguisb font files not found in editor directory");
+            Log.Warning("  Warning: seguisb font source files not found in editor directory");
             return;
         }
+
+        Directory.CreateDirectory(destFontDir);
 
         foreach (var fontFile in fontFiles)
         {
@@ -212,21 +211,6 @@ internal static class ProjectInitializer
             File.Copy(fontFile, destFile, overwrite: true);
             Log.Info($"  Copied font: {fileName}");
         }
-    }
-
-    private static void CopyPalette(string editorPath, string projectPath)
-    {
-        var sourcePalette = Path.Combine(editorPath, "assets", "textures", "editor_palette.png");
-        var destPalette = Path.Combine(projectPath, "assets", "texture", "palette.png");
-
-        if (!File.Exists(sourcePalette))
-        {
-            Log.Warning($"  Warning: Editor palette not found at {sourcePalette}");
-            return;
-        }
-
-        File.Copy(sourcePalette, destPalette, overwrite: true);
-        Log.Info("  Copied default palette");
     }
 
     private static bool IsValidProjectName(string name)
