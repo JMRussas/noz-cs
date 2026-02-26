@@ -15,7 +15,7 @@ public class Asset : IDisposable {
     private static readonly Dictionary<AssetType, AssetDef> Defs = new();
     private static readonly Dictionary<(AssetType, string), Asset> _registry = new();
 
-    internal Asset(AssetType type, string name)
+    protected internal Asset(AssetType type, string name)
     {
         Id = StringId.Get(name);
         Name = name;
