@@ -32,9 +32,16 @@ public static class AssetManifest
     private static string GetAssetTypeExpr(AssetType type)
     {
         var def = Asset.GetDef(type);
-        if (def != null)
+        if (def == null)
+            return $"AssetType.FromString(\"{type}\")";
+
+        // Check if AssetType has a built-in static field for this type
+        var field = typeof(AssetType).GetField(def.Name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static);
+        if (field != null)
             return $"AssetType.{def.Name}";
-        return $"AssetType.FromString(\"{type}\")";
+
+        // Custom asset type: use the runtime type's Type field
+        return $"{def.RuntimeType.Name}.Type";
     }
 
     private static string Pluralize(string typeName)
