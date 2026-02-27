@@ -124,6 +124,7 @@ public static class Application
         Font.RegisterDef();
         Vfx.RegisterDef();
         Bin.RegisterDef();
+        AssetBundle.RegisterDef();
     }
 
     public static void Run()

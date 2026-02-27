@@ -165,6 +165,39 @@ public class Asset : IDisposable {
     protected void Register() => _registry[(Def.Type, Name)] = this;
     protected void Unregister() => _registry.Remove((Def.Type, Name));
 
+    public virtual void PostLoad()
+    {
+    }
+
+    public static void PostLoadAll()
+    {
+        foreach (var asset in _registry.Values)
+            asset.PostLoad();
+    }
+
+    internal static Asset? LoadFromStream(AssetType type, Stream stream, string name, bool useRegistry = true)
+    {
+        var def = GetDef(type);
+        if (def == null)
+        {
+            Log.Error($"No asset def registered for type {type}");
+            return null;
+        }
+
+        if (!ValidateAssetHeader(stream, type))
+        {
+            Log.Error($"Invalid asset header: {type}/{name}");
+            return null;
+        }
+
+        var asset = def.Load(stream, name);
+
+        if (useRegistry && asset != null)
+            _registry[(type, name)] = asset;
+
+        return asset;
+    }
+
     public virtual void Dispose()
     {
     }

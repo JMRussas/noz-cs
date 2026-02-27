@@ -43,6 +43,7 @@ public abstract class Document : IDisposable
     public virtual void LoadMetadata(PropertySet meta) { }
     public virtual void SaveMetadata(PropertySet meta) { }
     public virtual void Import(string outputPath, PropertySet meta) { }
+    public virtual void GetDependencies(List<(AssetType Type, string Name)> dependencies) { }
     public virtual void Draw() { }
     public virtual void Clone(Document source) { }
     public virtual void OnUndoRedo() { }

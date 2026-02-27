@@ -55,6 +55,38 @@ public static class AssetManifest
     {
         var entries = new List<(AssetType Type, Document Doc)>();
 
+        // Collect assets owned by bundles and their transitive dependencies
+        var bundleOwned = new HashSet<(AssetType, string)>();
+        var depQueue = new Queue<(AssetType, string)>();
+        foreach (var doc in DocumentManager.Documents)
+        {
+            if (doc is BundleDocument bundle)
+            {
+                foreach (var entry in bundle.Entries)
+                    depQueue.Enqueue((entry.AssetType, entry.AssetName));
+            }
+        }
+
+        var deps = new List<(AssetType Type, string Name)>();
+        while (depQueue.Count > 0)
+        {
+            var dep = depQueue.Dequeue();
+            if (!bundleOwned.Add(dep))
+                continue;
+
+            var depDoc = DocumentManager.Find(dep.Item1, dep.Item2);
+            if (depDoc == null)
+                continue;
+
+            if (!depDoc.Loaded)
+                depDoc.Load();
+
+            deps.Clear();
+            depDoc.GetDependencies(deps);
+            foreach (var d in deps)
+                depQueue.Enqueue(d);
+        }
+
         // Collect actual sprite names for conflict detection
         var spriteNames = new HashSet<string>();
         foreach (var doc in DocumentManager.Documents)
@@ -67,6 +99,14 @@ public static class AssetManifest
         foreach (var doc in DocumentManager.Documents)
         {
             if (doc.IsEditorOnly) continue;
+
+            // Skip assets owned by a bundle
+            if (bundleOwned.Contains((doc.Def.Type, doc.Name)))
+                continue;
+
+            // Skip remote bundles
+            if (doc is BundleDocument { IsRemote: true })
+                continue;
 
             // Texture documents marked as sprites get remapped
             if (doc is TextureDocument { IsSprite: true } texDoc)
@@ -91,6 +131,8 @@ public static class AssetManifest
         var path = config.GenerateCs!;
         Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
 
+        var manifestEntries = GetManifestEntries();
+
         using var writer = new StreamWriter(path);
 
         writer.WriteLine("//");
@@ -98,13 +140,21 @@ public static class AssetManifest
         writer.WriteLine("//");
         writer.WriteLine();
         writer.WriteLine("using NoZ;");
+
+        // Emit using directives for namespaces of custom asset runtime types
+        var namespaces = manifestEntries
+            .Select(e => Asset.GetDef(e.Type)?.RuntimeType.Namespace)
+            .Where(ns => ns != null && ns != "NoZ" && ns != config.CsNamespace)
+            .Distinct()
+            .OrderBy(ns => ns);
+        foreach (var ns in namespaces)
+            writer.WriteLine($"using {ns};");
+
         writer.WriteLine();
         writer.WriteLine($"namespace {config.CsNamespace};");
         writer.WriteLine();
         writer.WriteLine($"public static class {config.CsClass}");
         writer.WriteLine("{");
-
-        var manifestEntries = GetManifestEntries();
         var documentsByType = manifestEntries
             .GroupBy(e => e.Type)
             .OrderBy(g => g.Key.ToString())
