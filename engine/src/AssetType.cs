@@ -32,6 +32,7 @@ public readonly struct AssetType : IEquatable<AssetType>
     public static readonly AssetType Lua       = FromString("LUA_");
     public static readonly AssetType Event     = FromString("EVNT");
     public static readonly AssetType Bin       = FromString("BIN_");
+    public static readonly AssetType Bundle    = FromString("BNDL");
 
     public bool Equals(AssetType other) => Value == other.Value;
     public override bool Equals(object? obj) => obj is AssetType other && Equals(other);

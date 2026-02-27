@@ -248,6 +248,7 @@ public static partial class EditorApplication
         AnimationDocument.RegisterDef();
         VfxDocument.RegisterDef();
         BinDocument.RegisterDef();
+        BundleDocument.RegisterDef();
         PaletteDocument.RegisterDef();
 
         config.RegisterDocumentTypes?.Invoke();
