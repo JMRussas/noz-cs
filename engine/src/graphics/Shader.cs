@@ -73,6 +73,7 @@ public class Shader : Asset
         };
 
         shader.Handle = Graphics.Driver.CreateShader(name, source, source, bindings);
+        Graphics.Driver.SetShaderFlags(shader.Handle, shader.Flags);
         return shader;
     }
 
@@ -85,6 +86,20 @@ public class Shader : Asset
         }
 
         base.Dispose();
+    }
+
+    internal static Shader CreateRaw(string name, nuint handle, ShaderFlags flags,
+        List<ShaderBinding> bindings, uint vertexFormatHash)
+    {
+        var shader = new Shader(name)
+        {
+            Flags = flags,
+            Bindings = bindings,
+            VertexFormatHash = vertexFormatHash,
+        };
+        shader.Handle = handle;
+        Graphics.Driver.SetShaderFlags(handle, flags);
+        return shader;
     }
 
     internal static void RegisterDef()

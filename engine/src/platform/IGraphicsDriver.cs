@@ -62,6 +62,7 @@ public interface IGraphicsDriver
     nuint CreateShader(string name, string vertexSource, string fragmentSource, List<ShaderBinding> bindings);
     void DestroyShader(nuint handle);
     void BindShader(nuint handle);
+    void SetShaderFlags(nuint handle, ShaderFlags flags) { }
 
     void SetBlendMode(BlendMode mode);
     void SetTextureFilter(TextureFilter filter);

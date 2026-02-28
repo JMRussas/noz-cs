@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 
 [assembly: InternalsVisibleTo("noz")]
 [assembly: InternalsVisibleTo("NoZ.Editor")]
+[assembly: InternalsVisibleTo("YesZ.Rendering")]
 
 namespace NoZ;
 

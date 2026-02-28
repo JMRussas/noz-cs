@@ -134,6 +134,17 @@ public static unsafe partial class Graphics
         _passProjections[(int)_currentPass] = projection;
     }
 
+    internal static void SetPassProjection(in Matrix4x4 projection)
+    {
+        _passProjections[(int)_currentPass] = projection;
+        _batchStateDirty = true;
+    }
+
+    internal static Matrix4x4 GetPassProjection()
+    {
+        return _passProjections[(int)_currentPass];
+    }
+
     public static void SetMesh(RenderMesh mesh)
     {
         if (CurrentState.Mesh == mesh) return;

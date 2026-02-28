@@ -349,7 +349,14 @@ public unsafe partial class WebGPUGraphicsDriver
     private RenderPipeline* GetOrCreatePipeline(nuint shaderHandle, BlendMode blendMode, int vertexStride)
     {
         ref var shaderInfo = ref _shaders[(int)shaderHandle];
-        var key = new PsoKey { ShaderHandle = shaderHandle, BlendMode = blendMode, VertexStride = vertexStride, MsaaSamples = _state.CurrentPassSampleCount };
+        var key = new PsoKey
+        {
+            ShaderHandle = shaderHandle,
+            BlendMode = blendMode,
+            VertexStride = vertexStride,
+            MsaaSamples = _state.CurrentPassSampleCount,
+            HasDepthAttachment = _state.HasDepthAttachment
+        };
 
         if (shaderInfo.PsoCache.TryGetValue(key, out var pipelinePtr))
         {
@@ -367,7 +374,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
         // Create render pipeline
         var pipelineName = $"{shaderInfo.Name}_{blendMode}_{meshInfo.Descriptor.Stride}b_{key.MsaaSamples}x";
-        var pipeline = CreateRenderPipeline(shaderInfo, blendMode, meshInfo.Descriptor, key.MsaaSamples, pipelineName);
+        var pipeline = CreateRenderPipeline(shaderInfo, blendMode, meshInfo.Descriptor, key.MsaaSamples, key.HasDepthAttachment, pipelineName);
 
         if (pipeline == null)
         {
@@ -380,7 +387,7 @@ public unsafe partial class WebGPUGraphicsDriver
         return pipeline;
     }
 
-    private RenderPipeline* CreateRenderPipeline(ShaderInfo shaderInfo, BlendMode blendMode, VertexFormatDescriptor vertexDescriptor, int sampleCount, string? pipelineName = null)
+    private RenderPipeline* CreateRenderPipeline(ShaderInfo shaderInfo, BlendMode blendMode, VertexFormatDescriptor vertexDescriptor, int sampleCount, bool hasDepthAttachment, string? pipelineName = null)
     {
         using var vsEntryPoint = SilkMarshal.StringToMemory("vs_main");
         using var fsEntryPoint = SilkMarshal.StringToMemory("fs_main");
@@ -446,6 +453,33 @@ public unsafe partial class WebGPUGraphicsDriver
             AlphaToCoverageEnabled = false,
         };
 
+        // Depth/stencil state — required when render pass has a depth attachment
+        DepthStencilState depthStencilState = default;
+        DepthStencilState* depthStencilPtr = null;
+        if (hasDepthAttachment)
+        {
+            var noopStencilFace = new StencilFaceState
+            {
+                Compare = CompareFunction.Always,
+                FailOp = StencilOperation.Keep,
+                DepthFailOp = StencilOperation.Keep,
+                PassOp = StencilOperation.Keep,
+            };
+            depthStencilState = new DepthStencilState
+            {
+                Format = DepthFormat,
+                DepthWriteEnabled = shaderInfo.Flags.HasFlag(ShaderFlags.Depth),
+                DepthCompare = shaderInfo.Flags.HasFlag(ShaderFlags.DepthLess)
+                    ? CompareFunction.Less
+                    : CompareFunction.Always,
+                StencilFront = noopStencilFace,
+                StencilBack = noopStencilFace,
+                StencilReadMask = 0,
+                StencilWriteMask = 0,
+            };
+            depthStencilPtr = &depthStencilState;
+        }
+
         // Create render pipeline
         var pipelineDesc = new RenderPipelineDescriptor
         {
@@ -455,7 +489,7 @@ public unsafe partial class WebGPUGraphicsDriver
             Fragment = &fragmentState,
             Primitive = primitiveState,
             Multisample = multisampleState,
-            DepthStencil = null, // No depth buffer for now
+            DepthStencil = depthStencilPtr,
         };
 
         return _wgpu.DeviceCreateRenderPipeline(_device, &pipelineDesc);

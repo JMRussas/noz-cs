@@ -37,6 +37,11 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
     private WGPUTexture* _currentSurfaceTexture;
     private TextureView* _currentSurfaceTextureView;
 
+    // Depth buffer
+    private WGPUTexture* _depthTexture;
+    private TextureView* _depthTextureView;
+    private const WGPUTextureFormat DepthFormat = WGPUTextureFormat.Depth24Plus;
+
     // Resource tracking
     private const int MaxMeshes = 32;
     private const int MaxBuffers = 256;
@@ -91,6 +96,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public bool ScissorEnabled;
         public RectInt Scissor;
         public int CurrentPassSampleCount;
+        public bool HasDepthAttachment;
     }
 
     private struct MeshInfo
@@ -143,6 +149,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public List<TextureSlotInfo> TextureSlots; // Derived from bindings: texture+sampler pairs
         public Dictionary<string, uint> UniformBindings; // Uniform name → binding number
         public Dictionary<string, nint> UniformBuffers; // Per-shader uniform buffers by name (nint -> WGPUBuffer*)
+        public ShaderFlags Flags; // Depth/blend flags from shader asset
     }
 
     private struct PsoKey : IEquatable<PsoKey>
@@ -151,16 +158,18 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public BlendMode BlendMode;
         public int VertexStride;
         public int MsaaSamples;
+        public bool HasDepthAttachment;
 
         public bool Equals(PsoKey other) =>
             ShaderHandle == other.ShaderHandle &&
             BlendMode == other.BlendMode &&
             VertexStride == other.VertexStride &&
-            MsaaSamples == other.MsaaSamples;
+            MsaaSamples == other.MsaaSamples &&
+            HasDepthAttachment == other.HasDepthAttachment;
 
         public override bool Equals(object? obj) => obj is PsoKey other && Equals(other);
 
-        public override int GetHashCode() => HashCode.Combine(ShaderHandle, BlendMode, VertexStride, MsaaSamples);
+        public override int GetHashCode() => HashCode.Combine(ShaderHandle, BlendMode, VertexStride, MsaaSamples, HasDepthAttachment);
     }
 
     public void Init(GraphicsDriverConfig config)
@@ -432,10 +441,44 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         };
 
         _wgpu.SurfaceConfigure(_surface, &surfaceConfig);
+
+        // Create depth texture immediately so it's available for the first frame.
+        CreateDepthTexture();
+    }
+
+    private void CreateDepthTexture()
+    {
+        if (_depthTextureView != null) { _wgpu.TextureViewRelease(_depthTextureView); _depthTextureView = null; }
+        if (_depthTexture != null) { _wgpu.TextureRelease(_depthTexture); _depthTexture = null; }
+
+        fixed (byte* label = "DepthTexture\0"u8)
+        {
+            var desc = new TextureDescriptor
+            {
+                Label = label,
+                Size = new Extent3D { Width = (uint)_surfaceWidth, Height = (uint)_surfaceHeight, DepthOrArrayLayers = 1 },
+                MipLevelCount = 1,
+                SampleCount = 1,
+                Dimension = TextureDimension.Dimension2D,
+                Format = DepthFormat,
+                Usage = TextureUsage.RenderAttachment,
+            };
+            _depthTexture = _wgpu.DeviceCreateTexture(_device, &desc);
+        }
+        _depthTextureView = _wgpu.TextureCreateView(_depthTexture, null);
+    }
+
+    public void SetShaderFlags(nuint handle, ShaderFlags flags)
+    {
+        _shaders[(int)handle].Flags = flags;
     }
 
     public void Shutdown()
     {
+        // Release depth buffer
+        if (_depthTextureView != null) { _wgpu.TextureViewRelease(_depthTextureView); _depthTextureView = null; }
+        if (_depthTexture != null) { _wgpu.TextureRelease(_depthTexture); _depthTexture = null; }
+
         // Release global samplers
         if (_linearSampler != null)
         {
@@ -509,6 +552,7 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
                 AlphaMode = CompositeAlphaMode.Auto,
             };
             _wgpu.SurfaceConfigure(_surface, &surfaceConfig);
+            CreateDepthTexture();
         }
 
         // Acquire surface texture for this frame

@@ -22,6 +22,7 @@ public unsafe partial class WebGPUGraphicsDriver
         // Reset all cached state — new render pass encoder needs everything rebound
         _state = default;
         _state.CurrentPassSampleCount = 1;
+        _state.HasDepthAttachment = true;
         _state.PipelineDirty = true;
         _state.BindGroupDirty = true;
         _currentGlobalsIndex = -1;
@@ -41,11 +42,24 @@ public unsafe partial class WebGPUGraphicsDriver
             }
         };
 
+        var depthAttachment = new RenderPassDepthStencilAttachment
+        {
+            View = _depthTextureView,
+            DepthLoadOp = LoadOp.Clear,
+            DepthStoreOp = StoreOp.Store,
+            DepthClearValue = 1.0f,
+            DepthReadOnly = false,
+            StencilLoadOp = LoadOp.Undefined,
+            StencilStoreOp = StoreOp.Undefined,
+            StencilClearValue = 0,
+            StencilReadOnly = true,
+        };
+
         var desc = new RenderPassDescriptor
         {
             ColorAttachments = &colorAttachment,
             ColorAttachmentCount = 1,
-            DepthStencilAttachment = null
+            DepthStencilAttachment = &depthAttachment
         };
 
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, in desc);
@@ -94,6 +108,7 @@ public unsafe partial class WebGPUGraphicsDriver
         // Reset all cached state — new render pass encoder needs everything rebound
         _state = default;
         _state.CurrentPassSampleCount = 1;
+        _state.HasDepthAttachment = true;
         _state.PipelineDirty = true;
         _state.BindGroupDirty = true;
         _currentGlobalsIndex = -1;
@@ -106,11 +121,24 @@ public unsafe partial class WebGPUGraphicsDriver
             StoreOp = StoreOp.Store,
         };
 
+        var depthAttachment = new RenderPassDepthStencilAttachment
+        {
+            View = _depthTextureView,
+            DepthLoadOp = LoadOp.Load,
+            DepthStoreOp = StoreOp.Store,
+            DepthClearValue = 1.0f,
+            DepthReadOnly = false,
+            StencilLoadOp = LoadOp.Undefined,
+            StencilStoreOp = StoreOp.Undefined,
+            StencilClearValue = 0,
+            StencilReadOnly = true,
+        };
+
         var desc = new RenderPassDescriptor
         {
             ColorAttachments = &colorAttachment,
             ColorAttachmentCount = 1,
-            DepthStencilAttachment = null
+            DepthStencilAttachment = &depthAttachment
         };
 
         _currentRenderPass = _wgpu.CommandEncoderBeginRenderPass(_commandEncoder, in desc);
