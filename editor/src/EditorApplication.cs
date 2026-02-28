@@ -15,6 +15,11 @@ public class EditorApplicationConfig
     public string? IconPath { get; init; }
     public Action? RegisterAssetTypes { get; init; }
     public Action? RegisterDocumentTypes { get; init; }
+    public Action? Update { get; init; }
+    public Action? UpdateUI { get; init; }
+    public Action<PropertySet>? LoadUserSettings { get; init; }
+    public Action<PropertySet>? SaveUserSettings { get; init; }
+    public Action<List<Command>>? RegisterCommands { get; init; }
 }
 
 internal class EditorApplicationInstance : IApplication
@@ -38,6 +43,8 @@ public static partial class EditorApplication
 {
     private static readonly Queue<Action> _mainThreadQueue = new();
 
+    internal static EditorApplicationConfig AppConfig { get; private set; } = null!;
+
     public static EditorConfig Config { get; private set; } = null!;
     public static string OutputPath { get; private set; } = null!;
     public static string EditorPath { get; private set; } = null!;
@@ -45,6 +52,7 @@ public static partial class EditorApplication
 
     public static void Run(EditorApplicationConfig config, string[] args)
     {
+        AppConfig = config;
         var initProject = false;
         var importOnly = false;
         string? initProjectName = null;
@@ -319,6 +327,7 @@ public static partial class EditorApplication
         PopupMenu.Update();
         Notifications.Update();
         Workspace.Update();
+        AppConfig.Update?.Invoke();
     }
 
     internal static void UpdateUI()
@@ -328,6 +337,7 @@ public static partial class EditorApplication
         PopupMenu.UpdateUI();
         CommandPalette.UpdateUI();
         ConfirmDialog.UpdateUI();
+        AppConfig.UpdateUI?.Invoke();
     }
 
     internal static void LateUpdate()

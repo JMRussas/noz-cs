@@ -2,8 +2,6 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System.Numerics;
-
 namespace NoZ.Editor;
 
 public static class UserSettings
@@ -18,6 +16,7 @@ public static class UserSettings
 
         CollectionManager.LoadUserSettings(props);
         Workspace.LoadUserSettings(props);
+        EditorApplication.AppConfig.LoadUserSettings?.Invoke(props);
     }
 
     public static void Save()
@@ -29,6 +28,7 @@ public static class UserSettings
         var props = new PropertySet();
         Workspace.SaveUserSettings(props);
         CollectionManager.SaveUserSettings(props);
+        EditorApplication.AppConfig.SaveUserSettings?.Invoke(props);
         props.Save(UserConfigPath);
     }
 }

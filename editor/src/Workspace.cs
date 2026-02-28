@@ -31,6 +31,7 @@ public static partial class Workspace
     private const float UIScaleStep = 0.1f;
 
     public static DocumentEditor? ActiveEditor => _activeEditor;
+    public static Document? ActiveDocument => _activeDocument;
 
     private static Camera _camera = null!;
 
@@ -190,6 +191,8 @@ public static partial class Workspace
             new() { Name = "Show/Hide Hidden Assets", Handler = ToggleShowHidden },
             new() { Name = "Rebuild Atlas", Handler = RebuildAtlas },
         };
+
+        EditorApplication.AppConfig.RegisterCommands?.Invoke(workspaceCommands);
 
         for (var i = 1; i <= 9; i++)
         {

@@ -175,7 +175,7 @@ public class Asset : IDisposable {
             asset.PostLoad();
     }
 
-    internal static Asset? LoadFromStream(AssetType type, Stream stream, string name, bool useRegistry = true)
+    public static Asset? LoadFromStream(AssetType type, Stream stream, string name, bool useRegistry = true)
     {
         var def = GetDef(type);
         if (def == null)
