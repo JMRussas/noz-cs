@@ -162,6 +162,13 @@ public static class Application
         BeginFrame = null;
         beginFrame?.Invoke();
 
+        // Fixed timestep physics loop
+        var savedDt = Time.DeltaTime;
+        Time.DeltaTime = Time.FixedDeltaTime;
+        while (Time.ConsumeFixedStep())
+            _instance.FixedUpdate();
+        Time.DeltaTime = savedDt;
+
         _instance.Update();
         UI.Begin();
         _instance.UpdateUI();

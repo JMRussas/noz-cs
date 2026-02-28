@@ -11,11 +11,14 @@ public static class Time
     private static long _startTicks;
     private static long _lastFrameTicks;
     private static float _timeScale = 1f;
-    public static float DeltaTime { get; private set; }
+    private static float _fixedAccumulator;
+
+    public static float DeltaTime { get; set; }
     public static float UnscaledDeltaTime { get; private set; }
+    public static float FixedDeltaTime { get; set; } = 1f / 60f;
     public static float TotalTime { get; private set; }
     public static int FrameCount { get; private set; }
-    
+
     public static float TimeScale
     {
         get => _timeScale;
@@ -33,7 +36,8 @@ public static class Time
         DeltaTime = 0;
         UnscaledDeltaTime = 0;
         TotalTime = 0;
-        FrameCount = 0;        
+        FrameCount = 0;
+        _fixedAccumulator = 0;
     }
 
     internal static void Update()
@@ -49,10 +53,21 @@ public static class Time
         TotalTime += DeltaTime;
         FrameCount++;
 
+        _fixedAccumulator += DeltaTime;
+
         if (AvergeFps > 0)
             AvergeFps = AvergeFps * 0.95f + Fps * 0.05f;
         else
             AvergeFps = Fps;
+    }
+
+    internal static bool ConsumeFixedStep()
+    {
+        if (_fixedAccumulator < FixedDeltaTime)
+            return false;
+
+        _fixedAccumulator -= FixedDeltaTime;
+        return true;
     }
 
     internal static void Shutdown()
