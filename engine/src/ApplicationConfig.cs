@@ -10,6 +10,7 @@ namespace NoZ;
 public interface IApplication
 {
     void Update();
+    void FixedUpdate() { }
     void UpdateUI() { }
     void LateUpdate() { }
     void LoadConfig(ApplicationConfig config) { }
