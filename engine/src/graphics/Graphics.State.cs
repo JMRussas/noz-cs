@@ -315,8 +315,19 @@ public static unsafe partial class Graphics
         _batchStateDirty = true;
     }
 
+    // Per-batch uniform snapshot tracking — Graphics keeps a copy of current
+    // uniform data so it can be snapshotted in AddBatchState and restored
+    // per-batch during ExecuteBatches. The driver's copy (_uniformData) is
+    // write-only from Graphics' perspective.
+    private static readonly Dictionary<string, byte[]> _currentUniforms = new();
+
     public static void SetUniform(string name, ReadOnlySpan<byte> data)
     {
+        // Keep copy for per-batch snapshotting
+        if (!_currentUniforms.TryGetValue(name, out var existing) || existing.Length != data.Length)
+            _currentUniforms[name] = new byte[data.Length];
+        data.CopyTo(_currentUniforms[name]);
+
         Driver.SetUniform(name, data);
         _batchStateDirty = true;
     }
@@ -327,9 +338,8 @@ public static unsafe partial class Graphics
         {
             fixed (T* ptr = &data)
             {
-                Driver.SetUniform(name, new ReadOnlySpan<byte>(ptr, sizeof(T)));
+                SetUniform(name, new ReadOnlySpan<byte>(ptr, sizeof(T)));
             }
         }
-        _batchStateDirty = true;
     }
 }

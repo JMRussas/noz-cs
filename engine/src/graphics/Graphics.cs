@@ -46,6 +46,7 @@ public static unsafe partial class Graphics
         public bool ScissorEnabled;
         public byte Pass;
         public ushort GlobalsIndex;
+        public ushort UniformSnapshotIndex;  // 0 = no uniforms, 1+ = index into _uniformSnapshots
         public nuint RenderTextureHandle;  // 0 = scene pass, otherwise RT handle
         public Color ClearColor;
     }
@@ -110,6 +111,7 @@ public static unsafe partial class Graphics
     private static NativeArray<BatchState> _batchStates;
     private static NativeArray<GlobalsSnapshot> _globalsSnapshots;
     private static int _globalsBaseIndex; // Base offset for globals buffers to prevent RTT overwriting main frame
+    private static readonly List<KeyValuePair<string, byte[]>[]> _uniformSnapshots = new();
     private static ushort _currentBatchState;
     
     public static Color ClearColor { get; set; } = Color.Black;  
@@ -306,6 +308,51 @@ public static unsafe partial class Graphics
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ushort GetOrAddUniformSnapshot()
+    {
+        if (_currentUniforms.Count == 0)
+            return 0; // No uniforms set
+
+        // Check existing snapshots for matching content
+        for (int i = 0; i < _uniformSnapshots.Count; i++)
+            if (UniformSnapshotMatches(_uniformSnapshots[i]))
+                return (ushort)(i + 1); // 1-indexed (0 = none)
+
+        // Create new snapshot — clone current uniform data
+        var entries = new KeyValuePair<string, byte[]>[_currentUniforms.Count];
+        int idx = 0;
+        foreach (var kvp in _currentUniforms)
+            entries[idx++] = new(kvp.Key, kvp.Value.ToArray());
+
+        _uniformSnapshots.Add(entries);
+        return (ushort)_uniformSnapshots.Count; // 1-indexed
+    }
+
+    private static bool UniformSnapshotMatches(KeyValuePair<string, byte[]>[] snapshot)
+    {
+        if (snapshot.Length != _currentUniforms.Count)
+            return false;
+
+        foreach (var entry in snapshot)
+        {
+            if (!_currentUniforms.TryGetValue(entry.Key, out var current))
+                return false;
+            if (!current.AsSpan().SequenceEqual(entry.Value))
+                return false;
+        }
+        return true;
+    }
+
+    private static void RestoreUniformSnapshot(ushort index)
+    {
+        if (index == 0) return; // No uniforms for this batch
+
+        var snapshot = _uniformSnapshots[index - 1]; // 1-indexed
+        foreach (var entry in snapshot)
+            Driver.SetUniform(entry.Key, entry.Value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void AddBatchState()
     {
         _batchStateDirty = false;
@@ -317,6 +364,7 @@ public static unsafe partial class Graphics
         {
             Pass = (byte)_currentPass,
             GlobalsIndex = GetOrAddGlobals(currentProjection),
+            UniformSnapshotIndex = GetOrAddUniformSnapshot(),
             Shader = CurrentState.Shader?.Handle ?? nuint.Zero,
             BlendMode = CurrentState.BlendMode,
             Viewport = CurrentState.Viewport,
@@ -352,6 +400,7 @@ public static unsafe partial class Graphics
             $" {_batchStates.Length - 1}" +
             $" Pass={candidate.Pass}" +
             $" Globals={candidate.GlobalsIndex}" +
+            $" Uniforms={candidate.UniformSnapshotIndex}" +
             $" Shader=0x{candidate.Shader:X}" +
             $" ({Asset.Get<Shader>(AssetType.Shader, candidate.Shader)?.Name ?? "???"})" +
             $" Texture0=0x{candidate.Textures[0]:X}" +
@@ -668,6 +717,7 @@ public static unsafe partial class Graphics
                 Driver.ClearScissor();
             Driver.BindShader(batchState.Shader);
             Driver.BindGlobals(batchState.GlobalsIndex);
+            RestoreUniformSnapshot(batchState.UniformSnapshotIndex);
             for (int t = 0; t < MaxTextures; t++)
             {
                 if (batchState.Textures[t] != 0)
@@ -714,9 +764,11 @@ public static unsafe partial class Graphics
 
         // Advance base index so subsequent ExecuteCommands calls (like RTT) use different buffer slots
         // This prevents RTT from overwriting globals that main frame draw commands still reference
-        LogGraphics($"Clearing Snapshots:  baseIndex={_globalsBaseIndex}");
+        LogGraphics($"Clearing Snapshots:  baseIndex={_globalsBaseIndex}  uniformSnapshots={_uniformSnapshots.Count}");
         _globalsBaseIndex += _globalsSnapshots.Length;
         _globalsSnapshots.Clear();
+        _uniformSnapshots.Clear();
+        _currentUniforms.Clear();
 
         LogGraphics($"ExecuteCommands Done");
         _batchStateDirty = true;
