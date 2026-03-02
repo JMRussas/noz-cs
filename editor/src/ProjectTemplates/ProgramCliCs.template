@@ -1,0 +1,11 @@
+using NoZ;
+using {{NAMESPACE}};
+
+return CommandLineApplication.Run(new CommandLineConfig
+{
+    Name = "{{CLI_ASSEMBLY_NAME}}",
+    Vtable = new GameVtable(),
+    Commands =
+    {
+    }
+}, args);

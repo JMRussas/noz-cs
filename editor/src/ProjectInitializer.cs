@@ -63,10 +63,12 @@ internal static class ProjectInitializer
             ["GAME"] = Guid.NewGuid(),
             ["DESKTOP"] = Guid.NewGuid(),
             ["WEB"] = Guid.NewGuid(),
+            ["CLI"] = Guid.NewGuid(),
             ["NOZ"] = Guid.NewGuid(),
             ["NOZ_DESKTOP"] = Guid.NewGuid(),
             ["NOZ_WEBGPU"] = Guid.NewGuid(),
             ["NOZ_WEB"] = Guid.NewGuid(),
+            ["NOZ_CLI"] = Guid.NewGuid(),
             ["PLATFORM_FOLDER"] = Guid.NewGuid(),
             ["SOLUTION"] = Guid.NewGuid(),
         };
@@ -79,6 +81,7 @@ internal static class ProjectInitializer
             GameAssemblyName = $"{projectName}.Game",
             DesktopAssemblyName = projectName,
             WebAssemblyName = $"{projectName}.Web",
+            CLIAssemblyName = projectName.ToLower(),
             Guids = guids
         };
 
@@ -93,6 +96,8 @@ internal static class ProjectInitializer
         GenerateFile(Path.Combine(projectPath, "platform", "desktop"), "Program.cs", "ProgramDesktopCs.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "desktop", "Properties"), "launchSettings.json", "launchSettings.json.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "web"), "Program.cs", "ProgramWebCs.template", context);
+        GenerateFile(Path.Combine(projectPath, "platform", "cli"), $"{projectName}.CLI.csproj", "cli.csproj.template", context);
+        GenerateFile(Path.Combine(projectPath, "platform", "cli"), "Program.cs", "ProgramCliCs.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "web"), "App.razor", "AppRazor.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "web"), "_Imports.razor", "ImportsRazor.template", context);
         GenerateFile(Path.Combine(projectPath, "platform", "web", "wwwroot"), "index.html", "IndexHtml.template", context);
@@ -117,6 +122,7 @@ internal static class ProjectInitializer
             "platform/desktop/Properties",
             "platform/web",
             "platform/web/wwwroot",
+            "platform/cli",
             "library",
             "library/font",
             "library/sprite",
@@ -175,6 +181,7 @@ internal static class ProjectInitializer
         result = result.Replace("{{GAME_ASSEMBLY_NAME}}", context.GameAssemblyName);
         result = result.Replace("{{DESKTOP_ASSEMBLY_NAME}}", context.DesktopAssemblyName);
         result = result.Replace("{{WEB_ASSEMBLY_NAME}}", context.WebAssemblyName);
+        result = result.Replace("{{CLI_ASSEMBLY_NAME}}", context.CLIAssemblyName);
 
         foreach (var kvp in context.Guids)
         {
@@ -231,6 +238,7 @@ internal static class ProjectInitializer
         public string GameAssemblyName { get; set; } = "";
         public string DesktopAssemblyName { get; set; } = "";
         public string WebAssemblyName { get; set; } = "";
+        public string CLIAssemblyName { get; set; } = "";
         public Dictionary<string, Guid> Guids { get; set; } = new();
     }
 }
