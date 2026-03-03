@@ -4,13 +4,13 @@
 
 namespace NoZ.Editor;
 
-public struct SpriteLayerDef
+public struct SortOrderDef
 {
     public string Id;
-    public byte Layer;
+    public byte SortOrder;
     public string? DisplayName;
     public string Label;
-    public string LayerLabel;
+    public string SortOrderLabel;
 }
 
 public class EditorConfig
@@ -32,9 +32,10 @@ public class EditorConfig
     public string CsClass { get; }
     public string? GenerateLua { get; }
     public string LuaClass { get; }
+    public string GenerationServer { get; }
     public string[] SourcePaths { get; }
     public Vector2Int[] SpriteSizes { get; }
-    public SpriteLayerDef[] SpriteLayers { get; }
+    public SortOrderDef[] SortOrders { get; }
     public IEnumerable<string> Names => _props.GetKeys("names");
 
     public EditorConfig(PropertySet props)
@@ -54,6 +55,8 @@ public class EditorConfig
         FrameRate = props.GetInt("animation", "frame_rate", 12);
 
 
+        GenerationServer = props.GetString("generate", "server", "http://127.0.0.1:5555");
+
         var generateCs = props.GetString("manifest", "generate_cs", "");
         GenerateCs = string.IsNullOrEmpty(generateCs) ? null : ResolvePath(generateCs);
         CsNamespace = props.GetString("manifest", "cs_namespace", "noz");
@@ -65,7 +68,7 @@ public class EditorConfig
 
         SourcePaths = props.GetKeys("source").Select(ResolvePath).ToArray();
         SpriteSizes = ParseSpriteSizes(props);
-        SpriteLayers = ParseSpriteLayers(props);
+        SortOrders = ParseSortOrders(props);
     }
 
     private static Vector2Int[] ParseSpriteSizes(PropertySet props)
@@ -84,32 +87,36 @@ public class EditorConfig
         return sizes.ToArray();
     }
 
-    private static SpriteLayerDef[] ParseSpriteLayers(PropertySet props) =>
-        [.. props.GetKeys("sprite_layers")
+    private static SortOrderDef[] ParseSortOrders(PropertySet props)
+    {
+        // Try new section name first, fall back to legacy
+        var section = props.GetKeys("sort_orders").Any() ? "sort_orders" : "sprite_layers";
+        return [.. props.GetKeys(section)
             .Select(id =>
             {
-                var value = props.GetString("sprite_layers", id, "0");
+                var value = props.GetString(section, id, "0");
                 var tk = new Tokenizer(value);
 
-                byte layer = 0;
+                byte sortOrder = 0;
                 string? displayName = null;
 
                 if (tk.ExpectInt(out var intVal))
-                    layer = (byte)intVal;
+                    sortOrder = (byte)intVal;
 
                 displayName = tk.ExpectQuotedString();
 
-                return new SpriteLayerDef
+                return new SortOrderDef
                 {
                     Id = id,
-                    Layer = layer,
+                    SortOrder = sortOrder,
                     DisplayName = displayName,
                     Label = displayName ?? id,
-                    LayerLabel = $"({layer})"
+                    SortOrderLabel = $"({sortOrder})"
                 };
             })
-            .Where(def => def.Layer != 0)
-            .OrderByDescending(def => def.Layer)];
+            .Where(def => def.SortOrder != 0)
+            .OrderByDescending(def => def.SortOrder)];
+    }
 
     public IEnumerable<string> GetKeys(string section) => _props.GetKeys(section);
 
@@ -120,29 +127,29 @@ public class EditorConfig
 
     public IEnumerable<string> GetCollectionIds() => _props.GetKeys("collections");
 
-    public bool TryGetSpriteLayer(byte layer, out SpriteLayerDef layerDef)
+    public bool TryGetSortOrder(byte sortOrder, out SortOrderDef def)
     {
-        foreach (var l in SpriteLayers)
-            if (l.Layer == layer)
+        foreach (var s in SortOrders)
+            if (s.SortOrder == sortOrder)
             {
-                layerDef = l;
+                def = s;
                 return true;
             }
 
-        layerDef = default;
+        def = default;
         return false;
     }
 
-    public bool TryGetSpriteLayer(string? id, out SpriteLayerDef layerDef)
+    public bool TryGetSortOrder(string? id, out SortOrderDef def)
     {
         if (!string.IsNullOrEmpty(id))
-            foreach (var sg in SpriteLayers)
-                if (sg.Id == id)
+            foreach (var s in SortOrders)
+                if (s.Id == id)
                 {
-                    layerDef = sg;
+                    def = s;
                     return true;
                 }
-        layerDef = default;
+        def = default;
         return false;
     }
 

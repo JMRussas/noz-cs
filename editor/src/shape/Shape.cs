@@ -50,14 +50,11 @@ public sealed unsafe partial class Shape : IDisposable
     private UnsafeSpan<Vector2> _samples;
     private UnsafeSpan<Path> _paths;
     private bool _editing;
-    private BitMask256 _layers;
 
     public ushort AnchorCount { get; private set; }
     public ushort PathCount { get; private set; }
     public Rect Bounds { get; private set; }
     public RectInt RasterBounds { get; private set; }
-
-    public ref readonly BitMask256 Layers => ref _layers;
 
     [Flags]
     public enum AnchorFlags : ushort
@@ -91,8 +88,7 @@ public sealed unsafe partial class Shape : IDisposable
         public Color32 FillColor;
         public Color32 StrokeColor;
         public byte StrokeWidth;
-        public byte Layer;
-        public StringId Bone;  // bone name (None = root when skeleton bound)
+        public byte DocLayer;  // index into document layer list
         public PathFlags Flags;
         public PathOperation Operation;
 
@@ -856,23 +852,16 @@ public sealed unsafe partial class Shape : IDisposable
         path.StrokeWidth = width;
     }
 
-    public void SetPathLayer(ushort pathIndex, byte layer)
+    public void SetPathDocLayer(ushort pathIndex, byte docLayer)
     {
-        _paths[pathIndex].Layer = layer;
-        UpdateLayers();
-    }
-
-    public void SetPathBone(ushort pathIndex, StringId bone)
-    {
-        _paths[pathIndex].Bone = bone;
+        _paths[pathIndex].DocLayer = docLayer;
     }
 
     public ushort AddPath(
         Color32 fillColor,
         Color32 strokeColor = default,
         byte strokeWidth = 1,
-        byte layer = 0,
-        StringId bone = default,
+        byte docLayer = 0,
         PathOperation operation = PathOperation.Normal)
     {
         if (PathCount >= MaxPaths) return ushort.MaxValue;
@@ -885,12 +874,9 @@ public sealed unsafe partial class Shape : IDisposable
             FillColor = fillColor,
             StrokeColor = strokeColor,
             StrokeWidth = strokeWidth,
-            Layer = layer,
-            Bone = bone,
+            DocLayer = docLayer,
             Operation = operation,
         };
-
-        UpdateLayers();
 
         return pathIndex;
     }
@@ -1595,8 +1581,7 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorCount = (ushort)path2Count,
             FillColor = srcPath.FillColor,
             StrokeColor = srcPath.StrokeColor,
-            Layer = srcPath.Layer,
-            Bone = srcPath.Bone,
+            DocLayer = srcPath.DocLayer,
             Operation = srcPath.Operation
         };
 
@@ -1608,7 +1593,6 @@ public sealed unsafe partial class Shape : IDisposable
             AnchorCount++;
         }
 
-        UpdateLayers();
     }
 
     public float GetPathSignedDistance(Vector2 point, ushort pathIndex)
@@ -1787,14 +1771,8 @@ public sealed unsafe partial class Shape : IDisposable
         return 1;
     }
 
-    private void UpdateLayers()
-    {
-        _layers.Clear();
-        for (ushort p = 0; p < PathCount; p++)
-            _layers[_paths[p].Layer] = true;
-    }
 
-    public RectInt GetRasterBoundsFor(byte layer, StringId bone, Color32? fillColor = null)
+    public RectInt GetRasterBoundsFor(IReadOnlyList<byte> docLayers, Color32? fillColor = null)
     {
         var dpi = EditorApplication.Config.PixelsPerUnit;
         var min = new Vector2(float.MaxValue, float.MaxValue);
@@ -1807,7 +1785,7 @@ public sealed unsafe partial class Shape : IDisposable
         for (ushort p = 0; p < PathCount; p++)
         {
             ref var path = ref _paths[p];
-            if (path.Layer != layer || path.Bone != bone)
+            if (!docLayers.Contains(path.DocLayer))
                 continue;
             if (fillColor != null && path.FillColor != fillColor.Value)
                 continue;

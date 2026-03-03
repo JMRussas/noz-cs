@@ -426,7 +426,7 @@ public class KnifeTool : Tool
 
         ref readonly var path = ref _shape.GetPath(pathIndex);
         LogKnife($"CutNotch: creating new path from existing path {pathIndex}");
-        var newShapeIndex = _shape.AddPath(path.FillColor, operation: path.Operation);
+        var newShapeIndex = _shape.AddPath(path.FillColor, operation: path.Operation, docLayer: path.DocLayer);
         _shape.BeginEdit();
         _shape.AddAnchor(newShapeIndex, headHit.SegmentPosition);
         _shape.AddAnchors(newShapeIndex, intermediatePositions);

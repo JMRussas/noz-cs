@@ -5,8 +5,58 @@
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.PixelFormats;
+using SixLabors.ImageSharp.Processing;
 
 namespace NoZ.Editor;
+
+public enum DocumentLayerType : byte
+{
+    Vector,
+    Generated,
+}
+
+public class DocumentLayer
+{
+    public string Name = "";
+    public DocumentLayerType Type;
+    public bool Visible = true;
+    public bool Locked;
+    public float Opacity = 1.0f;
+    public byte SortOrder;
+    public StringId Bone;
+
+    // Generated layer properties (only used when Type == Generated)
+    public string Prompt = "";
+    public string NegativePrompt = "";
+    public string Style = "";
+    public long Seed;
+    public bool Auto;
+    public Texture? GeneratedTexture;
+    public bool IsGenerating;
+
+    public bool HasGeneration => Type == DocumentLayerType.Generated && !string.IsNullOrEmpty(Prompt);
+
+    public DocumentLayer Clone() => new()
+    {
+        Name = Name,
+        Type = Type,
+        Visible = Visible,
+        Locked = Locked,
+        Opacity = Opacity,
+        SortOrder = SortOrder,
+        Bone = Bone,
+        Prompt = Prompt,
+        NegativePrompt = NegativePrompt,
+        Style = Style,
+        Seed = Seed,
+        Auto = Auto,
+    };
+}
 
 public class SpriteFrame : IDisposable
 {
@@ -61,14 +111,17 @@ public class SpriteDocument : Document, ISpriteSource
         }
     }
 
-    public sealed class MeshSlot(byte layer, StringId bone)
+    public sealed class MeshSlot(byte sortOrder, StringId bone)
     {
-        public readonly byte Layer = layer;
+        public readonly byte SortOrder = sortOrder;
         public readonly StringId Bone = bone;
         public readonly List<ushort> PathIndices = new();
+        public readonly List<byte> DocLayers = new();  // which doc layers contribute to this slot
     }
 
-    private BitMask256 _layers = new();
+    public const int MaxDocumentLayers = 32;
+
+    private readonly List<DocumentLayer> _documentLayers = new();
     private readonly List<Rect> _atlasUV = new();
     private Sprite? _sprite;
 
@@ -81,11 +134,10 @@ public class SpriteDocument : Document, ISpriteSource
     public Color32 CurrentFillColor = Color32.White;
     public Color32 CurrentStrokeColor = new(0, 0, 0, 0);
     public byte CurrentStrokeWidth = 1;
-    public byte CurrentLayer = 0;
-    public StringId CurrentBone;
+    public int CurrentDocumentLayer;
     public PathOperation CurrentOperation;
 
-    public ref readonly BitMask256 Layers => ref _layers;
+    public IReadOnlyList<DocumentLayer> DocumentLayers => _documentLayers;
 
     public int MeshSlotCount
     {
@@ -95,11 +147,114 @@ public class SpriteDocument : Document, ISpriteSource
             return Math.Max(1, slots.Count);
         }
     }
-    
+
     public bool ShowInSkeleton { get; set; }
     public bool ShowTiling { get; set; }
     public bool ShowSkeletonOverlay { get; set; }
     public Vector2Int? ConstrainedSize { get; set; }
+
+    private string _generationHash = "";
+
+    /// <summary>Returns true if any document layer is a Generated layer with a prompt.</summary>
+    public bool HasGeneration => _documentLayers.Any(l => l.HasGeneration);
+
+    /// <summary>Returns true if any generated layer is currently generating.</summary>
+    public bool IsGenerating => _documentLayers.Any(l => l.IsGenerating);
+
+    public void EnsureDefaultLayer()
+    {
+        if (_documentLayers.Count == 0)
+            _documentLayers.Add(new DocumentLayer { Name = "Layer 1" });
+    }
+
+    public DocumentLayer? GetCurrentDocumentLayer() =>
+        CurrentDocumentLayer >= 0 && CurrentDocumentLayer < _documentLayers.Count
+            ? _documentLayers[CurrentDocumentLayer]
+            : null;
+
+    public int AddDocumentLayer(DocumentLayerType type = DocumentLayerType.Vector)
+    {
+        if (_documentLayers.Count >= MaxDocumentLayers)
+            return -1;
+
+        var name = type == DocumentLayerType.Generated
+            ? $"Generated {_documentLayers.Count(l => l.Type == DocumentLayerType.Generated) + 1}"
+            : $"Layer {_documentLayers.Count + 1}";
+
+        _documentLayers.Add(new DocumentLayer { Name = name, Type = type });
+        CurrentDocumentLayer = _documentLayers.Count - 1;
+        MarkModified();
+        return CurrentDocumentLayer;
+    }
+
+    public void DeleteDocumentLayer(int index)
+    {
+        if (index < 0 || index >= _documentLayers.Count || _documentLayers.Count <= 1)
+            return;
+
+        _documentLayers.RemoveAt(index);
+
+        // Remap all paths across all frames
+        for (ushort f = 0; f < FrameCount; f++)
+        {
+            var shape = Frames[f].Shape;
+            for (ushort p = 0; p < shape.PathCount; p++)
+            {
+                ref readonly var path = ref shape.GetPath(p);
+                if (path.DocLayer == index)
+                    shape.SetPathDocLayer(p, 0); // reassign to bottom layer
+                else if (path.DocLayer > index)
+                    shape.SetPathDocLayer(p, (byte)(path.DocLayer - 1));
+            }
+        }
+
+        if (CurrentDocumentLayer >= _documentLayers.Count)
+            CurrentDocumentLayer = _documentLayers.Count - 1;
+
+        MarkModified();
+        UpdateBounds();
+    }
+
+    public void MoveDocumentLayer(int fromIndex, int toIndex)
+    {
+        if (fromIndex < 0 || fromIndex >= _documentLayers.Count ||
+            toIndex < 0 || toIndex >= _documentLayers.Count ||
+            fromIndex == toIndex)
+            return;
+
+        var layer = _documentLayers[fromIndex];
+        _documentLayers.RemoveAt(fromIndex);
+        _documentLayers.Insert(toIndex, layer);
+
+        // Remap all paths across all frames
+        for (ushort f = 0; f < FrameCount; f++)
+        {
+            var shape = Frames[f].Shape;
+            for (ushort p = 0; p < shape.PathCount; p++)
+            {
+                ref readonly var path = ref shape.GetPath(p);
+                var docLayer = path.DocLayer;
+
+                if (docLayer == fromIndex)
+                    shape.SetPathDocLayer(p, (byte)toIndex);
+                else if (fromIndex < toIndex && docLayer > fromIndex && docLayer <= toIndex)
+                    shape.SetPathDocLayer(p, (byte)(docLayer - 1));
+                else if (fromIndex > toIndex && docLayer >= toIndex && docLayer < fromIndex)
+                    shape.SetPathDocLayer(p, (byte)(docLayer + 1));
+            }
+        }
+
+        // Track the selected layer
+        if (CurrentDocumentLayer == fromIndex)
+            CurrentDocumentLayer = toIndex;
+        else if (fromIndex < toIndex && CurrentDocumentLayer > fromIndex && CurrentDocumentLayer <= toIndex)
+            CurrentDocumentLayer--;
+        else if (fromIndex > toIndex && CurrentDocumentLayer >= toIndex && CurrentDocumentLayer < fromIndex)
+            CurrentDocumentLayer++;
+
+        MarkModified();
+        UpdateBounds();
+    }
 
     ushort ISpriteSource.FrameCount => FrameCount;
     AtlasDocument? ISpriteSource.Atlas { get => Atlas; set => Atlas = value; }
@@ -155,16 +310,12 @@ public class SpriteDocument : Document, ISpriteSource
                 continue;
 
             var modified = false;
-            for (ushort fi = 0; fi < doc.FrameCount; fi++)
+            foreach (var layer in doc._documentLayers)
             {
-                var shape = doc.Frames[fi].Shape;
-                for (ushort p = 0; p < shape.PathCount; p++)
+                if (layer.Bone == oldBoneName)
                 {
-                    if (shape.GetPath(p).Bone == oldBoneName)
-                    {
-                        shape.SetPathBone(p, newBoneName);
-                        modified = true;
-                    }
+                    layer.Bone = newBoneName;
+                    modified = true;
                 }
             }
 
@@ -183,17 +334,12 @@ public class SpriteDocument : Document, ISpriteSource
                 continue;
 
             var modified = false;
-            for (ushort fi = 0; fi < doc.FrameCount; fi++)
+            foreach (var layer in doc._documentLayers)
             {
-                var shape = doc.Frames[fi].Shape;
-                for (ushort p = 0; p < shape.PathCount; p++)
+                if (layer.Bone == removedBoneName)
                 {
-                    if (shape.GetPath(p).Bone == removedBoneName)
-                    {
-                        // Reset to root bone (None)
-                        shape.SetPathBone(p, StringId.None);
-                        modified = true;
-                    }
+                    layer.Bone = StringId.None;
+                    modified = true;
                 }
             }
 
@@ -267,6 +413,7 @@ public class SpriteDocument : Document, ISpriteSource
         FrameCount = 0;
         Edges = EdgeInsets.Zero;
         Binding.Clear();
+        _documentLayers.Clear();
 
         // Re-read and re-parse the .sprite file
         var contents = File.ReadAllText(Path);
@@ -283,13 +430,23 @@ public class SpriteDocument : Document, ISpriteSource
     private void Load(ref Tokenizer tk)
     {
         SpriteFrame? f = null;
+        // Track legacy per-path layers/bones for migration
+        var legacyPaths = new List<(ushort frameIndex, ushort pathIndex, byte sortOrder, StringId bone)>();
+        ushort currentFrameIndex = 0;
+        var hasDocLayers = false;
 
         while (!tk.IsEOF)
         {
             if (tk.ExpectIdentifier("path"))
             {
-                f ??= Frames[FrameCount++];
-                ParsePath(f, ref tk);
+                if (f == null) { f = Frames[FrameCount++]; currentFrameIndex = (ushort)(FrameCount - 1); }
+                ParsePath(f, currentFrameIndex, ref tk, legacyPaths, hasDocLayers);
+            }
+            else if (tk.ExpectIdentifier("layer") && f == null)
+            {
+                // Top-level layer definition (new format)
+                ParseDocumentLayer(ref tk);
+                hasDocLayers = true;
             }
             else if (tk.ExpectIdentifier("palette"))
             {
@@ -299,6 +456,7 @@ public class SpriteDocument : Document, ISpriteSource
             else if (tk.ExpectIdentifier("frame"))
             {
                 f = Frames[FrameCount++];
+                currentFrameIndex = (ushort)(FrameCount - 1);
                 if (tk.ExpectIdentifier("hold"))
                     f.Hold = tk.ExpectInt();
             }
@@ -321,17 +479,86 @@ public class SpriteDocument : Document, ISpriteSource
 
         if (FrameCount == 0)
             FrameCount = 1;
+
+        // Migrate legacy per-path layers/bones to document layers
+        if (!hasDocLayers)
+            MigrateLegacyLayers(legacyPaths);
+
+        EnsureDefaultLayer();
     }
 
-    private void ParsePath(SpriteFrame f, ref Tokenizer tk)
+    private void ParseDocumentLayer(ref Tokenizer tk)
+    {
+        var layer = new DocumentLayer();
+        layer.Name = tk.ExpectQuotedString() ?? $"Layer {_documentLayers.Count + 1}";
+
+        // Parse optional flags: sort N, generated, locked, hidden, bone "name"
+        while (!tk.IsEOF)
+        {
+            if (tk.ExpectIdentifier("sort"))
+                layer.SortOrder = (byte)tk.ExpectInt();
+            else if (tk.ExpectIdentifier("generated"))
+                layer.Type = DocumentLayerType.Generated;
+            else if (tk.ExpectIdentifier("locked"))
+                layer.Locked = true;
+            else if (tk.ExpectIdentifier("hidden"))
+                layer.Visible = false;
+            else if (tk.ExpectIdentifier("bone"))
+            {
+                var boneName = tk.ExpectQuotedString();
+                if (!string.IsNullOrEmpty(boneName))
+                    layer.Bone = StringId.Get(boneName);
+            }
+            else if (tk.ExpectIdentifier("opacity"))
+                layer.Opacity = tk.ExpectFloat(1.0f);
+            else
+                break;
+        }
+
+        _documentLayers.Add(layer);
+    }
+
+    private void MigrateLegacyLayers(List<(ushort frameIndex, ushort pathIndex, byte sortOrder, StringId bone)> legacyPaths)
+    {
+        // Group by (sortOrder, bone) to create document layers
+        var layerMap = new Dictionary<(byte sortOrder, StringId bone), byte>();
+
+        foreach (var (frameIndex, pathIndex, sortOrder, bone) in legacyPaths)
+        {
+            var key = (sortOrder, bone);
+            if (!layerMap.TryGetValue(key, out var docLayerIndex))
+            {
+                docLayerIndex = (byte)_documentLayers.Count;
+                var name = $"Layer {_documentLayers.Count + 1}";
+                if (EditorApplication.Config.TryGetSortOrder(sortOrder, out var sortDef))
+                    name = sortDef.Label;
+                _documentLayers.Add(new DocumentLayer
+                {
+                    Name = name,
+                    SortOrder = sortOrder,
+                    Bone = bone,
+                });
+                layerMap[key] = docLayerIndex;
+            }
+
+            Frames[frameIndex].Shape.SetPathDocLayer(pathIndex, docLayerIndex);
+        }
+    }
+
+    private void ParsePath(SpriteFrame f, ushort frameIndex, ref Tokenizer tk,
+        List<(ushort, ushort, byte, StringId)> legacyPaths, bool hasDocLayers)
     {
         var pathIndex = f.Shape.AddPath(Color32.White);
         var fillColor = Color32.White;
         var strokeColor = new Color32(0, 0, 0, 0);
         var strokeWidth = 1;
         var operation = PathOperation.Normal;
-        byte layer = 0;
-        var bone = StringId.None;
+        byte docLayer = 0;
+        // Legacy migration fields
+        byte legacySortOrder = 0;
+        var legacyBone = StringId.None;
+        var hasLegacyLayer = false;
+        var hasLegacyBone = false;
 
         while (!tk.IsEOF)
         {
@@ -375,14 +602,29 @@ public class SpriteDocument : Document, ISpriteSource
                     operation = PathOperation.Clip;
             }
             else if (tk.ExpectIdentifier("layer"))
-                layer = EditorApplication.Config.TryGetSpriteLayer(tk.ExpectQuotedString(), out var sg)
-                    ? sg.Layer
-                    : (byte)0;
+            {
+                if (hasDocLayers)
+                {
+                    // New format: layer N (integer index)
+                    docLayer = (byte)tk.ExpectInt();
+                }
+                else
+                {
+                    // Legacy format: layer "config_id"
+                    var layerId = tk.ExpectQuotedString();
+                    if (EditorApplication.Config.TryGetSortOrder(layerId, out var sg))
+                        legacySortOrder = sg.SortOrder;
+                    hasLegacyLayer = true;
+                }
+            }
             else if (tk.ExpectIdentifier("bone"))
             {
                 var boneName = tk.ExpectQuotedString();
                 if (!string.IsNullOrEmpty(boneName))
-                    bone = StringId.Get(boneName);
+                {
+                    legacyBone = StringId.Get(boneName);
+                    hasLegacyBone = true;
+                }
             }
             else if (tk.ExpectIdentifier("anchor"))
                 ParseAnchor(f.Shape, pathIndex, ref tk);
@@ -394,8 +636,15 @@ public class SpriteDocument : Document, ISpriteSource
         f.Shape.SetPathStroke(pathIndex, strokeColor, (byte)strokeWidth);
         if (operation != PathOperation.Normal)
             f.Shape.SetPathOperation(pathIndex, operation);
-        f.Shape.SetPathLayer(pathIndex, layer);
-        f.Shape.SetPathBone(pathIndex, bone);
+
+        if (hasDocLayers)
+        {
+            f.Shape.SetPathDocLayer(pathIndex, docLayer);
+        }
+        else if (hasLegacyLayer || hasLegacyBone)
+        {
+            legacyPaths.Add((frameIndex, pathIndex, legacySortOrder, legacyBone));
+        }
     }
 
     private static void ParseAnchor(Shape shape, ushort pathIndex, ref Tokenizer tk)
@@ -408,8 +657,6 @@ public class SpriteDocument : Document, ISpriteSource
 
     public void UpdateBounds()
     {
-        UpdateLayers();
-
         if (ConstrainedSize.HasValue)
         {
             var cs = ConstrainedSize.Value;
@@ -499,12 +746,6 @@ public class SpriteDocument : Document, ISpriteSource
             clampedHeight);
     }
 
-    private void UpdateLayers()
-    {
-        _layers.Clear();
-        for (ushort fi = 0; fi < FrameCount; fi++)
-            _layers |= Frames[fi].Shape.Layers;
-    }
 
     // :save
     public override void Save(StreamWriter writer)
@@ -514,6 +755,25 @@ public class SpriteDocument : Document, ISpriteSource
 
         if (Binding.IsBound)
             writer.WriteLine($"skeleton \"{Binding.SkeletonName}\"");
+
+        // Write document layer definitions
+        foreach (var layer in _documentLayers)
+        {
+            writer.Write($"layer \"{layer.Name}\"");
+            if (layer.SortOrder != 0)
+                writer.Write($" sort {layer.SortOrder}");
+            if (layer.Type == DocumentLayerType.Generated)
+                writer.Write(" generated");
+            if (layer.Locked)
+                writer.Write(" locked");
+            if (!layer.Visible)
+                writer.Write(" hidden");
+            if (!layer.Bone.IsNone)
+                writer.Write($" bone \"{layer.Bone}\"");
+            if (layer.Opacity < 1.0f)
+                writer.Write(string.Format(CultureInfo.InvariantCulture, " opacity {0}", layer.Opacity));
+            writer.WriteLine();
+        }
 
         writer.WriteLine();
 
@@ -552,11 +812,8 @@ public class SpriteDocument : Document, ISpriteSource
             if (path.StrokeColor.A > 0)
                 writer.WriteLine($"stroke {FormatColor(path.StrokeColor)} {path.StrokeWidth}");
 
-            if (EditorApplication.Config.TryGetSpriteLayer(path.Layer, out var layerDef))
-                writer.WriteLine($"layer \"{layerDef.Id}\"");
-
-            if (Binding.IsBound)
-                writer.WriteLine($"bone \"{path.Bone}\"");
+            if (path.DocLayer > 0)
+                writer.WriteLine($"layer {path.DocLayer}");
 
             for (ushort aIdx = 0; aIdx < path.AnchorCount; aIdx++)
             {
@@ -688,11 +945,13 @@ public class SpriteDocument : Document, ISpriteSource
         CurrentFillColor = src.CurrentFillColor;
         CurrentStrokeColor = src.CurrentStrokeColor;
         CurrentStrokeWidth = src.CurrentStrokeWidth;
-        CurrentLayer = src.CurrentLayer;
-        CurrentBone = src.CurrentBone;
+        CurrentDocumentLayer = src.CurrentDocumentLayer;
 
         Edges = src.Edges;
         Binding.CopyFrom(src.Binding);
+
+        _documentLayers.Clear();
+        _documentLayers.AddRange(src._documentLayers.Select(l => l.Clone()));
 
         for (var i = 0; i < src.FrameCount; i++)
         {
@@ -710,6 +969,38 @@ public class SpriteDocument : Document, ISpriteSource
         ShowTiling = meta.GetBool("sprite", "show_tiling", false);
         ShowSkeletonOverlay = meta.GetBool("sprite", "show_skeleton_overlay", false);
         ConstrainedSize = ParseConstrainedSize(meta.GetString("sprite", "constrained_size", ""));
+
+        // Load per-layer generation params from meta (new format: [generate.layer0], [generate.layer1], ...)
+        for (var i = 0; i < _documentLayers.Count; i++)
+        {
+            var layer = _documentLayers[i];
+            if (layer.Type != DocumentLayerType.Generated)
+                continue;
+            var section = $"generate.layer{i}";
+            layer.Prompt = meta.GetString(section, "prompt", layer.Prompt);
+            layer.NegativePrompt = meta.GetString(section, "negative_prompt", layer.NegativePrompt);
+            layer.Style = meta.GetString(section, "style", layer.Style);
+            layer.Seed = meta.GetLong(section, "seed", layer.Seed);
+            layer.Auto = meta.GetBool(section, "auto", layer.Auto);
+        }
+
+        // Legacy migration: old [generate] section at document level
+        var legacyPrompt = meta.GetString("generate", "prompt", "");
+        if (!string.IsNullOrEmpty(legacyPrompt) && !_documentLayers.Any(l => l.HasGeneration))
+        {
+            // Find or create a generated layer for the legacy config
+            var genLayer = _documentLayers.FirstOrDefault(l => l.Type == DocumentLayerType.Generated);
+            if (genLayer == null)
+            {
+                genLayer = new DocumentLayer { Name = "Generated", Type = DocumentLayerType.Generated };
+                _documentLayers.Insert(0, genLayer); // insert at bottom
+            }
+            genLayer.Prompt = legacyPrompt;
+            genLayer.NegativePrompt = meta.GetString("generate", "negative_prompt", "");
+            genLayer.Style = meta.GetString("generate", "style", "");
+            genLayer.Seed = meta.GetLong("generate", "seed", 0);
+            genLayer.Auto = meta.GetBool("generate", "auto", false);
+        }
     }
 
     private static Vector2Int? ParseConstrainedSize(string value)
@@ -737,11 +1028,36 @@ public class SpriteDocument : Document, ISpriteSource
             meta.RemoveKey("sprite", "constrained_size");
         meta.ClearGroup("skeleton");  // Legacy cleanup - skeleton now in .sprite file
         meta.ClearGroup("bone");  // Legacy cleanup
+        meta.ClearGroup("generate");  // Legacy cleanup - generation now per-layer
+
+        // Save per-layer generation params
+        for (var i = 0; i < _documentLayers.Count; i++)
+        {
+            var layer = _documentLayers[i];
+            var section = $"generate.layer{i}";
+            if (layer.Type == DocumentLayerType.Generated && layer.HasGeneration)
+            {
+                meta.SetString(section, "prompt", layer.Prompt);
+                if (!string.IsNullOrEmpty(layer.NegativePrompt))
+                    meta.SetString(section, "negative_prompt", layer.NegativePrompt);
+                if (!string.IsNullOrEmpty(layer.Style))
+                    meta.SetString(section, "style", layer.Style);
+                if (layer.Seed != 0)
+                    meta.SetLong(section, "seed", layer.Seed);
+                if (layer.Auto)
+                    meta.SetBool(section, "auto", true);
+            }
+            else
+            {
+                meta.ClearGroup(section);
+            }
+        }
     }
 
     public override void PostLoad()
     {
         Binding.Resolve();
+        LoadGeneratedTextures();
     }
 
     public void SetSkeletonBinding(SkeletonDocument? skeleton)
@@ -759,6 +1075,362 @@ public class SpriteDocument : Document, ISpriteSource
         skeleton?.UpdateSprites();
         MarkMetaModified();
     }
+
+    #region AI Generation
+
+    private string GetGeneratedImagePath(int layerIndex) => Path + $".layer{layerIndex}.gen";
+
+    /// <summary>Legacy path for migration.</summary>
+    private string LegacyGeneratedImagePath => Path + ".gen";
+
+    internal void LoadGeneratedTextures()
+    {
+        for (var i = 0; i < _documentLayers.Count; i++)
+        {
+            var layer = _documentLayers[i];
+            if (layer.Type != DocumentLayerType.Generated)
+                continue;
+
+            layer.GeneratedTexture?.Dispose();
+            layer.GeneratedTexture = null;
+
+            // Try new path first, then legacy path for migration
+            var genPath = GetGeneratedImagePath(i);
+            if (!File.Exists(genPath))
+            {
+                // Migration: try legacy .gen file for the first generated layer
+                var legacyPath = LegacyGeneratedImagePath;
+                if (File.Exists(legacyPath))
+                    genPath = legacyPath;
+                else
+                    continue;
+            }
+
+            try
+            {
+                using var srcImage = SixLabors.ImageSharp.Image.Load<Rgba32>(genPath);
+                var w = srcImage.Width;
+                var h = srcImage.Height;
+                var pixels = new byte[w * h * 4];
+                srcImage.CopyPixelDataTo(pixels);
+                layer.GeneratedTexture = Texture.Create(w, h, pixels, TextureFormat.RGBA8, TextureFilter.Linear, $"{Name}_gen{i}");
+                Log.Info($"Loaded generated texture for '{Name}' layer {i} ({w}x{h})");
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to load generated texture for '{Name}' layer {i}: {ex.Message}");
+            }
+        }
+    }
+
+    private string ComputeGenerationHash(DocumentLayer layer)
+    {
+        var input = $"{layer.Prompt}|{layer.NegativePrompt}|{layer.Style}|{layer.Seed}";
+        var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(input));
+        return Convert.ToHexString(bytes);
+    }
+
+
+
+    private bool TryBlitGeneratedImage(int layerIndex, PixelData<Color32> image, in AtlasSpriteRect rect, int padding)
+    {
+        var genPath = GetGeneratedImagePath(layerIndex);
+        if (!File.Exists(genPath))
+        {
+            // Migration: try legacy path
+            genPath = LegacyGeneratedImagePath;
+        }
+        if (!File.Exists(genPath))
+            return false;
+
+        try
+        {
+            using var srcImage = SixLabors.ImageSharp.Image.Load<Rgba32>(genPath);
+            var padding2 = padding * 2;
+
+            // Resize to fit the atlas rect (sprite's raster bounds + padding)
+            var targetW = rect.Rect.Width - padding2;
+            var targetH = rect.Rect.Height - padding2;
+            if (targetW <= 0 || targetH <= 0)
+                return false;
+
+            if (srcImage.Width != targetW || srcImage.Height != targetH)
+                srcImage.Mutate(x => x.Resize(targetW, targetH));
+
+            var w = srcImage.Width;
+            var h = srcImage.Height;
+
+            var rasterRect = new RectInt(
+                rect.Rect.Position + new Vector2Int(padding, padding),
+                new Vector2Int(w, h));
+
+            // Blit pixels into the atlas image
+            for (int y = 0; y < h; y++)
+            {
+                for (int x = 0; x < w; x++)
+                {
+                    var pixel = srcImage[x, y];
+                    image[rasterRect.X + x, rasterRect.Y + y] = new Color32(pixel.R, pixel.G, pixel.B, pixel.A);
+                }
+            }
+
+            var outerRect = new RectInt(rect.Rect.Position, new Vector2Int(w + padding2, h + padding2));
+            image.BleedColors(rasterRect);
+            for (int p = padding - 1; p >= 0; p--)
+            {
+                var padRect = new RectInt(
+                    outerRect.Position + new Vector2Int(p, p),
+                    outerRect.Size - new Vector2Int(p * 2, p * 2));
+                image.ExtrudeEdges(padRect);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Failed to load generated image '{genPath}': {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Rasterizes the sprite's vector paths (colored silhouette) to a PNG byte array for the generation API.
+    /// </summary>
+    private byte[] RasterizeSilhouetteToPng()
+    {
+        UpdateBounds();
+        var dpi = EditorApplication.Config.PixelsPerUnit;
+        var w = RasterBounds.Size.X;
+        var h = RasterBounds.Size.Y;
+        if (w <= 0 || h <= 0)
+            return [];
+
+        using var pixels = new PixelData<Color32>(w, h);
+        var targetRect = new RectInt(0, 0, w, h);
+        var sourceOffset = -RasterBounds.Position;
+
+        var frame = GetFrame(0);
+        var slots = GetMeshSlots(0);
+        foreach (var slot in slots)
+        {
+            if (slot.PathIndices.Count > 0)
+                RasterizeSlot(frame.Shape, slot, pixels, targetRect, sourceOffset, dpi);
+        }
+
+        // Convert to ImageSharp image: composite path colors over white background
+        using var img = new Image<Rgba32>(w, h);
+        for (int y = 0; y < h; y++)
+        {
+            for (int x = 0; x < w; x++)
+            {
+                var c = pixels[x, y];
+                if (c.A == 0)
+                {
+                    img[x, y] = new Rgba32(255, 255, 255, 255);
+                }
+                else
+                {
+                    float a = c.A / 255f;
+                    byte r = (byte)(c.R * a + 255 * (1 - a));
+                    byte g = (byte)(c.G * a + 255 * (1 - a));
+                    byte b = (byte)(c.B * a + 255 * (1 - a));
+                    img[x, y] = new Rgba32(r, g, b, 255);
+                }
+            }
+        }
+
+        using var ms = new MemoryStream();
+        img.SaveAsPng(ms);
+        var pngBytes = ms.ToArray();
+
+        // Debug: write silhouette to tmp folder for inspection
+        try
+        {
+            var tmpDir = System.IO.Path.Combine(EditorApplication.ProjectPath, "tmp");
+            Directory.CreateDirectory(tmpDir);
+            File.WriteAllBytes(System.IO.Path.Combine(tmpDir, $"{Name}_silhouette.png"), pngBytes);
+        }
+        catch { }
+
+        return pngBytes;
+    }
+
+    public void GenerateAsync(int layerIndex = -1)
+    {
+        // Find the target generated layer
+        if (layerIndex < 0)
+        {
+            layerIndex = CurrentDocumentLayer;
+            if (layerIndex < 0 || layerIndex >= _documentLayers.Count ||
+                _documentLayers[layerIndex].Type != DocumentLayerType.Generated)
+            {
+                // Find first generated layer
+                layerIndex = _documentLayers.FindIndex(l => l.Type == DocumentLayerType.Generated);
+            }
+        }
+
+        if (layerIndex < 0 || layerIndex >= _documentLayers.Count)
+        {
+            Log.Error($"No generated layer found for '{Name}'");
+            return;
+        }
+
+        var genLayer = _documentLayers[layerIndex];
+        if (genLayer.IsGenerating)
+            return;
+
+        if (!ConstrainedSize.HasValue)
+        {
+            Log.Error($"Generation requires a sprite size constraint for '{Name}'");
+            return;
+        }
+
+        genLayer.IsGenerating = true;
+
+        // Rasterize silhouette on the main thread (needs access to shape data)
+        var silhouetteBytes = RasterizeSilhouetteToPng();
+        if (silhouetteBytes.Length == 0)
+        {
+            Log.Error("Cannot generate: sprite has no visible shapes");
+            genLayer.IsGenerating = false;
+            return;
+        }
+
+        var silhouetteBase64 = $"data:image/png;base64,{Convert.ToBase64String(silhouetteBytes)}";
+
+        // Build the request inputs
+        var inputs = new Dictionary<string, string>
+        {
+            ["sketch"] = silhouetteBase64,
+            ["prompt"] = genLayer.Prompt
+        };
+
+        // Load style reference texture for ipadapter if specified
+        if (!string.IsNullOrEmpty(genLayer.Style))
+        {
+            var styleDoc = DocumentManager.Find(AssetType.Texture, genLayer.Style) as TextureDocument;
+            if (styleDoc != null && File.Exists(styleDoc.Path))
+            {
+                var styleBytes = File.ReadAllBytes(styleDoc.Path);
+                inputs["style_ref"] = $"data:image/png;base64,{Convert.ToBase64String(styleBytes)}";
+            }
+            else
+            {
+                Log.Warning($"Style texture '{genLayer.Style}' not found");
+            }
+        }
+
+        // Build pipeline: generate → remove_background
+        var nodes = new List<GenerationNode>
+        {
+            new()
+            {
+                Id = "gen",
+                Type = "generate",
+                Properties = BuildGenerateNodeProperties(genLayer)
+            },
+            new()
+            {
+                Id = "result",
+                Type = "remove_background",
+                Properties = new Dictionary<string, JsonElement>
+                {
+                    ["image"] = JsonSerializer.SerializeToElement("@gen")
+                }
+            }
+        };
+
+        var server = EditorApplication.Config?.GenerationServer ?? "http://127.0.0.1:7860";
+        var request = new GenerationRequest
+        {
+            Server = server,
+            Nodes = nodes,
+            Output = "@result",
+            Inputs = inputs
+        };
+
+        var capturedLayerIndex = layerIndex;
+        Log.Info($"Starting generation for '{Name}' layer {capturedLayerIndex} on {server}...");
+
+        GenerationClient.Generate(request, response =>
+        {
+            genLayer.IsGenerating = false;
+
+            if (response == null)
+            {
+                Log.Error($"Generation failed for '{Name}'");
+                return;
+            }
+
+            try
+            {
+                // Decode base64 image and save to .gen file
+                var imageBytes = Convert.FromBase64String(response.Image);
+                File.WriteAllBytes(GetGeneratedImagePath(capturedLayerIndex), imageBytes);
+
+                // Debug: write to tmp folder for inspection
+                var tmpDir = System.IO.Path.Combine(EditorApplication.ProjectPath, "tmp");
+                Directory.CreateDirectory(tmpDir);
+                var debugPath = System.IO.Path.Combine(tmpDir, $"{Name}_gen{capturedLayerIndex}.png");
+                File.WriteAllBytes(debugPath, imageBytes);
+                Log.Info($"Debug: wrote generated image to {debugPath} ({imageBytes.Length} bytes)");
+
+                // Update seed if it was random
+                if (genLayer.Seed == 0 && response.Seed != 0)
+                {
+                    genLayer.Seed = response.Seed;
+                    MarkMetaModified();
+                }
+
+                Log.Info($"Generation complete for '{Name}' ({response.Width}x{response.Height}, seed={response.Seed})");
+
+                // Load the generated image as a standalone texture for editor preview
+                LoadGeneratedTextures();
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"Failed to save generated image for '{Name}': {ex.Message}");
+            }
+        });
+    }
+
+    private Dictionary<string, JsonElement> BuildGenerateNodeProperties(DocumentLayer genLayer)
+    {
+        var props = new Dictionary<string, JsonElement>
+        {
+            ["model"] = JsonSerializer.SerializeToElement("sdxl-base"),
+            ["prompt"] = JsonSerializer.SerializeToElement("@input.prompt"),
+            ["negative_prompt"] = JsonSerializer.SerializeToElement(
+                string.IsNullOrEmpty(genLayer.NegativePrompt)
+                    ? "blurry, low quality, 3d render, photorealistic"
+                    : genLayer.NegativePrompt),
+        };
+
+        var controlnet = new Dictionary<string, object>
+        {
+            ["model"] = "scribble",
+            ["image"] = "@input.sketch",
+            ["strength"] = 0.3
+        };
+        props["controlnet"] = JsonSerializer.SerializeToElement(controlnet);
+
+        if (!string.IsNullOrEmpty(genLayer.Style))
+        {
+            var ipadapter = new Dictionary<string, object>
+            {
+                ["image"] = "@input.style_ref",
+                ["strength"] = 0.7
+            };
+            props["ipadapter"] = JsonSerializer.SerializeToElement(ipadapter);
+        }
+
+        if (genLayer.Seed != 0)
+            props["seed"] = JsonSerializer.SerializeToElement(genLayer.Seed);
+
+        return props;
+    }
+
+    #endregion
 
     void ISpriteSource.ClearAtlasUVs() => ClearAtlasUVs();
 
@@ -788,19 +1460,31 @@ public class SpriteDocument : Document, ISpriteSource
 
             var slotWidth = slotRasterBounds.Size.X + padding2;
 
-            AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} Frame={frameIndex} Layer={slot.Layer} Bone={slot.Bone} Rect={rect.Rect} SlotBounds={slotRasterBounds}");
+            AtlasManager.LogAtlas($"Rasterize: Name={rect.Name} Frame={frameIndex} SortOrder={slot.SortOrder} Bone={slot.Bone} Rect={rect.Rect} SlotBounds={slotRasterBounds}");
 
             var targetRect = new RectInt(
                 rect.Rect.Position + new Vector2Int(xOffset, 0),
                 new Vector2Int(slotWidth, slotRasterBounds.Size.Y + padding2));
             var sourceOffset = -slotRasterBounds.Position + new Vector2Int(padding, padding);
 
-            if (slot.PathIndices.Count > 0)
+            // Check if any document layer in this slot is a generated layer
+            var blittedGenerated = false;
+            foreach (var docLayerIdx in slot.DocLayers)
+            {
+                if (docLayerIdx < _documentLayers.Count && _documentLayers[docLayerIdx].Type == DocumentLayerType.Generated)
+                {
+                    if (TryBlitGeneratedImage(docLayerIdx, image, rect, padding))
+                    {
+                        blittedGenerated = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!blittedGenerated && slot.PathIndices.Count > 0)
                 RasterizeSlot(frame.Shape, slot, image, targetRect, sourceOffset, dpi);
 
             // Bleed RGB into transparent pixels to prevent fringing with linear filtering.
-            // Use the full targetRect (including padding) so bleed extends into the
-            // padding region — linear filtering can sample there.
             image.BleedColors(targetRect);
 
             xOffset += slotWidth;
@@ -1022,7 +1706,7 @@ public class SpriteDocument : Document, ISpriteSource
 
                 allMeshes.Add(new SpriteMesh(
                     uv,
-                    (short)slot.Layer,
+                    (short)slot.SortOrder,
                     boneIndex,
                     bounds.Position,
                     bounds.Size));
@@ -1106,7 +1790,7 @@ public class SpriteDocument : Document, ISpriteSource
                 if (Binding.IsBound && Binding.Skeleton != null)
                     boneIndex = slot.Bone.IsNone ? (short)0 : (short)Binding.Skeleton.FindBoneIndex(slot.Bone.ToString());
 
-                WriteMesh(writer, uv, (short)slot.Layer, boneIndex, bounds);
+                WriteMesh(writer, uv, (short)slot.SortOrder, boneIndex, bounds);
                 frameMeshCount += 1;
             }
 
@@ -1156,7 +1840,7 @@ public class SpriteDocument : Document, ISpriteSource
             for (ushort fi = 0; fi < FrameCount; fi++)
             {
                 var shape = Frames[fi].Shape;
-                var slotBounds = shape.GetRasterBoundsFor(slot.Layer, slot.Bone);
+                var slotBounds = shape.GetRasterBoundsFor(slot.DocLayers);
                 if (slotBounds.Width <= 0 || slotBounds.Height <= 0)
                     continue;
                 bounds = bounds.Width <= 0 ? slotBounds : RectInt.Union(bounds, slotBounds);
@@ -1172,25 +1856,25 @@ public class SpriteDocument : Document, ISpriteSource
         var result = new List<RectInt>(slots.Count);
         var shape = Frames[frameIndex].Shape;
         foreach (var slot in slots)
-            result.Add(shape.GetRasterBoundsFor(slot.Layer, slot.Bone));
+            result.Add(shape.GetRasterBoundsFor(slot.DocLayers));
         return result;
     }
 
     public Vector2Int GetFrameAtlasSize(ushort frameIndex)
     {
-        var padding2 = EditorApplication.Config.AtlasPadding * 2;
+        var padding2_ = EditorApplication.Config.AtlasPadding * 2;
         var slotBounds = GetMeshSlotBounds(frameIndex);
 
         if (slotBounds.Count == 0)
-            return new(RasterBounds.Size.X + padding2, RasterBounds.Size.Y + padding2);
+            return new(RasterBounds.Size.X + padding2_, RasterBounds.Size.Y + padding2_);
 
         var totalWidth = 0;
         var maxHeight = 0;
         for (int i = 0; i < slotBounds.Count; i++)
         {
             var bounds = slotBounds[i];
-            var slotWidth = (bounds.Width > 0 ? bounds.Size.X : RasterBounds.Size.X) + padding2;
-            var slotHeight = (bounds.Height > 0 ? bounds.Size.Y : RasterBounds.Size.Y) + padding2;
+            var slotWidth = (bounds.Width > 0 ? bounds.Size.X : RasterBounds.Size.X) + padding2_;
+            var slotHeight = (bounds.Height > 0 ? bounds.Size.Y : RasterBounds.Size.Y) + padding2_;
             totalWidth += slotWidth;
             maxHeight = Math.Max(maxHeight, slotHeight);
         }
@@ -1203,45 +1887,55 @@ public class SpriteDocument : Document, ISpriteSource
     {
         var slots = new List<MeshSlot>();
         var shape = Frames[frameIndex].Shape;
-        if (shape.PathCount == 0) return slots;
 
-        // Get paths sorted by layer, then by index
-        Span<ushort> sortedPaths = stackalloc ushort[shape.PathCount];
+        EnsureDefaultLayer();
+
+        // Collect subtract paths first — they'll be appended to all slots
+        var subtractPaths = new List<ushort>();
         for (ushort i = 0; i < shape.PathCount; i++)
-            sortedPaths[i] = i;
-
-        sortedPaths.Sort((a, b) =>
         {
-            var layerA = shape.GetPath(a).Layer;
-            var layerB = shape.GetPath(b).Layer;
-            if (layerA != layerB) return layerA.CompareTo(layerB);
-            return a.CompareTo(b);
-        });
+            if (shape.GetPath(i).IsSubtract)
+                subtractPaths.Add(i);
+        }
 
-        // Build runs — new slot whenever layer or bone changes.
-        // Colors are composited into a single bitmap per slot, so fillColor
-        // no longer triggers a new slot.
-        // Subtract paths are appended to all existing slots.
+        // Iterate document layers in order, collecting paths per layer.
+        // Auto-merge adjacent layers with same (SortOrder, Bone) into one MeshSlot.
         MeshSlot? currentSlot = null;
 
-        foreach (var pathIndex in sortedPaths)
+        for (var layerIdx = 0; layerIdx < _documentLayers.Count; layerIdx++)
         {
-            ref readonly var path = ref shape.GetPath(pathIndex);
+            var docLayer = _documentLayers[layerIdx];
+            var sortOrder = docLayer.SortOrder;
+            var bone = docLayer.Bone;
 
-            if (path.IsSubtract)
+            // Auto-merge: extend current slot if same sort order and bone
+            if (currentSlot != null && currentSlot.SortOrder == sortOrder && currentSlot.Bone == bone)
             {
-                foreach (var slot in slots)
-                    slot.PathIndices.Add(pathIndex);
-                continue;
+                // Merge into existing slot
             }
-
-            if (currentSlot == null || path.Layer != currentSlot.Layer || path.Bone != currentSlot.Bone)
+            else
             {
-                currentSlot = new MeshSlot(path.Layer, path.Bone);
+                currentSlot = new MeshSlot(sortOrder, bone);
                 slots.Add(currentSlot);
             }
 
-            currentSlot.PathIndices.Add(pathIndex);
+            currentSlot.DocLayers.Add((byte)layerIdx);
+
+            // Add paths belonging to this document layer
+            for (ushort pi = 0; pi < shape.PathCount; pi++)
+            {
+                ref readonly var path = ref shape.GetPath(pi);
+                if (path.IsSubtract) continue; // handled separately
+                if (path.DocLayer != layerIdx) continue;
+                currentSlot.PathIndices.Add(pi);
+            }
+        }
+
+        // Append subtract paths to all slots
+        foreach (var slot in slots)
+        {
+            foreach (var subtractIdx in subtractPaths)
+                slot.PathIndices.Add(subtractIdx);
         }
 
         return slots;

@@ -169,12 +169,20 @@ public class ShapeTool(
             return;
         }
 
+        // Don't create paths on locked layers
+        var currentLayer = _editor.Document.GetCurrentDocumentLayer();
+        if (currentLayer is { Locked: true })
+        {
+            Finish();
+            return;
+        }
+
         Undo.Record(_editor.Document);
 
         _shape.ClearAnchorSelection();
 
         var firstAnchor = _shape.AnchorCount;
-        var pathIndex = _shape.AddPath(_fillColor, operation: _operation);
+        var pathIndex = _shape.AddPath(_fillColor, operation: _operation, docLayer: (byte)_editor.Document.CurrentDocumentLayer);
         if (pathIndex == ushort.MaxValue)
         {
             Finish();

@@ -179,16 +179,16 @@ public static class AssetManifest
         writer.WriteLine("    }");
 
         // Layers class for sprite layer constants
-        var spriteLayers = config.SpriteLayers;
-        if (spriteLayers.Length > 0)
+        var sortOrders = config.SortOrders;
+        if (sortOrders.Length > 0)
         {
             writer.WriteLine();
-            writer.WriteLine("    public static class Layers");
+            writer.WriteLine("    public static class SortOrders");
             writer.WriteLine("    {");
-            foreach (var layer in spriteLayers.OrderBy(l => l.Layer))
+            foreach (var so in sortOrders.OrderBy(s => s.SortOrder))
             {
-                var constName = ToCSharpIdentifier(layer.Id);
-                writer.WriteLine($"        public const ushort {constName} = {layer.Layer};");
+                var constName = ToCSharpIdentifier(so.Id);
+                writer.WriteLine($"        public const ushort {constName} = {so.SortOrder};");
             }
             writer.WriteLine("    }");
         }

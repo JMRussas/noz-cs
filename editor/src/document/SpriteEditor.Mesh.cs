@@ -51,9 +51,13 @@ public partial class SpriteEditor
 
             // Collect subtract paths with their indices — each only affects paths below it
             List<(ushort PathIndex, PathsD Contours)>? subtractEntries = null;
+            var layers = Document.DocumentLayers;
             foreach (var pi in slot.PathIndices)
             {
                 ref readonly var path = ref shape.GetPath(pi);
+                // Skip paths on hidden layers
+                if (path.DocLayer < layers.Count && !layers[path.DocLayer].Visible)
+                    continue;
                 if (!path.IsSubtract || path.AnchorCount < 3) continue;
 
                 var subShape = new Msdf.Shape();
@@ -73,6 +77,9 @@ public partial class SpriteEditor
             foreach (var pi in slot.PathIndices)
             {
                 ref readonly var path = ref shape.GetPath(pi);
+                // Skip paths on hidden layers
+                if (path.DocLayer < layers.Count && !layers[path.DocLayer].Visible)
+                    continue;
                 if (path.IsSubtract || path.AnchorCount < 3) continue;
 
                 var pathShape = new Msdf.Shape();

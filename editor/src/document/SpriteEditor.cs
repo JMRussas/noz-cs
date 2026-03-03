@@ -25,7 +25,17 @@ public partial class SpriteEditor : DocumentEditor
     [ElementId("BonePathButton")]
     [ElementId("StrokeWidth")]
     [ElementId("AddFrameButton")]
+    [ElementId("GenerateButton")]
     [ElementId("PlayButton")]
+    [ElementId("LayerPanel")]
+    [ElementId("LayerPanelScroll")]
+    [ElementId("LayerItem", 32)]
+    [ElementId("LayerVisibility", 32)]
+    [ElementId("LayerLock", 32)]
+    [ElementId("LayerSortOrder", 32)]
+    [ElementId("AddVectorLayerBtn")]
+    [ElementId("AddGeneratedLayerBtn")]
+    [ElementId("DeleteLayerBtn")]
     private static partial class ElementId { }
 
     public new SpriteDocument Document => (SpriteDocument)base.Document;
@@ -39,6 +49,24 @@ public partial class SpriteEditor : DocumentEditor
     private Action<Color32>? _previewFillColor;
     private Action<Color32>? _previewStrokeColor;
 
+
+    private bool IsPathOnVisibleLayer(Shape.Path path)
+    {
+        var layers = Document.DocumentLayers;
+        return path.DocLayer < layers.Count && layers[path.DocLayer].Visible;
+    }
+
+    private bool IsPathOnLockedLayer(Shape.Path path)
+    {
+        var layers = Document.DocumentLayers;
+        return path.DocLayer < layers.Count && layers[path.DocLayer].Locked;
+    }
+
+    private bool IsCurrentLayerLocked()
+    {
+        var layer = Document.GetCurrentDocumentLayer();
+        return layer is { Locked: true };
+    }
 
     public SpriteEditor(SpriteDocument doc) : base(doc)
     {
@@ -89,6 +117,7 @@ public partial class SpriteEditor : DocumentEditor
             new Command { Name = "Duplicate", Handler = DuplicateSelected, Key = InputCode.KeyD, Ctrl = true },
             new Command { Name = "Copy", Handler = CopySelected, Key = InputCode.KeyC, Ctrl = true },
             new Command { Name = "Paste", Handler = PasteSelected, Key = InputCode.KeyV, Ctrl = true },
+            new Command { Name = "Generate", Handler = () => Document.GenerateAsync(), Key = InputCode.KeyG, Ctrl = true },
         ];
 
         bool HasSelection() => Document.GetFrame(_currentFrame).Shape.HasSelection();
@@ -234,6 +263,14 @@ public partial class SpriteEditor : DocumentEditor
         if (EditorUI.Button(ElementId.PlayButton, EditorAssets.Sprites.IconPlay, selected: _isPlaying, toolbar: true))
             TogglePlayback();
 
+        // AI Generation button — only shown when [generate] section exists in meta
+        if (Document.HasGeneration)
+        {
+            EditorUI.ToolbarSpacer();
+            if (EditorUI.Button(ElementId.GenerateButton, EditorAssets.Sprites.IconPlay, selected: Document.IsGenerating, toolbar: true))
+                Document.GenerateAsync();
+        }
+
         UI.Flex();
 
         if (EditorUI.Button(ElementId.TileButton, EditorAssets.Sprites.IconTiling, Document.ShowTiling, toolbar: true))
@@ -266,6 +303,8 @@ public partial class SpriteEditor : DocumentEditor
 
             UI.Spacer(EditorStyle.Control.Spacing);
         }
+
+        LayerPanelUI();
     }
 
 
@@ -353,8 +392,7 @@ public partial class SpriteEditor : DocumentEditor
 
             Document.CurrentFillColor = path.FillColor;
             Document.CurrentStrokeColor = path.StrokeColor;
-            Document.CurrentLayer = path.Layer;
-            Document.CurrentBone = path.Bone;
+            Document.CurrentDocumentLayer = path.DocLayer;
             Document.CurrentStrokeWidth = (byte)int.Max(1, (int)path.StrokeWidth);
             Document.CurrentOperation = path.Operation;
             return;
@@ -441,20 +479,17 @@ public partial class SpriteEditor : DocumentEditor
 
     private void LayerButtonUI()
     {
-        var spriteLayers = EditorApplication.Config.SpriteLayers;
         using (UI.BeginContainer(ContainerStyle.Fit))
         {
             void ButtonContent()
             {
                 EditorUI.ControlIcon(EditorAssets.Sprites.IconLayer);
-                if (EditorApplication.Config.TryGetSpriteLayer(Document.CurrentLayer, out var spriteLayer))
-                {
-                    EditorUI.ControlText(spriteLayer.Label);
-                    EditorUI.ControlPlaceholderText(spriteLayer.LayerLabel);
-                }
+                var currentLayer = Document.GetCurrentDocumentLayer();
+                if (currentLayer != null)
+                    EditorUI.ControlText(currentLayer.Name);
                 else
-                    EditorUI.ControlPlaceholderText("None");
-               UI.Spacer(EditorStyle.Control.Spacing);
+                    EditorUI.ControlPlaceholderText("Layer 1");
+                UI.Spacer(EditorStyle.Control.Spacing);
             }
 
             if (EditorUI.Control(
@@ -471,35 +506,203 @@ public partial class SpriteEditor : DocumentEditor
     {
         void Content()
         {
-            var layers = EditorApplication.Config.SpriteLayers;
-            for (int i = 0; i < layers.Length; i++)
+            var layers = Document.DocumentLayers;
+            for (int i = 0; i < layers.Count; i++)
             {
-                ref readonly var layerDef = ref layers[i];
-                var selected = Document.CurrentLayer == layerDef.Layer;
-                var label = layerDef.Label;
-                var layerLabel = layerDef.LayerLabel;
+                var layer = layers[i];
+                var selected = Document.CurrentDocumentLayer == i;
 
                 void ItemContent()
                 {
-                    EditorUI.ControlText($"{label}");
-                    EditorUI.ControlPlaceholderText($"{layerLabel}");
+                    EditorUI.ControlText(layer.Name);
+                    if (layer.SortOrder != 0)
+                        EditorUI.ControlPlaceholderText($"({layer.SortOrder})");
                 }
 
                 if (EditorUI.PopupItem(ItemContent, selected: selected))
                 {
-                    SetPathLayer(layerDef.Layer);
+                    Document.CurrentDocumentLayer = i;
                     EditorUI.ClosePopup();
                 }
-            }
-
-            if (EditorUI.PopupItem("None", selected: Document.CurrentLayer == 0))
-            {
-                SetPathLayer(0);
-                EditorUI.ClosePopup();
             }
         }
 
         EditorUI.Popup(ElementId.LayerButton, Content);
+    }
+
+    private static readonly ContainerStyle LayerPanelRoot = EditorStyle.Panel.Root with
+    {
+        AlignX = Align.Max,
+        AlignY = Align.Max,
+        Width = 200,
+        Height = Size.Fit,
+        MaxHeight = 400,
+        Margin = EdgeInsets.BottomRight(8),
+        Padding = EdgeInsets.All(EditorStyle.Panel.BorderWidth),
+        BorderRadius = EditorStyle.Panel.BorderRadius
+    };
+
+    private static readonly ContainerStyle LayerItemRow = new()
+    {
+        Height = 28f,
+        Padding = EdgeInsets.LeftRight(4),
+        Spacing = 2f
+    };
+
+    private static readonly ContainerStyle LayerItemSelected = new()
+    {
+        Color = Color.FromRgba(0x4488FF40),
+        BorderRadius = 4f
+    };
+
+    private static readonly ContainerStyle LayerItemHover = new()
+    {
+        Color = Color.FromRgba(0xFFFFFF10),
+        BorderRadius = 4f
+    };
+
+    private void LayerPanelUI()
+    {
+        using (UI.BeginColumn(ElementId.LayerPanel, LayerPanelRoot))
+        {
+            // Header row with title and add buttons
+            using (UI.BeginRow(new ContainerStyle { Height = 28f, Padding = EdgeInsets.LeftRight(8), Spacing = 2f }))
+            {
+                UI.Label("Layers", EditorStyle.Inspector.SectionLabel);
+                UI.Flex();
+
+                if (EditorUI.Button(ElementId.AddVectorLayerBtn, EditorAssets.Sprites.IconLayer, toolbar: true))
+                {
+                    Undo.Record(Document);
+                    Document.AddDocumentLayer(DocumentLayerType.Vector);
+                    MarkRasterDirty();
+                }
+
+                if (EditorUI.Button(ElementId.AddGeneratedLayerBtn, EditorAssets.Sprites.IconPlay, toolbar: true))
+                {
+                    Undo.Record(Document);
+                    Document.AddDocumentLayer(DocumentLayerType.Generated);
+                    MarkRasterDirty();
+                }
+            }
+
+            UI.Container(EditorStyle.Inspector.Separator);
+
+            // Layer list — top layer (highest index) displayed at top
+            var layers = Document.DocumentLayers;
+            for (int i = layers.Count - 1; i >= 0; i--)
+            {
+                var layer = layers[i];
+                var isSelected = Document.CurrentDocumentLayer == i;
+                var itemId = ElementId.LayerItem + i;
+
+                using (UI.BeginRow(itemId, LayerItemRow))
+                {
+                    // Background fill for selection/hover
+                    if (isSelected)
+                        UI.Container(LayerItemSelected);
+                    else if (UI.IsHovered())
+                        UI.Container(LayerItemHover);
+
+                    // Visibility toggle
+                    if (EditorUI.Button(ElementId.LayerVisibility + i, EditorAssets.Sprites.IconPreview,
+                        selected: layer.Visible, toolbar: true))
+                    {
+                        Undo.Record(Document);
+                        layer.Visible = !layer.Visible;
+                        Document.MarkModified();
+                        MarkRasterDirty();
+                    }
+
+                    // Lock toggle
+                    if (EditorUI.Button(ElementId.LayerLock + i, EditorAssets.Sprites.IconConstraint,
+                        selected: layer.Locked, toolbar: true))
+                    {
+                        Undo.Record(Document);
+                        layer.Locked = !layer.Locked;
+                        Document.MarkModified();
+                    }
+
+                    // Layer name — click to select
+                    using (UI.BeginContainer(new ContainerStyle { AlignY = Align.Center }))
+                    {
+                        var nameStyle = isSelected
+                            ? EditorStyle.Control.SelectedText
+                            : EditorStyle.Control.Text;
+                        UI.Label(layer.Name, nameStyle);
+                    }
+
+                    UI.Flex();
+
+                    // Sort order indicator
+                    if (layer.SortOrder != 0)
+                    {
+                        using (UI.BeginContainer(new ContainerStyle { AlignY = Align.Center }))
+                            UI.Label($"({layer.SortOrder})", EditorStyle.Inspector.Label);
+                    }
+
+                    // Generated layer indicator
+                    if (layer.Type == DocumentLayerType.Generated)
+                    {
+                        using (UI.BeginContainer(new ContainerStyle { AlignY = Align.Center }))
+                            UI.Label("G", EditorStyle.Inspector.Label);
+                    }
+
+                    // Click row to select layer
+                    if (UI.WasPressed())
+                        Document.CurrentDocumentLayer = i;
+                }
+            }
+
+            // Footer with delete button
+            if (layers.Count > 1)
+            {
+                UI.Container(EditorStyle.Inspector.Separator);
+                using (UI.BeginRow(new ContainerStyle { Height = 28f, Padding = EdgeInsets.LeftRight(8) }))
+                {
+                    UI.Flex();
+                    if (EditorUI.Button(ElementId.DeleteLayerBtn, EditorAssets.Sprites.IconDelete, toolbar: true))
+                    {
+                        Undo.Record(Document);
+                        Document.DeleteDocumentLayer(Document.CurrentDocumentLayer);
+                        MarkRasterDirty();
+                    }
+                }
+            }
+        }
+    }
+
+    private void SortOrderPopupUI(int layerIndex)
+    {
+        void Content()
+        {
+            var layer = Document.DocumentLayers[layerIndex];
+            var sortOrders = EditorApplication.Config.SortOrders;
+
+            // Default (0) option
+            if (EditorUI.PopupItem("Default (0)", selected: layer.SortOrder == 0))
+            {
+                Undo.Record(Document);
+                layer.SortOrder = 0;
+                Document.MarkModified();
+                MarkRasterDirty();
+                EditorUI.ClosePopup();
+            }
+
+            foreach (var so in sortOrders)
+            {
+                if (EditorUI.PopupItem($"{so.Label} ({so.SortOrder})", selected: layer.SortOrder == so.SortOrder))
+                {
+                    Undo.Record(Document);
+                    layer.SortOrder = so.SortOrder;
+                    Document.MarkModified();
+                    MarkRasterDirty();
+                    EditorUI.ClosePopup();
+                }
+            }
+        }
+
+        EditorUI.Popup(ElementId.LayerSortOrder + layerIndex, Content);
     }
 
     private void BoneBindingUI()
@@ -508,11 +711,14 @@ public partial class SpriteEditor : DocumentEditor
 
         using var _ = UI.BeginContainer(ContainerStyle.Fit);
 
+        var currentLayer = Document.GetCurrentDocumentLayer();
+        var currentBone = currentLayer?.Bone ?? StringId.None;
+
         void ButtonContent()
         {
             EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
-            if (!Document.CurrentBone.IsNone)
-                EditorUI.ControlText(Document.CurrentBone.ToString());
+            if (!currentBone.IsNone)
+                EditorUI.ControlText(currentBone.ToString());
             else
                 EditorUI.ControlPlaceholderText("Root");
             UI.Spacer(EditorStyle.Control.Spacing);
@@ -535,10 +741,13 @@ public partial class SpriteEditor : DocumentEditor
             if (skeleton == null)
                 return;
 
+            var currentLayer = Document.GetCurrentDocumentLayer();
+            var currentBone = currentLayer?.Bone ?? StringId.None;
+
             // Root option (None = root bone)
-            if (EditorUI.PopupItem("Root", selected: Document.CurrentBone.IsNone))
+            if (EditorUI.PopupItem("Root", selected: currentBone.IsNone))
             {
-                SetPathBone(StringId.None);
+                SetLayerBone(StringId.None);
                 EditorUI.ClosePopup();
             }
 
@@ -547,9 +756,9 @@ public partial class SpriteEditor : DocumentEditor
             {
                 var boneName = skeleton.Bones[i].Name;
                 var boneNameValue = StringId.Get(boneName);
-                if (EditorUI.PopupItem(boneName, selected: Document.CurrentBone == boneNameValue))
+                if (EditorUI.PopupItem(boneName, selected: currentBone == boneNameValue))
                 {
-                    SetPathBone(boneNameValue);
+                    SetLayerBone(boneNameValue);
                     EditorUI.ClosePopup();
                 }
             }
@@ -558,20 +767,13 @@ public partial class SpriteEditor : DocumentEditor
         EditorUI.Popup(ElementId.BonePathButton, Content);
     }
 
-    public void SetPathBone(StringId bone)
+    public void SetLayerBone(StringId bone)
     {
-        Document.CurrentBone = bone;
+        var currentLayer = Document.GetCurrentDocumentLayer();
+        if (currentLayer == null) return;
 
         Undo.Record(Document);
-
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        for (ushort p = 0; p < shape.PathCount; p++)
-        {
-            ref readonly var path = ref shape.GetPath(p);
-            if (!path.IsSelected) continue;
-            shape.SetPathBone(p, bone);
-        }
-
+        currentLayer.Bone = bone;
         Document.UpdateBounds();
         Document.MarkModified();
         MarkRasterDirty();
@@ -830,10 +1032,8 @@ public partial class SpriteEditor : DocumentEditor
         EditorUI.Popup(ElementId.StrokeWidth, Content);
     }
 
-    public void SetPathLayer(byte layer)
+    public void SetPathDocLayer(byte docLayer)
     {
-        Document.CurrentLayer = layer;
-
         Undo.Record(Document);
 
         var shape = Document.GetFrame(_currentFrame).Shape;
@@ -841,7 +1041,7 @@ public partial class SpriteEditor : DocumentEditor
         {
             ref readonly var path = ref shape.GetPath(p);
             if (!path.IsSelected) continue;
-            shape.SetPathLayer(p, layer);
+            shape.SetPathDocLayer(p, docLayer);
         }
 
         Document.UpdateBounds();
@@ -888,7 +1088,7 @@ public partial class SpriteEditor : DocumentEditor
                 fillColor: srcPath.FillColor,
                 strokeColor: srcPath.StrokeColor,
                 strokeWidth: srcPath.StrokeWidth,
-                layer: srcPath.Layer,
+                docLayer: srcPath.DocLayer,
                 operation: srcPath.Operation);
             if (newPathIndex == ushort.MaxValue)
                 break;
@@ -1070,11 +1270,30 @@ public partial class SpriteEditor : DocumentEditor
 
         for (var i = 0; i < hitCount; i++)
         {
+            // Skip hits on hidden or locked layers
+            var hitPathIndex = hits[i].PathIndex;
+            if (hitPathIndex != ushort.MaxValue)
+            {
+                ref readonly var hitPath = ref shape.GetPath(hitPathIndex);
+                if (!IsPathOnVisibleLayer(hitPath) || IsPathOnLockedLayer(hitPath))
+                    continue;
+            }
+
             if (hits[i].AnchorIndex != ushort.MaxValue)
                 anchorHits[anchorCount++] = hits[i].AnchorIndex;
             else if (hits[i].SegmentIndex != ushort.MaxValue)
                 segmentHits[segmentCount++] = hits[i].SegmentIndex;
         }
+
+        // Filter path hits for hidden/locked layers
+        var filteredPathCount = 0;
+        for (var i = 0; i < pathCount; i++)
+        {
+            ref readonly var hitPath = ref shape.GetPath(pathHits[i]);
+            if (IsPathOnVisibleLayer(hitPath) && !IsPathOnLockedLayer(hitPath))
+                pathHits[filteredPathCount++] = pathHits[i];
+        }
+        pathCount = filteredPathCount;
 
         // Sort by path index descending (higher path index = drawn on top)
         SortByPathIndexDescending(shape, anchorHits[..anchorCount]);
@@ -1388,6 +1607,17 @@ public partial class SpriteEditor : DocumentEditor
         var localRect = Rect.FromMinMax(minLocal, maxLocal);
         shape.SelectAnchors(localRect);
 
+        // Deselect anchors on hidden or locked layers
+        for (ushort i = 0; i < shape.AnchorCount; i++)
+        {
+            if (!shape.IsAnchorSelected(i)) continue;
+            var pathIndex = FindPathForAnchor(shape, i);
+            if (pathIndex == ushort.MaxValue) continue;
+            ref readonly var path = ref shape.GetPath(pathIndex);
+            if (!IsPathOnVisibleLayer(path) || IsPathOnLockedLayer(path))
+                shape.SetAnchorSelected(i, false);
+        }
+
         UpdateSelection();
     }
 
@@ -1558,6 +1788,24 @@ public partial class SpriteEditor : DocumentEditor
         if (rb.Width <= 0 || rb.Height <= 0)
             return;
 
+        // Show generated layer images behind the vector paths when editing
+        foreach (var layer in Document.DocumentLayers)
+        {
+            if (layer.Type != DocumentLayerType.Generated) continue;
+            if (!layer.Visible || layer.GeneratedTexture == null) continue;
+
+            using (Graphics.PushState())
+            {
+                Graphics.SetSortGroup(2);
+                Graphics.SetLayer(EditorLayer.DocumentEditor);
+                Graphics.SetTransform(Document.Transform);
+                Graphics.SetShader(EditorAssets.Shaders.Texture);
+                Graphics.SetTexture(layer.GeneratedTexture);
+                Graphics.SetColor(new Color(1, 1, 1, layer.Opacity * Workspace.XrayAlpha));
+                Graphics.Draw(Document.Bounds, new Rect(0, 0, 1, 1));
+            }
+        }
+
         DrawMeshSDF();
     }
 
@@ -1577,7 +1825,7 @@ public partial class SpriteEditor : DocumentEditor
         Gizmos.DrawLine(prev, nextAnchor.Position, width, order: order);
     }
 
-    private static void DrawSegments(Shape shape)
+    private void DrawSegments(Shape shape)
     {
         using (Gizmos.PushState(EditorLayer.DocumentEditor))
         {
@@ -1587,7 +1835,7 @@ public partial class SpriteEditor : DocumentEditor
                 if (!shape.IsSegmentSelected(anchorIndex))
                 {
                     var pathIndex = FindPathForAnchor(shape, anchorIndex);
-                    if (pathIndex != ushort.MaxValue)
+                    if (pathIndex != ushort.MaxValue && IsPathOnVisibleLayer(shape.GetPath(pathIndex)))
                         DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentLineWidth, 1);
                 }
             }
@@ -1598,7 +1846,7 @@ public partial class SpriteEditor : DocumentEditor
                 if (shape.IsSegmentSelected(anchorIndex))
                 {
                     var pathIndex = FindPathForAnchor(shape, anchorIndex);
-                    if (pathIndex != ushort.MaxValue)
+                    if (pathIndex != ushort.MaxValue && IsPathOnVisibleLayer(shape.GetPath(pathIndex)))
                         DrawSegment(shape, pathIndex, anchorIndex, EditorStyle.Shape.SegmentLineWidth, 2);
                 }
             }
@@ -1617,13 +1865,16 @@ public partial class SpriteEditor : DocumentEditor
         Gizmos.DrawRect(worldPosition, EditorStyle.Shape.AnchorSize, order: 5);
     }
 
-    private static void DrawAnchors(Shape shape)
+    private void DrawAnchors(Shape shape)
     {
         using var _ = Gizmos.PushState(EditorLayer.DocumentEditor);
         for (ushort i = 0; i < shape.AnchorCount; i++)
         {
             ref readonly var anchor = ref shape.GetAnchor(i);
             if (anchor.IsSelected) continue;
+            var pathIndex = FindPathForAnchor(shape, i);
+            if (pathIndex != ushort.MaxValue && !IsPathOnVisibleLayer(shape.GetPath(pathIndex)))
+                continue;
             DrawAnchor(anchor.Position);
         }
 
@@ -1631,6 +1882,9 @@ public partial class SpriteEditor : DocumentEditor
         {
             ref readonly var anchor = ref shape.GetAnchor(i);
             if (!anchor.IsSelected) continue;
+            var pathIndex = FindPathForAnchor(shape, i);
+            if (pathIndex != ushort.MaxValue && !IsPathOnVisibleLayer(shape.GetPath(pathIndex)))
+                continue;
             DrawSelectedAnchor(anchor.Position);
         }
     }
@@ -1712,7 +1966,8 @@ public partial class SpriteEditor : DocumentEditor
             for (var boneIndex = 0; boneIndex < skeleton.BoneCount; boneIndex++)
             {
                 var boneName = StringId.Get(skeleton.Bones[boneIndex].Name);
-                Gizmos.DrawBoneAndJoints(skeleton, boneIndex, selected: boneName == Document.CurrentBone);
+                var currentBone = Document.GetCurrentDocumentLayer()?.Bone ?? StringId.None;
+                Gizmos.DrawBoneAndJoints(skeleton, boneIndex, selected: boneName == currentBone);
             }
         }
     }
