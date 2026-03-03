@@ -1430,6 +1430,42 @@ public sealed unsafe partial class Shape : IDisposable
             _samples[i] = source._samples[i];
     }
 
+    /// <summary>
+    /// Appends all paths and anchors from source into this shape, setting DocLayer on each copied path.
+    /// Used for building composite shapes from per-layer data.
+    /// </summary>
+    public void AppendFrom(Shape source, byte docLayer)
+    {
+        if (source.PathCount == 0)
+            return;
+
+        var anchorOffset = AnchorCount;
+
+        // Copy anchors
+        for (var i = 0; i < source.AnchorCount; i++)
+        {
+            var anchor = source._anchors[i];
+            anchor.Path = (ushort)(anchor.Path + PathCount);
+            _anchors[AnchorCount + i] = anchor;
+        }
+
+        // Copy samples
+        for (var i = 0; i < source.AnchorCount * MaxSegmentSamples; i++)
+            _samples[AnchorCount * MaxSegmentSamples + i] = source._samples[i];
+
+        // Copy paths with remapped anchor start and DocLayer
+        for (var i = 0; i < source.PathCount; i++)
+        {
+            var path = source._paths[i];
+            path.AnchorStart = (ushort)(path.AnchorStart + anchorOffset);
+            path.DocLayer = docLayer;
+            _paths[PathCount + i] = path;
+        }
+
+        AnchorCount = (ushort)(AnchorCount + source.AnchorCount);
+        PathCount = (ushort)(PathCount + source.PathCount);
+    }
+
     public void Clear()
     {
         AnchorCount = 0;

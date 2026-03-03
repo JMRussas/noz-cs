@@ -38,7 +38,7 @@ public partial class SpriteEditor
     {
         _meshSlots.Clear();
 
-        var slots = Document.GetMeshSlots(_currentFrame);
+        var slots = Document.GetMeshSlots((ushort)_currentTimeSlot);
         if (slots.Count == 0) return;
 
         var vertexOffset = 0;

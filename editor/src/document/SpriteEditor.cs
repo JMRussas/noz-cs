@@ -40,7 +40,7 @@ public partial class SpriteEditor : DocumentEditor
 
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
-    private ushort _currentFrame;
+    private int _currentTimeSlot;
     private bool _isPlaying;
     private float _playTimer;
     private bool _rasterDirty = true;
@@ -49,6 +49,17 @@ public partial class SpriteEditor : DocumentEditor
     private Action<Color32>? _previewFillColor;
     private Action<Color32>? _previewStrokeColor;
 
+    /// <summary>The current layer's frame index resolved from the global time slot.</summary>
+    private int CurrentLayerFrameIndex =>
+        Document.GetLayerFrameAtTimeSlot(Document.CurrentDocumentLayer, _currentTimeSlot);
+
+    /// <summary>The current layer's current frame's shape (for editing).</summary>
+    private Shape CurrentShape =>
+        Document.DocumentLayers[Document.CurrentDocumentLayer].Frames[CurrentLayerFrameIndex].Shape;
+
+    /// <summary>The current document layer.</summary>
+    private DocumentLayer CurrentLayer =>
+        Document.DocumentLayers[Document.CurrentDocumentLayer];
 
     private bool IsPathOnVisibleLayer(Shape.Path path)
     {
@@ -120,8 +131,8 @@ public partial class SpriteEditor : DocumentEditor
             new Command { Name = "Generate", Handler = () => Document.GenerateAsync(), Key = InputCode.KeyG, Ctrl = true },
         ];
 
-        bool HasSelection() => Document.GetFrame(_currentFrame).Shape.HasSelection();
-        bool HasSelectedPaths() => Document.GetFrame(_currentFrame).Shape.HasSelectedPaths();
+        bool HasSelection() => CurrentShape.HasSelection();
+        bool HasSelectedPaths() => CurrentShape.HasSelectedPaths();
 
         ContextMenu = new PopupMenuDef
         {
@@ -153,7 +164,7 @@ public partial class SpriteEditor : DocumentEditor
         };  
     }
 
-    public ushort CurrentFrame => _currentFrame;
+    public int CurrentTimeSlot => _currentTimeSlot;
     public bool IsPlaying => _isPlaying;
 
     public override void Dispose()
@@ -185,7 +196,7 @@ public partial class SpriteEditor : DocumentEditor
         if (_rasterDirty)
             UpdateRaster();
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
 
         DrawRaster();
 
@@ -290,21 +301,195 @@ public partial class SpriteEditor : DocumentEditor
         using (UI.BeginColumn(ElementId.Root, EditorStyle.DocumentEditor.Root))
         {
             ToolbarUI();
-
-            using (UI.BeginContainer(new ContainerStyle { Padding = EdgeInsets.LeftRight(2) }))
-            {
-                Span<EditorUI.DopeSheetFrame> frames = stackalloc EditorUI.DopeSheetFrame[Document.FrameCount];
-                for (ushort i = 0; i < Document.FrameCount; i++)
-                    frames[i] = new EditorUI.DopeSheetFrame { Hold = Document.Frames[i].Hold, };
-                var currentFrame = (int)_currentFrame;
-                if (EditorUI.DopeSheet(ElementId.DopeSheet, frames, ref currentFrame, Sprite.MaxFrames, _isPlaying))
-                    SetCurrentFrame((ushort)currentFrame);
-            }
-
+            LayerDopeSheetUI();
             UI.Spacer(EditorStyle.Control.Spacing);
         }
+    }
 
-        LayerPanelUI();
+    private void LayerDopeSheetUI()
+    {
+        var layers = Document.DocumentLayers;
+        var maxSlots = Sprite.MaxFrames;
+
+        using (UI.BeginColumn(new ContainerStyle { Padding = EdgeInsets.LeftRight(2) }))
+        {
+            // Time ruler header
+            UI.Container(EditorStyle.Dopesheet.LayerSeparator);
+            using (UI.BeginRow(EditorStyle.Dopesheet.HeaderContainer))
+            {
+                // Left column spacer for layer names
+                UI.Container(new ContainerStyle { Width = LayerNameColumnWidth });
+                UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+
+                var blockCount = maxSlots / 4;
+                for (var blockIndex = 0; blockIndex < blockCount; blockIndex++)
+                {
+                    using (UI.BeginContainer(EditorStyle.Dopesheet.TimeBlock))
+                        UI.Label(EditorUI.FrameTimeStrings[blockIndex], EditorStyle.Dopesheet.TimeText);
+                    UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+                }
+            }
+
+            UI.Container(EditorStyle.Dopesheet.LayerSeparator);
+
+            // Layer rows (reverse order — highest layer at top)
+            for (int i = layers.Count - 1; i >= 0; i--)
+            {
+                var layer = layers[i];
+                var isSelectedLayer = Document.CurrentDocumentLayer == i;
+
+                using (UI.BeginRow(ElementId.LayerItem + i, new ContainerStyle
+                    { Height = EditorStyle.Dopesheet.FrameHeight, Color = Color.FromRgb(0x2f2f2f) }))
+                {
+                    // Layer name column
+                    using (UI.BeginRow(new ContainerStyle { Width = LayerNameColumnWidth }))
+                    {
+                        if (isSelectedLayer)
+                            UI.Container(LayerItemSelected);
+                        else if (UI.IsHovered())
+                            UI.Container(LayerItemHover);
+
+                        // Visibility toggle
+                        if (EditorUI.Button(ElementId.LayerVisibility + i, EditorAssets.Sprites.IconPreview,
+                            selected: layer.Visible, toolbar: true))
+                        {
+                            Undo.Record(Document);
+                            layer.Visible = !layer.Visible;
+                            Document.MarkModified();
+                            MarkRasterDirty();
+                        }
+
+                        // Lock toggle
+                        if (EditorUI.Button(ElementId.LayerLock + i, EditorAssets.Sprites.IconConstraint,
+                            selected: layer.Locked, toolbar: true))
+                        {
+                            Undo.Record(Document);
+                            layer.Locked = !layer.Locked;
+                            Document.MarkModified();
+                        }
+
+                        // Layer name
+                        using (UI.BeginContainer(new ContainerStyle { AlignY = Align.Center }))
+                        {
+                            var nameStyle = isSelectedLayer
+                                ? EditorStyle.Control.SelectedText
+                                : EditorStyle.Control.Text;
+                            UI.Label(layer.Name, nameStyle);
+                        }
+
+                        // Click row to select layer
+                        if (UI.WasPressed())
+                            Document.CurrentDocumentLayer = i;
+                    }
+
+                    UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+
+                    // Frame cells for this layer
+                    var slotIndex = 0;
+                    for (ushort fi = 0; fi < layer.FrameCount && slotIndex < maxSlots; fi++)
+                    {
+                        var isCurrentSlot = IsTimeSlotInRange(i, fi, _currentTimeSlot);
+
+                        using (UI.BeginRow(ElementId.DopeSheet + i * Sprite.MaxFrames + fi))
+                        {
+                            if (UI.WasPressed())
+                            {
+                                Document.CurrentDocumentLayer = i;
+                                _currentTimeSlot = TimeSlotForLayerFrame(i, fi);
+                                MarkRasterDirty();
+                            }
+
+                            using (UI.BeginContainer(isCurrentSlot
+                                ? EditorStyle.Dopesheet.SelectedFrame
+                                : EditorStyle.Dopesheet.Frame))
+                            {
+                                UI.Container(isCurrentSlot
+                                    ? EditorStyle.Dopesheet.SelectedFrameDot
+                                    : EditorStyle.Dopesheet.FrameDot);
+                            }
+
+                            slotIndex++;
+
+                            // Hold cells
+                            var hold = layer.Frames[fi].Hold;
+                            for (int h = 0; h < hold && slotIndex < maxSlots; h++, slotIndex++)
+                            {
+                                using (UI.BeginContainer(isCurrentSlot
+                                    ? EditorStyle.Dopesheet.SelectedFrame
+                                    : EditorStyle.Dopesheet.Frame))
+                                {
+                                }
+
+                                if (h < hold - 1)
+                                    UI.Container(isCurrentSlot
+                                        ? EditorStyle.Dopesheet.SelectedHoldSeparator
+                                        : EditorStyle.Dopesheet.HoldSeparator);
+                            }
+
+                            UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+                        }
+                    }
+
+                    // Empty cells after the layer's frames
+                    for (; slotIndex < maxSlots; slotIndex++)
+                    {
+                        UI.Container(slotIndex % 4 == 0
+                            ? EditorStyle.Dopesheet.FourthEmptyFrame
+                            : EditorStyle.Dopesheet.EmptyFrame);
+                        UI.Container(EditorStyle.Dopesheet.FrameSeparator);
+                    }
+                }
+
+                UI.Container(EditorStyle.Dopesheet.LayerSeparator);
+            }
+
+            // Footer with add/delete buttons
+            using (UI.BeginRow(new ContainerStyle { Height = 28f, Padding = EdgeInsets.LeftRight(8), Spacing = 2f }))
+            {
+                if (EditorUI.Button(ElementId.AddVectorLayerBtn, EditorAssets.Sprites.IconLayer, toolbar: true))
+                {
+                    Undo.Record(Document);
+                    Document.AddDocumentLayer(DocumentLayerType.Vector);
+                    MarkRasterDirty();
+                }
+
+                if (EditorUI.Button(ElementId.AddGeneratedLayerBtn, EditorAssets.Sprites.IconPlay, toolbar: true))
+                {
+                    Undo.Record(Document);
+                    Document.AddDocumentLayer(DocumentLayerType.Generated);
+                    MarkRasterDirty();
+                }
+
+                UI.Flex();
+
+                if (layers.Count > 1)
+                {
+                    if (EditorUI.Button(ElementId.DeleteLayerBtn, EditorAssets.Sprites.IconDelete, toolbar: true))
+                    {
+                        Undo.Record(Document);
+                        Document.DeleteDocumentLayer(Document.CurrentDocumentLayer);
+                        MarkRasterDirty();
+                    }
+                }
+            }
+        }
+    }
+
+    private const float LayerNameColumnWidth = 140f;
+
+    /// <summary>Check if a global time slot falls within a specific layer frame.</summary>
+    private bool IsTimeSlotInRange(int layerIndex, int frameIndex, int timeSlot)
+    {
+        var layer = Document.DocumentLayers[layerIndex];
+        var accumulated = 0;
+        for (var f = 0; f < layer.FrameCount; f++)
+        {
+            var slots = 1 + layer.Frames[f].Hold;
+            if (f == frameIndex)
+                return timeSlot >= accumulated && timeSlot < accumulated + slots;
+            accumulated += slots;
+        }
+        return false;
     }
 
 
@@ -383,7 +568,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void UpdateSelection()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
 
         for (ushort p = (ushort)(shape.PathCount - 1); p < shape.PathCount; p--)
         {
@@ -530,25 +715,6 @@ public partial class SpriteEditor : DocumentEditor
         EditorUI.Popup(ElementId.LayerButton, Content);
     }
 
-    private static readonly ContainerStyle LayerPanelRoot = EditorStyle.Panel.Root with
-    {
-        AlignX = Align.Max,
-        AlignY = Align.Max,
-        Width = 200,
-        Height = Size.Fit,
-        MaxHeight = 400,
-        Margin = EdgeInsets.BottomRight(8),
-        Padding = EdgeInsets.All(EditorStyle.Panel.BorderWidth),
-        BorderRadius = EditorStyle.Panel.BorderRadius
-    };
-
-    private static readonly ContainerStyle LayerItemRow = new()
-    {
-        Height = 28f,
-        Padding = EdgeInsets.LeftRight(4),
-        Spacing = 2f
-    };
-
     private static readonly ContainerStyle LayerItemSelected = new()
     {
         Color = Color.FromRgba(0x4488FF40),
@@ -560,117 +726,6 @@ public partial class SpriteEditor : DocumentEditor
         Color = Color.FromRgba(0xFFFFFF10),
         BorderRadius = 4f
     };
-
-    private void LayerPanelUI()
-    {
-        using (UI.BeginColumn(ElementId.LayerPanel, LayerPanelRoot))
-        {
-            // Header row with title and add buttons
-            using (UI.BeginRow(new ContainerStyle { Height = 28f, Padding = EdgeInsets.LeftRight(8), Spacing = 2f }))
-            {
-                UI.Label("Layers", EditorStyle.Inspector.SectionLabel);
-                UI.Flex();
-
-                if (EditorUI.Button(ElementId.AddVectorLayerBtn, EditorAssets.Sprites.IconLayer, toolbar: true))
-                {
-                    Undo.Record(Document);
-                    Document.AddDocumentLayer(DocumentLayerType.Vector);
-                    MarkRasterDirty();
-                }
-
-                if (EditorUI.Button(ElementId.AddGeneratedLayerBtn, EditorAssets.Sprites.IconPlay, toolbar: true))
-                {
-                    Undo.Record(Document);
-                    Document.AddDocumentLayer(DocumentLayerType.Generated);
-                    MarkRasterDirty();
-                }
-            }
-
-            UI.Container(EditorStyle.Inspector.Separator);
-
-            // Layer list — top layer (highest index) displayed at top
-            var layers = Document.DocumentLayers;
-            for (int i = layers.Count - 1; i >= 0; i--)
-            {
-                var layer = layers[i];
-                var isSelected = Document.CurrentDocumentLayer == i;
-                var itemId = ElementId.LayerItem + i;
-
-                using (UI.BeginRow(itemId, LayerItemRow))
-                {
-                    // Background fill for selection/hover
-                    if (isSelected)
-                        UI.Container(LayerItemSelected);
-                    else if (UI.IsHovered())
-                        UI.Container(LayerItemHover);
-
-                    // Visibility toggle
-                    if (EditorUI.Button(ElementId.LayerVisibility + i, EditorAssets.Sprites.IconPreview,
-                        selected: layer.Visible, toolbar: true))
-                    {
-                        Undo.Record(Document);
-                        layer.Visible = !layer.Visible;
-                        Document.MarkModified();
-                        MarkRasterDirty();
-                    }
-
-                    // Lock toggle
-                    if (EditorUI.Button(ElementId.LayerLock + i, EditorAssets.Sprites.IconConstraint,
-                        selected: layer.Locked, toolbar: true))
-                    {
-                        Undo.Record(Document);
-                        layer.Locked = !layer.Locked;
-                        Document.MarkModified();
-                    }
-
-                    // Layer name — click to select
-                    using (UI.BeginContainer(new ContainerStyle { AlignY = Align.Center }))
-                    {
-                        var nameStyle = isSelected
-                            ? EditorStyle.Control.SelectedText
-                            : EditorStyle.Control.Text;
-                        UI.Label(layer.Name, nameStyle);
-                    }
-
-                    UI.Flex();
-
-                    // Sort order indicator
-                    if (layer.SortOrder != 0)
-                    {
-                        using (UI.BeginContainer(new ContainerStyle { AlignY = Align.Center }))
-                            UI.Label($"({layer.SortOrder})", EditorStyle.Inspector.Label);
-                    }
-
-                    // Generated layer indicator
-                    if (layer.Type == DocumentLayerType.Generated)
-                    {
-                        using (UI.BeginContainer(new ContainerStyle { AlignY = Align.Center }))
-                            UI.Label("G", EditorStyle.Inspector.Label);
-                    }
-
-                    // Click row to select layer
-                    if (UI.WasPressed())
-                        Document.CurrentDocumentLayer = i;
-                }
-            }
-
-            // Footer with delete button
-            if (layers.Count > 1)
-            {
-                UI.Container(EditorStyle.Inspector.Separator);
-                using (UI.BeginRow(new ContainerStyle { Height = 28f, Padding = EdgeInsets.LeftRight(8) }))
-                {
-                    UI.Flex();
-                    if (EditorUI.Button(ElementId.DeleteLayerBtn, EditorAssets.Sprites.IconDelete, toolbar: true))
-                    {
-                        Undo.Record(Document);
-                        Document.DeleteDocumentLayer(Document.CurrentDocumentLayer);
-                        MarkRasterDirty();
-                    }
-                }
-            }
-        }
-    }
 
     private void SortOrderPopupUI(int layerIndex)
     {
@@ -781,9 +836,9 @@ public partial class SpriteEditor : DocumentEditor
 
     private void UpdateRaster()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
-        shape.UpdateSamples();
-        shape.UpdateBounds();
+        // Update samples for the current editing layer
+        CurrentShape.UpdateSamples();
+        CurrentShape.UpdateBounds();
 
         Document.UpdateBounds();
         var bounds = Document.RasterBounds;
@@ -794,7 +849,9 @@ public partial class SpriteEditor : DocumentEditor
             return;
         }
 
-        UpdateMeshSDF(shape);
+        // Build composite shape for rendering
+        var composite = Document.GetCompositeShape(_currentTimeSlot);
+        UpdateMeshSDF(composite);
         _rasterDirty = false;
     }
 
@@ -803,12 +860,13 @@ public partial class SpriteEditor : DocumentEditor
         _rasterDirty = true;
     }
 
-    public void SetCurrentFrame(ushort frame)
+    public void SetCurrentTimeSlot(int timeSlot)
     {
-        var newFrame = (ushort)Math.Min(frame, Document.FrameCount - 1);
-        if (newFrame != _currentFrame)
+        var maxSlots = Document.GlobalTimeSlots;
+        var newSlot = Math.Clamp(timeSlot, 0, maxSlots - 1);
+        if (newSlot != _currentTimeSlot)
         {
-            _currentFrame = newFrame;
+            _currentTimeSlot = newSlot;
             MarkRasterDirty();
         }
     }
@@ -821,29 +879,51 @@ public partial class SpriteEditor : DocumentEditor
 
     private void NextFrame()
     {
-        if (Document.FrameCount == 0)
+        var layer = CurrentLayer;
+        if (layer.FrameCount <= 1)
             return;
 
-        _currentFrame = (ushort)((_currentFrame + 1) % Document.FrameCount);
+        // Navigate to the next keyframe in the current layer
+        var fi = CurrentLayerFrameIndex;
+        fi = (fi + 1) % layer.FrameCount;
+
+        // Compute time slot for this frame
+        _currentTimeSlot = TimeSlotForLayerFrame(Document.CurrentDocumentLayer, fi);
         MarkRasterDirty();
     }
 
     private void PreviousFrame()
     {
-        if (Document.FrameCount == 0)
+        var layer = CurrentLayer;
+        if (layer.FrameCount <= 1)
             return;
 
-        _currentFrame = _currentFrame == 0 ? (ushort)(Document.FrameCount - 1) : (ushort)(_currentFrame - 1);
+        var fi = CurrentLayerFrameIndex;
+        fi = fi == 0 ? layer.FrameCount - 1 : fi - 1;
+
+        _currentTimeSlot = TimeSlotForLayerFrame(Document.CurrentDocumentLayer, fi);
         MarkRasterDirty();
+    }
+
+    /// <summary>Compute the first time slot that corresponds to a given layer frame index.</summary>
+    private int TimeSlotForLayerFrame(int layerIndex, int frameIndex)
+    {
+        var layer = Document.DocumentLayers[layerIndex];
+        var slot = 0;
+        for (var f = 0; f < frameIndex && f < layer.FrameCount; f++)
+            slot += 1 + layer.Frames[f].Hold;
+        return slot;
     }
 
     private void InsertFrameBefore()
     {
         Undo.Record(Document);
-        var newFrame = Document.InsertFrame(_currentFrame);
+        var layer = CurrentLayer;
+        var fi = CurrentLayerFrameIndex;
+        var newFrame = layer.InsertFrame(fi);
         if (newFrame >= 0)
         {
-            _currentFrame = (ushort)newFrame;
+            _currentTimeSlot = TimeSlotForLayerFrame(Document.CurrentDocumentLayer, newFrame);
             MarkRasterDirty();
             Document.MarkModified();
             AtlasManager.UpdateSource(Document);
@@ -853,10 +933,12 @@ public partial class SpriteEditor : DocumentEditor
     private void InsertFrameAfter()
     {
         Undo.Record(Document);
-        var newFrame = Document.InsertFrame(_currentFrame + 1);
+        var layer = CurrentLayer;
+        var fi = CurrentLayerFrameIndex;
+        var newFrame = layer.InsertFrame(fi + 1);
         if (newFrame >= 0)
         {
-            _currentFrame = (ushort)newFrame;
+            _currentTimeSlot = TimeSlotForLayerFrame(Document.CurrentDocumentLayer, newFrame);
             MarkRasterDirty();
             Document.MarkModified();
             AtlasManager.UpdateSource(Document);
@@ -865,9 +947,11 @@ public partial class SpriteEditor : DocumentEditor
 
     private void DeleteCurrentFrame()
     {
-        if (Document.FrameCount <= 1) return;
+        var layer = CurrentLayer;
+        if (layer.FrameCount <= 1) return;
         Undo.Record(Document);
-        _currentFrame = (ushort)Document.DeleteFrame(_currentFrame);
+        var fi = layer.DeleteFrame(CurrentLayerFrameIndex);
+        _currentTimeSlot = TimeSlotForLayerFrame(Document.CurrentDocumentLayer, fi);
         MarkRasterDirty();
         Document.MarkModified();
         AtlasManager.UpdateSource(Document);
@@ -876,23 +960,24 @@ public partial class SpriteEditor : DocumentEditor
     private void AddHoldFrame()
     {
         Undo.Record(Document);
-        Document.Frames[_currentFrame].Hold++;
+        CurrentLayer.Frames[CurrentLayerFrameIndex].Hold++;
         Document.MarkModified();
     }
 
     private void RemoveHoldFrame()
     {
-        if (Document.Frames[_currentFrame].Hold <= 0)
+        var frame = CurrentLayer.Frames[CurrentLayerFrameIndex];
+        if (frame.Hold <= 0)
             return;
 
         Undo.Record(Document);
-        Document.Frames[_currentFrame].Hold = Math.Max(0, Document.Frames[_currentFrame].Hold - 1);
+        frame.Hold = Math.Max(0, frame.Hold - 1);
         Document.MarkModified();
     }
 
     private void PreviewFillColor(Color32 color)
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         for (ushort p = 0; p < shape.PathCount; p++)
         {
             ref readonly var path = ref shape.GetPath(p);
@@ -904,7 +989,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void PreviewStrokeColor(Color32 color)
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         for (ushort p = 0; p < shape.PathCount; p++)
         {
             ref readonly var path = ref shape.GetPath(p);
@@ -920,7 +1005,7 @@ public partial class SpriteEditor : DocumentEditor
 
         Undo.Record(Document);
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         for (ushort p = 0; p < shape.PathCount; p++)
         {
             ref readonly var path = ref shape.GetPath(p);
@@ -938,7 +1023,7 @@ public partial class SpriteEditor : DocumentEditor
 
         Undo.Record(Document);
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         for (ushort p = 0; p < shape.PathCount; p++)
         {
             ref readonly var path = ref shape.GetPath(p);
@@ -956,7 +1041,7 @@ public partial class SpriteEditor : DocumentEditor
 
         Undo.Record(Document);
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         for (ushort p = 0; p < shape.PathCount; p++)
         {
             ref readonly var path = ref shape.GetPath(p);
@@ -978,7 +1063,7 @@ public partial class SpriteEditor : DocumentEditor
             _ => PathOperation.Normal,
         };
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var anySelected = false;
         for (ushort p = 0; p < shape.PathCount; p++)
         {
@@ -1036,7 +1121,7 @@ public partial class SpriteEditor : DocumentEditor
     {
         Undo.Record(Document);
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         for (ushort p = 0; p < shape.PathCount; p++)
         {
             ref readonly var path = ref shape.GetPath(p);
@@ -1052,7 +1137,7 @@ public partial class SpriteEditor : DocumentEditor
     public void DeleteSelected()
     {
         Undo.Record(Document);
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         shape.DeleteAnchors();
         Document.MarkModified();
         Document.UpdateBounds();
@@ -1061,7 +1146,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void DuplicateSelected()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         if (!shape.HasSelection())
             return;
 
@@ -1114,7 +1199,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void CopySelected()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         if (!shape.HasSelection())
             return;
 
@@ -1133,7 +1218,7 @@ public partial class SpriteEditor : DocumentEditor
 
         Undo.Record(Document);
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         shape.ClearSelection();
 
         clipboardData.PasteInto(shape);
@@ -1146,13 +1231,11 @@ public partial class SpriteEditor : DocumentEditor
 
     private void CenterShape()
     {
-        if (Document.FrameCount == 0)
-            return;
-
         Undo.Record(Document);
 
-        for (ushort fi = 0; fi < Document.FrameCount; fi++)
-            Document.Frames[fi].Shape.CenterOnOrigin();
+        foreach (var layer in Document.DocumentLayers)
+            for (ushort fi = 0; fi < layer.FrameCount; fi++)
+                layer.Frames[fi].Shape.CenterOnOrigin();
 
         Document.UpdateBounds();
         Document.MarkModified();
@@ -1162,7 +1245,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void FlipHorizontal()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var pivot = shape.GetSelectedPathsCenter();
         if (!pivot.HasValue)
             return;
@@ -1178,7 +1261,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void FlipVertical()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var pivot = shape.GetSelectedPathsCenter();
         if (!pivot.HasValue)
             return;
@@ -1194,7 +1277,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void MovePathUp()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         if (!shape.HasSelectedPaths())
             return;
 
@@ -1208,7 +1291,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void MovePathDown()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         if (!shape.HasSelectedPaths())
             return;
 
@@ -1222,7 +1305,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void SelectAll()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         for (ushort i = 0; i < shape.AnchorCount; i++)
             shape.SetAnchorSelected(i, true);
         UpdateSelection();
@@ -1230,17 +1313,17 @@ public partial class SpriteEditor : DocumentEditor
 
     private void UpdateAnimation()
     {
-        if (!_isPlaying || Document.FrameCount <= 1)
+        if (!_isPlaying || Document.GlobalTimeSlots <= 1)
             return;
 
         _playTimer += Time.DeltaTime;
-        var frame = Document.GetFrame(_currentFrame);
-        var holdTime = Math.Max(1, frame.Hold) / 12f;
+        var slotDuration = 1f / 12f;
 
-        if (_playTimer >= holdTime)
+        if (_playTimer >= slotDuration)
         {
             _playTimer = 0;
-            NextFrame();
+            _currentTimeSlot = (_currentTimeSlot + 1) % Document.GlobalTimeSlots;
+            MarkRasterDirty();
         }
     }
 
@@ -1254,7 +1337,7 @@ public partial class SpriteEditor : DocumentEditor
     {
         Matrix3x2.Invert(Document.Transform, out var invTransform);
         var localMousePos = Vector2.Transform(Workspace.MouseWorldPosition, invTransform);
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var shift = Input.IsShiftDown(InputScope.All);
 
         Span<Shape.HitResult> hits = stackalloc Shape.HitResult[Shape.MaxAnchors];
@@ -1405,7 +1488,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void BeginMoveTool()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         if (!shape.HasSelection())
             return;
 
@@ -1440,7 +1523,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void BeginRotateTool()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var localPivot = GetLocalTransformPivot(shape);
         if (!localPivot.HasValue)
             return;
@@ -1492,7 +1575,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void OnScale()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var localPivot = GetLocalTransformPivot(shape);
         if (!localPivot.HasValue)
             return;
@@ -1554,7 +1637,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void BeginCurveTool()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
 
         var hasSelectedSegment = false;
         for (ushort i = 0; i < shape.AnchorCount; i++)
@@ -1595,7 +1678,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void CommitBoxSelectAnchors(Rect bounds)
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var shift = Input.IsShiftDown(InputScope.All);
 
         if (!shift)
@@ -1623,7 +1706,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void SelectAnchor(ushort anchorIndex, bool toggle)
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
 
         if (toggle)
         {
@@ -1642,7 +1725,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void SelectSegment(ushort anchorIndex, bool toggle)
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var pathIdx = FindPathForAnchor(shape, anchorIndex);
         if (pathIdx == ushort.MaxValue)
             return;
@@ -1671,7 +1754,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void SelectPath(ushort pathIndex, bool toggle)
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         var path = shape.GetPath(pathIndex);
 
         if (toggle)
@@ -1701,7 +1784,7 @@ public partial class SpriteEditor : DocumentEditor
 
     private void SplitSegment(ushort anchorIndex)
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         shape.ClearSelection();
         shape.SplitSegment(anchorIndex);
 
@@ -1716,13 +1799,13 @@ public partial class SpriteEditor : DocumentEditor
 
     private void BeginPenTool()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         Workspace.BeginTool(new PenTool(this, shape, Document.CurrentFillColor, Document.CurrentOperation));
     }
 
     private void BeginKnifeTool()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         Workspace.BeginTool(new KnifeTool(this, shape, commit: () =>
         {
             shape.UpdateSamples();
@@ -1733,20 +1816,20 @@ public partial class SpriteEditor : DocumentEditor
 
     private void BeginRectangleTool()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         Workspace.BeginTool(new ShapeTool(this, shape, Document.CurrentFillColor, ShapeType.Rectangle, Document.CurrentOperation));
     }
 
     private void BeginCircleTool()
     {
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         Workspace.BeginTool(new ShapeTool(this, shape, Document.CurrentFillColor, ShapeType.Circle, Document.CurrentOperation));
     }
 
     private void InsertAnchorAtHover()
     {
         Matrix3x2.Invert(Document.Transform, out var invTransform);
-        var hit = Document.GetFrame(_currentFrame).Shape.HitTest(
+        var hit = CurrentShape.HitTest(
             Vector2.Transform(Workspace.MouseWorldPosition, invTransform));
 
         if (hit.SegmentIndex == ushort.MaxValue)
@@ -1754,7 +1837,7 @@ public partial class SpriteEditor : DocumentEditor
 
         Undo.Record(Document);
 
-        var shape = Document.GetFrame(_currentFrame).Shape;
+        var shape = CurrentShape;
         shape.ClearSelection();
         shape.SplitSegmentAtPoint(hit.SegmentIndex, hit.SegmentPosition);
 
@@ -1997,8 +2080,9 @@ public partial class SpriteEditor : DocumentEditor
 
     private void ClearSelection()
     {
-        for (int i=0; i<Document.FrameCount; i++)
-            Document.GetFrame((ushort)i).Shape.ClearSelection();
+        foreach (var layer in Document.DocumentLayers)
+            for (ushort fi = 0; fi < layer.FrameCount; fi++)
+                layer.Frames[fi].Shape.ClearSelection();
     }
 
     #endregion

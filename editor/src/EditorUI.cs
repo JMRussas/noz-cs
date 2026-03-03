@@ -13,7 +13,7 @@ internal static partial class EditorUI
     private static partial class ElementId { }
 
     private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
-    private static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
+    internal static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
     private static readonly string[] SizeStrings = [.. Enumerable.Range(0, 10).Select(i => i.ToString())];
     private static readonly float[] OpacityValues = [0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f];
 
