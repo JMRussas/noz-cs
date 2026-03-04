@@ -20,6 +20,9 @@ public abstract class Document : IDisposable
     public Vector2 SavedPosition { get; set; }
     public Rect Bounds { get; set; } = new(-0.5f, -0.5f, 1f, 1f);
 
+    public int Version { get; private set; }
+    public int SavedVersion { get; private set; }
+
     public Matrix3x2 Transform => Matrix3x2.CreateTranslation(Position);
     
     public bool IsHiddenInWorkspace { get; set; }
@@ -28,8 +31,7 @@ public abstract class Document : IDisposable
     public bool IsVisible { get; set; } = true;
     public bool IsSelected { get; set; }
     public bool IsEditing { get; set; }
-    public bool IsModified { get; private set; }
-    public bool IsMetaModified { get; private set; }
+    public bool IsModified => Version != SavedVersion;
     public bool IsClipped { get; set; }
     public bool Loaded { get; set; }
     public bool PostLoaded { get; set; }
@@ -70,7 +72,6 @@ public abstract class Document : IDisposable
             props.SetString("editor", "collection", CollectionId);
         SaveMetadata(props);
         props.Save(metaPath);
-        IsMetaModified = false;
     }
 
     public void LoadMetadata()
@@ -80,13 +81,12 @@ public abstract class Document : IDisposable
         Position = props.GetVector2("editor", "position", default);
         var collectionId = props.GetString("editor", "collection", "");
         CollectionId = CollectionManager.GetIdOrDefault(collectionId);
-        LoadMetadata(props);
-        IsMetaModified = false;
+        LoadMetadata(props);        
     }
 
     public void Save() 
     {
-        IsModified = false;
+        SavedVersion = Version;
 
         if (!CanSave)
             return;
@@ -95,14 +95,9 @@ public abstract class Document : IDisposable
         Save(sw);
     }
 
-    public void MarkModified()
+    public void IncrementVersion()
     {
-        IsModified = true;
-    }
-
-    public void MarkMetaModified()
-    {
-        IsMetaModified = true;
+        Version++;
     }
 
     public virtual void Dispose () 

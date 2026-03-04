@@ -54,8 +54,8 @@ internal partial class TextureEditor : DocumentEditor
                 var isSprite = Document.IsSprite;
                 if (EditorUI.ToggleField(NextFieldId(), "Sprite", ref isSprite))
                 {
+                    Undo.Record(Document);
                     Document.IsSprite = isSprite;
-                    Document.MarkMetaModified();
                     AssetManifest.IsModified = true;
 
                     if (isSprite)
@@ -67,8 +67,8 @@ internal partial class TextureEditor : DocumentEditor
                 var isReference = Document.IsEditorOnly;
                 if (EditorUI.ToggleField(NextFieldId(), "Reference", ref isReference))
                 {
+                    Undo.Record(Document);
                     Document.IsEditorOnly = isReference;
-                    Document.MarkMetaModified();
                     AssetManifest.IsModified = true;
                 }
             }
@@ -96,8 +96,7 @@ internal partial class TextureEditor : DocumentEditor
                 Document.UpdateBounds();
             },
             commit: _ =>
-            {
-                Document.MarkMetaModified();
+            {                
             },
             cancel: Undo.Cancel
         ));

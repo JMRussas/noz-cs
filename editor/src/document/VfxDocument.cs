@@ -75,7 +75,7 @@ public class VfxDocument : Document
 
     public void ApplyChanges()
     {
-        MarkModified();
+        IncrementVersion();
         BuildVfx();
 
         if (_playing && _vfx != null)

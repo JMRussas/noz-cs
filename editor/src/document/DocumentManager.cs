@@ -146,7 +146,7 @@ public static class DocumentManager
         if (position.HasValue)
         {
             doc.Position = position.Value;
-            doc.MarkMetaModified();
+            doc.IncrementVersion();
         }
 
         doc.PostLoad();
@@ -224,18 +224,15 @@ public static class DocumentManager
         var count = 0;
         foreach (var doc in _documents)
         {
-            if (doc.IsModified || doc.IsMetaModified)
-            {
-                if (doc.IsVisible)
-                    count++;
-                doc.SilentImport = true;
-            }
+            if (!doc.IsModified)
+                continue;
 
-            if (doc.IsModified)
-                doc.Save();
+            if (doc.IsVisible)
+                count++;
 
-            if (doc.IsMetaModified)
-                doc.SaveMetadata();
+            doc.SilentImport = true;
+            doc.Save();
+            doc.SaveMetadata();
         }
 
         if (count > 0)
@@ -272,7 +269,7 @@ public static class DocumentManager
 
         doc.Path = Path.GetFullPath(newPath).ToLowerInvariant();
         doc.Name = canonicalName;
-        doc.MarkModified();
+        doc.IncrementVersion();
 
         AssetManifest.IsModified = true;
 

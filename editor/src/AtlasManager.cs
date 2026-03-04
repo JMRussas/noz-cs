@@ -174,7 +174,7 @@ public static class AtlasManager
         {
             if (_atlases[i].TryAdd(source))
             {
-                _atlases[i].MarkModified();
+                _atlases[i].IncrementVersion();
                 return;
             }
         }
@@ -188,7 +188,7 @@ public static class AtlasManager
         if (!atlas.TryAdd(source))
             Log.Warning($"Add: failed to add '{source.Name}' to new atlas");
         else
-            atlas.MarkModified();
+            atlas.IncrementVersion();
     }
 
     public static void Rebuild()

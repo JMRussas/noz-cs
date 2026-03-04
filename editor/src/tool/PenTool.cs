@@ -325,9 +325,8 @@ public class PenTool : Tool
         _shape.UpdateSamples();
         _shape.UpdateBounds();
 
-        _editor.Document.MarkModified();
+        _editor.Document.IncrementVersion();
         _editor.Document.UpdateBounds();
-        _editor.MarkRasterDirty();
 
         Finish();
     }

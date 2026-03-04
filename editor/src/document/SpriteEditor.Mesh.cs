@@ -5,7 +5,6 @@
 //  triangle meshes for real-time editing feedback.
 //
 
-using System.Runtime.InteropServices;
 using Clipper2Lib;
 using LibTessDotNet;
 using NoZ.Editor.Msdf;
@@ -22,6 +21,7 @@ public partial class SpriteEditor
 
     private readonly MeshVertex[] _meshVertices = new MeshVertex[MaxMeshVertices];
     private readonly ushort[] _meshIndices = new ushort[MaxMeshIndices];
+    private int _meshVersion = -1;
 
     private struct MeshSlotData
     {
@@ -36,6 +36,9 @@ public partial class SpriteEditor
 
     private void UpdateMesh()
     {
+        if (_meshVersion == Document.Version) return;
+
+        _meshVersion = Document.Version;
         _meshSlots.Clear();
 
         var slots = Document.GetMeshSlots((ushort)_currentTimeSlot);
@@ -43,7 +46,7 @@ public partial class SpriteEditor
 
         var vertexOffset = 0;
         var indexOffset = 0;
-        var layers = Document.DocumentLayers;
+        var layers = Document.Layers;
 
         for (int i = 0; i < slots.Count; i++)
         {

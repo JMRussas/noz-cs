@@ -152,7 +152,7 @@ internal class AnimationDocument : Document
             if (boneIndex >= 0 && boneIndex < doc.BoneCount && doc.Bones[boneIndex].Name == oldName)
             {
                 doc.Bones[boneIndex].Name = newName;
-                doc.MarkModified();
+                doc.IncrementVersion();
             }
         }
     }
@@ -175,7 +175,7 @@ internal class AnimationDocument : Document
                         doc.Frames[f].Transforms[i] = doc.Frames[f].Transforms[i + 1];
                 }
                 doc.BoneCount--;
-                doc.MarkModified();
+                doc.IncrementVersion();
                 Notifications.Add($"Animation '{doc.Name}' updated (bone '{removedName}' removed)");
             }
 
@@ -430,11 +430,12 @@ internal class AnimationDocument : Document
 
     public void SetLooping(bool looping)
     {
+        Undo.Record(this);
+
         if (looping)
             Flags |= AnimationFlags.Looping;
         else
-            Flags &= ~AnimationFlags.Looping;
-        MarkMetaModified();
+            Flags &= ~AnimationFlags.Looping;        
     }
 
     public int HitTestBones(
@@ -1033,6 +1034,6 @@ internal class AnimationDocument : Document
         }
         UpdateTransforms();
         UpdateBounds();
-        MarkMetaModified();
+        IncrementVersion();
     }
 }

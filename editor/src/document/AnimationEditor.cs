@@ -111,7 +111,7 @@ internal partial class AnimationEditor : DocumentEditor
                 {
                     EditorUI.ClosePopup();
                     Undo.Record(Document);
-                    Document.MarkModified();
+                    Document.IncrementVersion();
                     Document.SetSkeleton(doc as SkeletonDocument);
                 }
             }
@@ -183,7 +183,6 @@ internal partial class AnimationEditor : DocumentEditor
             if (EditorUI.Button(ElementId.LoopButton, EditorAssets.Sprites.IconLoop, selected: Document.IsLooping, toolbar: true))
             {
                 Undo.Record(Document);
-                Document.MarkMetaModified();
                 Document.IsLooping = !Document.IsLooping;
             }
 
@@ -403,7 +402,7 @@ internal partial class AnimationEditor : DocumentEditor
             commit: _ =>
             {
                 Document.UpdateTransforms();
-                Document.MarkModified();
+                Document.IncrementVersion();
             },
             cancel: () =>
             {
@@ -475,7 +474,7 @@ internal partial class AnimationEditor : DocumentEditor
             commit: _ =>
             {
                 Document.UpdateTransforms();
-                Document.MarkModified();
+                Document.IncrementVersion();
             },
             cancel: () =>
             {
@@ -524,7 +523,7 @@ internal partial class AnimationEditor : DocumentEditor
             Document.GetFrameTransform(boneIndex, Document.CurrentFrame).Rotation = 0;
         }
 
-        Document.MarkModified();
+        Document.IncrementVersion();
         Document.UpdateTransforms();
     }
 
@@ -547,7 +546,7 @@ internal partial class AnimationEditor : DocumentEditor
         }
 
         Document.UpdateTransforms();
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void SelectAll()
@@ -597,7 +596,7 @@ internal partial class AnimationEditor : DocumentEditor
         Undo.Record(Document);
         Document.CurrentFrame = Document.InsertFrame(Document.CurrentFrame);
         Document.UpdateTransforms();
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void InsertFrameAfter()
@@ -605,7 +604,7 @@ internal partial class AnimationEditor : DocumentEditor
         Undo.Record(Document);
         Document.CurrentFrame = Document.InsertFrame(Document.CurrentFrame + 1);
         Document.UpdateTransforms();
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void InsertFrameAfterLerp()
@@ -632,7 +631,7 @@ internal partial class AnimationEditor : DocumentEditor
 
         Document.CurrentFrame = newFrame;
         Document.UpdateTransforms();
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void DeleteFrame()
@@ -640,14 +639,14 @@ internal partial class AnimationEditor : DocumentEditor
         Undo.Record(Document);
         Document.CurrentFrame = Document.DeleteFrame(Document.CurrentFrame);
         Document.UpdateTransforms();
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void AddHoldFrame()
     {
         Undo.Record(Document);
         Document.Frames[Document.CurrentFrame].Hold++;
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void RemoveHoldFrame()
@@ -657,7 +656,7 @@ internal partial class AnimationEditor : DocumentEditor
 
         Undo.Record(Document);
         Document.Frames[Document.CurrentFrame].Hold = Math.Max(0, Document.Frames[Document.CurrentFrame].Hold - 1);
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void CopyKeys()
@@ -683,7 +682,7 @@ internal partial class AnimationEditor : DocumentEditor
             Document.Frames[Document.CurrentFrame].Transforms[boneIndex] = frameData.Transforms[boneIndex];
         }
 
-        Document.MarkModified();
+        Document.IncrementVersion();
         Document.UpdateTransforms();
     }
 
@@ -696,7 +695,7 @@ internal partial class AnimationEditor : DocumentEditor
     {
         Undo.Record(Document);
         Document.SetLooping(!Document.IsLooping);
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private void IncreasePlaySpeed()
@@ -752,7 +751,7 @@ internal partial class AnimationEditor : DocumentEditor
             Document.UpdateTransforms();
         }
 
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     private static float GetRotation(Matrix3x2 transform)

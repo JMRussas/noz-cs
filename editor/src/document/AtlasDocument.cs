@@ -114,7 +114,7 @@ internal class AtlasDocument : Document
             size.Y = atlasSize;
             PixelsPerUnit = EditorApplication.Config.PixelsPerUnit;
             Padding = configPadding;
-            MarkModified();
+            IncrementVersion();
         }
 
         _image = new PixelData<Color32>(size.X, size.Y);
@@ -218,7 +218,7 @@ internal class AtlasDocument : Document
                 if (frameSize.X > rect.Rect.Size.X || frameSize.Y > rect.Rect.Size.Y)
                 {
                     rect.Name = "";
-                    MarkModified();
+                    IncrementVersion();
                     continue;
                 }
             }
@@ -235,7 +235,7 @@ internal class AtlasDocument : Document
             {
                 Remove(source);
                 source.Atlas = null;
-                MarkModified();
+                IncrementVersion();
                 continue;
             }
             source.UpdateAtlasUVs(this, Rects, Padding);
@@ -381,7 +381,7 @@ internal class AtlasDocument : Document
         }
 
         source.UpdateAtlasUVs(this, Rects, Padding);
-        MarkModified();
+        IncrementVersion();
         return true;
     }
 
@@ -483,7 +483,7 @@ internal class AtlasDocument : Document
 
         // Update texture
         UpdateInternal(true);
-        MarkModified();
+        IncrementVersion();
     }
 
     public override void Draw()

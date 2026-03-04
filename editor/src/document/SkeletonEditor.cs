@@ -147,7 +147,7 @@ internal partial class SkeletonEditor : DocumentEditor
             }
         }
 
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     public override void UpdateUI()
@@ -409,7 +409,7 @@ internal partial class SkeletonEditor : DocumentEditor
 
         Workspace.BeginTool(new MoveTool(
             update: UpdateMoveTool,
-            commit: _ => { Document.MarkModified(); Document.NotifyTransformsChanged(); },
+            commit: _ => { Document.IncrementVersion(); Document.NotifyTransformsChanged(); },
             cancel: Undo.Cancel
         ));
     }
@@ -511,7 +511,7 @@ internal partial class SkeletonEditor : DocumentEditor
             _selectionCenterWorld,
             worldOrigin,
             update: UpdateScaleTool,
-            commit: _ => { Document.MarkModified(); Document.NotifyTransformsChanged(); },
+            commit: _ => { Document.IncrementVersion(); Document.NotifyTransformsChanged(); },
             cancel: Undo.Cancel
         ));
     }
@@ -627,7 +627,7 @@ internal partial class SkeletonEditor : DocumentEditor
         Undo.EndGroup();
 
         ClearSelection();
-        Document.MarkModified();
+        Document.IncrementVersion();
     }
 
     #endregion
@@ -654,7 +654,7 @@ internal partial class SkeletonEditor : DocumentEditor
                 Undo.Record(Document);
                 bone.Name = newName;
                 Document.NotifyBoneRenamed(boneIndex, oldName, newName);
-                Document.MarkModified();
+                Document.IncrementVersion();
                 Notifications.Add($"renamed bone to '{newName}'");
             }
         ));

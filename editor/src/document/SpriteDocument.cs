@@ -2,6 +2,7 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Data.Common;
 using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
@@ -214,7 +215,7 @@ public class SpriteDocument : Document, ISpriteSource
     public int CurrentDocumentLayer;
     public PathOperation CurrentOperation;
 
-    public IReadOnlyList<DocumentLayer> DocumentLayers => _documentLayers;
+    public IReadOnlyList<DocumentLayer> Layers => _documentLayers;
 
     /// <summary>Total time slots across the longest layer.</summary>
     public int GlobalTimeSlots
@@ -296,7 +297,7 @@ public class SpriteDocument : Document, ISpriteSource
 
         _documentLayers.Add(new DocumentLayer { Name = name, Generation = generated ? new GenerationConfig() : null });
         CurrentDocumentLayer = _documentLayers.Count - 1;
-        MarkModified();
+        IncrementVersion();
         return CurrentDocumentLayer;
     }
 
@@ -310,7 +311,7 @@ public class SpriteDocument : Document, ISpriteSource
         if (CurrentDocumentLayer >= _documentLayers.Count)
             CurrentDocumentLayer = _documentLayers.Count - 1;
 
-        MarkModified();
+        IncrementVersion();
         UpdateBounds();
     }
 
@@ -333,7 +334,7 @@ public class SpriteDocument : Document, ISpriteSource
         else if (fromIndex > toIndex && CurrentDocumentLayer >= toIndex && CurrentDocumentLayer < fromIndex)
             CurrentDocumentLayer++;
 
-        MarkModified();
+        IncrementVersion();
         UpdateBounds();
     }
 
@@ -399,7 +400,7 @@ public class SpriteDocument : Document, ISpriteSource
             }
 
             if (modified)
-                doc.MarkModified();
+                doc.IncrementVersion();
         }
     }
 
@@ -424,7 +425,7 @@ public class SpriteDocument : Document, ISpriteSource
 
             if (modified)
             {
-                doc.MarkModified();
+                doc.IncrementVersion();
                 Notifications.Add($"Sprite '{doc.Name}' bone bindings updated (bone '{removedName}' deleted)");
             }
         }
@@ -1286,22 +1287,6 @@ public class SpriteDocument : Document, ISpriteSource
         LoadGeneratedTextures();
     }
 
-    public void SetSkeletonBinding(SkeletonDocument? skeleton)
-    {
-        Binding.Set(skeleton);
-        MarkSpriteDirty();
-        MarkMetaModified();
-    }
-
-    public void ClearSkeletonBinding()
-    {
-        var skeleton = Binding.Skeleton;
-        Binding.Clear();
-        MarkSpriteDirty();
-        skeleton?.UpdateSprites();
-        MarkMetaModified();
-    }
-
     #region AI Generation
 
     private string GetGeneratedImagePath(int layerIndex) => Path + $".layer{layerIndex}.gen";
@@ -1614,10 +1599,7 @@ public class SpriteDocument : Document, ISpriteSource
 
                 // Update seed if it was random
                 if (gen.Seed == 0 && response.Seed != 0)
-                {
                     gen.Seed = response.Seed;
-                    MarkMetaModified();
-                }
 
                 Log.Info($"Generation complete for '{Name}' ({response.Width}x{response.Height}, seed={response.Seed})");
 

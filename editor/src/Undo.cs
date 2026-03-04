@@ -50,6 +50,8 @@ public static class Undo
             GroupId = _currentGroupId
         });
 
+        doc.IncrementVersion();
+
         ClearRedoStack();
     }
 
@@ -85,7 +87,7 @@ public static class Undo
                 GroupId = item.GroupId
             });
 
-            doc.MarkModified();
+            doc.IncrementVersion();
             _pendingCallbacks.Add(doc);
 
             var itemGroupId = item.GroupId;
@@ -133,7 +135,7 @@ public static class Undo
                 GroupId = item.GroupId
             });
 
-            doc.MarkModified();
+            doc.IncrementVersion();
             _pendingCallbacks.Add(doc);
 
             var itemGroupId = item.GroupId;
@@ -166,7 +168,7 @@ public static class Undo
             var doc = item.Doc;
             RestoreDocument(doc, item.Snapshot);
 
-            doc.MarkModified();
+            doc.IncrementVersion();
             _pendingCallbacks.Add(doc);
 
             var itemGroupId = item.GroupId;

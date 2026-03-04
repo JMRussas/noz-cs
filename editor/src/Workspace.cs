@@ -140,7 +140,7 @@ public static partial class Workspace
         if (doc != null)
         {
             doc.CollectionId = CollectionManager.GetVisibleId();
-            doc.MarkMetaModified();
+            doc.IncrementVersion();
             ClearSelection();
             SetSelected(doc, true);
             Notifications.Add($"created {(Asset.GetDef(assetType)?.Name ?? assetType.ToString()).ToLowerInvariant()} '{doc.Name}'");
@@ -568,13 +568,6 @@ public static partial class Workspace
             },
             commit: _ =>
             {
-                foreach (var doc in DocumentManager.Documents)
-                {
-                    if (!doc.IsSelected)
-                        continue;
-                    if (doc.Position != doc.SavedPosition)
-                        doc.MarkMetaModified();
-                }
             },
             cancel: () =>
             {
@@ -1000,8 +993,8 @@ public static partial class Workspace
         {
             if (!doc.IsSelected || doc.CollectionId == collection.Id)
                 continue;
+            Undo.Record(doc);
             doc.CollectionId = collection.Id;
-            doc.MarkMetaModified();
             count++;
         }
 
