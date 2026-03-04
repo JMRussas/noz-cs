@@ -60,7 +60,50 @@ public static class EditorStyle
 
     public static class Palette
     {
-        public static readonly Color Panel = Color.FromRgb(0x2C2C2C);
+        public static readonly Color Workspace = Color.FromRgb(0x333333);
+        public static readonly Color Grid = Color.FromRgb(0x434343);
+
+        public static readonly Color Panel = Color.FromRgb(0x1A191C);
+
+        public static readonly Color IconPrimary = Color.FromRgb(0xCCCCCC);
+        public static readonly Color IconSecondary = Color.FromRgb(0x757575);
+
+        public static readonly Color TextPrimary = Color.FromRgb(0xCCCCCC);
+        public static readonly Color TextSecondary = Color.FromRgb(0x757575);
+        public static readonly Color TextDisabled = Color.FromRgb(0x615F62);
+
+        public static readonly Color ControlBorder = Color.FromRgb(0x666666);
+        public static readonly Color ControlChecked = Color.FromRgb(0x333333);
+    }
+
+    // :icon
+    public static class Icon
+    {
+        public static readonly ImageStyle Primary = new()
+        {
+            Color = Palette.IconPrimary,
+            Size = 20.0f,
+            Align = Align.Center
+        };
+
+        public static readonly ImageStyle Secondary = Primary with { Color = Palette.IconSecondary };
+
+        public static readonly ImageStyle SecondarySmall = Secondary with { Size = 12.0f };
+    }
+
+    // :text
+    public static class Text
+    {
+        public readonly static LabelStyle Primary = new()
+        {
+            FontSize = 16.0f,
+            Color = Palette.TextPrimary,
+            AlignX = Align.Min,
+            AlignY = Align.Center
+        };
+
+        public readonly static LabelStyle Secondary = Primary with { Color = Palette.TextSecondary };
+        public readonly static LabelStyle Disabled = Primary with { Color = Palette.TextDisabled };
     }
 
     // :workspace
@@ -89,6 +132,7 @@ public static class EditorStyle
     public static class Control
     {
         public const float TextSize = 16.0f;
+        public const float IconSize = 20.0f;
         public const float Height = 40.0f;
         public const float BorderRadius = 10.0f;
         public const float Spacing = 5.0f;
@@ -97,7 +141,16 @@ public static class EditorStyle
 
         public static readonly ContainerStyle Root = new()
         {
-            Height = Height
+            Height = Height,
+            Spacing = Spacing,
+            Padding = EdgeInsets.Symmetric(ContentPadding, ContentPadding * 2)
+        };
+
+        public static readonly ContainerStyle RootHovered = Root with
+        {
+            BorderWidth = 2,
+            BorderColor = Palette.ControlBorder,
+            BorderRadius = BorderRadius
         };
 
         public static readonly ContainerStyle Fill = new()
@@ -144,9 +197,12 @@ public static class EditorStyle
         public static readonly ImageStyle Icon = new()
         {
             Color = Color.FromRgb(0xebebeb),
+            Size = IconSize,
             AlignX = Align.Center,
             AlignY = Align.Center,
         };
+
+        public static readonly ImageStyle IconSecondary = Icon with { Color = Palette.IconSecondary };
 
         public static readonly ImageStyle SelectedIcon = Icon with { Color = Color.FromRgb(0xffffff) };
         public static readonly ImageStyle DisabledIcon = Icon with { Color = Color.FromRgb(0x3e3e3e) };
@@ -514,11 +570,13 @@ public static class EditorStyle
         {
             Width = 300.0f,
             Color = Palette.Panel,
+            Padding = 8
         };
-
 
         public static readonly ContainerStyle Section = new()
         {            
+            MinHeight = Control.Height,
+            Height = Size.Fit
         };
 
         public static readonly LabelStyle SectionText = Label with
@@ -530,6 +588,11 @@ public static class EditorStyle
             Height = Control.Height,
         };
 
+        public static readonly LabelStyle PropertyName = Text.Secondary with
+        {
+            FontSize = Text.Secondary.FontSize * 0.8f
+        };
+
         public static readonly ContainerStyle Content = new()
         {
             Spacing = 2f,
@@ -539,9 +602,9 @@ public static class EditorStyle
         public static readonly ContainerStyle Row = new()
         {
             Height = Size.Fit,
-            MinHeight = RowHeight,
+            MinHeight = Control.Height,
             Padding = EdgeInsets.LeftRight(4),
-            Spacing = 4f
+            Spacing = Control.Spacing
         };
 
         public static readonly ContainerStyle FieldContainer = new()
@@ -608,6 +671,27 @@ public static class EditorStyle
             Color = Color.FromRgb(0xebebeb),
             AlignX = Align.Center,
             AlignY = Align.Center
+        };
+
+
+
+
+        public static readonly ContainerStyle ToggleButton = Control.Root with
+        {
+            Padding = 4,
+            Size = Control.Height
+        };
+
+        public static readonly ContainerStyle ToggleButtonHovered = Control.RootHovered with
+        {
+            Padding = 4,
+            Size = Control.Height
+        };
+
+        public static readonly ContainerStyle ToggleButtonChecked = new ContainerStyle()
+        {
+            Color = Palette.ControlChecked,
+            BorderRadius = 6
         };
     }
 

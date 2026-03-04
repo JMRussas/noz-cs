@@ -1,21 +1,22 @@
 
+layer "Layer 1"
 path
-fill 0
+fill #FFFFFF
 anchor -0.1875 -0.1015625
 anchor -0.1875 0.1796875
 anchor 0.1875 0.1796875
 anchor 0.1875 -0.1015625
 
 path
-fill 0
+fill #FFFFFF
 anchor -0.2109375 -0.1796875
 anchor -0.2109375 -0.1171875
 anchor 0.2109375 -0.1171875
 anchor 0.2109375 -0.1796875
 
 path
-fill 0
 subtract true
+fill #FFFFFF
 anchor -0.046875 -0.0546875
 anchor -0.046875 -0.015625
 anchor 0.0390625 -0.015625

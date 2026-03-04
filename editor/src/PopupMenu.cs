@@ -55,9 +55,8 @@ public static partial class PopupMenu
 
     private static int _id;
     private static bool _visible;
-    private static Vector2 _position;
     private static Vector2 _worldPosition;
-    private static PopupMenuItem[]? _items;
+    private static PopupMenuItem[] _items = new PopupMenuItem[MaxItems];
     private static int _itemCount;
     private static string? _title;
     private static InputScope _scope;
@@ -74,14 +73,13 @@ public static partial class PopupMenu
     public static void Shutdown()
     {
         _visible = false;
-        _items = null;
         _itemCount = 0;
         _title = null;
     }
 
     public static void Open(
         int id,
-        PopupMenuItem[] items,
+        ReadOnlySpan<PopupMenuItem> items,
         string? title = null) => Open(
             id,
             items,
@@ -92,13 +90,15 @@ public static partial class PopupMenu
 
     public static void Open(
         int id,
-        PopupMenuItem[] items,
+        ReadOnlySpan<PopupMenuItem> items,
         PopupStyle style,
         string? title = null)
     {
-        _id = id;
-        _items = items;
         _itemCount = Math.Min(items.Length, MaxItems);
+        for (var i = 0; i < _itemCount; i++)
+            _items[i] = items[i];
+
+        _id = id;
         _title = title;
         _popupStyle = style;
         _worldPosition = Workspace.MouseWorldPosition;
@@ -115,7 +115,6 @@ public static partial class PopupMenu
     public static void Close()
     {
         _visible = false;
-        _items = null;
         _itemCount = 0;
         _title = null;
         _id = 0;
@@ -153,7 +152,7 @@ public static partial class PopupMenu
 
     public static void UpdateUI()
     {
-        if (!_visible || _items == null)
+        if (!_visible)
             return;
 
         Action? executed = null;

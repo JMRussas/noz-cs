@@ -423,7 +423,7 @@ public static partial class Workspace
         using (UI.BeginContainer())
             UI.Scene(ElementId.Scene, Camera, DrawScene, new SceneStyle
             {
-                Color = EditorStyle.Workspace.FillColor,
+                Color = EditorStyle.Palette.Workspace,
                 SampleCount = 4
             });
 

@@ -18,10 +18,9 @@ internal static partial class Inspector
     private static int _nextPropertyId = 0;
     private static int _propertyId;
     private static bool _propertyEnabled;
-    private static PopupMenuItem[]? _dropdownItems = null!;
-    private static string? _dropdownLabel;
-    private static Sprite? _dropdownIcon;
-    private static Color? _dropdownIconColor;
+    private static string? _dropdownText = null!;
+
+    private static int GetNextPropertyId() => _nextPropertyId++;
 
     public static void UpdateUI()
     {
@@ -36,79 +35,92 @@ internal static partial class Inspector
 
     public static AutoSection BeginSection(string name)
     {
-        UI.BeginContainer(EditorStyle.Inspector.Section);
+        UI.BeginColumn(EditorStyle.Inspector.Section);
+        UI.Label(name, EditorStyle.Text.Primary);
 
         return new AutoSection();
     }
 
+    public static UI.AutoRow BeginRow()
+    {
+        return UI.BeginRow(EditorStyle.Inspector.Row);
+    }
+
     public static void EndSection()
     {
-        UI.EndContainer();        
+        UI.EndColumn();        
     }
 
-    private static void Property(string name, Action<int> content)
+    public static bool Property(Action content, string? name = null, Sprite? icon = null, bool enabled = true)
     {
         _propertyId = _nextPropertyId++;
-        using (UI.BeginRow(EditorStyle.Inspector.Property))
-        {
-            using (UI.BeginContainer(new ContainerStyle { Width = 80 }))
-                UI.Label(name, _propertyEnabled ? EditorStyle.Control.Text : EditorStyle.Control.DisabledText);
-            content(_propertyId);
-        }
-    }
+        _propertyEnabled = enabled;
 
-    public static void Property(string name, Action<int> content, bool isEnabled = true)
-    {
-        _propertyEnabled = isEnabled;
-        Property(name, content);
+        var hovered = UI.IsHovered(_propertyId);
+        var pressed = false;
+        using (UI.BeginRow(_propertyId, hovered ? EditorStyle.Control.RootHovered : EditorStyle.Control.Root))
+        {
+            if (icon != null)
+                UI.Image(icon, EditorStyle.Icon.Secondary);
+
+            if (name != null)
+                UI.Label(name, EditorStyle.Text.Primary);
+
+            content();
+
+            pressed = UI.WasPressed();
+        }
+
+        return pressed;
     }
 
     public static void DropdownProperty(
-        string name,
-        string label,
-        PopupMenuItem[] items,
+        string text,
+        Func<PopupMenuItem[]> getItems,
+        string? name = null,
         Sprite? icon = null,
-        Color? iconColor = null)
+        bool enabled = true
+    )
     {
-        Debug.Assert(_dropdownItems != null);
+        _dropdownText = text;
 
-        _dropdownItems = items;
-        _dropdownLabel = label;
-        _dropdownIcon = icon;
-        _dropdownIconColor = iconColor;
-        Property(name, DropdownContent, true);
+        static void DropdownContent()
+        {
+            UI.Label(_dropdownText!, EditorStyle.Text.Primary);
+
+            if (UI.IsHovered())
+                UI.Flex();
+
+            UI.Image(EditorAssets.Sprites.IconFoldoutClosed, EditorStyle.Icon.SecondarySmall);
+        }
+
+        if (Property(DropdownContent, name: name, icon: icon, enabled: enabled))
+        {
+            var style = EditorStyle.Popup.Left with { AnchorRect = UI.GetElementWorldRect(_propertyId) };
+            PopupMenu.Open(_propertyId, getItems(), style);
+        }
     }
 
-    private static void DropdownContent(int id)
+    public static bool ToggleProperty(Sprite icon, ref bool value, bool enabled=true)
     {
-        var label = _dropdownLabel!;
-        var icon = _dropdownIcon;
-        var iconColor = _dropdownIconColor;
+        var propertyId = GetNextPropertyId();
 
-        void ControlContent()
+        var hovered = UI.IsHovered(propertyId);
+        var pressed = false;
+        using (UI.BeginContainer(propertyId, hovered ? EditorStyle.Inspector.ToggleButtonHovered : EditorStyle.Inspector.ToggleButton))
         {
-            using (UI.BeginRow(new ContainerStyle
-            {
-                Width = 180,
-                Padding = EdgeInsets.LeftRight(12)
-            }))
-            {
-                if (icon != null)
-                {
-                    UI.Image(icon, EditorStyle.Control.Icon with { Color = iconColor ?? Color.White });
-                    UI.Spacer(EditorStyle.Control.Spacing);
-                }
-                UI.Label(label, EditorStyle.Control.Text);
-                UI.Flex();
-                UI.Image(EditorAssets.Sprites.IconFoldoutClosed, EditorStyle.Control.Icon);
-            }
+            if (value)
+                UI.Container(EditorStyle.Inspector.ToggleButtonChecked);
+
+            UI.Image(icon, EditorStyle.Icon.Primary);
+
+            pressed = UI.WasPressed();
         }
 
-        if (EditorUI.Control(id, ControlContent, selected: PopupMenu.IsOpen(id)))
-        {
-            var style = EditorStyle.Popup.Left with { AnchorRect = UI.GetElementWorldRect(id) };
-            PopupMenu.Open(id, _dropdownItems!, style);
-        }
+        if (pressed)
+            value = !value;
+
+        return pressed;
     }
 }
 

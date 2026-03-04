@@ -13,6 +13,12 @@ public struct SortOrderDef
     public string SortOrderLabel;
 }
 
+public struct SpriteSize(Vector2Int size, string label)
+{
+    public Vector2Int Size = size; 
+    public string Label = label;
+} 
+
 public class EditorConfig
 {
     private readonly PropertySet _props;
@@ -34,7 +40,7 @@ public class EditorConfig
     public string LuaClass { get; }
     public string GenerationServer { get; }
     public string[] SourcePaths { get; }
-    public Vector2Int[] SpriteSizes { get; }
+    public SpriteSize[] SpriteSizes { get; }
     public SortOrderDef[] SortOrders { get; }
     public IEnumerable<string> Names => _props.GetKeys("names");
 
@@ -71,9 +77,9 @@ public class EditorConfig
         SortOrders = ParseSortOrders(props);
     }
 
-    private static Vector2Int[] ParseSpriteSizes(PropertySet props)
+    private static SpriteSize[] ParseSpriteSizes(PropertySet props)
     {
-        var sizes = new List<Vector2Int>();
+        var sizes = new List<SpriteSize>();
         foreach (var key in props.GetKeys("sprite_sizes"))
         {
             var parts = key.Split('x');
@@ -81,7 +87,7 @@ public class EditorConfig
                 int.TryParse(parts[0], out var w) &&
                 int.TryParse(parts[1], out var h))
             {
-                sizes.Add(new Vector2Int(w, h));
+                sizes.Add(new SpriteSize(new Vector2Int(w, h), $"{w} x {h}"));
             }
         }
         return sizes.ToArray();

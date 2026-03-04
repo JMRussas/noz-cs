@@ -18,7 +18,6 @@ public partial class SpriteEditor : DocumentEditor
     [ElementId("PreviewButton")]
     [ElementId("SkeletonOverlayButton")]
     [ElementId("DopeSheet")]
-    [ElementId("ConstraintsButton")]
     [ElementId("FillColorButton")]
     [ElementId("StrokeColorButton")]
     [ElementId("LayerButton")]
@@ -252,8 +251,6 @@ public partial class SpriteEditor : DocumentEditor
 
         EditorUI.ToolbarSpacer();
 
-        LayerButtonUI();
-
         BoneBindingUI();
 
         if (EditorUI.Button(ElementId.AddFrameButton, EditorAssets.Sprites.IconKeyframe, toolbar: true))
@@ -277,11 +274,6 @@ public partial class SpriteEditor : DocumentEditor
             Document.ShowTiling = !Document.ShowTiling;
             Document.MarkMetaModified();
         }
-
-        EditorUI.ToolbarSpacer();
-
-        SkeletonBindingUI();
-        ConstraintsButtonUI();
     }
 
     public override void UpdateUI()
@@ -480,80 +472,6 @@ public partial class SpriteEditor : DocumentEditor
         return false;
     }
 
-
-    private void SkeletonBindingUI()
-    {
-        var binding = Document.Binding;
-
-        void SkeletonBindingContent()
-        {
-            EditorUI.ControlIcon(EditorAssets.Sprites.IconBone);
-
-            if (!binding.IsBound)
-            {
-                EditorUI.ControlPlaceholderText("Select Skeleton...");
-                UI.Spacer(EditorStyle.Control.Spacing);
-                return;
-            }
-
-            EditorUI.ControlText(binding.SkeletonName.ToString());
-
-            using (UI.BeginContainer(ElementId.BoneUnbindButton, EditorStyle.Button.IconContent with { Padding = EdgeInsets.All(4) }))
-            {
-                UI.Image(
-                    EditorAssets.Sprites.IconDelete,
-                    UI.IsHovered()
-                        ? EditorStyle.Control.SelectedIcon
-                        : EditorStyle.Control.Icon);
-
-                if (UI.WasPressed())
-                    ClearSkeletonBinding();
-            }
-
-            UI.Spacer(EditorStyle.Control.Spacing);
-        }
-
-        if (EditorUI.Control(ElementId.BoneBindButton, SkeletonBindingContent, selected: EditorUI.IsPopupOpen(ElementId.BoneBindButton)))
-            EditorUI.TogglePopup(ElementId.BoneBindButton);
-
-        SkeletonBindingPopupUI();
-
-        if (EditorUI.Button(ElementId.PreviewButton, EditorAssets.Sprites.IconPreview, selected: Document.ShowInSkeleton, disabled: !Document.Binding.IsBound, toolbar: true))
-        {
-            Undo.Record(Document);
-            Document.ShowInSkeleton = !Document.ShowInSkeleton;
-            Document.Binding.Skeleton?.UpdateSprites();
-            Document.MarkMetaModified();
-        }
-
-        if (EditorUI.Button(ElementId.SkeletonOverlayButton, EditorAssets.Sprites.IconBone, selected: Document.ShowSkeletonOverlay, disabled: !Document.Binding.IsBound, toolbar: true))
-        {
-            Document.ShowSkeletonOverlay = !Document.ShowSkeletonOverlay;
-            Document.MarkMetaModified();
-        }
-    }
-
-    private void SkeletonBindingPopupUI()
-    {
-        void Content()
-        {
-            foreach (var doc in DocumentManager.Documents)
-            {
-                if (doc is not SkeletonDocument skeleton || skeleton.BoneCount == 0)
-                    continue;
-
-                var isSelected = Document.Binding.Skeleton == skeleton;
-                if (EditorUI.PopupItem(skeleton.Name, selected: isSelected))
-                {
-                    CommitSkeletonBinding(skeleton);
-                    EditorUI.ClosePopup();
-                }
-            }
-        }
-
-        EditorUI.Popup(ElementId.BoneBindButton, Content);
-    }
-
     private void UpdateSelection()
     {
         var shape = CurrentShape;
@@ -583,123 +501,15 @@ public partial class SpriteEditor : DocumentEditor
     }
 
 
-    private void ConstraintsButtonUI()
+    private void SetConstraint(Vector2Int? size)
     {
-        using (UI.BeginContainer(ContainerStyle.Fit))
-        {
-            var sizes = EditorApplication.Config.SpriteSizes;
-            var constraint = Document.ConstrainedSize;
-
-            void ConstraintsButtonContent()
-            {
-                EditorUI.ControlIcon(EditorAssets.Sprites.IconConstraint);
-                if (constraint.HasValue)
-                    EditorUI.ControlText($"{constraint.Value.X}x{constraint.Value.Y}");
-                else
-                    EditorUI.ControlPlaceholderText("None");
-                UI.Spacer(EditorStyle.Control.Spacing);
-            }
-
-            if (EditorUI.Control(
-                ElementId.ConstraintsButton,
-                ConstraintsButtonContent,
-                selected: EditorUI.IsPopupOpen(ElementId.ConstraintsButton),
-                disabled: sizes.Length == 0))
-                EditorUI.TogglePopup(ElementId.ConstraintsButton);
-
-            ConstraintsPopupUI();            
-        }
-    }
-
-    private void ConstraintsPopupUI()
-    {
-        void Content()
-        {
-            var sizes = EditorApplication.Config.SpriteSizes;
-
-            for (int i = 0; i < sizes.Length; i++)
-            {
-                var size = sizes[i];
-                var selected = Document.ConstrainedSize.HasValue &&
-                                Document.ConstrainedSize.Value == size;
-                if (EditorUI.PopupItem($"{size.X}x{size.Y}", selected: selected))
-                {
-                    Undo.Record(Document);
-                    Document.ConstrainedSize = size;
-                    Document.UpdateBounds();
-                    Document.MarkModified();
-                    Document.MarkMetaModified();
-                    MarkRasterDirty();
-                    EditorUI.ClosePopup();
-                }
-            }
-
-            if (EditorUI.PopupItem("None", selected: !Document.ConstrainedSize.HasValue))
-            {
-                Undo.Record(Document);
-                Document.ConstrainedSize = null;
-                Document.UpdateBounds();
-                Document.MarkModified();
-                Document.MarkMetaModified();
-                MarkRasterDirty();
-                EditorUI.ClosePopup();
-            }
-        }
-
-        EditorUI.Popup(ElementId.ConstraintsButton, Content);
-    }
-
-    private void LayerButtonUI()
-    {
-        using (UI.BeginContainer(ContainerStyle.Fit))
-        {
-            void ButtonContent()
-            {
-                EditorUI.ControlIcon(EditorAssets.Sprites.IconLayer);
-                var currentLayer = Document.GetCurrentDocumentLayer();
-                if (currentLayer != null)
-                    EditorUI.ControlText(currentLayer.Name);
-                else
-                    EditorUI.ControlPlaceholderText("Layer 1");
-                UI.Spacer(EditorStyle.Control.Spacing);
-            }
-
-            if (EditorUI.Control(
-                ElementId.LayerButton,
-                ButtonContent,
-                selected: EditorUI.IsPopupOpen(ElementId.LayerButton)))
-                EditorUI.TogglePopup(ElementId.LayerButton);
-
-            LayerPopupUI();
-        }
-    }
-
-    private void LayerPopupUI()
-    {
-        void Content()
-        {
-            var layers = Document.DocumentLayers;
-            for (int i = 0; i < layers.Count; i++)
-            {
-                var layer = layers[i];
-                var selected = Document.CurrentDocumentLayer == i;
-
-                void ItemContent()
-                {
-                    EditorUI.ControlText(layer.Name);
-                    if (layer.SortOrder != 0)
-                        EditorUI.ControlPlaceholderText($"({layer.SortOrder})");
-                }
-
-                if (EditorUI.PopupItem(ItemContent, selected: selected))
-                {
-                    Document.CurrentDocumentLayer = i;
-                    EditorUI.ClosePopup();
-                }
-            }
-        }
-
-        EditorUI.Popup(ElementId.LayerButton, Content);
+        Undo.Record(Document);
+        Document.ConstrainedSize = size;
+        Document.UpdateBounds();
+        Document.MarkModified();
+        Document.MarkMetaModified();
+        MarkRasterDirty();
+        EditorUI.ClosePopup();
     }
 
     private static readonly ContainerStyle LayerItemSelected = new()
@@ -2025,6 +1835,98 @@ public partial class SpriteEditor : DocumentEditor
                 Gizmos.DrawBoneAndJoints(skeleton, boneIndex, selected: boneName == currentBone);
             }
         }
+    }
+
+    private void SpriteInspectorUI()
+    {
+        using var _ = Inspector.BeginSection("SPRITE");
+
+        using (Inspector.BeginRow())
+        { 
+            // Constraint
+            using (UI.BeginFlex())
+            {
+                var sizes = EditorApplication.Config.SpriteSizes;
+                var constraintLabel = "None";
+                if (Document.ConstrainedSize.HasValue)
+                    for (int i = 0; i < sizes.Length; i++)
+                        if (Document.ConstrainedSize.Value == sizes[i].Size)
+                        {
+                            constraintLabel = sizes[i].Label;
+                            break;
+                        }
+
+                Inspector.DropdownProperty(
+                    constraintLabel,
+                    () => {
+                        return [
+                            ..EditorApplication.Config.SpriteSizes.Select(s =>
+                            new PopupMenuItem { Label = s.Label, Handler = () => SetConstraint(s.Size) }
+                        ),
+                        new PopupMenuItem { Label = "None", Handler = () => SetConstraint(null)}
+                        ];
+                    },
+                    icon: EditorAssets.Sprites.IconConstraint);
+            }
+
+        }
+
+        // Skeleton
+        using (Inspector.BeginRow())
+        {
+            if (Document.Binding.IsBound)
+                UI.BeginFlex();
+            
+            var skeletonLabel = Document.Binding.IsBound
+                ? StringId.Get(Document.Binding.Skeleton!.Name).ToString()
+                : "None";
+
+            Inspector.DropdownProperty(
+                skeletonLabel,
+                () => {
+                    var items = new List<PopupMenuItem>();
+
+                    foreach (var doc in DocumentManager.Documents)
+                    {
+                        if (doc is not SkeletonDocument skeleton || skeleton.BoneCount == 0)
+                            continue;
+
+                        var name = StringId.Get(skeleton.Name).ToString();
+                        items.Add(new PopupMenuItem { Label = name, Handler = () => CommitSkeletonBinding(skeleton) });
+                    }
+
+                    items.Add(new PopupMenuItem { Label = "None", Handler = ClearSkeletonBinding });
+                    return items.ToArray();
+                },
+                icon: EditorAssets.Sprites.IconBone);
+
+            if (Document.Binding.IsBound)
+            {
+                UI.EndFlex();
+
+                var showInSkeleton = Document.ShowInSkeleton;
+                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconPreview, ref showInSkeleton))
+                {
+                    Undo.Record(Document);
+                    Document.ShowInSkeleton = showInSkeleton;
+                    Document.Binding.Skeleton?.UpdateSprites();
+                    Document.MarkMetaModified();
+                }
+
+                var showSkeletonOverlay = Document.ShowSkeletonOverlay;
+                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconBone, ref showSkeletonOverlay))
+                {
+                    Undo.Record(Document);
+                    Document.ShowSkeletonOverlay = showSkeletonOverlay;
+                    Document.MarkMetaModified();
+                }
+            }
+        }
+    }
+
+    public override void InspectorUI()
+    {
+        SpriteInspectorUI();
     }
 
     #region Skeleton Binding

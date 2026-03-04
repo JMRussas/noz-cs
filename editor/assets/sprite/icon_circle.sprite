@@ -1,6 +1,7 @@
 
+layer "Layer 1"
 path
-fill 11
+fill #FFFFFF
 anchor 0.4765625 0 -0.2689502
 anchor 0 0.4765625 -0.2778775
 anchor -0.4765625 0 -0.28085402

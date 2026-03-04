@@ -313,13 +313,13 @@ internal static partial class EditorUI
         bool toolbar = false,
         bool padding = true)
     {
-        bool pressed = false;
-        using (UI.BeginContainer(id, EditorStyle.Control.Root))
+        var pressed = false;
+        var hovered = UI.IsHovered(id);
+        using (UI.BeginContainer(id, hovered ? EditorStyle.Control.RootHovered : EditorStyle.Control.Root))
         {
             SetState(selected, disabled);
-            ControlFill(ignoreDefaultFill: toolbar);
 
-            using (UI.BeginRow(padding ? EditorStyle.Control.Content : EditorStyle.Control.ContentNoPadding))
+            using (UI.BeginRow())
                 content.Invoke();
 
             pressed = !disabled && UI.WasPressed();

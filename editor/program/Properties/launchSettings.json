@@ -8,6 +8,10 @@
       "commandName": "Project",
       "commandLineArgs": "--project .",
       "workingDirectory": "$(ProjectDir)../../../"
+    },
+    "WSL": {
+      "commandName": "WSL2",
+      "distributionName": ""
     }
   }
 }

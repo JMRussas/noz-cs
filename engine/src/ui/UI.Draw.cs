@@ -194,10 +194,11 @@ public static partial class UI
 
     private static Vector2 GetTextOffset(ReadOnlySpan<char> text, Font font, float fontSize, in Vector2 containerSize, Align alignX, Align alignY)
     {
-        var size = new Vector2(TextRender.Measure(text, font, fontSize).X, font.LineHeight * fontSize);
+        var textWidth = TextRender.Measure(text, font, fontSize).X;
+        var textHeight = (font.LineHeight + font.InternalLeading) * fontSize;
         var offset = new Vector2(
-            (containerSize.X - size.X) * alignX.ToFactor(),
-            (containerSize.Y - size.Y) * alignY.ToFactor()
+            (containerSize.X - textWidth) * alignX.ToFactor(),
+            (containerSize.Y - textHeight) * alignY.ToFactor()
         );
 
         var displayScale = Application.Platform.DisplayScale;
@@ -232,7 +233,8 @@ public static partial class UI
             {
                 // Vertical alignment: offset the whole text block within the element
                 var wrappedHeight = TextRender.MeasureWrapped(text, font, fontSize, e.Rect.Width, cacheId: e.Id).Y;
-                var offsetY = (e.Rect.Height - wrappedHeight) * e.Data.Label.Align.Y.ToFactor();
+                var effectiveHeight = wrappedHeight + font.InternalLeading * fontSize;
+                var offsetY = (e.Rect.Height - effectiveHeight) * e.Data.Label.Align.Y.ToFactor();
                 var displayScale = Application.Platform.DisplayScale;
                 offsetY = MathF.Round(offsetY * displayScale) / displayScale;
 
