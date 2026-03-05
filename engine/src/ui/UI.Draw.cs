@@ -44,6 +44,20 @@ public static partial class UI
             case ElementType.Column:
             case ElementType.Row:
                 DrawContainer(ref e);
+                if (e.Data.Container.Clip)
+                {
+                    var topLeft = Vector2.Transform(e.Rect.Position, e.LocalToWorld);
+                    var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, e.LocalToWorld);
+                    var screenTopLeft = Camera!.WorldToScreen(topLeft);
+                    var screenBottomRight = Camera!.WorldToScreen(bottomRight);
+                    var screenHeight = Application.WindowSize.Y;
+                    var scissorX = (int)screenTopLeft.X;
+                    var scissorW = (int)(screenBottomRight.X - screenTopLeft.X);
+                    var scissorH = (int)(screenBottomRight.Y - screenTopLeft.Y);
+                    var scissorY = (int)(screenHeight - screenBottomRight.Y);
+                    Graphics.SetScissor(scissorX, scissorY, scissorW, scissorH);
+                    setScissor = true;
+                }
                 break;
 
             case ElementType.Label:

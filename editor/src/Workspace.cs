@@ -279,7 +279,8 @@ public static partial class Workspace
 
         if (!CommandPalette.IsOpen && !PopupMenu.IsVisible && !ConfirmDialog.IsVisible)
         {
-            CommandManager.ProcessShortcuts();
+            if (!UI.HasAnyFocus())
+                CommandManager.ProcessShortcuts();
 
             UpdateMouse();
             UpdatePan();

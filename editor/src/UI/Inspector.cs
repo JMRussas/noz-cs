@@ -36,11 +36,14 @@ internal static partial class Inspector
             Workspace.ActiveEditor.InspectorUI();        
     }
 
-    public static AutoSection BeginSection(string name)
+    public static AutoSection BeginSection(string name, Action? content = null)
     {
         UI.BeginColumn(EditorStyle.Inspector.Section);
-        using (UI.BeginContainer(new ContainerStyle{ Height = EditorStyle.Control.Height}))
+        using (UI.BeginRow(new ContainerStyle{ Height = EditorStyle.Control.Height}))
+        {
             UI.Label(name, EditorStyle.Text.Primary);
+            content?.Invoke();  
+        }
 
         return new AutoSection();
     }
@@ -52,7 +55,8 @@ internal static partial class Inspector
 
     public static void EndSection()
     {
-        UI.EndColumn();        
+        UI.EndColumn();
+        EditorUI.PanelSeparator();
     }
 
     public static bool Property(Action content, string? name = null, Sprite? icon = null, bool isEnabled = true, bool forceHovered=false) =>
@@ -119,6 +123,28 @@ internal static partial class Inspector
 
         return false;
     }
+
+    public static bool StringProperty(bool multiLine = false, string? placeholder = null)
+    {
+        var propertyId = GetNextPropertyId();
+
+        using (BeginRow())
+        using (UI.BeginContainer(new ContainerStyle { Width = Size.Percent(1), Height = Size.Fit }))
+        {
+            var hovered = UI.IsHovered(propertyId);
+
+            if (multiLine)
+                UI.TextArea(propertyId, style: hovered ? EditorStyle.Inspector.TextAreaHovered : EditorStyle.Inspector.TextArea, placeholder: placeholder);
+            else
+                UI.TextBox(propertyId, style: hovered ? EditorStyle.Inspector.TextBoxHovered : EditorStyle.Inspector.TextBox, placeholder: placeholder);
+        }
+
+        return false;
+    }
+
+    public static bool Button(Sprite icon, bool enabled = true) =>
+        EditorUI.Button(GetNextPropertyId(), icon, isEnabled: enabled);
+        
 
 #if false
     public static bool ColorPickerButton(

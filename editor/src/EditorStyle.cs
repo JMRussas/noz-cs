@@ -66,7 +66,7 @@ public static class EditorStyle
         public static readonly Color Grid = Color.FromRgb(0x434343);
 
         public static readonly Color Panel = Color.FromRgb(0x191919);
-        public static readonly Color PanelSeparator = Color.FromRgb(0x212121);
+        public static readonly Color PanelSeparator = Color.FromRgb(0x232323);
 
         public static readonly Color IconPrimary = Color.FromRgb(0xCCCCCC);
         public static readonly Color IconSecondary = Color.FromRgb(0x757575);
@@ -238,7 +238,6 @@ public static class EditorStyle
             BorderColor = Palette.ControlBorder,
             BorderRadius = BorderRadius
         };
-
     }
 
     // :panel
@@ -680,13 +679,14 @@ public static class EditorStyle
         {
             Width = 300.0f,
             Color = Palette.Panel,
-            Padding = 8,
-            Spacing = Control.Spacing
+            Padding = EdgeInsets.LeftRight(10)
         };
 
         public static readonly ContainerStyle Section = new()
         {            
-            MinHeight = Control.Height,
+            MinHeight = Control.Height + 8,
+            Padding = EdgeInsets.TopBottom(4),
+            Spacing = Control.Spacing,
             Height = Size.Fit,
         };
 
@@ -725,6 +725,46 @@ public static class EditorStyle
             AlignY = Align.Center   
         };
 
+        public static readonly TextBoxStyle TextBox = new()
+        {
+            Height = Control.Height,
+            FontSize = Control.TextSize,
+            TextColor = Palette.TextPrimary,
+            PlaceholderColor = Palette.TextDisabled,
+            SelectionColor = Palette.Selection,
+            FocusBorderRadius = Control.RootHovered.BorderRadius,
+            FocusBorderWidth = Control.RootHovered.BorderWidth,
+            FocusBorderColor = Control.RootHovered.BorderColor,
+            Padding = EdgeInsets.Symmetric(2, 6)
+        };
+
+        public static readonly TextBoxStyle TextBoxHovered = TextBox with
+        {
+            BorderRadius = Control.RootHovered.BorderRadius,
+            BorderWidth = Control.RootHovered.BorderWidth,
+            BorderColor = Control.RootHovered.BorderColor,
+        };
+
+        public static readonly TextAreaStyle TextArea = new()
+        {
+            Height = Control.Height * 3,
+            FontSize = Control.TextSize,
+            TextColor = Palette.TextPrimary,
+            PlaceholderColor = Palette.TextDisabled,
+            SelectionColor = Palette.Selection,
+            FocusBorderRadius = Control.RootHovered.BorderRadius,
+            FocusBorderWidth = Control.RootHovered.BorderWidth,
+            FocusBorderColor = Control.RootHovered.BorderColor,
+            Padding = EdgeInsets.Symmetric(8, 10)
+        };
+
+        public static readonly TextAreaStyle TextAreaHovered = TextArea with
+        {
+            BorderRadius = Control.RootHovered.BorderRadius,
+            BorderWidth = Control.RootHovered.BorderWidth,
+            BorderColor = Control.RootHovered.BorderColor,
+        };
+
         public static readonly ContainerStyle FieldContainer = new()
         {
             Width = 90f,
@@ -739,19 +779,6 @@ public static class EditorStyle
             AlignY = Align.Center
         };
 
-
-        public static readonly TextBoxStyle TextBox = new()
-        {
-            Height = 24f,
-            FontSize = Panel.TextSize,
-            TextColor = Control.Text.Color,
-            PlaceholderColor = Color.FromRgb(0x555555),
-            SelectionColor = SelectionColor,
-            BackgroundColor = Color.FromRgb(0x1d1d1d),
-            BorderRadius = 4f, BorderWidth = 1f, BorderColor = Color.FromRgb(0x2a2a2a),
-            FocusBorderRadius = 4f, FocusBorderWidth = 1f, FocusBorderColor = SelectionColor,
-            Padding = EdgeInsets.Symmetric(2, 6)
-        };
 
         public static readonly ContainerStyle Separator = new()
         {
@@ -934,7 +961,8 @@ public static class EditorStyle
         public readonly static ContainerStyle SaturationAndValue = new()
         {
             Size = SVSize,
-            Margin = EdgeInsets.LeftRight(-(Padding - 2))
+            Margin = EdgeInsets.LeftRight(-(Padding - 2)),
+            Clip = true
         };
 
         public readonly static ContainerStyle Slider = new()

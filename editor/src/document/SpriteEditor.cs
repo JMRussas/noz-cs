@@ -1876,6 +1876,39 @@ public partial class SpriteEditor : DocumentEditor
         }
     }
 
+    private void LayerInspectorUI()
+    {
+        static void GenerateContent()
+        {
+            var doc = (SpriteDocument)Workspace.ActiveDocument!;
+
+            UI.Flex();
+            if (Inspector.Button(EditorAssets.Sprites.IconAi))
+                doc.ActiveLayer.Generation = new GenerationConfig { };
+        }
+
+        static void RemoveGenerateContent()
+        {
+            var doc = (SpriteDocument)Workspace.ActiveDocument!;
+
+            UI.Flex();
+            if (Inspector.Button(EditorAssets.Sprites.IconDelete))
+                doc.ActiveLayer.Generation = null;
+        }
+
+        var layer = Document.ActiveLayer;
+        var isGenerated = layer.IsGenerated; 
+
+        using (Inspector.BeginSection("GENERATE", content: isGenerated ? RemoveGenerateContent : GenerateContent))
+        {
+            if (isGenerated)
+            {
+                Inspector.StringProperty(placeholder: "Positive Prompt", multiLine: true);
+                Inspector.StringProperty(placeholder: "Negaive Prompt", multiLine: true);
+            }
+        }
+    }
+
     private void PathInspectorUI()
     {
         if (!_hasPathSelection)
@@ -1929,6 +1962,7 @@ public partial class SpriteEditor : DocumentEditor
     public override void InspectorUI()
     {
         SpriteInspectorUI();
+        LayerInspectorUI();
         PathInspectorUI();
     }
 

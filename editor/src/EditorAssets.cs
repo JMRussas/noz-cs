@@ -23,6 +23,7 @@ public static class EditorAssets
         public const string Composite = "composite";
         public const string EditorPalette = "editor_palette";
         public const string EditorSprites000 = "editor_sprites000";
+        public const string IconAi = "icon_ai";
         public const string IconBone = "icon_bone";
         public const string IconCheck = "icon_check";
         public const string IconCircle = "icon_circle";
@@ -141,6 +142,7 @@ public static class EditorAssets
         public static Sprite AssetIconSound { get; private set; } = null!;
         public static Sprite AssetIconSprite { get; private set; } = null!;
         public static Sprite AssetIconVfx { get; private set; } = null!;
+        public static Sprite IconAi { get; private set; } = null!;
         public static Sprite IconBone { get; private set; } = null!;
         public static Sprite IconCheck { get; private set; } = null!;
         public static Sprite IconCircle { get; private set; } = null!;
@@ -196,6 +198,7 @@ public static class EditorAssets
             AssetIconSound = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconSound)!;
             AssetIconSprite = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconSprite)!;
             AssetIconVfx = (Sprite)Asset.Load(AssetType.Sprite, Names.AssetIconVfx)!;
+            IconAi = (Sprite)Asset.Load(AssetType.Sprite, Names.IconAi)!;
             IconBone = (Sprite)Asset.Load(AssetType.Sprite, Names.IconBone)!;
             IconCheck = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCheck)!;
             IconCircle = (Sprite)Asset.Load(AssetType.Sprite, Names.IconCircle)!;
@@ -252,6 +255,7 @@ public static class EditorAssets
             AssetIconSound?.Dispose();
             AssetIconSprite?.Dispose();
             AssetIconVfx?.Dispose();
+            IconAi?.Dispose();
             IconBone?.Dispose();
             IconCheck?.Dispose();
             IconCircle?.Dispose();

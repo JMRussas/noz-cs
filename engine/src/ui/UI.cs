@@ -216,6 +216,7 @@ public static partial class UI
 
     public static bool IsRow() => GetSelf().Type == ElementType.Row;
     public static bool IsColumn() => GetSelf().Type == ElementType.Column;
+    public static int GetElementChildCount() => GetSelf().ChildCount;
 
     private static ref NativeArray<char> GetTextBuffer() => ref _textBuffers[_currentTextBuffer];
 
@@ -454,6 +455,12 @@ public static partial class UI
         ref var e = ref GetSelf();
         return _focusElementId != 0 && e.Id == _focusElementId;
     }
+
+    public static bool HasAnyFocus() => _focusElementId != 0;
+
+    public static bool HasFocus(int elementId) =>
+        elementId != 0 &&
+        _focusElementId == elementId;
 
     public static void SetFocus(int elementId)
     {
@@ -944,7 +951,11 @@ public static partial class UI
     // :textbox
     public static bool TextBox(
         int id,
-        TextBoxStyle style = default,
+        string? placeholder = null) => TextBox(id, new TextBoxStyle(), placeholder);
+
+    public static bool TextBox(
+        int id,
+        TextBoxStyle style,
         string? placeholder = null)
     {
         ref var e = ref CreateElement(ElementType.TextBox);
@@ -976,7 +987,7 @@ public static partial class UI
 
     public static bool TextArea(
         int id,
-        TextAreaStyle style = default,
+        TextAreaStyle style,
         string? placeholder = null)
     {
         ref var e = ref CreateElement(ElementType.TextArea);
