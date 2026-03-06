@@ -39,6 +39,8 @@ public class EditorConfig
     public string? GenerateLua { get; }
     public string LuaClass { get; }
     public string GenerationServer { get; }
+    public string GenerationPrompt { get; }
+    public string GenerationNegativePrompt { get; }
     public string[] SourcePaths { get; }
     public SpriteSize[] SpriteSizes { get; }
     public SortOrderDef[] SortOrders { get; }
@@ -62,6 +64,8 @@ public class EditorConfig
 
 
         GenerationServer = props.GetString("generate", "server", "http://127.0.0.1:5555");
+        GenerationPrompt = props.GetString("generate", "prompt", "");
+        GenerationNegativePrompt = props.GetString("generate", "negative_prompt", "");
 
         var generateCs = props.GetString("manifest", "generate_cs", "");
         GenerateCs = string.IsNullOrEmpty(generateCs) ? null : ResolvePath(generateCs);

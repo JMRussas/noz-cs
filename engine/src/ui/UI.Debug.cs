@@ -216,21 +216,12 @@ public static unsafe partial class UI
                     return e.Data.Label.Text.AsReadOnlySpan().ToString();
                 break;
 
-            case ElementType.TextBox:
+            case ElementType.Widget:
                 if (e.Id > 0)
                 {
-                    ref var es = ref _elementStates[e.Id];
-                    if (es.Data.TextBox.Text.Length > 0)
-                        return es.Data.TextBox.Text.AsReadOnlySpan().ToString();
-                }
-                break;
-
-            case ElementType.TextArea:
-                if (e.Id > 0)
-                {
-                    ref var es = ref _elementStates[e.Id];
-                    if (es.Data.TextArea.Text.Length > 0)
-                        return es.Data.TextArea.Text.AsReadOnlySpan().ToString();
+                    var text = GetElementText(e.Id);
+                    if (text.Length > 0)
+                        return text.ToString();
                 }
                 break;
         }
@@ -282,38 +273,16 @@ public static unsafe partial class UI
                     sb.Append($" color={DebugColorToHex(l.Color)}");
                 break;
 
-            case ElementType.TextBox:
-                ref var tb = ref e.Data.TextBox;
+            case ElementType.Widget:
                 if (e.Id > 0)
                 {
-                    ref var es = ref _elementStates[e.Id];
-                    var text = es.Data.TextBox.Text.Length > 0
-                        ? es.Data.TextBox.Text.AsReadOnlySpan().ToString()
-                        : "";
-                    sb.Append($" text=\"{text}\"");
+                    var text = GetElementText(e.Id);
+                    if (text.Length > 0)
+                    {
+                        var str = text.Length > 50 ? text[..47].ToString() + "..." : text.ToString();
+                        sb.Append($" text=\"{str}\"");
+                    }
                 }
-                if (tb.Placeholder.Length > 0)
-                    sb.Append($" placeholder=\"{tb.Placeholder.AsReadOnlySpan().ToString()}\"");
-                sb.Append($" size={tb.FontSize:0}");
-                if (tb.Password)
-                    sb.Append(" password");
-                break;
-
-            case ElementType.TextArea:
-                ref var ta = ref e.Data.TextArea;
-                if (e.Id > 0)
-                {
-                    ref var es = ref _elementStates[e.Id];
-                    var text = es.Data.TextArea.Text.Length > 0
-                        ? es.Data.TextArea.Text.AsReadOnlySpan().ToString()
-                        : "";
-                    if (text.Length > 50)
-                        text = text[..47] + "...";
-                    sb.Append($" text=\"{text}\"");
-                }
-                if (ta.Placeholder.Length > 0)
-                    sb.Append($" placeholder=\"{ta.Placeholder.AsReadOnlySpan().ToString()}\"");
-                sb.Append($" size={ta.FontSize:0}");
                 break;
 
             case ElementType.Scrollable:

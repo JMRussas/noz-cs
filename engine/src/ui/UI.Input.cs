@@ -361,10 +361,8 @@ public static partial class UI
                 continue;
             }
 
-            if (e.Type == ElementType.TextBox)
-                UpdateTextBoxState(ref e);
-            else if (e.Type == ElementType.TextArea)
-                UpdateTextAreaState(ref e);
+            if (e.Type == ElementType.Widget)
+                Widgets.Widget._registry[e.Data.Widget.WidgetType].Input?.Invoke(e.Id);
 
             var localMouse = Vector2.Transform(mouse, e.WorldToLocal);
             var mouseOver = e.Rect.Contains(localMouse);
@@ -421,9 +419,9 @@ public static partial class UI
                 es.SetFlags(ElementFlags.Pressed, ElementFlags.Pressed);
                 _mouseLeftElementId = e.Id;
 
-                if (e.Type == ElementType.TextBox || e.Type == ElementType.TextArea)
+                // Widget text controls (those with SetText) get focus on click
+                if (e.Type == ElementType.Widget && Widgets.Widget._registry[e.Data.Widget.WidgetType].SetText != null)
                 {
-                    // Clear Focus on previously hot text control
                     if (_hotId != 0 && _hotId != e.Id)
                     {
                         ref var prevEs = ref GetElementState(_hotId);

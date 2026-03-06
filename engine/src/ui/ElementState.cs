@@ -21,27 +21,6 @@ internal enum ElementFlags : ushort
     HoverChanged = 1 << 8,
 }
 
-internal struct TextBoxState
-{
-    public int CursorIndex;
-    public int SelectionStart;
-    public float ScrollOffset;
-    public float BlinkTimer;
-    public int TextHash;
-    public UnsafeSpan<char> Text;
-}
-
-internal struct TextAreaState
-{
-    public int CursorIndex;
-    public int SelectionStart;
-    public float ScrollOffset;
-    public float BlinkTimer;
-    public int TextHash;
-    public float DesiredColumn;
-    public UnsafeSpan<char> Text;
-}
-
 internal struct ScrollableState
 {
     public float ScrollOffset;
@@ -50,8 +29,6 @@ internal struct ScrollableState
 [StructLayout(LayoutKind.Explicit)]
 internal struct ElementStateData
 {
-    [FieldOffset(0)] public TextBoxState TextBox;
-    [FieldOffset(0)] public TextAreaState TextArea;
     [FieldOffset(0)] public ScrollableData Scrollable;
 }
 

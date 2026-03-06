@@ -23,7 +23,7 @@ public static partial class UI
     internal static RectInt? SceneViewport { get; private set; }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Color ApplyOpacity(Color c) => c.WithAlpha(c.A * _drawOpacity);
+    internal static Color ApplyOpacity(Color c) => c.WithAlpha(c.A * _drawOpacity);
 
     // Draw pass
     private static void DrawElement(int elementIndex, bool isPopup)
@@ -68,14 +68,6 @@ public static partial class UI
                 DrawImage(ref e);
                 break;
 
-            case ElementType.TextBox:
-                DrawTextBox(ref e);
-                break;
-
-            case ElementType.TextArea:
-                DrawTextArea(ref e);
-                break;
-
             case ElementType.Scene:
                 DrawScene(ref e);
                 return;
@@ -85,6 +77,10 @@ public static partial class UI
 
             case ElementType.Opacity:
                 _drawOpacity *= e.Data.Opacity.Value;
+                break;
+
+            case ElementType.Widget:
+                Widgets.Widget._registry[e.Data.Widget.WidgetType].Draw?.Invoke(e.Id);
                 break;
 
             case ElementType.Scrollable:
@@ -413,7 +409,7 @@ public static partial class UI
         }
     }
 
-    private static void DrawTexturedRect(
+    internal static void DrawTexturedRect(
         in Rect rect,
         in Matrix3x2 transform,
         Texture? texture,

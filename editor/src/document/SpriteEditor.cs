@@ -1832,9 +1832,54 @@ public partial class SpriteEditor : DocumentEditor
             {
                 var gen = layer.Generation!;
 
-                gen.Strength = Inspector.SliderProperty(gen.Strength, handler: Document);
-                gen.Prompt = Inspector.StringProperty(gen.Prompt, handler: Document, placeholder: "Prompt", multiLine: true);
-                gen.NegativePrompt = Inspector.StringProperty(gen.NegativePrompt, handler: Document, placeholder: "Negative Prompt", multiLine: true);
+                if (gen.IsGenerating)
+                {
+                    var progressText = gen.GenerationState switch
+                    {
+                        GenerationState.Queued when gen.QueuePosition > 0 =>
+                            $"Queued (position {gen.QueuePosition})",
+                        GenerationState.Queued => "Queued...",
+                        GenerationState.Running when gen.TotalSteps > 0 =>
+                            $"Generating {gen.CurrentStep}/{gen.TotalSteps}",
+                        GenerationState.Running => "Processing...",
+                        _ => "Starting..."
+                    };
+                    UI.Label(progressText, EditorStyle.Text.Secondary);
+
+                    // Progress bar
+                    if (gen.GenerationState == GenerationState.Running && gen.TotalSteps > 0)
+                    {
+                        using (UI.BeginContainer(new ContainerStyle
+                        {
+                            Width = Size.Percent(1),
+                            Height = 4f,
+                            Color = EditorStyle.Palette.PanelSeparator,
+                            BorderRadius = 2f
+                        }))
+                        {
+                            UI.BeginContainer(new ContainerStyle
+                            {
+                                Width = Size.Percent(gen.GenerationProgress),
+                                Height = 4f,
+                                Color = EditorStyle.SelectionColor,
+                                BorderRadius = 2f
+                            });
+                            UI.EndContainer();
+                        }
+                    }
+
+                    // Cancel button
+                    if (Inspector.Button(EditorAssets.Sprites.IconDelete))
+                        gen.CancelGeneration();
+                }
+                else
+                {
+                    if (gen.GenerationError != null)
+                        UI.Label(gen.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
+
+                    gen.Strength = Inspector.SliderProperty(gen.Strength, handler: Document);
+                    gen.Prompt = Inspector.StringProperty(gen.Prompt, handler: Document, placeholder: "Prompt", multiLine: true);
+                }
             }
         }
     }

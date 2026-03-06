@@ -153,7 +153,7 @@ public static partial class UI
         _textBuffers[1].Dispose();
     }
 
-    private static ref Element CreateElement(ElementType type)
+    internal static ref Element CreateElement(ElementType type)
     {
         ref var element = ref _elements[_elementCount];
         element.Type = type;
@@ -202,7 +202,7 @@ public static partial class UI
     private static ref Element GetTopId() =>
         ref _elements[_elementIdStack[_elementIdStackCount - 1]];
 
-    private static ref Element GetElement(int index) =>
+    internal static ref Element GetElement(int index) =>
         ref _elements[index];
 
     private static ref ElementState GetElementState(ref Element e)
@@ -271,7 +271,7 @@ public static partial class UI
 
     private static bool HasCurrentElement() => _elementStackCount > 0;
 
-    private static void SetId(ref Element e, int elementId)
+    internal static void SetId(ref Element e, int elementId)
     {
         if (elementId == 0) return;
         Debug.Assert(elementId > 0 && elementId <= MaxElementId, $"Invalid ElementId: {elementId}");
@@ -289,7 +289,7 @@ public static partial class UI
         es.Index = e.Index;
     }
 
-    private static void PushElement(short index)
+    internal static void PushElement(short index)
     {
         if (_elementStackCount >= MaxElementStack) return;
         _elementStack[_elementStackCount++] = index;
@@ -297,7 +297,7 @@ public static partial class UI
             _elementIdStack[_elementIdStackCount++] = index;
     }
 
-    private static void PopElement()
+    internal static void PopElement()
     {
         if (_elementStackCount == 0) return;
         var index = _elementStack[_elementStackCount - 1];
@@ -333,7 +333,7 @@ public static partial class UI
         return textBuffer.AddRange(text);
     }
 
-    private static UnsafeSpan<char> InsertText(ReadOnlySpan<char> text, int start, ReadOnlySpan<char> insert)
+    internal static UnsafeSpan<char> InsertText(ReadOnlySpan<char> text, int start, ReadOnlySpan<char> insert)
     {
         var result = AddText(text.Length + insert.Length);
         for (int i = 0; i < result.Length; i++)
@@ -395,33 +395,20 @@ public static partial class UI
     {
         ref var es = ref GetElementState(elementId);
         ref var e = ref GetElement(es.Index);
-        return e.Type switch
+        if (e.Type == ElementType.Widget)
         {
-            ElementType.TextBox => es.Data.TextBox.Text.AsReadOnlySpan(),
-            ElementType.TextArea => es.Data.TextArea.Text.AsReadOnlySpan(),
-            _ => default
-        };
+            var getText = Widgets.Widget._registry[e.Data.Widget.WidgetType].GetText;
+            return getText != null ? getText(elementId) : default;
+        }
+        return default;
     }
 
     public static void SetElementText(int elementId, ReadOnlySpan<char> value, bool selectAll = false)
     {
         ref var es = ref GetElementState(elementId);
         ref var e = ref GetElement(es.Index);
-        switch (e.Type)
-        {
-            case ElementType.TextBox:
-                es.Data.TextBox.Text = AddText(value);
-                es.Data.TextBox.TextHash = string.GetHashCode(value);
-                es.Data.TextBox.CursorIndex = value.Length;
-                es.Data.TextBox.SelectionStart = selectAll ? 0 : value.Length;
-                break;
-            case ElementType.TextArea:
-                es.Data.TextArea.Text = AddText(value);
-                es.Data.TextArea.TextHash = string.GetHashCode(value);
-                es.Data.TextArea.CursorIndex = value.Length;
-                es.Data.TextArea.SelectionStart = selectAll ? 0 : value.Length;
-                break;
-        }
+        if (e.Type == ElementType.Widget)
+            Widgets.Widget._registry[e.Data.Widget.WidgetType].SetText?.Invoke(elementId, value, selectAll);
     }
 
     public static ref Tween GetElementTween(int elementId) => ref GetElementState(elementId).Tween;
@@ -504,7 +491,7 @@ public static partial class UI
         _activePopupCount = 0;
         _currentTextBuffer = 1 - _currentTextBuffer;
         _textBuffers[_currentTextBuffer].Clear();
-        Widget.BeginFrame();
+        Widgets.Widget.BeginFrame();
 
         var screenSize = Application.WindowSize.ToVector2();
         var rw = (float)_refSize.X;
@@ -956,98 +943,36 @@ public static partial class UI
         PopElement();
     }
 
-    // :textbox
-    public static bool TextBox(
-        int id,
-        ReadOnlySpan<char> text,
-        ReadOnlySpan<char> placeholder = default) => TextBox(id, text, new TextBoxStyle(), placeholder);
-
-    public static bool TextBox(
-        int id,
-        ReadOnlySpan<char> text,
-        TextBoxStyle style,
-        ReadOnlySpan<char> placeholder = default)
+    // :widget
+    internal static void Widget(int id, WidgetType type)
     {
-        ref var e = ref CreateElement(ElementType.TextBox);
-        e.Data.TextBox = style.ToData();
-        e.Asset = style.Font ?? _defaultFont;
-
-        if (!placeholder.IsEmpty)
-            e.Data.TextBox.Placeholder = AddText(placeholder);
-
+        ref var e = ref CreateElement(ElementType.Widget);
+        e.Data.Widget.WidgetType = type.Value;
         SetId(ref e, id);
-
-        ref var es = ref GetElementState(ref e);
-
-        if (es.HasFocus)
-        {
-            SetHot(id, text);
-            es.Data.TextBox.Text = AddText(es.Data.TextBox.Text.AsReadOnlySpan());
-        }
-        else
-        {
-            es.Data.TextBox.Text = AddText(text);
-        }
-
-        var changed = es.IsChanged;
-        es.SetFlags(ElementFlags.Changed, ElementFlags.None);
-
-        if (changed)
-            NotifyChanged(es.Data.TextBox.TextHash);
-
         PushElement(e.Index);
         PopElement();
-
-        SetLastElement(id);
-        return changed;
     }
 
-    // :textarea
-    public static bool TextArea(
-        int id,
-        ReadOnlySpan<char> text,
-        ReadOnlySpan<char> placeholder = default) =>
-        TextArea(id, text, new TextAreaStyle(), placeholder);
-
-    public static bool TextArea(
-        int id,
-        ReadOnlySpan<char> text,
-        TextAreaStyle style,
-        ReadOnlySpan<char> placeholder = default)
+    internal static void Widget(int id, WidgetType type, object? asset)
     {
-        ref var e = ref CreateElement(ElementType.TextArea);
-        e.Data.TextArea = style.ToData();
-        e.Asset = style.Font ?? _defaultFont;
-
-        if (!placeholder.IsEmpty)
-            e.Data.TextArea.Placeholder = AddText(placeholder);
-
+        ref var e = ref CreateElement(ElementType.Widget);
+        e.Data.Widget.WidgetType = type.Value;
+        e.Asset = asset;
         SetId(ref e, id);
-
-        ref var es = ref GetElementState(ref e);
-
-        if (es.HasFocus)
-        {
-            SetHot(id, text);
-            es.Data.TextArea.Text = AddText(es.Data.TextArea.Text.AsReadOnlySpan());
-        }
-        else
-        {
-            es.Data.TextArea.Text = AddText(text);
-        }
-
-        var changed = es.IsChanged;
-        es.SetFlags(ElementFlags.Changed, ElementFlags.None);
-
-        if (changed)
-            NotifyChanged(es.Data.TextArea.TextHash);
-
         PushElement(e.Index);
         PopElement();
-
-        SetLastElement(id);
-        return changed;
     }
+
+    internal static AutoContainer BeginWidget(int id, WidgetType type)
+    {
+        ref var e = ref CreateElement(ElementType.Widget);
+        e.Data.Widget.WidgetType = type.Value;
+        SetId(ref e, id);
+        PushElement(e.Index);
+        return new AutoContainer();
+    }
+
+    internal static void EndWidget() => EndElement(ElementType.Widget);
 
     internal static void End()
     {
@@ -1065,8 +990,6 @@ public static partial class UI
         Graphics.SetCamera(Camera);
 
         DrawElements();
-
-        TextBoxEndFrame();
 
         for (int i = _elementCount; i < _previousElementCount; i++)
         {

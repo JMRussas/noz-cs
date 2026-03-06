@@ -49,6 +49,7 @@ public static partial class UI
     }
 
     public static bool HasHot() => _hotId != 0;
+    internal static int HotId => _hotId;
 
     public static void NotifyChanged(int currentHash)
     {

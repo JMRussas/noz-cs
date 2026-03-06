@@ -2,6 +2,7 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 namespace NoZ.Widgets;
@@ -13,12 +14,52 @@ public interface IChangeHandler
     void CancelChange();
 }
 
+public readonly struct WidgetType
+{
+    public readonly ushort Value;
+    internal WidgetType(ushort value) => Value = value;
+}
+
+public delegate void WidgetDrawDelegate(int id);
+public delegate Vector2 WidgetMeasureDelegate(int id);
+public delegate void WidgetInputDelegate(int id);
+public delegate ReadOnlySpan<char> WidgetGetTextDelegate(int id);
+public delegate void WidgetSetTextDelegate(int id, ReadOnlySpan<char> value, bool selectAll);
+
+internal struct WidgetRegistration
+{
+    public WidgetDrawDelegate? Draw;
+    public WidgetMeasureDelegate? Measure;
+    public WidgetInputDelegate? Input;
+    public WidgetGetTextDelegate? GetText;
+    public WidgetSetTextDelegate? SetText;
+}
+
 public static partial class Widget
 {
+    private const int MaxWidgetTypes = 64;
     private const int StatePoolSize = 16 * 1024;
+
+    internal static WidgetRegistration[] _registry = new WidgetRegistration[MaxWidgetTypes];
+    private static ushort _nextWidgetType = 1;
 
     private static NativeArray<byte>[] _statePools = [new(StatePoolSize, 0), new(StatePoolSize, 0)];
     private static int _currentStatePool;
+
+    public static WidgetType Register(WidgetDrawDelegate? draw = null,
+        WidgetMeasureDelegate? measure = null,
+        WidgetInputDelegate? input = null,
+        WidgetGetTextDelegate? getText = null,
+        WidgetSetTextDelegate? setText = null)
+    {
+        var type = new WidgetType(_nextWidgetType++);
+        _registry[type.Value] = new WidgetRegistration
+        {
+            Draw = draw, Measure = measure, Input = input,
+            GetText = getText, SetText = setText
+        };
+        return type;
+    }
 
     internal static void BeginFrame()
     {

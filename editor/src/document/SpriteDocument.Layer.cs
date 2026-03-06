@@ -2,33 +2,44 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
+using System.Threading;
+
 namespace NoZ.Editor;
 
 public class GenerationConfig
 {
     public string Prompt = "";
-    public string NegativePrompt = "";
-    public string Style = "";
     public long Seed;
-    public float Strength = 0.3f;
-    public float StyleStrength = 0.7f;
-    public bool Auto;
+    public float Strength = 0.8f;
 
     // Editor-only state (not persisted)
     public bool IsGenerating;
+    public GenerationState GenerationState;
+    public int QueuePosition;
+    public float GenerationProgress;
+    public int CurrentStep;
+    public int TotalSteps;
+    public string? GenerationError;
+    public CancellationTokenSource? CancellationSource;
 
     public bool HasPrompt => !string.IsNullOrEmpty(Prompt);
 
     public GenerationConfig Clone() => new()
     {
         Prompt = Prompt,
-        NegativePrompt = NegativePrompt,
-        Style = Style,
         Seed = Seed,
         Strength = Strength,
-        StyleStrength = StyleStrength,
-        Auto = Auto,
     };
+
+    public void CancelGeneration()
+    {
+        CancellationSource?.Cancel();
+        CancellationSource = null;
+        IsGenerating = false;
+        GenerationState = default;
+        GenerationProgress = 0f;
+        GenerationError = null;
+    }
 }
 
 public class SpriteFrame : IDisposable

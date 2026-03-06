@@ -49,6 +49,40 @@ public static partial class UI
         return result;
     }
 
+    internal static Vector2 ResolveWidgetSize(int elementId, in Size2 size, in Vector2 fitSize)
+    {
+        ref var es = ref GetElementState(elementId);
+        ref var e = ref _elements[es.Index];
+        ref var p = ref _elements[e.ParentIndex];
+        var result = Vector2.Zero;
+
+        for (int axis = 0; axis < 2; axis++)
+        {
+            Size resolveSize = size[axis];
+            if (resolveSize.Mode == SizeMode.Default)
+            {
+                if (p.Type == ElementType.Column && axis == 1)
+                    resolveSize = Size.Fit;
+                else if (p.Type == ElementType.Row && axis == 0)
+                    resolveSize = Size.Fit;
+                else
+                    resolveSize = Size.Percent();
+            }
+
+            if (resolveSize.Mode == SizeMode.Fit)
+                resolveSize = fitSize[axis];
+
+            result[axis] = resolveSize.Mode switch
+            {
+                SizeMode.Fixed => resolveSize.Value,
+                SizeMode.Percent => (p.ContentRect.GetSize(axis)) * resolveSize.Value,
+                _ => 0.0f,
+            };
+        }
+
+        return result;
+    }
+
     private static Vector2 MeasureContainer(ref readonly Element e, ref readonly Element p)
     {
         var size = ResolveSize(in e, in p, e.Data.Container.Size);
@@ -97,11 +131,10 @@ public static partial class UI
         ElementType.Grid => MeasureGrid(in e, in p),
         ElementType.Popup => MeasurePopup(in e, in p),
         ElementType.Scene => MeasureScene(in e, in p),
-        ElementType.TextBox => MeasureTextBox(in e, in p),
-        ElementType.TextArea => MeasureTextArea(in e, in p),
         ElementType.Image => MeasureImage(in e, in p),
         ElementType.Flex when p.Type is ElementType.Row => MeasureRowFlex(in e, in p),
         ElementType.Flex when p.Type is ElementType.Column => MeasureColumnFlex(in e, in p),
+        ElementType.Widget => Widgets.Widget._registry[e.Data.Widget.WidgetType].Measure?.Invoke(e.Id) ?? Vector2.Zero,
         _ => ResolveSize(in e, in p, Size2.Default)
     };
 
@@ -119,12 +152,6 @@ public static partial class UI
         var width = grid.IsAutoWidth ? availableWidth : columns * cellWidth + (columns - 1) * grid.Spacing;
         var height = rowCount * cellHeight + Math.Max(0, rowCount - 1) * grid.Spacing;
         return new Vector2(width, height);
-    }
-
-    private static Vector2 MeasureTextBox(ref readonly Element e, ref readonly Element p)
-    {
-        var widthMode = p.Type == ElementType.Row ? Size.Fit : Size.Percent();
-        return ResolveSize(in e, in p, new Size2(widthMode, e.Data.TextBox.Height));
     }
 
     private static Vector2 MeasureScene(ref readonly Element e, ref readonly Element p)
@@ -185,71 +212,6 @@ public static partial class UI
         }
 
         return TextRender.Measure(text, font, fontSize);
-    }
-
-    private static Vector2 FitTextBox(ref readonly Element e, ref readonly Element p)
-    {
-        // Use the style's height (same as MeasureTextBox)
-        var height = e.Data.TextBox.Height.Mode == SizeMode.Fixed
-            ? e.Data.TextBox.Height.Value
-            : 0;
-
-        var font = (e.Asset as Font) ?? DefaultFont;
-        var width = 0f;
-
-        if (font != null)
-        {
-            var fontSize = e.Data.TextBox.FontSize;
-
-            // Use actual text if available, otherwise placeholder
-            var text = e.Id != 0
-                ? GetElementState(e.Id).Data.TextBox.Text.AsReadOnlySpan()
-                : ReadOnlySpan<char>.Empty;
-
-            if (text.Length == 0)
-                text = e.Data.TextBox.Placeholder.AsReadOnlySpan();
-
-            width = text.Length > 0
-                ? TextRender.Measure(text, font, fontSize).X
-                : 0;
-        }
-
-        var padding = e.Data.TextBox.Padding;
-        return new Vector2(width + padding.Horizontal, height);
-    }
-
-    private static Vector2 MeasureTextArea(ref readonly Element e, ref readonly Element p)
-    {
-        var widthMode = p.Type == ElementType.Row ? Size.Fit : Size.Percent();
-        return ResolveSize(in e, in p, new Size2(widthMode, e.Data.TextArea.Height));
-    }
-
-    private static Vector2 FitTextArea(ref readonly Element e, ref readonly Element p)
-    {
-        var height = e.Data.TextArea.Height.Mode == SizeMode.Fixed
-            ? e.Data.TextArea.Height.Value
-            : 100f;
-
-        var font = (e.Asset as Font) ?? DefaultFont;
-        var width = 0f;
-
-        if (font != null)
-        {
-            var fontSize = e.Data.TextArea.FontSize;
-            var text = e.Id != 0
-                ? GetElementState(e.Id).Data.TextArea.Text.AsReadOnlySpan()
-                : ReadOnlySpan<char>.Empty;
-
-            if (text.Length == 0)
-                text = e.Data.TextArea.Placeholder.AsReadOnlySpan();
-
-            width = text.Length > 0
-                ? TextRender.Measure(text, font, fontSize).X
-                : 0;
-        }
-
-        var padding = e.Data.TextArea.Padding;
-        return new Vector2(width + padding.Horizontal, height);
     }
 
     private static Vector2 GetOuterSize(ref readonly Element e, in Vector2 intrinsicSize)
@@ -376,8 +338,6 @@ public static partial class UI
         ElementType.Cursor => FitTransform(in e, in p),
         ElementType.Image => FitImage(in e),
         ElementType.Label => FitLabel(in e, in p),
-        ElementType.TextBox => FitTextBox(in e, in p),
-        ElementType.TextArea => FitTextArea(in e, in p),
         ElementType.Spacer => e.Data.Spacer.Size,
         _ => Vector2.Zero
     };

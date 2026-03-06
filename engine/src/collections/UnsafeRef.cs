@@ -40,5 +40,5 @@ public readonly unsafe struct UnsafeRef<T> where T : unmanaged
     /// <summary>
     /// Return an unsafe pointer.
     /// </summary>
-    public T* AsUnsafePtr() => _ptr;
+    public T* Ptr => _ptr;
 }
