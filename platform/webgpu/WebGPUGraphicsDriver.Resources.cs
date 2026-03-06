@@ -924,7 +924,13 @@ public unsafe partial class WebGPUGraphicsDriver
 
     public void BindDepthTextureForSampling(nuint depthTexture, int slot)
     {
-        _state.BoundDepthTexture = depthTexture;
+        switch (slot)
+        {
+            case 0: _state.BoundDepthTexture0 = depthTexture; break;
+            case 1: _state.BoundDepthTexture1 = depthTexture; break;
+            case 2: _state.BoundDepthTexture2 = depthTexture; break;
+            case 3: _state.BoundDepthTexture3 = depthTexture; break;
+        }
         _state.BindGroupDirty = true;
     }
 

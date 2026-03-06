@@ -113,7 +113,10 @@ public unsafe partial class WebGPUGraphicsDriver : IGraphicsDriver
         public int CurrentPassSampleCount;
         public bool HasDepthAttachment;
         public bool IsDepthOnly;
-        public nuint BoundDepthTexture;
+        public nuint BoundDepthTexture0;
+        public nuint BoundDepthTexture1;
+        public nuint BoundDepthTexture2;
+        public nuint BoundDepthTexture3;
     }
 
     private struct MeshInfo

@@ -163,6 +163,7 @@ public unsafe partial class WebGPUGraphicsDriver
 
         var entries = stackalloc BindGroupEntry[bindings.Count];
         int validEntryCount = 0;
+        int depthTextureSlot = 0;
 
         for (int i = 0; i < bindings.Count; i++)
         {
@@ -259,14 +260,25 @@ public unsafe partial class WebGPUGraphicsDriver
 
                 case ShaderBindingType.DepthTexture2D:
                 {
-                    if (_state.BoundDepthTexture == 0)
+                    // Map successive DepthTexture2D bindings to slots 0-3
+                    var boundDt = depthTextureSlot switch
                     {
-                        Log.Error($"Depth texture (binding {binding.Binding}) not bound!");
+                        0 => _state.BoundDepthTexture0,
+                        1 => _state.BoundDepthTexture1,
+                        2 => _state.BoundDepthTexture2,
+                        3 => _state.BoundDepthTexture3,
+                        _ => (nuint)0,
+                    };
+                    depthTextureSlot++;
+
+                    if (boundDt == 0)
+                    {
+                        Log.Error($"Depth texture (binding {binding.Binding}, slot {depthTextureSlot - 1}) not bound!");
                         _state.BindGroupDirty = false;
                         return;
                     }
 
-                    ref var dt = ref _depthTextures[(int)_state.BoundDepthTexture];
+                    ref var dt = ref _depthTextures[(int)boundDt];
                     entries[validEntryCount++] = new BindGroupEntry
                     {
                         Binding = binding.Binding,
