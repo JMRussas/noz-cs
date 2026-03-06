@@ -6,12 +6,36 @@ using System.Threading;
 
 namespace NoZ.Editor;
 
+/// <summary>
+/// Generation parameters shared by both per-layer shapes and the refine pass.
+/// </summary>
 public class GenerationConfig
 {
     public string Prompt = "";
+    public string NegativePrompt = "";
     public long Seed;
     public float Strength = 0.8f;
+    public int Steps = 40;
+    public float GuidanceScale = 6.0f;
 
+    public bool HasPrompt => !string.IsNullOrEmpty(Prompt);
+
+    public GenerationConfig Clone() => new()
+    {
+        Prompt = Prompt,
+        NegativePrompt = NegativePrompt,
+        Seed = Seed,
+        Strength = Strength,
+        Steps = Steps,
+        GuidanceScale = GuidanceScale,
+    };
+}
+
+/// <summary>
+/// Document-level generation state and result image.
+/// </summary>
+public class GenerationImage : IDisposable
+{
     // Editor-only state (not persisted)
     public bool IsGenerating;
     public GenerationState GenerationState;
@@ -22,14 +46,11 @@ public class GenerationConfig
     public string? GenerationError;
     public CancellationTokenSource? CancellationSource;
 
-    public bool HasPrompt => !string.IsNullOrEmpty(Prompt);
+    // Result image (persisted as base64 in .sprite file)
+    public byte[]? ImageData;
+    public Texture? Texture; // Editor-only GPU texture
 
-    public GenerationConfig Clone() => new()
-    {
-        Prompt = Prompt,
-        Seed = Seed,
-        Strength = Strength,
-    };
+    public bool HasImageData => ImageData is { Length: > 0 };
 
     public void CancelGeneration()
     {
@@ -40,6 +61,12 @@ public class GenerationConfig
         GenerationProgress = 0f;
         GenerationError = null;
     }
+
+    public void Dispose()
+    {
+        Texture?.Dispose();
+        Texture = null;
+    }
 }
 
 public class SpriteFrame : IDisposable
@@ -47,17 +74,9 @@ public class SpriteFrame : IDisposable
     public readonly Shape Shape = new();
     public int Hold;
 
-    // Per-frame generated image (PNG bytes, persisted as base64 in .sprite file)
-    public byte[]? ImageData;
-    public Texture? GeneratedTexture; // Editor-only GPU texture
-
-    public bool HasImageData => ImageData is { Length: > 0 };
-
     public void Dispose()
     {
         Shape.Dispose();
-        GeneratedTexture?.Dispose();
-        GeneratedTexture = null;
     }
 }
 
@@ -107,16 +126,12 @@ public class SpriteLayer
         {
             Frames[i].Shape.CopyFrom(Frames[i - 1].Shape);
             Frames[i].Hold = Frames[i - 1].Hold;
-            Frames[i].ImageData = Frames[i - 1].ImageData;
         }
 
         if (copyFrame >= 0 && copyFrame < FrameCount)
             Frames[insertAt].Shape.CopyFrom(Frames[copyFrame].Shape);
 
         Frames[insertAt].Hold = 0;
-        Frames[insertAt].ImageData = null;
-        Frames[insertAt].GeneratedTexture?.Dispose();
-        Frames[insertAt].GeneratedTexture = null;
         return insertAt;
     }
 
@@ -129,14 +144,10 @@ public class SpriteLayer
         {
             Frames[i].Shape.CopyFrom(Frames[i + 1].Shape);
             Frames[i].Hold = Frames[i + 1].Hold;
-            Frames[i].ImageData = Frames[i + 1].ImageData;
-            Frames[i].GeneratedTexture = Frames[i + 1].GeneratedTexture;
         }
 
         Frames[FrameCount - 1].Shape.Clear();
         Frames[FrameCount - 1].Hold = 0;
-        Frames[FrameCount - 1].ImageData = null;
-        Frames[FrameCount - 1].GeneratedTexture = null;
         FrameCount--;
         return Math.Min(frameIndex, FrameCount - 1);
     }
@@ -159,7 +170,6 @@ public class SpriteLayer
         {
             clone.Frames[i].Shape.CopyFrom(Frames[i].Shape);
             clone.Frames[i].Hold = Frames[i].Hold;
-            clone.Frames[i].ImageData = Frames[i].ImageData?.ToArray();
         }
         return clone;
     }

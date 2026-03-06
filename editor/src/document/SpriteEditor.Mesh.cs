@@ -81,9 +81,8 @@ public partial class SpriteEditor
             {
                 if (!layers[layerIdx].Visible) continue;
 
-                // Layers with image data render their image instead of mesh
-                var layerFrameIdx = SpriteDocument.GetLayerFrameAtTimeSlot(layers[layerIdx], _currentTimeSlot);
-                if (layers[layerIdx].Frames[layerFrameIdx].GeneratedTexture != null) continue;
+                // Generated layers render as a single composite image, not vector mesh
+                if (layers[layerIdx].IsGenerated) continue;
 
                 // Snapshot accumulated paths at layer start for clip (cross-layer only)
                 var lowerLayerPaths = accumulatedPaths;
@@ -274,36 +273,27 @@ public partial class SpriteEditor
     /// </summary>
     private void DrawGeneratedLayers()
     {
-        var layers = Document.Layers;
+        var texture = Document.Generation.Texture;
+        if (texture == null) return;
+
         var ppu = EditorApplication.Config.PixelsPerUnitInv;
+        var bounds = Document.RasterBounds;
 
-        for (int li = 0; li < layers.Count; li++)
+        var rect = new Rect(
+            bounds.X * ppu,
+            bounds.Y * ppu,
+            bounds.Width * ppu,
+            bounds.Height * ppu);
+
+        using (Graphics.PushState())
         {
-            var layer = layers[li];
-            if (!layer.Visible) continue;
-
-            var fi = SpriteDocument.GetLayerFrameAtTimeSlot(layer, _currentTimeSlot);
-            var frame = layer.Frames[fi];
-            if (frame.GeneratedTexture == null) continue;
-
-            var bounds = Document.RasterBounds;
-
-            var rect = new Rect(
-                bounds.X * ppu,
-                bounds.Y * ppu,
-                bounds.Width * ppu,
-                bounds.Height * ppu);
-
-            using (Graphics.PushState())
-            {
-                    Graphics.SetSortGroup(3);
-                Graphics.SetLayer(EditorLayer.DocumentEditor);
-                Graphics.SetTransform(Document.Transform);
-                Graphics.SetTexture(frame.GeneratedTexture);
-                Graphics.SetShader(EditorAssets.Shaders.Texture);
-                Graphics.SetColor(Color.White.WithAlpha(layer.Opacity * Workspace.XrayAlpha));
-                Graphics.Draw(rect);
-            }
+            Graphics.SetSortGroup(3);
+            Graphics.SetLayer(EditorLayer.DocumentEditor);
+            Graphics.SetTransform(Document.Transform);
+            Graphics.SetTexture(texture);
+            Graphics.SetShader(EditorAssets.Shaders.Texture);
+            Graphics.SetColor(Color.White.WithAlpha(Workspace.XrayAlpha));
+            Graphics.Draw(rect);
         }
     }
 }

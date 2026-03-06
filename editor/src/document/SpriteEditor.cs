@@ -214,6 +214,7 @@ public partial class SpriteEditor : DocumentEditor
             ToolbarUI();
             EditorUI.PanelSeparator();
             LayerDopeSheetUI();
+            UI.Spacer(EditorStyle.Control.Spacing);
         }
     }
 
@@ -262,7 +263,7 @@ public partial class SpriteEditor : DocumentEditor
         var layers = Document.Layers;
         var maxSlots = Sprite.MaxFrames;
 
-        using (UI.BeginColumn(new ContainerStyle { Padding = EdgeInsets.LeftRight(2) }))
+        using (UI.BeginColumn(new ContainerStyle { Padding = EdgeInsets.LeftRight(EditorStyle.Control.Spacing) }))
         {
             using (UI.BeginRow(EditorStyle.Dopesheet.HeaderContainer))
             {
@@ -1831,23 +1832,24 @@ public partial class SpriteEditor : DocumentEditor
             if (isGenerated)
             {
                 var gen = layer.Generation!;
+                var genImage = Document.Generation;
 
-                if (gen.IsGenerating)
+                if (genImage.IsGenerating)
                 {
-                    var progressText = gen.GenerationState switch
+                    var progressText = genImage.GenerationState switch
                     {
-                        GenerationState.Queued when gen.QueuePosition > 0 =>
-                            $"Queued (position {gen.QueuePosition})",
+                        GenerationState.Queued when genImage.QueuePosition > 0 =>
+                            $"Queued (position {genImage.QueuePosition})",
                         GenerationState.Queued => "Queued...",
-                        GenerationState.Running when gen.TotalSteps > 0 =>
-                            $"Generating {gen.CurrentStep}/{gen.TotalSteps}",
+                        GenerationState.Running when genImage.TotalSteps > 0 =>
+                            $"Generating {genImage.CurrentStep}/{genImage.TotalSteps}",
                         GenerationState.Running => "Processing...",
                         _ => "Starting..."
                     };
                     UI.Label(progressText, EditorStyle.Text.Secondary);
 
                     // Progress bar
-                    if (gen.GenerationState == GenerationState.Running && gen.TotalSteps > 0)
+                    if (genImage.GenerationState == GenerationState.Running && genImage.TotalSteps > 0)
                     {
                         using (UI.BeginContainer(new ContainerStyle
                         {
@@ -1859,7 +1861,7 @@ public partial class SpriteEditor : DocumentEditor
                         {
                             UI.BeginContainer(new ContainerStyle
                             {
-                                Width = Size.Percent(gen.GenerationProgress),
+                                Width = Size.Percent(genImage.GenerationProgress),
                                 Height = 4f,
                                 Color = EditorStyle.SelectionColor,
                                 BorderRadius = 2f
@@ -1870,15 +1872,16 @@ public partial class SpriteEditor : DocumentEditor
 
                     // Cancel button
                     if (Inspector.Button(EditorAssets.Sprites.IconDelete))
-                        gen.CancelGeneration();
+                        genImage.CancelGeneration();
                 }
                 else
                 {
-                    if (gen.GenerationError != null)
-                        UI.Label(gen.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
+                    if (genImage.GenerationError != null)
+                        UI.Label(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
 
                     gen.Strength = Inspector.SliderProperty(gen.Strength, handler: Document);
                     gen.Prompt = Inspector.StringProperty(gen.Prompt, handler: Document, placeholder: "Prompt", multiLine: true);
+                    gen.NegativePrompt = Inspector.StringProperty(gen.NegativePrompt, handler: Document, placeholder: "Negative Prompt", multiLine: true);
                 }
             }
         }

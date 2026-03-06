@@ -173,15 +173,27 @@ public class GenerationRequest
 
     public string Workflow { get; set; } = "sprite";
     public List<GenerationShape> Shapes { get; set; } = [];
-    public string? NegativePrompt { get; set; }
-    public string? RefinePrompt { get; set; }
+    public GenerationRefine? Refine { get; set; }
+    public long? Seed { get; set; }
 }
 
 public class GenerationShape
 {
     public string Mask { get; set; } = "";
     public string Prompt { get; set; } = "";
+    public string? NegativePrompt { get; set; }
     public float Strength { get; set; } = 0.8f;
+    public int Steps { get; set; } = 40;
+    public float GuidanceScale { get; set; } = 6.0f;
+}
+
+public class GenerationRefine
+{
+    public string Prompt { get; set; } = "";
+    public string? NegativePrompt { get; set; }
+    public float Strength { get; set; } = 0.64f;
+    public int Steps { get; set; } = 40;
+    public float GuidanceScale { get; set; } = 6.0f;
 }
 
 public class GenerationResponse

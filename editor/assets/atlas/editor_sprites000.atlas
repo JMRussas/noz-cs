@@ -56,5 +56,4 @@ r "icon_subtract" 127 660 64 64 0
 r "icon_tiling" 183 471 57 57 0
 r "icon_unlock" 217 435 26 33 0
 r "icon_xray" 183 528 59 62 0
-r "" 74 987 29 30 0
-r "new_sprite" 240 468 42 48 0
+r "new_sprite" 240 468 41 51 0
