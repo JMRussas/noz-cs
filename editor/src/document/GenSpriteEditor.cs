@@ -223,7 +223,7 @@ public partial class GenSpriteEditor : DocumentEditor
                         {
                             Width = Size.Percent(genImage.GenerationProgress),
                             Height = 4f,
-                            Color = EditorStyle.SelectionColor,
+                            Color = EditorStyle.Palette.Primary,
                             BorderRadius = 2f
                         });
                         UI.EndContainer();
@@ -266,32 +266,19 @@ public partial class GenSpriteEditor : DocumentEditor
             }
         }
 
-        using (Inspector.BeginSection("LAYERS", content: HeaderContent))
+        for (int i = Document.Layers.Count - 1; i >= 0; i--)
         {
-            for (int i = Document.Layers.Count - 1; i >= 0; i--)
+            var layer = Document.Layers[i];
+            var isActive = Document.ActiveLayerIndex == i;
+
+            var prompt = layer.Generation.Prompt;
+            var title = string.IsNullOrEmpty(prompt) ? layer.Name
+                : prompt.Length > 28 ? prompt[..28] + "..."
+                : prompt;
+
+            using (var section = Inspector.BeginSection(title, icon: EditorAssets.Sprites.IconLayer, isActive: isActive, content: isActive ? HeaderContent : null))
             {
-                var layer = Document.Layers[i];
-                var isActive = Document.ActiveLayerIndex == i;
-
-                using (UI.BeginRow(ElementId.LayerItem + i,
-                    isActive
-                        ? EditorStyle.SpriteEditor.LayerNameContainerActive with { Width = Size.Default }
-                        : EditorStyle.SpriteEditor.LayerNameContainer with { Width = Size.Default }))
-                {
-                    UI.Label(layer.Name, EditorStyle.Text.Primary);
-
-                    UI.Flex();
-
-                    if (!isActive && !string.IsNullOrEmpty(layer.Generation.Prompt))
-                    {
-                        var prompt = layer.Generation.Prompt;
-                        if (prompt.Length > 16)
-                            prompt = prompt[..16] + "...";
-                        UI.Label(prompt, EditorStyle.Text.Secondary);
-                    }
-                }
-
-                if (UI.WasPressed(ElementId.LayerItem + i))
+                if (section.WasPressed && !isActive)
                 {
                     Document.ActiveLayerIndex = i;
                     ClearSelection();

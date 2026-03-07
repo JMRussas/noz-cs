@@ -7,21 +7,36 @@ namespace NoZ.Editor;
 internal static partial class Inspector
 {
     private const int MaxProperties = 128;
+    private const int MaxSections = 32;
 
-    public struct AutoSection : IDisposable { readonly void IDisposable.Dispose() => EndSection(); }
+    public struct AutoSection : IDisposable
+    {
+        public bool WasPressed;
+        readonly void IDisposable.Dispose() => EndSection();
+    }
+
+    private struct SectionState
+    {
+        public byte Collapsed;
+    }
 
     [ElementId("Root")]
+    [ElementId("Section", MaxSections)]
     [ElementId("Property", MaxProperties)]
     private static partial class ElementId { }
 
     private static int _nextPropertyId = 0;
+    private static int _nextSectionId = 0;
     private static int _propertyId;
     private static bool _propertyEnabled;
     private static bool _propertyHovered;
+    private static bool _sectionCollapsed;
     private static string? _dropdownText = null!;
     private static Color32 _valueColor;
 
     private static int GetNextPropertyId() => _nextPropertyId++;
+
+    public static bool IsSectionCollapsed => _sectionCollapsed;
 
     public static void UpdateUI()
     {
@@ -29,21 +44,52 @@ internal static partial class Inspector
             return;
 
         _nextPropertyId = ElementId.Property;
+        _nextSectionId = ElementId.Section;
 
         using (UI.BeginColumn(ElementId.Root, EditorStyle.Inspector.Root))
-            Workspace.ActiveEditor.InspectorUI();        
+            Workspace.ActiveEditor.InspectorUI();
     }
 
-    public static AutoSection BeginSection(string name, Action? content = null)
+    public static AutoSection BeginSection(string name, Sprite? icon = null, Action? content = null, bool isActive = false)
     {
+        var sectionId = _nextSectionId++;
+        ref var state = ref UI.GetStateByWidgetId<SectionState>(sectionId);
+
+        var headerStyle = isActive
+            ? EditorStyle.Inspector.SectionHeaderActive
+            : EditorStyle.Inspector.SectionHeader;
+        var textStyle = isActive
+            ? EditorStyle.Inspector.SectionTextActive
+            : EditorStyle.Inspector.SectionText;
+
         UI.BeginColumn(EditorStyle.Inspector.Section);
-        using (UI.BeginRow(new ContainerStyle{ Height = EditorStyle.Control.Height}))
+
+        bool pressed;
+        using (UI.BeginRow(sectionId, headerStyle))
         {
-            UI.Label(name, EditorStyle.Text.Primary);
-            content?.Invoke();  
+            var chevron = state.Collapsed != 0
+                ? EditorAssets.Sprites.IconFoldoutClosed
+                : EditorAssets.Sprites.IconFoldoutOpen;
+            UI.Image(chevron, EditorStyle.Inspector.ChevronIcon);
+
+            if (icon != null)
+                UI.Image(icon, EditorStyle.Inspector.SectionIcon);
+
+            UI.Label(name, textStyle);
+            UI.Flex();
+            content?.Invoke();
+
+            pressed = UI.WasPressed();
+            if (pressed)
+                state.Collapsed = (byte)(state.Collapsed != 0 ? 0 : 1);
         }
 
-        return new AutoSection();
+        _sectionCollapsed = state.Collapsed != 0;
+
+        if (_sectionCollapsed)
+            UI.BeginColumn(new ContainerStyle { Height = 0, Clip = true });
+
+        return new AutoSection { WasPressed = pressed };
     }
 
     public static UI.AutoRow BeginRow()
@@ -53,6 +99,10 @@ internal static partial class Inspector
 
     public static void EndSection()
     {
+        if (_sectionCollapsed)
+            UI.EndColumn();
+
+        _sectionCollapsed = false;
         UI.EndColumn();
         EditorUI.PanelSeparator();
     }
@@ -67,7 +117,19 @@ internal static partial class Inspector
         _propertyHovered = forceHovered || UI.IsHovered(_propertyId);
 
         var pressed = false;
-        using (UI.BeginRow(_propertyId, _propertyHovered ? EditorStyle.Control.RootHovered : EditorStyle.Control.Root))
+        var propertyStyle = new ContainerStyle
+        {
+            Height = EditorStyle.Inspector.ControlHeight,
+            Spacing = EditorStyle.Inspector.BodyGap,
+            Padding = EdgeInsets.LeftRight(8)
+        };
+        if (_propertyHovered)
+        {
+            propertyStyle.BorderWidth = 1;
+            propertyStyle.BorderColor = EditorStyle.Palette.FocusRing;
+            propertyStyle.BorderRadius = EditorStyle.Inspector.BorderRadius;
+        }
+        using (UI.BeginRow(_propertyId, propertyStyle))
         {
             if (icon != null)
                 UI.Image(icon, EditorStyle.Icon.Secondary);

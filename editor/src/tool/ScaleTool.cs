@@ -90,7 +90,7 @@ public class ScaleTool(
 
         if (_scaleConstraint.X == 0 || _scaleConstraint.Y == 0)
         {
-            Graphics.SetColor(EditorStyle.SelectionColor.WithAlpha(0.5f));
+            Graphics.SetColor(EditorStyle.Palette.Primary.WithAlpha(0.5f));
 
             var camera = Workspace.Camera;
             var bounds = camera.WorldBounds;

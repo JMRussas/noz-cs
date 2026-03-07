@@ -242,19 +242,19 @@ public class PenTool : Tool
 
             if (_hoveringFirstPoint)
             {
-                Gizmos.SetColor(EditorStyle.SelectionColor);
+                Gizmos.SetColor(EditorStyle.Palette.Primary);
                 Gizmos.DrawRect(_points[0].Position, vertexSize * 1.3f);
             }
 
             if (_hoveringExistingAnchor && !_hoveringFirstPoint)
             {
-                Gizmos.SetColor(EditorStyle.SelectionColor);
+                Gizmos.SetColor(EditorStyle.Palette.Primary);
                 Gizmos.DrawRect(_hoverSnapPosition, vertexSize);
             }
 
             if (_hoveringSegment)
             {
-                Gizmos.SetColor(EditorStyle.SelectionColor);
+                Gizmos.SetColor(EditorStyle.Palette.Primary);
                 Gizmos.DrawRect(_hoverSnapPosition, vertexSize);
             }
         }

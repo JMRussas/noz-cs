@@ -1863,7 +1863,7 @@ public partial class SpriteEditor : DocumentEditor
                             {
                                 Width = Size.Percent(genImage.GenerationProgress),
                                 Height = 4f,
-                                Color = EditorStyle.SelectionColor,
+                                Color = EditorStyle.Palette.Primary,
                                 BorderRadius = 2f
                             });
                             UI.EndContainer();

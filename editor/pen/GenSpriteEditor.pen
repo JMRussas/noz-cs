@@ -304,6 +304,12 @@
           "id": "oEnlc",
           "name": "Layer 2 (expanded)",
           "width": "fill_container",
+          "cornerRadius": 4,
+          "stroke": {
+            "align": "inside",
+            "thickness": 1,
+            "fill": "#E83A3A"
+          },
           "layout": "vertical",
           "children": [
             {
@@ -328,7 +334,7 @@
                   "height": 12,
                   "iconFontName": "chevron-down",
                   "iconFontFamily": "lucide",
-                  "fill": "#AAAAAA"
+                  "fill": "#FFFFFF"
                 },
                 {
                   "type": "icon_font",
@@ -338,13 +344,13 @@
                   "height": 12,
                   "iconFontName": "layers",
                   "iconFontFamily": "lucide",
-                  "fill": "#AAAAAA"
+                  "fill": "#FFFFFF"
                 },
                 {
                   "type": "text",
                   "id": "3q7hF",
                   "name": "l2Title",
-                  "fill": "#AAAAAA",
+                  "fill": "#FFFFFF",
                   "content": "detailed monkey face, fur...",
                   "fontFamily": "Inter",
                   "fontSize": 12,

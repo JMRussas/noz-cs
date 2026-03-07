@@ -221,6 +221,9 @@ public static partial class UI
     public static bool HasCapture() => ElementTree.HasCapture();
     public static void ReleaseCapture() => ElementTree.ReleaseCapture();
 
+    public static ref T GetStateByWidgetId<T>(int widgetId) where T : unmanaged =>
+        ref ElementTree.GetStateByWidgetId<T>(widgetId);
+
     public static ReadOnlySpan<char> GetElementText(int elementId)
     {
         if (_lastChangedTextId == elementId)

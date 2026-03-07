@@ -263,7 +263,7 @@ internal static partial class ColorPicker
         var container = UI.BeginContainer(id, new ContainerStyle
         {
             Padding = EdgeInsets.All(3),
-            Color = selected ? EditorStyle.SelectionColor : Color.Transparent,
+            Color = selected ? EditorStyle.Palette.Primary : Color.Transparent,
             BorderRadius = EditorStyle.Control.BorderRadius
         });
 

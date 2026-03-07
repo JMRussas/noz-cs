@@ -78,12 +78,12 @@ internal class SpriteSelectTool : Tool
                     _hoverSprite.Bounds.Width,
                     _hoverSprite.Bounds.Height);
 
-                Graphics.SetColor(EditorStyle.SelectionColor);
+                Graphics.SetColor(EditorStyle.Palette.Primary);
                 Gizmos.DrawRect(worldBounds, EditorStyle.Workspace.DocumentBoundsLineWidth, outside: true);
             }
             else
             {
-                Graphics.SetColor(EditorStyle.SelectionColor.WithAlpha(0.5f));
+                Graphics.SetColor(EditorStyle.Palette.Primary.WithAlpha(0.5f));
                 Gizmos.DrawRect(Workspace.MouseWorldPosition, EditorStyle.Shape.AnchorSize * 2f);
             }
         }
