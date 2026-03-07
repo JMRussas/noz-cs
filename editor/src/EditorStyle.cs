@@ -7,6 +7,28 @@ namespace NoZ.Editor;
 
 public static class EditorStyle
 {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
     public static readonly Color SelectionColor = Color.FromRgb(0x54a3f6);
 
     // Toggle Button

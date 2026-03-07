@@ -1,8 +1,6 @@
-﻿//
+//
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
-
-using System.Runtime.InteropServices;
 
 namespace NoZ;
 
@@ -21,36 +19,4 @@ public enum ElementFlags : ushort
     HoverChanged = 1 << 8,
     Disabled = 1 << 9,
     Checked = 1 << 10,
-}
-
-internal struct ScrollableState
-{
-    public float ScrollOffset;
-}
-
-[StructLayout(LayoutKind.Explicit)]
-internal struct ElementStateData
-{
-    [FieldOffset(0)] public ScrollableData Scrollable;
-}
-
-internal struct ElementState
-{
-    public ElementFlags Flags;
-    public short Index;
-    public Rect Rect;
-    public System.Numerics.Matrix3x2 LocalToWorld;
-    public ElementStateData Data;
-    public ushort LastFrame;
-    public Tween Tween;
-
-    public readonly bool HasFocus => (Flags & ElementFlags.Focus) != 0;
-    public readonly bool IsHovered => (Flags & ElementFlags.Hovered) != 0;
-    public readonly bool IsHoverChanged => (Flags & ElementFlags.HoverChanged) != 0;
-    public readonly bool IsPressed => (Flags & ElementFlags.Pressed) != 0;
-    public readonly bool IsDown => (Flags & ElementFlags.Down) != 0;
-    public readonly bool IsDragging => (Flags & ElementFlags.Dragging) != 0;
-    public readonly bool IsChanged => (Flags & ElementFlags.Changed) != 0;
-    public void SetFlags(ElementFlags mask, ElementFlags flags) =>
-        Flags = (Flags & ~mask) | (flags & mask);
 }

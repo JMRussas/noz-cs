@@ -20,11 +20,7 @@ public enum ImageStretch : byte
 
 public static partial class UI
 {
-    private const int MaxElements = 4096;
-    private const int MaxElementStack = 128;
-    private const int MaxPopups = 4;
     private const int MaxTextBuffer = 64 * 1024;
-    private const int MaxElementId = 32767;
 
     public struct AutoContainer : IDisposable { readonly void IDisposable.Dispose() => EndContainer(); }
     public struct AutoColumn : IDisposable { readonly void IDisposable.Dispose() => EndColumn(); }
@@ -41,43 +37,21 @@ public static partial class UI
     public static Font DefaultFont => _defaultFont!;
     public static UIConfig Config { get; private set; } = new();
 
-    private static readonly Element[] _elements = new Element[MaxElements];
-    private static readonly short[] _elementStack = new short[MaxElementStack];
-    private static readonly short[] _elementIdStack = new short[MaxElementStack];
-    private static readonly short[] _popups = new short[MaxPopups];
-    private static NativeArray<ElementState> _elementStates = new(MaxElementId + 1, MaxElementId + 1);
     private static NativeArray<char>[] _textBuffers = [new(MaxTextBuffer), new(MaxTextBuffer)];
     private static int _currentTextBuffer;
 
     private static ushort _frame;
     public static ushort Frame => _frame;
-    private static short _elementCount;
-    private static short _previousElementCount;
-    private static int _elementStackCount;
-    private static int _elementIdStackCount;
-    private static int _popupCount;
-    private static int _activePopupCount;
     private static Vector2 _size;
     private static Vector2Int _refSize;
-    private static int _activeScrollId;
-    private static float _lastScrollMouseY;
-    private static bool _closePopups;
-    private static int _inputPopupIndex;
 
     // ElementTree wrapper stack for Container/Row/Column decomposition
     // High bit (0x80) = widget was opened, low 7 bits = wrapper element count
     private static readonly byte[] _etWrapperCounts = new byte[128];
     private static int _etWrapperIndex;
 
-    // ElementTree popup offsets (parallel to _popups array)
-    private static readonly int[] _etPopupOffsets = new int[4];
-    private static int _etPopupCount;
 
-    // Scrollbar drag state
-    private static bool _scrollbarDragging;
-    private static int _scrollbarDragElementId;
-    private static float _scrollbarDragStartOffset;
-    private static float _scrollbarDragStartMouseY;
+
     public static Vector2 ScreenSize => _size;
 
     public static float UserScale { get; set; } = 1.0f;
@@ -165,172 +139,23 @@ public static partial class UI
         ElementTree.Shutdown();
     }
 
-    internal static ref Element CreateElement(ElementType type)
-    {
-        ref var element = ref _elements[_elementCount];
-        element.Type = type;
-        element.Id = 0;
-        element.Index = _elementCount;
-        element.NextSiblingIndex = 0;
-        element.ParentIndex = _elementStackCount > 0 ? _elementStack[_elementStackCount - 1] : (short)-1;
-        element.ChildCount = 0;
-        element.Rect = Rect.Zero;
-        element.MeasuredSize = Vector2.Zero;
-        element.LocalToWorld = Matrix3x2.Identity;
-        element.WorldToLocal = Matrix3x2.Identity;
-        element.Asset = null;
+    public static bool IsValidElement(int elementId) => ElementTree.IsWidgetId(elementId);
 
-        if (_elementStackCount > 0)
-            _elements[_elementStack[_elementStackCount - 1]].ChildCount++;
-
-        _elementCount++;
-        return ref element;
-    }
-
-    private static int GetDepth(ref readonly Element e)
-    {
-        int depth = 0;
-        var parentIndex = e.ParentIndex;
-        while (parentIndex != -1)
-        {
-            depth++;
-            parentIndex = _elements[parentIndex].ParentIndex;
-        }
-        return depth;
-    }
-
-    public static bool IsValidElement(int elementId) =>
-        elementId > 0 && elementId <= MaxElementId && _elementStates[elementId].LastFrame >= _frame - 1;
-
-    private static ref Element GetParent() => 
-        ref _elements[_elementStackCount - 2];
-
-    private static ref Element GetParent(ref readonly Element e) =>
-        ref GetElement(e.ParentIndex);
-
-    private static ref Element GetSelf() =>
-        ref _elements[_elementStack[_elementStackCount - 1]];
-
-    private static ref Element GetTopId() =>
-        ref _elements[_elementIdStack[_elementIdStackCount - 1]];
-
-    internal static ref Element GetElement(int index) =>
-        ref _elements[index];
-
-    private static ref ElementState GetElementState(ref Element e)
-    {
-        Debug.Assert(e.Id > 0 && e.Id <= MaxElementId, $"Invalid ElementId: {e.Id}");
-        return ref _elementStates[e.Id];
-    }
-
-    internal static ref ElementState GetElementState(int elementId)
-    {
-        Debug.Assert(elementId > 0 && elementId <= MaxElementId, $"Invalid ElementId: {elementId}");
-        return ref _elementStates[elementId];
-    }
-
-    public static bool IsRow() => GetSelf().Type == ElementType.Row;
-    public static bool IsColumn() => GetSelf().Type == ElementType.Column;
-    public static int GetElementChildCount() => GetSelf().ChildCount;
+    public static bool IsRow() => ElementTree.IsParentRow();
+    public static bool IsColumn() => ElementTree.IsParentColumn();
 
     private static ref NativeArray<char> GetTextBuffer() => ref _textBuffers[_currentTextBuffer];
-
-    public static int GetElementId() => GetTopId().Id;
 
     public static Rect GetElementRect(int elementId)
     {
         if (elementId == 0) return Rect.Zero;
-        if (ElementTree.IsWidgetId(elementId)) return ElementTree.GetWidgetRect(elementId);
-        return GetElementState(elementId).Rect;
+        return ElementTree.GetWidgetRect(elementId);
     }
 
     public static Rect GetElementWorldRect(int elementId)
     {
-        if (elementId == 0)
-            return Rect.Zero;
-
-        if (ElementTree.IsWidgetId(elementId))
-            return ElementTree.GetWidgetWorldRect(elementId);
-
-        ref var es = ref GetElementState(elementId);
-        var topLeft = Vector2.Transform(es.Rect.Position, es.LocalToWorld);
-        var bottomRight = Vector2.Transform(es.Rect.Position + es.Rect.Size, es.LocalToWorld);
-        return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
-    }
-
-    public static int GetParentElementId() =>
-        GetElement(GetElement(GetElementId()).ParentIndex).Id;
-
-    public static Rect GetRelativeElementRect(int elementId, int relativeToId)
-    {
-        if (elementId == 0)
-            return Rect.Zero;
-
-        ref var sourceState = ref GetElementState(elementId);
-
-        var topLeft = Vector2.Transform(sourceState.Rect.Position, sourceState.LocalToWorld);
-        var bottomRight = Vector2.Transform(sourceState.Rect.Position + sourceState.Rect.Size, sourceState.LocalToWorld);
-
-        // If no relative element specified, return world-space rect
-        if (relativeToId == 0)
-            return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
-
-        // Transform to target element's local space using cached transform
-        ref var targetState = ref GetElementState(relativeToId);
-        Matrix3x2.Invert(targetState.LocalToWorld, out var targetWorldToLocal);
-
-        topLeft = Vector2.Transform(topLeft, targetWorldToLocal);
-        bottomRight = Vector2.Transform(bottomRight, targetWorldToLocal);
-
-        return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
-    }
-
-    private static bool HasCurrentElement() => _elementStackCount > 0;
-
-    internal static void SetId(ref Element e, int elementId)
-    {
-        if (elementId == 0) return;
-        Debug.Assert(elementId > 0 && elementId <= MaxElementId, $"Invalid ElementId: {elementId}");
-
-        e.Id = elementId;
-
-        ref var es = ref GetElementState(elementId);
-
-        // Reset state for elements not present in the previous frame to prevent
-        // stale UnsafeSpan references and garbage flags
-        if (es.LastFrame != (ushort)(_frame - 1) && es.LastFrame != _frame)
-            es = default;
-
-        es.LastFrame = _frame;
-        es.Index = e.Index;
-    }
-
-    internal static void PushElement(short index)
-    {
-        if (_elementStackCount >= MaxElementStack) return;
-        _elementStack[_elementStackCount++] = index;
-        if (_elements[index].Id != 0)
-            _elementIdStack[_elementIdStackCount++] = index;
-    }
-
-    internal static void PopElement()
-    {
-        if (_elementStackCount == 0) return;
-        var index = _elementStack[_elementStackCount - 1];
-        _elements[index].NextSiblingIndex = _elementCount;
-        if (_elements[index].Id != 0)
-            _elementIdStackCount--;
-        _elementStackCount--;
-    }
-
-    private static void EndElement(ElementType expectedType)
-    {
-        if (!HasCurrentElement())
-            throw new InvalidOperationException("No current element to end");
-        ref var current = ref GetSelf();
-        if (current.Type != expectedType)
-            throw new InvalidOperationException($"Expected {expectedType} but got {current.Type}");
-        PopElement();
+        if (elementId == 0) return Rect.Zero;
+        return ElementTree.GetWidgetWorldRect(elementId);
     }
 
     internal static UnsafeSpan<char> AddText(int length)
@@ -373,85 +198,28 @@ public static partial class UI
         return result;
     }
 
-    public static bool IsHovered(int elementId) =>
-        ElementTree.IsWidgetId(elementId) ? ElementTree.IsHoveredById(elementId) : GetElementState(elementId).IsHovered;
-    public static bool IsHovered()
-    {
-        if (ElementTree.HasCurrentWidget()) return ElementTree.IsHovered();
-        return GetElementState(ref GetTopId()).IsHovered;
-    }
-    public static bool HoverEnter()
-    {
-        if (ElementTree.HasCurrentWidget()) return ElementTree.HoverEnter();
-        ref var es = ref GetElementState(ref GetTopId()); return es.IsHoverChanged && es.IsHovered;
-    }
-    public static bool HoverEnter(int elementId)
-    {
-        if (ElementTree.IsWidgetId(elementId)) return ElementTree.HoverChangedById(elementId) && ElementTree.IsHoveredById(elementId);
-        ref var es = ref GetElementState(elementId); return es.IsHoverChanged && es.IsHovered;
-    }
-    public static bool HoverExit()
-    {
-        if (ElementTree.HasCurrentWidget()) return ElementTree.HoverExit();
-        ref var es = ref GetElementState(ref GetTopId()); return es.IsHoverChanged && !es.IsHovered;
-    }
-    public static bool HoverExit(int elementId)
-    {
-        if (ElementTree.IsWidgetId(elementId)) return ElementTree.HoverChangedById(elementId) && !ElementTree.IsHoveredById(elementId);
-        ref var es = ref GetElementState(elementId); return es.IsHoverChanged && !es.IsHovered;
-    }
-    public static bool HoverChanged()
-    {
-        if (ElementTree.HasCurrentWidget()) return ElementTree.HoverChanged();
-        return GetElementState(ref GetTopId()).IsHoverChanged;
-    }
-    public static bool HoverChanged(int elementId) =>
-        ElementTree.IsWidgetId(elementId) ? ElementTree.HoverChangedById(elementId) : GetElementState(elementId).IsHoverChanged;
-    public static bool WasPressed()
-    {
-        if (ElementTree.HasCurrentWidget()) return ElementTree.WasPressed();
-        return GetElementState(ref GetTopId()).IsPressed;
-    }
-    public static bool WasPressed(int elementId) =>
-        ElementTree.IsWidgetId(elementId) ? ElementTree.WasPressedById(elementId) : GetElementState(elementId).IsPressed;
-    public static bool IsDown()
-    {
-        if (ElementTree.HasCurrentWidget()) return ElementTree.IsDown();
-        return GetElementState(ref GetTopId()).IsDown;
-    }
+    public static bool IsHovered(int elementId) => ElementTree.IsHoveredById(elementId);
+    public static bool IsHovered() => ElementTree.IsHovered();
+    public static bool HoverEnter() => ElementTree.HoverEnter();
+    public static bool HoverEnter(int elementId) => ElementTree.HoverChangedById(elementId) && ElementTree.IsHoveredById(elementId);
+    public static bool HoverExit() => ElementTree.HoverExit();
+    public static bool HoverExit(int elementId) => ElementTree.HoverChangedById(elementId) && !ElementTree.IsHoveredById(elementId);
+    public static bool HoverChanged() => ElementTree.HoverChanged();
+    public static bool HoverChanged(int elementId) => ElementTree.HoverChangedById(elementId);
+    public static bool WasPressed() => ElementTree.WasPressed();
+    public static bool WasPressed(int elementId) => ElementTree.WasPressedById(elementId);
+    public static bool IsDown() => ElementTree.IsDown();
 
     public static void SetDisabled(bool disabled = true) => ElementTree.SetWidgetFlag(ElementFlags.Disabled, disabled);
     public static void SetChecked(bool isChecked = true) => ElementTree.SetWidgetFlag(ElementFlags.Checked, isChecked);
     public static bool IsDisabled() => ElementTree.HasCurrentWidget() && (ElementTree.GetCurrentWidgetFlags() & ElementFlags.Disabled) != 0;
     public static bool IsChecked() => ElementTree.HasCurrentWidget() && (ElementTree.GetCurrentWidgetFlags() & ElementFlags.Checked) != 0;
 
-    public static void SetCapture(int elementId)
-    {
-        _captureElementId = elementId;
-        Input.CaptureMouse();
-    }
-
-    public static void SetCapture()
-    {
-        if (ElementTree.HasCurrentWidget()) { ElementTree.SetCapture(); return; }
-        SetCapture(GetTopId().Id);
-    }
-
-    public static bool HasCapture(int elementId) => _captureElementId != 0 && _captureElementId == elementId;
-
-    public static bool HasCapture()
-    {
-        if (ElementTree.HasCurrentWidget()) return ElementTree.HasCapture();
-        if (!HasCurrentElement()) return false;
-        return _captureElementId != 0 && GetTopId().Id == _captureElementId;
-    }
-
-    public static void ReleaseCapture()
-    {
-        if (ElementTree.HasCurrentWidget()) { ElementTree.ReleaseCapture(); return; }
-        _captureElementId = 0;
-        Input.ReleaseMouseCapture();
-    }
+    public static void SetCapture(int elementId) => ElementTree.SetCaptureById(elementId);
+    public static void SetCapture() => ElementTree.SetCapture();
+    public static bool HasCapture(int elementId) => ElementTree.HasCaptureById(elementId);
+    public static bool HasCapture() => ElementTree.HasCapture();
+    public static void ReleaseCapture() => ElementTree.ReleaseCapture();
 
     public static ReadOnlySpan<char> GetElementText(int elementId)
     {
@@ -470,27 +238,11 @@ public static partial class UI
         ElementTree.SetEditableText(elementId, value, selectAll);
     }
 
-    public static ref Tween GetElementTween(int elementId) => ref GetElementState(elementId).Tween;
+    public static float GetScrollOffset(int elementId) =>
+        ElementTree.GetScrollOffset(elementId);
 
-    public static float GetScrollOffset(int elementId)
-    {
-        if (elementId == 0) return 0;
-        ref var es = ref GetElementState(elementId);
-        if (es.Index == 0) return 0;
-        ref var e = ref GetElement(es.Index);
-        if (e.Id != elementId) return 0;
-        Debug.Assert(e.Type == ElementType.Scrollable, "GetScrollOffset called on non-scrollable element");
-        return es.Data.Scrollable.Offset;
-    }
-
-    public static void SetScrollOffset(int elementId, float offset)
-    {
-        if (elementId == 0) return;
-        ref var es = ref GetElementState(elementId);
-        ref var e = ref GetElement(es.Index);
-        Debug.Assert(e.Type == ElementType.Scrollable, "SetScrollOffset called on non-scrollable element");
-        es.Data.Scrollable.Offset = offset;
-    }
+    public static void SetScrollOffset(int elementId, float offset) =>
+        ElementTree.SetScrollOffset(elementId, offset);
 
     /// <summary>
     /// Calculates the visible index range for a virtualized grid inside a scrollable.
@@ -524,15 +276,7 @@ public static partial class UI
     public static Vector2 ScreenToUI(Vector2 screenPos) =>
         screenPos / Application.WindowSize.ToVector2() * _size;
 
-    public static Vector2 ScreenToElement(Vector2 screen)
-    {
-        if (!HasCurrentElement()) return Vector2.Zero;
-        ref var e = ref GetSelf();
-        return Vector2.Transform(Camera!.ScreenToWorld(screen), e.WorldToLocal);
-    }
-
-    public static bool IsClosed() =>
-        HasCurrentElement() && GetSelf().Type == ElementType.Popup && _closePopups;
+    public static bool IsClosed() => ElementTree.ClosePopups;
 
     internal static void Begin()
     {
@@ -541,15 +285,8 @@ public static partial class UI
         _valueChanged = false;
 
         _frame++;
-        _previousElementCount = _elementCount;
         _refSize = GetRefSize();
-        _elementStackCount = 0;
-        _elementIdStackCount = 0;
-        _elementCount = 0;
         _etWrapperIndex = 0;
-        _popupCount = 0;
-        _etPopupCount = 0;
-        _activePopupCount = 0;
         _currentTextBuffer = 1 - _currentTextBuffer;
         _textBuffers[_currentTextBuffer].Clear();
 
@@ -594,13 +331,6 @@ public static partial class UI
         Camera!.SetExtents(new Rect(0, 0, _size.X, _size.Y));
         Camera!.Update();
 
-        // Create automatic full-screen root container
-        ref var root = ref CreateElement(ElementType.Container);
-        root.Id = 0;
-        root.Data.Container = ContainerData.Default;
-        PushElement(root.Index);
-
-        // Element tree
         ElementTree.ScreenSize = _size;
         ElementTree.Begin();
         ElementTree.BeginSize(Size.Percent(1), Size.Percent(1));
@@ -747,19 +477,12 @@ public static partial class UI
 
     public static AutoTransformed BeginTransformed(TransformStyle style)
     {
-        ref var e = ref CreateElement(ElementType.Transform);
-        e.Data.Transform = new TransformData
-        {
-            Pivot = style.Origin,
-            Translate = style.Translate,
-            Rotate = style.Rotate,
-            Scale = style.Scale
-        };
-        PushElement(e.Index);
+        ElementTree.BeginTransform(style.Origin, style.Translate, style.Rotate, style.Scale);
+        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoTransformed();
     }
 
-    public static void EndTransformed() => EndElement(ElementType.Transform);
+    public static void EndTransformed() => EndContainerImpl();
 
     public static AutoOpacity BeginOpacity(float opacity)
     {
@@ -772,21 +495,19 @@ public static partial class UI
 
     public static AutoCursor BeginCursor(Sprite sprite)
     {
-        ref var e = ref CreateElement(ElementType.Cursor);
-        e.Asset = sprite;
-        PushElement(e.Index);
+        ElementTree.BeginCursor(sprite);
+        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoCursor();
     }
 
     public static AutoCursor BeginCursor(SystemCursor cursor)
     {
-        ref var e = ref CreateElement(ElementType.Cursor);
-        e.Data.Cursor = new CursorData { SystemCursor = cursor };
-        PushElement(e.Index);
+        ElementTree.BeginCursor(cursor);
+        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoCursor();
     }
 
-    public static void EndCursor() => EndElement(ElementType.Cursor);
+    public static void EndCursor() => EndContainerImpl();
 
     public static AutoScrollable BeginScrollable(int id) =>
         BeginScrollable(id, new ScrollableStyle());
@@ -794,48 +515,19 @@ public static partial class UI
     public static AutoScrollable BeginScrollable(int id, in ScrollableStyle style)
     {
         Debug.Assert(id != 0);
-        ref var e = ref CreateElement(ElementType.Scrollable);
-        e.Data.Scrollable = new ScrollableData
-        {
-            Offset = 0,
-            ContentHeight = 0,
-            ScrollSpeed = style.ScrollSpeed,
-            ScrollbarVisibility = style.Scrollbar,
-            ScrollbarWidth = style.ScrollbarWidth,
-            ScrollbarMinThumbHeight = style.ScrollbarMinThumbHeight,
-            ScrollbarTrackColor = style.ScrollbarTrackColor,
-            ScrollbarThumbColor = style.ScrollbarThumbColor,
-            ScrollbarThumbHoverColor = style.ScrollbarThumbHoverColor,
-            ScrollbarPadding = style.ScrollbarPadding,
-            ScrollbarBorderRadius = style.ScrollbarBorderRadius
-        };
-        SetId(ref e, id);
-
-        // Restore persisted scroll offset from element state
-        ref var es = ref GetElementState(ref e);
-        e.Data.Scrollable.Offset = es.Data.Scrollable.Offset;
-
-        PushElement(e.Index);
+        ElementTree.BeginWidget(id);
+        ElementTree.BeginScrollable(id, in style);
+        _etWrapperCounts[_etWrapperIndex++] = (byte)(1 | 0x80); // 1 element (scrollable), widget flag
         return new AutoScrollable();
     }
 
-    public static void EndScrollable() => EndElement(ElementType.Scrollable);
+    public static void EndScrollable() => EndContainerImpl();
 
     public static AutoGrid BeginGrid(GridStyle style)
     {
-        ref var e = ref CreateElement(ElementType.Grid);
-        e.Data.Grid = new GridData
-        {
-            Spacing = style.Spacing,
-            Columns = style.Columns,
-            CellWidth = style.CellWidth,
-            CellHeight = style.CellHeight,
-            CellMinWidth = style.CellMinWidth,
-            CellHeightOffset = style.CellHeightOffset,
-            VirtualCount = style.VirtualCount,
-            StartIndex = style.StartIndex
-        };
-        PushElement(e.Index);
+        ElementTree.BeginGrid(style.Spacing, style.Columns, style.CellWidth, style.CellHeight,
+            style.CellMinWidth, style.CellHeightOffset, style.VirtualCount, style.StartIndex);
+        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoGrid();
     }
 
@@ -857,58 +549,30 @@ public static partial class UI
         return (columns, cellWidth, cellHeight);
     }
 
-    public static void EndGrid() => EndElement(ElementType.Grid);
+    public static void EndGrid() => EndContainerImpl();
 
     public static void Scene(int id, Camera camera, Action draw) =>
         Scene(id, camera, draw, new SceneStyle());
 
     public static void Scene(int id, Camera camera, Action draw, SceneStyle style = default)
     {
-        ref var e = ref CreateElement(ElementType.Scene);
-
-        e.Data.Scene = new SceneData
-        {
-            Size = style.Size,
-            Color = style.Color,
-            SampleCount = style.SampleCount
-        };
-        e.Asset = (camera, draw);
-
-        SetId(ref e, id);
-
-        PushElement(e.Index);
-        PopElement();
+        if (id != 0) ElementTree.BeginWidget(id);
+        ElementTree.Scene(camera, draw, style.Size, style.Color, style.SampleCount);
+        if (id != 0) ElementTree.EndWidget();
     }
 
     public static void Scene(Camera camera, Action draw, SceneStyle style = default) => Scene(0, camera, draw, style);
 
     public static AutoPopup BeginPopup(int id, PopupStyle style)
     {
-        ref var e = ref CreateElement(ElementType.Popup);
-        e.Data.Popup = new PopupData
-        {
-            Anchor = style.Anchor,
-            PopupAlign = style.PopupAlign,
-            Spacing = style.Spacing,
-            ClampToScreen = style.ClampToScreen,
-            AnchorRect = style.AnchorRect,
-            MinWidth = style.MinWidth,
-            AutoClose = style.AutoClose,
-            Interactive = style.Interactive
-        };
-        SetId(ref e, id);
-        PushElement(e.Index);
-        _popups[_popupCount++] = e.Index;
-        if (style.Interactive)
-            _activePopupCount++;
-
-        // Also push ElementTree popup for positioning content
-        _etPopupOffsets[_etPopupCount++] = ElementTree.BeginPopup(
+        ElementTree.BeginPopup(
             style.AnchorRect,
             style.Anchor,
             style.PopupAlign,
             style.Spacing,
-            style.ClampToScreen);
+            style.ClampToScreen,
+            style.AutoClose,
+            style.Interactive);
 
         return new AutoPopup();
     }
@@ -916,7 +580,6 @@ public static partial class UI
     public static void EndPopup()
     {
         ElementTree.EndPopup();
-        EndElement(ElementType.Popup);
     }
 
     // :label
@@ -960,74 +623,26 @@ public static partial class UI
 
     public static void Image(Texture texture, in ImageStyle style)
     {
-        ref var e = ref CreateElement(ElementType.Image);
-        e.Asset = texture;
         var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
         var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
-        e.Data.Image = new ImageData
-        {
-            Size = resolved.Size,
-            Stretch = resolved.Stretch,
-            Align = resolved.Align,
-            Scale = resolved.Scale,
-            Color = resolved.Color,
-            Order = resolved.Order,
-            Texture = texture.Handle,
-            UV0 = Vector2.Zero,
-            UV1 = Vector2.One,
-            Width = texture.Width,
-            Height = texture.Height,
-            AtlasIndex = -1,
-            BorderRadius = style.BorderRadius
-        };
-
-        PushElement(e.Index);
-        PopElement();
+        ElementTree.Image(texture, resolved.Size, resolved.Stretch, resolved.Color, resolved.Scale);
     }
 
     internal static void End()
     {
-        // Pop the automatic root container
-        PopElement();
-
-        LayoutElements();
-
-        Graphics.SetCamera(Camera);
-
-        // Flush any pending world-space rendering before drawing UI
-        // SetCamera also sets u_projection uniform which UIRender will use
-        Graphics.SetCamera(Camera);
-
-        DrawElements();
-
-        // Element tree
         ElementTree.EndSize();
         ElementTree.MouseWorldPosition = MouseWorldPosition;
         ElementTree.End();
 
-        // HandleInput after ElementTree layout so popup rects are available
+        Graphics.SetCamera(Camera);
         HandleInput();
 
         ElementTree.Draw();
-
-        for (int i = _elementCount; i < _previousElementCount; i++)
-        {
-            ref var e = ref _elements[i];
-            e.Asset = null;
-
-            if (e.Id == 0) continue;
-            {
-                ref var es = ref GetElementState(e.Id);
-                if (es.LastFrame != _frame)
-                    es = default;
-            }
-        }
 
 #if DEBUG
         if (Input.IsCtrlDown() && Input.WasButtonPressed(InputCode.KeyF12))
         {
             Directory.CreateDirectory("temp");
-            File.WriteAllText("temp/ui_dump.txt", DebugDumpTree());
             File.WriteAllText("temp/et_dump.txt", ElementTree.DebugDumpTree());
         }
 #endif
@@ -1052,12 +667,5 @@ public static partial class UI
     {
         if (condition == null || condition())
             Log.Info($"[UI] {new string(' ', depth)}{msg}{Log.Params(values)}");
-    }
-
-    [Conditional("NOZ_UI_DEBUG")]
-    private static void LogUI(in Element e, string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)
-    {
-        if (condition == null || condition())
-            Log.Info($"[UI]   {new string(' ', GetDepth(in e) * 2 + depth * 2)}{msg}{Log.Params(values)}");
     }
 }

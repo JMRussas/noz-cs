@@ -34,17 +34,13 @@ public static partial class UI
     public static void SetHot(int elementId)
     {
         _hotId = elementId;
-        ref var es = ref GetElementState(elementId);
-        es.SetFlags(ElementFlags.Focus, ElementFlags.Focus);
+        ElementTree.SetFocusById(elementId);
     }
 
     public static void ClearHot()
     {
         if (_hotId != 0)
-        {
-            ref var es = ref GetElementState(_hotId);
-            es.SetFlags(ElementFlags.Focus, ElementFlags.None);
-        }
+            ElementTree.ClearFocus();
         _hotId = 0;
     }
 

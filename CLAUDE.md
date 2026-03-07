@@ -91,19 +91,31 @@ Sort-based batched rendering. Key files: `Graphics.cs`, `Graphics.State.cs`, `Gr
 
 ### UI System (`engine/src/ui/`)
 
-Immediate-mode hierarchical UI. Key files: `UI.cs`, `UI.Layout.cs`, `UI.Draw.cs`, `UI.Input.cs`, `UI.Measure.cs`.
+Immediate-mode hierarchical UI built on `ElementTree`. Facade: `UI.cs`. Core: `ElementTree.cs` (partial class split across files).
 
-- **Element types**: Container, Column, Row, Grid, Label, Image, TextBox, TextArea, Scrollable, Popup, Scene, Flex, Spacer, Transform, Opacity, Cursor
-- **Layout**: Flexbox-inspired. Size modes: Default, Percent, Fixed, Fit. Alignment: Min, Center, Max.
-- **Building pattern**: `UI.BeginContainer(id, style)` ... `UI.EndContainer()`. Supports `using` auto-dispose.
-- **Style structs**: `ContainerStyle`, `LabelStyle`, `ImageStyle`, `TextBoxStyle`, etc.
-- **Input**: `UI.IsHovered()`, `UI.WasPressed()`, `UI.HasFocus()`, `UI.SetFocus()`
-- **Input inside popups**: Use `UI.IsDown()` / `UI.WasPressed()` instead of `Input.IsButtonDown()`. When popups are open, the UI system consumes the mouse button via `Input.ConsumeButton()` (UI.Input.cs), making raw `Input.IsButtonDown()` return false. `UI.IsDown()` checks the pre-consumption state.
-- **Element positioning**: During the UI build phase, the current frame's elements have uninitialized `WorldToLocal` matrices. Use `UI.GetElementWorldRect(id)` to get the previous frame's laid-out rect. For mouse position in the same coordinate space, use `UI.MouseWorldPosition` (not `UI.ScreenToUI()` which differs on the X axis due to aspect ratio handling).
+**Key files:**
+| File | Contents |
+|------|----------|
+| `ElementTree.cs` | Enums, structs, fields, Init/Shutdown, Begin/End, element allocation |
+| `ElementTree.API.cs` | Public element creation (Size, Padding, Fill, Row, Column, Label, Image, Scene, etc.) |
+| `ElementTree.Widgets.cs` | Widget state, focus/capture, Button, Toggle, Slider |
+| `ElementTree.Layout.cs` | FitAxis, LayoutAxis, GetElementSize, UpdateTransforms |
+| `ElementTree.Input.cs` | HandleInput, popup auto-close, scrollable input, cursor |
+| `ElementTree.Draw.cs` | Draw, DrawElement, DrawLabel, DrawImage, DrawScene, DrawScrollbar, debug dump |
+| `ElementTree.EditableText.cs` | TextBox/TextArea editable text widgets |
+| `UI.cs` | Public facade — delegates to ElementTree, manages camera, text buffer |
+| `UI.Draw.cs` | `DrawTexturedRect` helper, mesh flush (used by ElementTree) |
+
+- **Element types**: Widget, Size, Padding, Fill, Border, Margin, Row, Column, Flex, Align, Clip, Spacer, Opacity, Label, Image, EditableText, Popup, Cursor, Transform, Grid, Scene, Scrollable
+- **Layout**: Flexbox-inspired axis-independent layout. Size modes: Default, Percent, Fixed, Fit. Alignment: Min, Center, Max.
+- **Building pattern**: `ElementTree.BeginSize(...)` ... `ElementTree.EndSize()`. UI facade wraps with style structs.
+- **Input**: `UI.IsHovered()`, `UI.WasPressed()`, `UI.HasFocus()`, `UI.SetFocus()` — all delegate to ElementTree
+- **Input inside popups**: Use `UI.IsDown()` / `UI.WasPressed()` instead of `Input.IsButtonDown()`. When popups are open, the UI system consumes the mouse button via `Input.ConsumeButton()`, making raw `Input.IsButtonDown()` return false. `UI.IsDown()` checks the pre-consumption state.
+- **Element positioning**: During the UI build phase, the current frame's elements have uninitialized `WorldToLocal` matrices (lazy-computed on first access for input). Use `UI.GetElementWorldRect(id)` to get the previous frame's laid-out rect.
 - **EdgeInsets constructor**: `EdgeInsets(top, left, bottom, right)` — note the TLBR order, **not** TRBL. `L` is the 2nd parameter, `R` is the 4th.
-- **Margin-based positioning in Containers**: For a plain Container (not Row/Column), children overlap and are positioned via `Align + Margin`. With `Align = Align.Min` (default), `Margin.L` directly sets X position and `Margin.T` directly sets Y position. In Row layouts, `Margin.L` is consumed by sequential layout (not alignment). In Column layouts, `Margin.T` is consumed by sequential layout.
 - **Rendering**: Custom `UIVertex` mesh, renders on layer 12. Commands with custom meshes need contiguous index merging.
-- **Limits**: 4096 elements, 128-depth stack, 4 popups, 64KB text buffer
+- **Memory**: 64KB element buffer (rebuilt each frame), 128KB double-buffered state pools (widget persistence), 375KB widget state array (32000 IDs)
+- **Limits**: 65535 bytes element tree, 64-depth stack, 4 popups, 32000 widget IDs
 - **Scaling**: `UIScaleMode` with reference resolution for responsive design
 
 ### Asset System (`engine/src/Asset.cs`, `AssetDef.cs`)
