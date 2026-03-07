@@ -74,7 +74,7 @@ public static class EditorStyle
     {
         public readonly static LabelStyle Primary = new()
         {
-            FontSize = 11.0f,
+            FontSize = 16.0f,
             Color = Palette.Content,
             AlignX = Align.Min,
             AlignY = Align.Center
@@ -111,12 +111,13 @@ public static class EditorStyle
     // :control — Global control dimensions (toolbar, popups, etc.)
     public static class Control
     {
-        public const float TextSize = 11.0f;
+        public const float TextSize = 16.0f;
         public const float IconSize = 14.0f;
         public const float Height = 40.0f;
         public const float BorderRadius = 4.0f;
         public const float Spacing = 6.0f;
         public const float ContentPadding = 4.0f;
+        public const float SecondaryHeight = 36.0f;
         public const float ContentHeight = Height - ContentPadding * 2;
 
         public static readonly ContainerStyle Root = new()
@@ -136,7 +137,14 @@ public static class EditorStyle
         public static readonly ContainerStyle Fill = new()
         {
             Color = Palette.PageBG,
-            BorderRadius = BorderRadius
+            BorderRadius = BorderRadius,
+            Resolve = (s, f) =>
+            {
+                if ((f & ElementFlags.Disabled) != 0) return s with { Color = Color.Transparent };
+                if ((f & ElementFlags.Checked) != 0) return s with { Color = Palette.Active };
+                if ((f & ElementFlags.Hovered) != 0) return s with { Color = Palette.Active };
+                return s;
+            },
         };
 
         public static readonly ContainerStyle Content = new()
@@ -147,25 +155,45 @@ public static class EditorStyle
 
         public static readonly ContainerStyle ContentNoPadding = Content with { Padding = EdgeInsets.Zero };
 
-        public static readonly ContainerStyle HoverFill = Fill with { Color = Palette.Active };
-        public static readonly ContainerStyle SelectedFill = Fill with { Color = Palette.Active };
-        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Palette.Active };
-        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent };
+        // Legacy — prefer using Fill with Resolve
+        public static readonly ContainerStyle HoverFill = Fill with { Color = Palette.Active, Resolve = null };
+        public static readonly ContainerStyle SelectedFill = Fill with { Color = Palette.Active, Resolve = null };
+        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Palette.Active, Resolve = null };
+        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent, Resolve = null };
 
         public readonly static LabelStyle Text = new()
         {
             FontSize = TextSize,
             Color = Palette.Content,
             AlignX = Align.Min,
-            AlignY = Align.Center
+            AlignY = Align.Center,
+            Resolve = (s, f) =>
+            {
+                if ((f & ElementFlags.Disabled) != 0) return s with { Color = Palette.DisabledLight };
+                return s;
+            },
         };
-        public readonly static LabelStyle DisabledText = Text with { Color = Palette.DisabledLight };
-        public readonly static LabelStyle HoveredText = Text with { Color = Palette.Content };
-        public readonly static LabelStyle SelectedText = Text with { Color = Palette.Content };
+        // Legacy — prefer using Text with Resolve
+        public readonly static LabelStyle DisabledText = Text with { Color = Palette.DisabledLight, Resolve = null };
+        public readonly static LabelStyle HoveredText = Text with { Color = Palette.Content, Resolve = null };
+        public readonly static LabelStyle SelectedText = Text with { Color = Palette.Content, Resolve = null };
 
-        public readonly static LabelStyle PlaceholderText = Text with { Color = Palette.Placeholder };
-        public readonly static LabelStyle PlaceholderHoverText = Text with { Color = Palette.Label };
-        public readonly static LabelStyle PlaceholderSelectedText = Text with { Color = Palette.HeaderText };
+        public readonly static LabelStyle PlaceholderText = new()
+        {
+            FontSize = TextSize,
+            Color = Palette.Placeholder,
+            AlignX = Align.Min,
+            AlignY = Align.Center,
+            Resolve = (s, f) =>
+            {
+                if ((f & ElementFlags.Checked) != 0) return s with { Color = Palette.HeaderText };
+                if ((f & ElementFlags.Hovered) != 0) return s with { Color = Palette.Label };
+                return s;
+            },
+        };
+        // Legacy
+        public readonly static LabelStyle PlaceholderHoverText = PlaceholderText with { Color = Palette.Label, Resolve = null };
+        public readonly static LabelStyle PlaceholderSelectedText = PlaceholderText with { Color = Palette.HeaderText, Resolve = null };
 
         public static readonly ContainerStyle IconContainer = new()
         {
@@ -180,13 +208,19 @@ public static class EditorStyle
             Size = IconSize,
             AlignX = Align.Center,
             AlignY = Align.Center,
+            Resolve = (s, f) =>
+            {
+                if ((f & ElementFlags.Disabled) != 0) return s with { Color = Palette.DisabledLight };
+                return s;
+            },
         };
 
         public static readonly ImageStyle IconSecondary = Icon with { Color = Palette.Label };
 
-        public static readonly ImageStyle SelectedIcon = Icon with { Color = Palette.Content };
-        public static readonly ImageStyle DisabledIcon = Icon with { Color = Palette.DisabledLight };
-        public static readonly ImageStyle HoveredIcon = Icon with { Color = Palette.Content };
+        // Legacy — prefer using Icon with Resolve
+        public static readonly ImageStyle SelectedIcon = Icon with { Color = Palette.Content, Resolve = null };
+        public static readonly ImageStyle DisabledIcon = Icon with { Color = Palette.DisabledLight, Resolve = null };
+        public static readonly ImageStyle HoveredIcon = Icon with { Color = Palette.Content, Resolve = null };
     }
 
     // :smallcontrol
@@ -216,7 +250,6 @@ public static class EditorStyle
     {
         public const float BorderRadius = 6f;
         public const float BorderWidth = 1.0f;
-        public const int TextSize = 11;
         public const float ContentBorderRadius = 4f;
         public const float VerticalSpacing = 4.0f;
 
@@ -306,6 +339,52 @@ public static class EditorStyle
     // :button
     public static class Button
     {
+        public const float IconSize = 16.0f;
+
+        // --- Complete button styles (use with UI.Button) ---
+
+        public static readonly ButtonStyle Primary = new()
+        {
+            Width = Size.Fit,
+            MinWidth = 80.0f,
+            Height = Control.Height,
+            Color = Palette.Primary,
+            ContentColor = Palette.Content,
+            FontSize = Control.TextSize,
+            IconSize = IconSize,
+            Spacing = Control.Spacing,
+            BorderRadius = Control.BorderRadius,
+            Padding = EdgeInsets.LeftRight(12),
+            Resolve = (s, f) =>
+            {
+                if ((f & ElementFlags.Disabled) != 0) return s with { Color = Palette.DisabledLight, ContentColor = Palette.Placeholder };
+                if ((f & ElementFlags.Hovered) != 0) return s with { Color = Palette.PrimaryHover };
+                return s;
+            },
+        };
+
+        public static readonly ButtonStyle Secondary = new()
+        {
+            Width = Size.Fit,
+            MinWidth = 80.0f,
+            Height = Control.SecondaryHeight,
+            Color = Palette.Secondary,
+            ContentColor = Palette.SecondaryText,
+            FontSize = 12.0f,
+            IconSize = IconSize,
+            Spacing = Control.Spacing,
+            BorderRadius = Control.BorderRadius,
+            Padding = EdgeInsets.LeftRight(12),
+            Resolve = (s, f) =>
+            {
+                if ((f & ElementFlags.Disabled) != 0) return s with { Color = Palette.DisabledLight, ContentColor = Palette.Placeholder };
+                if ((f & ElementFlags.Hovered) != 0) return s with { Color = Palette.Active, ContentColor = Palette.Content };
+                return s;
+            },
+        };
+
+        // --- Legacy styles (still used by EditorUI helpers) ---
+
         public static readonly ContainerStyle Root = new()
         {
             Width = Size.Fit,
@@ -328,13 +407,20 @@ public static class EditorStyle
         public static readonly ContainerStyle Fill = new()
         {
             BorderRadius = Control.BorderRadius,
-            Color = Palette.Secondary
+            Color = Palette.Secondary,
+            Resolve = (s, f) =>
+            {
+                if ((f & ElementFlags.Disabled) != 0) return s with { Color = Color.Transparent };
+                if ((f & ElementFlags.Checked) != 0) return s with { Color = Palette.Active };
+                if ((f & ElementFlags.Hovered) != 0) return s with { Color = Palette.Active };
+                return s;
+            },
         };
 
-        public static readonly ContainerStyle HoverFill = Fill with { Color = Palette.Active };
-        public static readonly ContainerStyle SelectedFill = Fill with { Color = Palette.Active };
-        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Palette.Active };
-        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent };
+        public static readonly ContainerStyle HoverFill = Fill with { Color = Palette.Active, Resolve = null };
+        public static readonly ContainerStyle SelectedFill = Fill with { Color = Palette.Active, Resolve = null };
+        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Palette.Active, Resolve = null };
+        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent, Resolve = null };
 
         public static readonly ContainerStyle TextContent = Control.Content;
         public static readonly ContainerStyle IconContent = new()
@@ -380,7 +466,6 @@ public static class EditorStyle
             Size = Control.Height
         };
 
-
         public static readonly ContainerStyle SmallIcon = new()
         {
             Padding = 2,
@@ -418,7 +503,6 @@ public static class EditorStyle
     {
         public const float ItemHeight = 28f;
         public const float ItemPadding = 8f;
-        public const float ItemTextSize = 11.0f;
         public static readonly Color ItemSelectedFillColor = Palette.Active;
         public static readonly Color ItemSelectedTextColor = Palette.Content;
         public static readonly Color ItemTextColor = Palette.Content;
@@ -548,7 +632,6 @@ public static class EditorStyle
     // :contextmenu
     public static class ContextMenu
     {
-        public const int TextSize = 11;
         public const float SeparatorHeight = 1f;
         public const float SeparatorSpacing = 4f;
         public static readonly Color TitleColor = Palette.Disabled;
@@ -659,7 +742,7 @@ public static class EditorStyle
 
         public static readonly ContainerStyle SectionHeader = new()
         {
-            Height = ControlHeight,
+            Height = Control.Height,
             Color = Palette.Header,
             Padding = EdgeInsets.LeftRight(8),
             Spacing = HeaderGap,
@@ -668,7 +751,7 @@ public static class EditorStyle
 
         public static readonly LabelStyle SectionText = new()
         {
-            FontSize = HeaderFontSize,
+            FontSize = Control.TextSize,
             Color = Palette.HeaderText,
             AlignX = Align.Min,
             AlignY = Align.Center
@@ -677,7 +760,7 @@ public static class EditorStyle
         public static readonly ImageStyle ChevronIcon = new()
         {
             Color = Palette.HeaderText,
-            Size = IconSize,
+            Size = Control.IconSize,
             AlignX = Align.Center,
             AlignY = Align.Center
         };

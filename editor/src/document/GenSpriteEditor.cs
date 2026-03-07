@@ -96,9 +96,11 @@ public partial class GenSpriteEditor : DocumentEditor
         else
             GenSpriteInspectorUI();
 
-        GenerationStatusUI();
         LayersInspectorUI();
         RefineInspectorUI();
+
+        UI.Flex();
+        GenerateButtonUI();
     }
 
     public override void Dispose()
@@ -159,6 +161,7 @@ public partial class GenSpriteEditor : DocumentEditor
             return;
 
         using var _ = Inspector.BeginSection("GENSPRITE");
+        if (Inspector.IsSectionCollapsed) return;
 
         using (Inspector.BeginRow())
         using (UI.BeginFlex())
@@ -187,15 +190,13 @@ public partial class GenSpriteEditor : DocumentEditor
         Document.IncrementVersion();
     }
 
-    private void GenerationStatusUI()
+    private void GenerateButtonUI()
     {
         var genImage = Document.Generation;
-        if (!genImage.IsGenerating && genImage.GenerationError == null)
-            return;
 
-        using (Inspector.BeginSection("PROGRESS"))
+        if (genImage.IsGenerating)
         {
-            if (genImage.IsGenerating)
+            using (UI.BeginColumn(new ContainerStyle { Spacing = 4, Padding = EdgeInsets.TopBottom(4) }))
             {
                 var progressText = genImage.GenerationState switch
                 {
@@ -207,36 +208,36 @@ public partial class GenSpriteEditor : DocumentEditor
                     GenerationState.Running => "Processing...",
                     _ => "Starting..."
                 };
-                UI.Label(progressText, EditorStyle.Text.Secondary);
+                UI.Label(progressText, EditorStyle.Text.Secondary with { AlignX = Align.Center });
 
-                if (genImage.GenerationState == GenerationState.Running && genImage.TotalSteps > 0)
+                using (UI.BeginContainer(new ContainerStyle
                 {
-                    using (UI.BeginContainer(new ContainerStyle
+                    Width = Size.Percent(1),
+                    Height = 4f,
+                    Color = EditorStyle.Palette.PanelSeparator,
+                    BorderRadius = 2f
+                }))
+                {
+                    UI.Container(new ContainerStyle
                     {
-                        Width = Size.Percent(1),
+                        Width = Size.Percent(genImage.GenerationProgress),
                         Height = 4f,
-                        Color = EditorStyle.Palette.PanelSeparator,
+                        Color = EditorStyle.Palette.Primary,
                         BorderRadius = 2f
-                    }))
-                    {
-                        UI.BeginContainer(new ContainerStyle
-                        {
-                            Width = Size.Percent(genImage.GenerationProgress),
-                            Height = 4f,
-                            Color = EditorStyle.Palette.Primary,
-                            BorderRadius = 2f
-                        });
-                        UI.EndContainer();
-                    }
+                    });
                 }
 
-                if (Inspector.Button(EditorAssets.Sprites.IconDelete))
+                if (UI.Button(ElementId.GenerateButton, "Cancel", EditorAssets.Sprites.IconDelete, EditorStyle.Button.Secondary with { Width = Size.Percent(1), MinWidth = 0 }))
                     genImage.CancelGeneration();
             }
-            else if (genImage.GenerationError != null)
-            {
+        }
+        else
+        {
+            if (genImage.GenerationError != null)
                 UI.Label(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
-            }
+
+            if (UI.Button(ElementId.GenerateButton, "Generate", EditorAssets.Sprites.IconAi, EditorStyle.Button.Primary with { Width = Size.Percent(1), MinWidth = 0 }))
+                Document.GenerateAsync();
         }
     }
 
@@ -284,7 +285,7 @@ public partial class GenSpriteEditor : DocumentEditor
                     ClearSelection();
                 }
 
-                if (isActive)
+                if (!Inspector.IsSectionCollapsed && isActive)
                 {
                     var gen = layer.Generation;
                     gen.Strength = Inspector.SliderProperty(gen.Strength, handler: Document);
@@ -302,10 +303,13 @@ public partial class GenSpriteEditor : DocumentEditor
 
         using (Inspector.BeginSection("REFINE"))
         {
-            var refine = Document.Refine;
-            refine.Strength = Inspector.SliderProperty(refine.Strength, handler: Document);
-            refine.Prompt = Inspector.StringProperty(refine.Prompt, handler: Document, placeholder: "Refine Prompt", multiLine: true);
-            refine.NegativePrompt = Inspector.StringProperty(refine.NegativePrompt, handler: Document, placeholder: "Negative Prompt", multiLine: true);
+            if (!Inspector.IsSectionCollapsed)
+            {
+                var refine = Document.Refine;
+                refine.Strength = Inspector.SliderProperty(refine.Strength, handler: Document);
+                refine.Prompt = Inspector.StringProperty(refine.Prompt, handler: Document, placeholder: "Refine Prompt", multiLine: true);
+                refine.NegativePrompt = Inspector.StringProperty(refine.NegativePrompt, handler: Document, placeholder: "Negative Prompt", multiLine: true);
+            }
         }
     }
 
@@ -313,22 +317,25 @@ public partial class GenSpriteEditor : DocumentEditor
     {
         using (Inspector.BeginSection("PATH"))
         {
-            using (Inspector.BeginRow())
+            if (!Inspector.IsSectionCollapsed)
             {
-                var shape = CurrentShape;
-                var currentOp = GetSelectedPathOperation(shape);
+                using (Inspector.BeginRow())
+                {
+                    var shape = CurrentShape;
+                    var currentOp = GetSelectedPathOperation(shape);
 
-                var isNormal = currentOp == PathOperation.Normal;
-                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconFill, ref isNormal))
-                    SetPathOperation(PathOperation.Normal);
+                    var isNormal = currentOp == PathOperation.Normal;
+                    if (Inspector.ToggleProperty(EditorAssets.Sprites.IconFill, ref isNormal))
+                        SetPathOperation(PathOperation.Normal);
 
-                var isSubtract = currentOp == PathOperation.Subtract;
-                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconSubtract, ref isSubtract))
-                    SetPathOperation(PathOperation.Subtract);
+                    var isSubtract = currentOp == PathOperation.Subtract;
+                    if (Inspector.ToggleProperty(EditorAssets.Sprites.IconSubtract, ref isSubtract))
+                        SetPathOperation(PathOperation.Subtract);
 
-                var isClip = currentOp == PathOperation.Clip;
-                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconClip, ref isClip))
-                    SetPathOperation(PathOperation.Clip);
+                    var isClip = currentOp == PathOperation.Clip;
+                    if (Inspector.ToggleProperty(EditorAssets.Sprites.IconClip, ref isClip))
+                        SetPathOperation(PathOperation.Clip);
+                }
             }
         }
     }

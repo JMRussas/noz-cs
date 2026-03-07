@@ -43,8 +43,6 @@ internal struct BaseElement
     public ushort FirstChild;
     public ushort ChildCount;
     public Rect Rect;
-    public Matrix3x2 LocalToWorld;
-    public Matrix3x2 WorldToLocal;
 }
 
 internal struct SizeElement
@@ -59,6 +57,7 @@ internal struct PaddingElement
 
 internal struct WidgetElement
 {
+    public Matrix3x2 LocalToWorld;
     public int Id;
     public ushort Data;
     public ElementFlags Flags;
@@ -66,12 +65,14 @@ internal struct WidgetElement
 
 internal struct FillElement
 {
+    public Matrix3x2 LocalToWorld;
     public Color Color;
     public BorderRadius Radius;
 }
 
 internal struct BorderElement
 {
+    public Matrix3x2 LocalToWorld;
     public float Width;
     public Color Color;
     public BorderRadius Radius;
@@ -104,6 +105,7 @@ internal struct AlignElement
 
 internal struct ClipElement
 {
+    public Matrix3x2 LocalToWorld;
     public BorderRadius Radius;
 }
 
@@ -119,6 +121,7 @@ internal struct OpacityElement
 
 internal struct LabelElement
 {
+    public Matrix3x2 LocalToWorld;
     public UnsafeSpan<char> Text;
     public float FontSize;
     public Color Color;
@@ -129,6 +132,7 @@ internal struct LabelElement
 
 internal struct ImageElement
 {
+    public Matrix3x2 LocalToWorld;
     public Size2 Size;
     public ImageStretch Stretch;
     public Align2 Align;
@@ -153,6 +157,7 @@ internal struct GridElement
 
 internal struct TransformElement
 {
+    public Matrix3x2 LocalToWorld;
     public Vector2 Pivot;
     public Vector2 Translate;
     public float Rotate;
@@ -161,6 +166,7 @@ internal struct TransformElement
 
 internal struct SceneElement
 {
+    public Matrix3x2 LocalToWorld;
     public Size2 Size;
     public Color ClearColor;
     public int SampleCount;
@@ -169,6 +175,7 @@ internal struct SceneElement
 
 internal struct ScrollableElement
 {
+    public Matrix3x2 LocalToWorld;
     public float ScrollSpeed;
     public ScrollbarVisibility ScrollbarVisibility;
     public float ScrollbarWidth;
@@ -189,6 +196,7 @@ internal struct ScrollableState
 
 internal struct CursorElement
 {
+    public Matrix3x2 LocalToWorld;
     public SystemCursor SystemCursor;
     public ushort AssetIndex; // 0 = no sprite, use SystemCursor
     public bool IsSprite;
@@ -196,6 +204,7 @@ internal struct CursorElement
 
 internal struct PopupElement
 {
+    public Matrix3x2 LocalToWorld;
     public Rect AnchorRect;
     public float AnchorFactorX;
     public float AnchorFactorY;
@@ -317,11 +326,41 @@ public static unsafe partial class ElementTree
          ref *(T*)((byte*)Unsafe.AsPointer(ref element) + sizeof(BaseElement));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static Matrix3x2 GetWorldToLocal(ref BaseElement e)
+    private static ref Matrix3x2 GetLocalToWorld(ref BaseElement e)
     {
-        if (e.WorldToLocal.M11 == 0 && e.WorldToLocal.M22 == 0)
-            Matrix3x2.Invert(e.LocalToWorld, out e.WorldToLocal);
-        return e.WorldToLocal;
+        switch (e.Type)
+        {
+            case ElementType.Fill: return ref GetElementData<FillElement>(ref e).LocalToWorld;
+            case ElementType.Border: return ref GetElementData<BorderElement>(ref e).LocalToWorld;
+            case ElementType.Label: return ref GetElementData<LabelElement>(ref e).LocalToWorld;
+            case ElementType.Image: return ref GetElementData<ImageElement>(ref e).LocalToWorld;
+            case ElementType.Scene: return ref GetElementData<SceneElement>(ref e).LocalToWorld;
+            case ElementType.Clip: return ref GetElementData<ClipElement>(ref e).LocalToWorld;
+            case ElementType.Scrollable: return ref GetElementData<ScrollableElement>(ref e).LocalToWorld;
+            case ElementType.Widget: return ref GetElementData<WidgetElement>(ref e).LocalToWorld;
+            case ElementType.Popup: return ref GetElementData<PopupElement>(ref e).LocalToWorld;
+            case ElementType.Cursor: return ref GetElementData<CursorElement>(ref e).LocalToWorld;
+            case ElementType.Transform: return ref GetElementData<TransformElement>(ref e).LocalToWorld;
+            default: throw new InvalidOperationException();
+        }
+    }
+
+    private static void StoreLocalToWorld(ref BaseElement e, in Matrix3x2 m)
+    {
+        switch (e.Type)
+        {
+            case ElementType.Fill: GetElementData<FillElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Border: GetElementData<BorderElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Label: GetElementData<LabelElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Image: GetElementData<ImageElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Scene: GetElementData<SceneElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Clip: GetElementData<ClipElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Scrollable: GetElementData<ScrollableElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Widget: GetElementData<WidgetElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Popup: GetElementData<PopupElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Cursor: GetElementData<CursorElement>(ref e).LocalToWorld = m; break;
+            case ElementType.Transform: GetElementData<TransformElement>(ref e).LocalToWorld = m; break;
+        }
     }
 
     private static ref BaseElement AllocElement<T>(ElementType type) where T : unmanaged

@@ -86,9 +86,6 @@ internal static partial class Inspector
 
         _sectionCollapsed = state.Collapsed != 0;
 
-        if (_sectionCollapsed)
-            UI.BeginColumn(new ContainerStyle { Height = 0, Clip = true });
-
         return new AutoSection { WasPressed = pressed };
     }
 
@@ -99,9 +96,6 @@ internal static partial class Inspector
 
     public static void EndSection()
     {
-        if (_sectionCollapsed)
-            UI.EndColumn();
-
         _sectionCollapsed = false;
         UI.EndColumn();
         EditorUI.PanelSeparator();

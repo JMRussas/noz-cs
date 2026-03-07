@@ -616,6 +616,7 @@ public static unsafe partial class ElementTree
         ref var e = ref GetElement(offset);
 
         Matrix3x2 localTransform;
+        Matrix3x2 worldTransform;
         if (e.Type == ElementType.Transform)
         {
             ref var d = ref GetElementData<TransformElement>(ref e);
@@ -625,7 +626,8 @@ public static unsafe partial class ElementTree
                 Matrix3x2.CreateRotation(MathEx.Deg2Rad * d.Rotate) *
                 Matrix3x2.CreateTranslation(e.Rect.X + pivot.X + d.Translate.X,
                                              e.Rect.Y + pivot.Y + d.Translate.Y);
-            e.LocalToWorld = localTransform * parentTransform;
+            worldTransform = localTransform * parentTransform;
+            d.LocalToWorld = worldTransform;
 
             // Rect becomes element-local (relative to pivot)
             e.Rect.X = -e.Rect.Width * d.Pivot.X;
@@ -634,7 +636,10 @@ public static unsafe partial class ElementTree
         else
         {
             localTransform = Matrix3x2.CreateTranslation(e.Rect.X, e.Rect.Y);
-            e.LocalToWorld = localTransform * parentTransform;
+            worldTransform = localTransform * parentTransform;
+
+            // Store for types that need it in Draw/Input
+            StoreLocalToWorld(ref e, in worldTransform);
 
             e.Rect.X = 0;
             e.Rect.Y = 0;
@@ -658,9 +663,9 @@ public static unsafe partial class ElementTree
         {
             ref var child = ref GetElement(childOffset);
             var absPos = child.Rect.Position;
-            child.Rect.X = absPos.X - e.LocalToWorld.M31;
-            child.Rect.Y = absPos.Y - e.LocalToWorld.M32 - scrollOffset;
-            UpdateTransforms(childOffset, e.LocalToWorld, rectSize);
+            child.Rect.X = absPos.X - worldTransform.M31;
+            child.Rect.Y = absPos.Y - worldTransform.M32 - scrollOffset;
+            UpdateTransforms(childOffset, worldTransform, rectSize);
             childOffset = child.NextSibling;
         }
     }

@@ -11,6 +11,7 @@
       "fill": "#252526",
       "layout": "vertical",
       "gap": 2,
+      "padding": 2,
       "children": [
         {
           "type": "frame",
@@ -304,13 +305,14 @@
           "id": "oEnlc",
           "name": "Layer 2 (expanded)",
           "width": "fill_container",
-          "cornerRadius": 4,
+          "fill": "#252526",
           "stroke": {
             "align": "inside",
             "thickness": 1,
             "fill": "#E83A3A"
           },
           "layout": "vertical",
+          "padding": 1,
           "children": [
             {
               "type": "frame",
@@ -1099,7 +1101,7 @@
                   "cornerRadius": 2,
                   "id": "sul4S",
                   "name": "Progress Bar Fill",
-                  "fill": "#00D4AA",
+                  "fill": "#e83a3a",
                   "width": 150,
                   "height": 4
                 }

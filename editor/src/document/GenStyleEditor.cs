@@ -34,6 +34,7 @@ public class GenStyleEditor : DocumentEditor
     private void LayerDefaultsUI()
     {
         using var _ = Inspector.BeginSection("LAYER DEFAULTS");
+        if (Inspector.IsSectionCollapsed) return;
 
         Document.Prompt = Inspector.StringProperty(Document.Prompt, handler: Document, placeholder: "Prompt", multiLine: true);
         Document.NegativePrompt = Inspector.StringProperty(Document.NegativePrompt, handler: Document, placeholder: "Negative Prompt", multiLine: true);
@@ -44,6 +45,7 @@ public class GenStyleEditor : DocumentEditor
     private void RefineDefaultsUI()
     {
         using var _ = Inspector.BeginSection("REFINE DEFAULTS");
+        if (Inspector.IsSectionCollapsed) return;
 
         Document.RefinePrompt = Inspector.StringProperty(Document.RefinePrompt, handler: Document, placeholder: "Refine Prompt", multiLine: true);
         Document.RefineNegativePrompt = Inspector.StringProperty(Document.RefineNegativePrompt, handler: Document, placeholder: "Negative Prompt", multiLine: true);
@@ -54,6 +56,7 @@ public class GenStyleEditor : DocumentEditor
     private void StyleReferencesUI()
     {
         using var _ = Inspector.BeginSection("STYLE REFERENCES");
+        if (Inspector.IsSectionCollapsed) return;
 
         for (int i = 0; i < Document.StyleReferences.Count; i++)
         {

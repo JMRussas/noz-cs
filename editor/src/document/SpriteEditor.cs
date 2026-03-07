@@ -1723,6 +1723,7 @@ public partial class SpriteEditor : DocumentEditor
             return;
 
         using var _ = Inspector.BeginSection("SPRITE");
+        if (Inspector.IsSectionCollapsed) return;
 
         using (Inspector.BeginRow())
         { 
@@ -1829,7 +1830,7 @@ public partial class SpriteEditor : DocumentEditor
 
         using (Inspector.BeginSection("GENERATE", content: isGenerated ? RemoveGenerateContent : GenerateContent))
         {
-            if (isGenerated)
+            if (!Inspector.IsSectionCollapsed && isGenerated)
             {
                 var gen = layer.Generation!;
                 var genImage = Document.Generation;
@@ -1894,38 +1895,51 @@ public partial class SpriteEditor : DocumentEditor
 
         using (Inspector.BeginSection("PATH"))
         {
-            using (Inspector.BeginRow())
+            if (!Inspector.IsSectionCollapsed)
             {
-                var operation = Document.CurrentOperation == PathOperation.Normal;
-                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconFill, ref operation))
-                    SetPathOperation(PathOperation.Normal);
+                using (Inspector.BeginRow())
+                {
+                    var operation = Document.CurrentOperation == PathOperation.Normal;
+                    if (Inspector.ToggleProperty(EditorAssets.Sprites.IconFill, ref operation))
+                        SetPathOperation(PathOperation.Normal);
 
-                operation = Document.CurrentOperation == PathOperation.Subtract;
-                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconSubtract, ref operation))
-                    SetPathOperation(PathOperation.Subtract);
+                    operation = Document.CurrentOperation == PathOperation.Subtract;
+                    if (Inspector.ToggleProperty(EditorAssets.Sprites.IconSubtract, ref operation))
+                        SetPathOperation(PathOperation.Subtract);
 
-                operation = Document.CurrentOperation == PathOperation.Clip;
-                if (Inspector.ToggleProperty(EditorAssets.Sprites.IconClip, ref operation))
-                    SetPathOperation(PathOperation.Clip);
+                    operation = Document.CurrentOperation == PathOperation.Clip;
+                    if (Inspector.ToggleProperty(EditorAssets.Sprites.IconClip, ref operation))
+                        SetPathOperation(PathOperation.Clip);
+                }
             }
         }
-        
-        using (Inspector.BeginSection("FILL"))
-        using (Inspector.BeginRow())
-        {
-            using var __ = UI.BeginFlex();
 
-            var fillColor = Inspector.ColorProperty(Document.CurrentFillColor, handler: Document);
-            if (UI.WasChanged()) SetFillColor(fillColor);
+        using (Inspector.BeginSection("FILL"))
+        {
+            if (!Inspector.IsSectionCollapsed)
+            {
+                using (Inspector.BeginRow())
+                {
+                    using var __ = UI.BeginFlex();
+
+                    var fillColor = Inspector.ColorProperty(Document.CurrentFillColor, handler: Document);
+                    if (UI.WasChanged()) SetFillColor(fillColor);
+                }
+            }
         }
 
         using (Inspector.BeginSection("STROKE"))
-        using (Inspector.BeginRow())
         {
-            using var __ = UI.BeginFlex();
+            if (!Inspector.IsSectionCollapsed)
+            {
+                using (Inspector.BeginRow())
+                {
+                    using var __ = UI.BeginFlex();
 
-            var strokeColor = Inspector.ColorProperty(Document.CurrentStrokeColor, handler: Document);
-            if (UI.WasChanged()) SetStrokeColor(strokeColor);
+                    var strokeColor = Inspector.ColorProperty(Document.CurrentStrokeColor, handler: Document);
+                    if (UI.WasChanged()) SetStrokeColor(strokeColor);
+                }
+            }
         }
     }
 
