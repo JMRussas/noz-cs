@@ -86,7 +86,7 @@ internal static class TextRender
             totalWidth += advance;
         }
 
-        var totalHeight = font.LineHeight * fontSize;
+        var totalHeight = (font.LineHeight + font.InternalLeading) * fontSize;
         return new Vector2(totalWidth, totalHeight);
     }
 
@@ -107,7 +107,7 @@ internal static class TextRender
             totalWidth += advance;
         }
 
-        var totalHeight = font.LineHeight * fontSize;
+        var totalHeight = (font.LineHeight + font.InternalLeading) * fontSize;
         return new Vector2(totalWidth, totalHeight);
     }
 

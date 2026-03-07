@@ -13,7 +13,7 @@ public static unsafe partial class ElementTree
 
     private static void SetElementScissor(ref BaseElement e)
     {
-        ref var ltw = ref GetLocalToWorld(ref e);
+        ref var ltw = ref GetTransform(ref e);
         var topLeft = Vector2.Transform(e.Rect.Position, ltw);
         var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, ltw);
         var screenTopLeft = UI.Camera!.WorldToScreen(topLeft);
@@ -58,7 +58,7 @@ public static unsafe partial class ElementTree
             {
                 ref var d = ref GetElementData<FillElement>(ref e);
                 if (!d.Color.IsTransparent)
-                    DrawTexturedRect(e.Rect, d.LocalToWorld, null, ApplyOpacity(d.Color), d.Radius);
+                    DrawTexturedRect(e.Rect, GetTransform(ref e), null, ApplyOpacity(d.Color), d.Radius);
                 break;
             }
 
@@ -66,7 +66,7 @@ public static unsafe partial class ElementTree
             {
                 ref var d = ref GetElementData<BorderElement>(ref e);
                 if (d.Width > 0)
-                    DrawTexturedRect(e.Rect, d.LocalToWorld, null, Color.Transparent,
+                    DrawTexturedRect(e.Rect, GetTransform(ref e), null, Color.Transparent,
                         d.Radius, d.Width, ApplyOpacity(d.Color));
                 break;
             }
@@ -226,7 +226,7 @@ public static unsafe partial class ElementTree
                 var offsetY = (e.Rect.Height - effectiveHeight) * d.Align.Y.ToFactor();
                 var displayScale = Application.Platform.DisplayScale;
                 offsetY = MathF.Round(offsetY * displayScale) / displayScale;
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + new Vector2(0, offsetY)) * d.LocalToWorld;
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + new Vector2(0, offsetY)) * GetTransform(ref e);
 
                 using (Graphics.PushState())
                 {
@@ -246,7 +246,7 @@ public static unsafe partial class ElementTree
                     scaledFontSize = fontSize * (e.Rect.Width / textWidth);
 
                 var textOffset = GetTextOffset(text, font, scaledFontSize, e.Rect.Size, d.Align.X, d.Align.Y);
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * d.LocalToWorld;
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * GetTransform(ref e);
 
                 using (Graphics.PushState())
                 {
@@ -260,7 +260,7 @@ public static unsafe partial class ElementTree
             case TextOverflow.Ellipsis:
             {
                 var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, d.Align.X, d.Align.Y);
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * d.LocalToWorld;
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * GetTransform(ref e);
 
                 using (Graphics.PushState())
                 {
@@ -274,7 +274,7 @@ public static unsafe partial class ElementTree
             default:
             {
                 var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, d.Align.X, d.Align.Y);
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * d.LocalToWorld;
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * GetTransform(ref e);
 
                 using (Graphics.PushState())
                 {
@@ -290,7 +290,7 @@ public static unsafe partial class ElementTree
     private static Vector2 GetTextOffset(ReadOnlySpan<char> text, Font font, float fontSize, in Vector2 containerSize, Align alignX, Align alignY)
     {
         var textWidth = TextRender.Measure(text, font, fontSize).X;
-        var textHeight = font.LineHeight * fontSize;
+        var textHeight = (font.LineHeight + font.InternalLeading) * fontSize;
         var offset = new Vector2(
             (containerSize.X - textWidth) * alignX.ToFactor(),
             (containerSize.Y - textHeight) * alignY.ToFactor()
@@ -331,13 +331,13 @@ public static unsafe partial class ElementTree
 
             if (sprite.IsSliced)
             {
-                Graphics.SetTransform(d.LocalToWorld);
+                Graphics.SetTransform(GetTransform(ref e));
                 Graphics.DrawSliced(sprite, new Rect(offset.X, offset.Y, scaledSize.X, scaledSize.Y));
             }
             else
             {
                 offset -= new Vector2(sprite.Bounds.X, sprite.Bounds.Y) * scale;
-                var transform = Matrix3x2.CreateScale(scale * sprite.PixelsPerUnit) * Matrix3x2.CreateTranslation(offset) * d.LocalToWorld;
+                var transform = Matrix3x2.CreateScale(scale * sprite.PixelsPerUnit) * Matrix3x2.CreateTranslation(offset) * GetTransform(ref e);
                 Graphics.SetTransform(transform);
                 Graphics.DrawFlat(sprite, bone: -1);
             }
@@ -346,7 +346,7 @@ public static unsafe partial class ElementTree
         {
             DrawTexturedRect(
                 new Rect(offset.X, offset.Y, scaledSize.X, scaledSize.Y),
-                d.LocalToWorld,
+                GetTransform(ref e),
                 texture,
                 ApplyOpacity(d.Color));
         }
@@ -357,8 +357,8 @@ public static unsafe partial class ElementTree
         if (_assets[d.AssetIndex] is not (Camera camera, Action draw))
             return;
 
-        var topLeft = Vector2.Transform(e.Rect.Position, d.LocalToWorld);
-        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, d.LocalToWorld);
+        var topLeft = Vector2.Transform(e.Rect.Position, GetTransform(ref e));
+        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, GetTransform(ref e));
         var screenTopLeft = UI.Camera!.WorldToScreen(topLeft);
         var screenBottomRight = UI.Camera!.WorldToScreen(bottomRight);
         var rtW = (int)MathF.Ceiling(screenBottomRight.X - screenTopLeft.X);
@@ -411,7 +411,7 @@ public static unsafe partial class ElementTree
 
         DrawTexturedRect(
             new Rect(trackX, trackY, d.ScrollbarWidth, trackH),
-            d.LocalToWorld, null,
+            GetTransform(ref e), null,
             ApplyOpacity(d.ScrollbarTrackColor),
             BorderRadius.Circular(d.ScrollbarBorderRadius));
 
@@ -424,7 +424,7 @@ public static unsafe partial class ElementTree
 
             DrawTexturedRect(
                 new Rect(trackX, thumbY, d.ScrollbarWidth, thumbH),
-                d.LocalToWorld, null,
+                GetTransform(ref e), null,
                 ApplyOpacity(d.ScrollbarThumbColor),
                 BorderRadius.Circular(d.ScrollbarBorderRadius));
         }

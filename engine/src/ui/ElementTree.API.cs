@@ -32,7 +32,7 @@ public static unsafe partial class ElementTree
 
     public static int BeginFill(Color color, BorderRadius radius = default)
     {
-        ref var e = ref BeginElement<FillElement>(ElementType.Fill);
+        ref var e = ref BeginElement<FillElement>(ElementType.Fill, withTransform: true);
         ref var d = ref GetElementData<FillElement>(ref e);
         d.Color = color;
         d.Radius = radius;
@@ -43,7 +43,7 @@ public static unsafe partial class ElementTree
 
     public static int BeginBorder(float width, Color color, BorderRadius radius = default)
     {
-        ref var e = ref BeginElement<BorderElement>(ElementType.Border);
+        ref var e = ref BeginElement<BorderElement>(ElementType.Border, withTransform: true);
         ref var d = ref GetElementData<BorderElement>(ref e);
         d.Width = width;
         d.Color = color;
@@ -75,7 +75,7 @@ public static unsafe partial class ElementTree
 
     public static int BeginClip(BorderRadius radius = default)
     {
-        ref var e = ref BeginElement<ClipElement>(ElementType.Clip);
+        ref var e = ref BeginElement<ClipElement>(ElementType.Clip, withTransform: true);
         ref var d = ref GetElementData<ClipElement>(ref e);
         d.Radius = radius;
         return GetOffset(ref e);
@@ -95,7 +95,7 @@ public static unsafe partial class ElementTree
 
     internal static int BeginCursor(Sprite sprite)
     {
-        ref var e = ref BeginElement<CursorElement>(ElementType.Cursor);
+        ref var e = ref BeginElement<CursorElement>(ElementType.Cursor, withTransform: true);
         ref var d = ref GetElementData<CursorElement>(ref e);
         d.IsSprite = true;
         d.AssetIndex = AddAsset(sprite);
@@ -104,7 +104,7 @@ public static unsafe partial class ElementTree
 
     internal static int BeginCursor(SystemCursor cursor)
     {
-        ref var e = ref BeginElement<CursorElement>(ElementType.Cursor);
+        ref var e = ref BeginElement<CursorElement>(ElementType.Cursor, withTransform: true);
         ref var d = ref GetElementData<CursorElement>(ref e);
         d.IsSprite = false;
         d.SystemCursor = cursor;
@@ -115,7 +115,7 @@ public static unsafe partial class ElementTree
 
     internal static int BeginTransform(Vector2 pivot, Vector2 translate, float rotate, Vector2 scale)
     {
-        ref var e = ref BeginElement<TransformElement>(ElementType.Transform);
+        ref var e = ref BeginElement<TransformElement>(ElementType.Transform, withTransform: true);
         ref var d = ref GetElementData<TransformElement>(ref e);
         d.Pivot = pivot;
         d.Translate = translate;
@@ -146,7 +146,7 @@ public static unsafe partial class ElementTree
 
     internal static int BeginScrollable(int widgetId, in ScrollableStyle style)
     {
-        ref var e = ref BeginElement<ScrollableElement>(ElementType.Scrollable);
+        ref var e = ref BeginElement<ScrollableElement>(ElementType.Scrollable, withTransform: true);
         ref var d = ref GetElementData<ScrollableElement>(ref e);
         d.ScrollSpeed = style.ScrollSpeed;
         d.ScrollbarVisibility = style.Scrollbar;
@@ -203,7 +203,7 @@ public static unsafe partial class ElementTree
 
     internal static int BeginPopup(Rect anchorRect, Align2 anchor, Align2 popupAlign, float spacing, bool clampToScreen, bool autoClose = true, bool interactive = true)
     {
-        ref var e = ref BeginElement<PopupElement>(ElementType.Popup);
+        ref var e = ref BeginElement<PopupElement>(ElementType.Popup, withTransform: true);
         ref var d = ref GetElementData<PopupElement>(ref e);
         d.AnchorRect = anchorRect;
         d.AnchorFactorX = anchor.X.ToFactor();
@@ -239,7 +239,7 @@ public static unsafe partial class ElementTree
     public static int Label(UnsafeSpan<char> text, Font font, float fontSize, Color color,
         Align2 align = default, TextOverflow overflow = TextOverflow.Overflow)
     {
-        ref var e = ref CreateLeafElement<LabelElement>(ElementType.Label);
+        ref var e = ref CreateLeafElement<LabelElement>(ElementType.Label, withTransform: true);
         ref var d = ref GetElementData<LabelElement>(ref e);
         d.Text = text;
         d.FontSize = fontSize;
@@ -253,7 +253,7 @@ public static unsafe partial class ElementTree
     public static int Image(Sprite sprite, Size2 size = default, ImageStretch stretch = ImageStretch.Uniform,
         Color color = default, float scale = 1.0f)
     {
-        ref var e = ref CreateLeafElement<ImageElement>(ElementType.Image);
+        ref var e = ref CreateLeafElement<ImageElement>(ElementType.Image, withTransform: true);
         ref var d = ref GetElementData<ImageElement>(ref e);
         d.Size = size;
         d.Stretch = stretch;
@@ -269,7 +269,7 @@ public static unsafe partial class ElementTree
     public static int Image(Texture texture, Size2 size = default, ImageStretch stretch = ImageStretch.Uniform,
         Color color = default, float scale = 1.0f)
     {
-        ref var e = ref CreateLeafElement<ImageElement>(ElementType.Image);
+        ref var e = ref CreateLeafElement<ImageElement>(ElementType.Image, withTransform: true);
         ref var d = ref GetElementData<ImageElement>(ref e);
         d.Size = size;
         d.Stretch = stretch;
@@ -284,7 +284,7 @@ public static unsafe partial class ElementTree
 
     public static int Scene(Camera camera, Action draw, Size2 size, Color clearColor, int sampleCount)
     {
-        ref var e = ref CreateLeafElement<SceneElement>(ElementType.Scene);
+        ref var e = ref CreateLeafElement<SceneElement>(ElementType.Scene, withTransform: true);
         ref var d = ref GetElementData<SceneElement>(ref e);
         d.Size = size;
         d.ClearColor = clearColor;

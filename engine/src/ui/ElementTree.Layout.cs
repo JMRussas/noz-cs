@@ -179,7 +179,7 @@ public static unsafe partial class ElementTree
         while (offset < _elements.Length && count < 200)
         {
             ref var e = ref GetElement(offset);
-            var elemSize = GetElementSize(e.Type);
+            var elemSize = GetElementSize(ref e);
             sb.Append($"  [{offset}] {e.Type} parent={e.Parent} first={e.FirstChild} next={e.NextSibling} children={e.ChildCount}");
             if (e.Type == ElementType.Widget)
             {
@@ -192,32 +192,36 @@ public static unsafe partial class ElementTree
         }
     }
 
-    private static int GetElementSize(ElementType type) => type switch
+    private static int GetElementSize(ref BaseElement e)
     {
-        ElementType.Widget => sizeof(BaseElement) + sizeof(WidgetElement),
-        ElementType.Size => sizeof(BaseElement) + sizeof(SizeElement),
-        ElementType.Padding => sizeof(BaseElement) + sizeof(PaddingElement),
-        ElementType.Fill => sizeof(BaseElement) + sizeof(FillElement),
-        ElementType.Border => sizeof(BaseElement) + sizeof(BorderElement),
-        ElementType.Margin => sizeof(BaseElement) + sizeof(MarginElement),
-        ElementType.Row => sizeof(BaseElement) + sizeof(RowElement),
-        ElementType.Column => sizeof(BaseElement) + sizeof(ColumnElement),
-        ElementType.Flex => sizeof(BaseElement) + sizeof(FlexElement),
-        ElementType.Align => sizeof(BaseElement) + sizeof(AlignElement),
-        ElementType.Clip => sizeof(BaseElement) + sizeof(ClipElement),
-        ElementType.Spacer => sizeof(BaseElement) + sizeof(SpacerElement),
-        ElementType.Opacity => sizeof(BaseElement) + sizeof(OpacityElement),
-        ElementType.Label => sizeof(BaseElement) + sizeof(LabelElement),
-        ElementType.Image => sizeof(BaseElement) + sizeof(ImageElement),
-        ElementType.EditableText => sizeof(BaseElement) + sizeof(EditableTextElement),
-        ElementType.Popup => sizeof(BaseElement) + sizeof(PopupElement),
-        ElementType.Cursor => sizeof(BaseElement) + sizeof(CursorElement),
-        ElementType.Transform => sizeof(BaseElement) + sizeof(TransformElement),
-        ElementType.Grid => sizeof(BaseElement) + sizeof(GridElement),
-        ElementType.Scene => sizeof(BaseElement) + sizeof(SceneElement),
-        ElementType.Scrollable => sizeof(BaseElement) + sizeof(ScrollableElement),
-        _ => sizeof(BaseElement)
-    };
+        var extra = e.TransformOffset != 0 ? sizeof(Matrix3x2) : 0;
+        return (sizeof(BaseElement) + extra) + e.Type switch
+        {
+            ElementType.Widget => sizeof(WidgetElement),
+            ElementType.Size => sizeof(SizeElement),
+            ElementType.Padding => sizeof(PaddingElement),
+            ElementType.Fill => sizeof(FillElement),
+            ElementType.Border => sizeof(BorderElement),
+            ElementType.Margin => sizeof(MarginElement),
+            ElementType.Row => sizeof(RowElement),
+            ElementType.Column => sizeof(ColumnElement),
+            ElementType.Flex => sizeof(FlexElement),
+            ElementType.Align => sizeof(AlignElement),
+            ElementType.Clip => sizeof(ClipElement),
+            ElementType.Spacer => sizeof(SpacerElement),
+            ElementType.Opacity => sizeof(OpacityElement),
+            ElementType.Label => sizeof(LabelElement),
+            ElementType.Image => sizeof(ImageElement),
+            ElementType.EditableText => sizeof(EditableTextElement),
+            ElementType.Popup => sizeof(PopupElement),
+            ElementType.Cursor => sizeof(CursorElement),
+            ElementType.Transform => sizeof(TransformElement),
+            ElementType.Grid => sizeof(GridElement),
+            ElementType.Scene => sizeof(SceneElement),
+            ElementType.Scrollable => sizeof(ScrollableElement),
+            _ => 0
+        };
+    }
 
     private static void LayoutAxisImpl(int offset, float position, float available, int axis, int layoutAxis)
     {
@@ -627,7 +631,7 @@ public static unsafe partial class ElementTree
                 Matrix3x2.CreateTranslation(e.Rect.X + pivot.X + d.Translate.X,
                                              e.Rect.Y + pivot.Y + d.Translate.Y);
             worldTransform = localTransform * parentTransform;
-            d.LocalToWorld = worldTransform;
+            StoreTransform(ref e, in worldTransform);
 
             // Rect becomes element-local (relative to pivot)
             e.Rect.X = -e.Rect.Width * d.Pivot.X;
@@ -639,7 +643,7 @@ public static unsafe partial class ElementTree
             worldTransform = localTransform * parentTransform;
 
             // Store for types that need it in Draw/Input
-            StoreLocalToWorld(ref e, in worldTransform);
+            StoreTransform(ref e, in worldTransform);
 
             e.Rect.X = 0;
             e.Rect.Y = 0;

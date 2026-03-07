@@ -37,7 +37,7 @@ public static unsafe partial class ElementTree
                 ref var pd = ref GetElementData<PopupElement>(ref pe);
                 if (!pd.AutoClose) continue;
 
-                Matrix3x2.Invert(GetElementData<PopupElement>(ref pe).LocalToWorld, out var popupInv);
+                Matrix3x2.Invert(GetTransform(ref pe), out var popupInv);
                 var localMouse = Vector2.Transform(MouseWorldPosition, popupInv);
                 if (pe.Rect.Contains(localMouse))
                 {
@@ -154,7 +154,7 @@ public static unsafe partial class ElementTree
 
         if (e.Type == ElementType.Cursor)
         {
-            Matrix3x2.Invert(GetElementData<CursorElement>(ref e).LocalToWorld, out var cursorInv);
+            Matrix3x2.Invert(GetTransform(ref e), out var cursorInv);
             var localMouse = Vector2.Transform(MouseWorldPosition, cursorInv);
             if (e.Rect.Contains(localMouse))
                 foundOffset = offset;
@@ -286,7 +286,7 @@ public static unsafe partial class ElementTree
         var maxScroll = Math.Max(0, state.ContentHeight - viewportHeight);
         if (d.ScrollbarVisibility == ScrollbarVisibility.Never || maxScroll <= 0) return false;
 
-        var pos = Vector2.Transform(e.Rect.Position, d.LocalToWorld);
+        var pos = Vector2.Transform(e.Rect.Position, GetTransform(ref e));
         var trackX = pos.X + e.Rect.Width - d.ScrollbarWidth - d.ScrollbarPadding;
         var trackY = pos.Y + d.ScrollbarPadding;
         var trackH = viewportHeight - d.ScrollbarPadding * 2;
@@ -307,7 +307,7 @@ public static unsafe partial class ElementTree
         if (d.ScrollbarVisibility == ScrollbarVisibility.Never) return false;
         if (d.ScrollbarVisibility == ScrollbarVisibility.Auto && maxScroll <= 0) return false;
 
-        var pos = Vector2.Transform(e.Rect.Position, d.LocalToWorld);
+        var pos = Vector2.Transform(e.Rect.Position, GetTransform(ref e));
         var trackX = pos.X + e.Rect.Width - d.ScrollbarWidth - d.ScrollbarPadding;
         var trackY = pos.Y + d.ScrollbarPadding;
         var trackH = viewportHeight - d.ScrollbarPadding * 2;
@@ -397,7 +397,7 @@ public static unsafe partial class ElementTree
             ref var d = ref GetElementData<ScrollableElement>(ref e);
             if (d.WidgetId > 0)
             {
-                Matrix3x2.Invert(d.LocalToWorld, out var scrollInv);
+                Matrix3x2.Invert(GetTransform(ref e), out var scrollInv);
                 var localMouse = Vector2.Transform(MouseWorldPosition, scrollInv);
                 if (e.Rect.Contains(localMouse))
                 {
@@ -465,7 +465,7 @@ public static unsafe partial class ElementTree
 
         if (e.Type == ElementType.Scene)
         {
-            Matrix3x2.Invert(GetElementData<SceneElement>(ref e).LocalToWorld, out var sceneInv);
+            Matrix3x2.Invert(GetTransform(ref e), out var sceneInv);
             var localMouse = Vector2.Transform(MouseWorldPosition, sceneInv);
             if (e.Rect.Contains(localMouse))
                 MouseOverScene = true;
@@ -508,7 +508,7 @@ public static unsafe partial class ElementTree
                     goto recurse;
                 }
 
-                Matrix3x2.Invert(d.LocalToWorld, out var widgetInv);
+                Matrix3x2.Invert(GetTransform(ref e), out var widgetInv);
                 var localMouse = Vector2.Transform(MouseWorldPosition, widgetInv);
                 var hovered = e.Rect.Contains(localMouse);
 

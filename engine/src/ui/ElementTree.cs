@@ -38,6 +38,7 @@ internal enum ElementType : byte
 internal struct BaseElement
 {
     public ElementType Type;
+    public byte TransformOffset;
     public ushort Parent;
     public ushort NextSibling;
     public ushort FirstChild;
@@ -57,7 +58,6 @@ internal struct PaddingElement
 
 internal struct WidgetElement
 {
-    public Matrix3x2 LocalToWorld;
     public int Id;
     public ushort Data;
     public ElementFlags Flags;
@@ -65,14 +65,12 @@ internal struct WidgetElement
 
 internal struct FillElement
 {
-    public Matrix3x2 LocalToWorld;
     public Color Color;
     public BorderRadius Radius;
 }
 
 internal struct BorderElement
 {
-    public Matrix3x2 LocalToWorld;
     public float Width;
     public Color Color;
     public BorderRadius Radius;
@@ -105,7 +103,6 @@ internal struct AlignElement
 
 internal struct ClipElement
 {
-    public Matrix3x2 LocalToWorld;
     public BorderRadius Radius;
 }
 
@@ -121,7 +118,6 @@ internal struct OpacityElement
 
 internal struct LabelElement
 {
-    public Matrix3x2 LocalToWorld;
     public UnsafeSpan<char> Text;
     public float FontSize;
     public Color Color;
@@ -132,7 +128,6 @@ internal struct LabelElement
 
 internal struct ImageElement
 {
-    public Matrix3x2 LocalToWorld;
     public Size2 Size;
     public ImageStretch Stretch;
     public Align2 Align;
@@ -157,7 +152,6 @@ internal struct GridElement
 
 internal struct TransformElement
 {
-    public Matrix3x2 LocalToWorld;
     public Vector2 Pivot;
     public Vector2 Translate;
     public float Rotate;
@@ -166,7 +160,6 @@ internal struct TransformElement
 
 internal struct SceneElement
 {
-    public Matrix3x2 LocalToWorld;
     public Size2 Size;
     public Color ClearColor;
     public int SampleCount;
@@ -175,7 +168,6 @@ internal struct SceneElement
 
 internal struct ScrollableElement
 {
-    public Matrix3x2 LocalToWorld;
     public float ScrollSpeed;
     public ScrollbarVisibility ScrollbarVisibility;
     public float ScrollbarWidth;
@@ -196,7 +188,6 @@ internal struct ScrollableState
 
 internal struct CursorElement
 {
-    public Matrix3x2 LocalToWorld;
     public SystemCursor SystemCursor;
     public ushort AssetIndex; // 0 = no sprite, use SystemCursor
     public bool IsSprite;
@@ -204,7 +195,6 @@ internal struct CursorElement
 
 internal struct PopupElement
 {
-    public Matrix3x2 LocalToWorld;
     public Rect AnchorRect;
     public float AnchorFactorX;
     public float AnchorFactorY;
@@ -319,62 +309,43 @@ public static unsafe partial class ElementTree
     internal static ref BaseElement GetElement(int offset) =>
         ref *(BaseElement*)(_elements.Ptr + offset);
 
-    private static UnsafeRef<T> GetElementData<T>(int offset) where T : unmanaged =>
-        new((T*)(_elements.Ptr + offset + sizeof(BaseElement)));
+    private static UnsafeRef<T> GetElementData<T>(int offset) where T : unmanaged
+    {
+        ref var e = ref *(BaseElement*)(_elements.Ptr + offset);
+        return new((T*)(_elements.Ptr + offset + sizeof(BaseElement) + (e.TransformOffset != 0 ? sizeof(Matrix3x2) : 0)));
+    }
 
     internal static ref T GetElementData<T>(ref BaseElement element) where T : unmanaged =>
-         ref *(T*)((byte*)Unsafe.AsPointer(ref element) + sizeof(BaseElement));
+         ref *(T*)((byte*)Unsafe.AsPointer(ref element) + sizeof(BaseElement) + (element.TransformOffset != 0 ? sizeof(Matrix3x2) : 0));
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static ref Matrix3x2 GetLocalToWorld(ref BaseElement e)
+    private static ref Matrix3x2 GetTransform(ref BaseElement e)
     {
-        switch (e.Type)
-        {
-            case ElementType.Fill: return ref GetElementData<FillElement>(ref e).LocalToWorld;
-            case ElementType.Border: return ref GetElementData<BorderElement>(ref e).LocalToWorld;
-            case ElementType.Label: return ref GetElementData<LabelElement>(ref e).LocalToWorld;
-            case ElementType.Image: return ref GetElementData<ImageElement>(ref e).LocalToWorld;
-            case ElementType.Scene: return ref GetElementData<SceneElement>(ref e).LocalToWorld;
-            case ElementType.Clip: return ref GetElementData<ClipElement>(ref e).LocalToWorld;
-            case ElementType.Scrollable: return ref GetElementData<ScrollableElement>(ref e).LocalToWorld;
-            case ElementType.Widget: return ref GetElementData<WidgetElement>(ref e).LocalToWorld;
-            case ElementType.Popup: return ref GetElementData<PopupElement>(ref e).LocalToWorld;
-            case ElementType.Cursor: return ref GetElementData<CursorElement>(ref e).LocalToWorld;
-            case ElementType.Transform: return ref GetElementData<TransformElement>(ref e).LocalToWorld;
-            default: throw new InvalidOperationException();
-        }
+        Debug.Assert(e.TransformOffset != 0);
+        return ref *(Matrix3x2*)((byte*)Unsafe.AsPointer(ref e) + e.TransformOffset);
     }
 
-    private static void StoreLocalToWorld(ref BaseElement e, in Matrix3x2 m)
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void StoreTransform(ref BaseElement e, in Matrix3x2 m)
     {
-        switch (e.Type)
-        {
-            case ElementType.Fill: GetElementData<FillElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Border: GetElementData<BorderElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Label: GetElementData<LabelElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Image: GetElementData<ImageElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Scene: GetElementData<SceneElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Clip: GetElementData<ClipElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Scrollable: GetElementData<ScrollableElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Widget: GetElementData<WidgetElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Popup: GetElementData<PopupElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Cursor: GetElementData<CursorElement>(ref e).LocalToWorld = m; break;
-            case ElementType.Transform: GetElementData<TransformElement>(ref e).LocalToWorld = m; break;
-        }
+        if (e.TransformOffset == 0) return;
+        *(Matrix3x2*)((byte*)Unsafe.AsPointer(ref e) + e.TransformOffset) = m;
     }
 
-    private static ref BaseElement AllocElement<T>(ElementType type) where T : unmanaged
+    private static ref BaseElement AllocElement<T>(ElementType type, bool withTransform = false) where T : unmanaged
     {
-        var size = sizeof(T) + sizeof(BaseElement);
+        var size = sizeof(T) + sizeof(BaseElement) + (withTransform ? sizeof(Matrix3x2) : 0);
         if (!_elements.CheckCapacity(size))
             throw new InvalidOperationException($"Element tree exceeded maximum size of {MaxElementSize} bytes.");
 
-        return ref *(BaseElement*)_elements.AddRange(size).GetUnsafePtr();
+        ref var e = ref *(BaseElement*)_elements.AddRange(size).GetUnsafePtr();
+        e.TransformOffset = withTransform ? (byte)sizeof(BaseElement) : (byte)0;
+        return ref e;
     }
 
-    private static ref BaseElement BeginElement<T>(ElementType type) where T : unmanaged
+    private static ref BaseElement BeginElement<T>(ElementType type, bool withTransform = false) where T : unmanaged
     {
-        ref var e = ref AllocElement<T>(type);
+        ref var e = ref AllocElement<T>(type, withTransform);
         BeginElementInternal(type, ref e);
         _elementStack[_elementStackCount++] = (ushort)GetOffset(ref e);
         return ref e;
@@ -426,9 +397,9 @@ public static unsafe partial class ElementTree
         return (int)offset;
     }
 
-    internal static ref BaseElement CreateLeafElement<T>(ElementType type) where T : unmanaged
+    internal static ref BaseElement CreateLeafElement<T>(ElementType type, bool withTransform = false) where T : unmanaged
     {
-        ref var e = ref AllocElement<T>(type);
+        ref var e = ref AllocElement<T>(type, withTransform);
         BeginElementInternal(type, ref e);
         e.NextSibling = (ushort)_elements.Length;
         return ref e;

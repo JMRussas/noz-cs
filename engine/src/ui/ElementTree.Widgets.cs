@@ -94,7 +94,7 @@ public static unsafe partial class ElementTree
     {
         if (!IsWidgetId(id)) return Rect.Zero;
         ref var e = ref GetElement(_widgets[id]);
-        ref var ltw = ref GetElementData<WidgetElement>(ref e).LocalToWorld;
+        ref var ltw = ref GetTransform(ref e);
         var topLeft = Vector2.Transform(e.Rect.Position, ltw);
         var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, ltw);
         return new Rect(topLeft.X, topLeft.Y, bottomRight.X - topLeft.X, bottomRight.Y - topLeft.Y);
@@ -222,7 +222,7 @@ public static unsafe partial class ElementTree
     public static Vector2 GetLocalMousePosition()
     {
         ref var e = ref GetElement(_currentWidget);
-        Matrix3x2.Invert(GetElementData<WidgetElement>(ref e).LocalToWorld, out var inv);
+        Matrix3x2.Invert(GetTransform(ref e), out var inv);
         return Vector2.Transform(MouseWorldPosition, inv);
     }
 
@@ -238,7 +238,7 @@ public static unsafe partial class ElementTree
 
     public static int BeginWidget(int id)
     {
-        ref var e = ref BeginElement<WidgetElement>(ElementType.Widget);
+        ref var e = ref BeginElement<WidgetElement>(ElementType.Widget, withTransform: true);
         ref var d = ref GetElementData<WidgetElement>(ref e);
         var offset = (ushort)GetOffset(ref e);
         d.Id = id;

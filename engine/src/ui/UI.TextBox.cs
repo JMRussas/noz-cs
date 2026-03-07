@@ -19,7 +19,9 @@ public static partial class UI
         var changed = ElementTree.EditableText(id, ref value, font, style.FontSize,
             style.TextColor, style.BackgroundColor, style.FocusBorderColor,
             placeholder.IsEmpty ? "" : new string(placeholder), false,
-            height, style.BorderColor, style.BorderWidth);
+            height, style.BorderWidth, style.BorderColor, style.BorderRadius,
+            style.FocusBorderWidth, style.FocusBorderColor, style.FocusBorderRadius,
+            style.Padding, style.PlaceholderColor, style.SelectionColor);
 
         ref var state = ref ElementTree.GetStateByWidgetId<TextBoxState>(id);
 
@@ -59,7 +61,9 @@ public static partial class UI
         var changed = ElementTree.EditableText(id, ref value, font, style.FontSize,
             style.TextColor, style.BackgroundColor, style.FocusBorderColor,
             placeholder ?? "", false,
-            height, style.BorderColor, style.BorderWidth);
+            height, style.BorderWidth, style.BorderColor, style.BorderRadius,
+            style.FocusBorderWidth, style.FocusBorderColor, style.FocusBorderRadius,
+            style.Padding, style.PlaceholderColor, style.SelectionColor);
 
         ref var state = ref ElementTree.GetStateByWidgetId<TextBoxState>(id);
 

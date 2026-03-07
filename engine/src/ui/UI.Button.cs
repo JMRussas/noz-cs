@@ -44,14 +44,19 @@ public static partial class UI
 
         ElementTree.BeginFill(s.Color, s.BorderRadius);
 
-        if (s.Padding.L != 0 || s.Padding.R != 0 || s.Padding.T != 0 || s.Padding.B != 0)
+        var hasBadding = !s.Padding.IsZero;
+        if (hasBadding)
             ElementTree.BeginPadding(s.Padding);
 
         ElementTree.BeginAlign(Align.Center);
         ElementTree.BeginRow(s.Spacing);
 
         if (icon != null)
+        {
+            ElementTree.BeginAlign(new Align2(Align.Min, Align.Center));
             ElementTree.Image(icon, new Size2(s.IconSize, s.IconSize), ImageStretch.Uniform, s.ContentColor, 1.0f);
+            ElementTree.EndAlign();
+        }
 
         if (text != null)
         {
@@ -63,7 +68,7 @@ public static partial class UI
         ElementTree.EndElement(); // row
         ElementTree.EndElement(); // align
 
-        if (s.Padding.L != 0 || s.Padding.R != 0 || s.Padding.T != 0 || s.Padding.B != 0)
+        if (hasBadding)
             ElementTree.EndElement(); // padding
 
         ElementTree.EndElement(); // fill
