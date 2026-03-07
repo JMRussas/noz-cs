@@ -251,13 +251,13 @@ public static unsafe partial class ElementTree
     }
 
     public static int Image(Sprite sprite, Size2 size = default, ImageStretch stretch = ImageStretch.Uniform,
-        Color color = default, float scale = 1.0f)
+        Color color = default, float scale = 1.0f, Align2 align = default)
     {
         ref var e = ref CreateLeafElement<ImageElement>(ElementType.Image, withTransform: true);
         ref var d = ref GetElementData<ImageElement>(ref e);
         d.Size = size;
         d.Stretch = stretch;
-        d.Align = NoZ.Align.Center;
+        d.Align = align;
         d.Scale = scale;
         d.Color = color.IsTransparent ? Color.White : color;
         d.Width = sprite.Bounds.Width;
@@ -267,13 +267,13 @@ public static unsafe partial class ElementTree
     }
 
     public static int Image(Texture texture, Size2 size = default, ImageStretch stretch = ImageStretch.Uniform,
-        Color color = default, float scale = 1.0f)
+        Color color = default, float scale = 1.0f, Align2 align = default)
     {
         ref var e = ref CreateLeafElement<ImageElement>(ElementType.Image, withTransform: true);
         ref var d = ref GetElementData<ImageElement>(ref e);
         d.Size = size;
         d.Stretch = stretch;
-        d.Align = NoZ.Align.Center;
+        d.Align = align;
         d.Scale = scale;
         d.Color = color.IsTransparent ? Color.White : color;
         d.Width = texture.Width;

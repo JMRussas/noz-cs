@@ -619,7 +619,7 @@ public static partial class UI
         if (sprite == null) return;
         var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
         var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
-        ElementTree.Image(sprite, resolved.Size, resolved.Stretch, resolved.Color, resolved.Scale);
+        ElementTree.Image(sprite, resolved.Size, resolved.Stretch, resolved.Color, resolved.Scale, resolved.Align);
     }
 
     public static void Image(Texture texture) => Image(texture, new ImageStyle());
@@ -628,7 +628,7 @@ public static partial class UI
     {
         var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
         var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
-        ElementTree.Image(texture, resolved.Size, resolved.Stretch, resolved.Color, resolved.Scale);
+        ElementTree.Image(texture, resolved.Size, resolved.Stretch, resolved.Color, resolved.Scale, resolved.Align);
     }
 
     internal static void End()

@@ -53,9 +53,8 @@ public static partial class UI
 
         if (icon != null)
         {
-            ElementTree.BeginAlign(new Align2(Align.Min, Align.Center));
-            ElementTree.Image(icon, new Size2(s.IconSize, s.IconSize), ImageStretch.Uniform, s.ContentColor, 1.0f);
-            ElementTree.EndAlign();
+            ElementTree.Image(icon, new Size2(s.IconSize, s.IconSize), ImageStretch.Uniform, s.ContentColor, 1.0f,
+                new Align2(Align.Min, Align.Center));
         }
 
         if (text != null)

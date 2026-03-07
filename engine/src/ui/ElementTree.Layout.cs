@@ -320,20 +320,24 @@ public static unsafe partial class ElementTree
             {
                 ref var d = ref GetElementData<LabelElement>(ref e);
                 var font = (Font)_assets[d.AssetIndex]!;
+                float contentSize;
                 if (axis == 1 && d.Overflow == TextOverflow.Wrap && e.Rect.Width > 0)
-                    size = TextRender.MeasureWrapped(d.Text.AsReadOnlySpan(), font, d.FontSize, e.Rect.Width).Y;
+                    contentSize = TextRender.MeasureWrapped(d.Text.AsReadOnlySpan(), font, d.FontSize, e.Rect.Width).Y;
                 else
-                    size = TextRender.Measure(d.Text.AsReadOnlySpan(), font, d.FontSize)[axis];
+                    contentSize = TextRender.Measure(d.Text.AsReadOnlySpan(), font, d.FontSize)[axis];
+                size = Math.Max(contentSize, available);
                 break;
             }
 
             case ElementType.Image:
             {
                 ref var d = ref GetElementData<ImageElement>(ref e);
+                float contentSize;
                 if (d.Size[axis].IsFixed)
-                    size = d.Size[axis].Value;
+                    contentSize = d.Size[axis].Value;
                 else
-                    size = (axis == 0 ? d.Width : d.Height) * d.Scale;
+                    contentSize = (axis == 0 ? d.Width : d.Height) * d.Scale;
+                size = Math.Max(contentSize, available);
                 break;
             }
 
@@ -607,7 +611,8 @@ public static unsafe partial class ElementTree
             }
             else
             {
-                LayoutAxis(childOffset, childPos, e.Rect.GetSize(axis), axis, containerAxis);
+                var childFit = FitAxis(childOffset, axis, containerAxis);
+                LayoutAxis(childOffset, childPos, childFit, axis, containerAxis);
                 offset += child.Rect.GetSize(axis);
             }
 

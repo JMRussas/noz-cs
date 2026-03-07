@@ -14,7 +14,6 @@ internal struct EditableTextElement
     public Color TextColor;
     public Color CursorColor;
     public Color SelectionColor;
-    public Color PlaceholderColor;
     public int WidgetId;
     public bool MultiLine;
     public ushort FontAssetIndex;
@@ -38,282 +37,284 @@ internal struct TextBoxState
 
 public static unsafe partial class ElementTree
 {
-    public static bool EditableText(int widgetId, ref string value, Font font, float fontSize,
-        Color textColor, Color bgColor, Color cursorColor,
-        string placeholder, bool multiLine,
-        float height, float borderWidth, Color borderColor, BorderRadius borderRadius,
-        float focusBorderWidth, Color focusBorderColor, BorderRadius focusBorderRadius,
-        EdgeInsets padding, Color placeholderColor, Color selectionColor,
-        bool commitOnEnter = false)
+    public static bool EditableText(int id, ref string value, Font font, float fontSize,
+        Color textColor, Color cursorColor, Color selectionColor,
+        string placeholder, Color placeholderColor,
+        bool multiLine, bool commitOnEnter = false, InputScope scope = default)
     {
-        if (cursorColor.IsTransparent) cursorColor = textColor;
-        if (height <= 0) height = multiLine ? fontSize * 4 : fontSize * 1.8f;
-
-        var changed = false;
-
-        BeginWidget(widgetId);
         ref var state = ref GetState<TextBoxState>();
-
         var focused = HasFocus();
-        state.FocusEntered = 0;
-        state.FocusExited = 0;
-        state.WasCancelled = 0;
 
-        // Click to focus
+        // Focus on press
         if (WasPressed() && !focused)
         {
             SetFocus();
             focused = true;
+            state.Focused = 1;
+            state.FocusEntered = 1;
+            state.EditText = Text(value);
+            state.TextHash = string.GetHashCode(value.AsSpan());
+            state.PrevTextHash = state.TextHash;
             state.CursorIndex = value.Length;
             state.SelectionStart = 0;
             state.BlinkTimer = 0;
-            state.FocusEntered = 1;
         }
 
-        // Handle keyboard input when focused
+        // Mouse click-to-position and drag-to-select
+        if (focused && IsDown())
+        {
+            var localMouse = GetLocalMousePosition();
+            var editText = state.EditText.AsReadOnlySpan();
+            var widgetRect = GetWidgetRect(id);
+            var charIndex = HitTestCharIndex(editText, font, fontSize,
+                multiLine, widgetRect.Width, localMouse.X, localMouse.Y);
+            state.CursorIndex = charIndex;
+            if (WasPressed())
+                state.SelectionStart = charIndex;
+            state.BlinkTimer = 0;
+        }
+
+        // Keyboard input when focused
         if (focused)
         {
             state.BlinkTimer += Time.DeltaTime;
+            HandleTextInput(ref state, font, fontSize, multiLine, scope, commitOnEnter);
+        }
 
-            if (state.Focused == 0)
-            {
-                state.EditText = Text(value);
-                state.TextHash = value.GetHashCode();
-                state.PrevTextHash = state.TextHash;
-                state.Focused = 1;
-                state.FocusEntered = 1;
-            }
-            else
-            {
-                state.EditText = Text(state.EditText.AsReadOnlySpan());
-            }
+        // Resolve display text
+        var editSpan = focused ? state.EditText.AsReadOnlySpan() : value.AsSpan();
+        var showPlaceholder = editSpan.Length == 0 && placeholder.Length > 0;
+        var displayText = showPlaceholder ? placeholder.AsSpan() : editSpan;
+        var displayColor = showPlaceholder ? placeholderColor : textColor;
+        var overflow = multiLine ? TextOverflow.Wrap : TextOverflow.Overflow;
 
-            var scope = InputScope.All;
-            var text = state.EditText.AsReadOnlySpan();
+        // Create the leaf element
+        ref var e = ref CreateLeafElement<EditableTextElement>(ElementType.EditableText, withTransform: true);
+        ref var d = ref GetElementData<EditableTextElement>(ref e);
+        d.Text = Text(displayText);
+        d.FontSize = fontSize;
+        d.TextColor = displayColor;
+        d.CursorColor = cursorColor;
+        d.SelectionColor = selectionColor;
+        d.WidgetId = id;
+        d.MultiLine = multiLine;
+        d.FontAssetIndex = AddAsset(font);
+        d.Overflow = overflow;
 
-            if (Input.WasButtonPressed(InputCode.KeyEscape, scope))
+        // Detect focus loss → commit
+        var changed = false;
+        if (state.FocusExited != 0)
+        {
+            if (state.WasCancelled == 0)
             {
-                Input.ConsumeButton(InputCode.KeyEscape);
-                ClearFocus();
-                state.Focused = 0;
-                state.FocusExited = 1;
-                state.WasCancelled = 1;
-            }
-            else if (Input.WasButtonPressed(InputCode.KeyEnter, scope))
-            {
-                Input.ConsumeButton(InputCode.KeyEnter);
-                if (!multiLine || commitOnEnter)
+                var finalText = state.EditText.AsReadOnlySpan();
+                var finalHash = string.GetHashCode(finalText);
+                if (finalHash != state.PrevTextHash)
                 {
-                    var newText = new string(state.EditText.AsReadOnlySpan());
-                    if (newText != value)
-                    {
-                        value = newText;
-                        changed = true;
-                    }
-                    ClearFocus();
-                    state.Focused = 0;
-                    state.FocusExited = 1;
-                }
-                else
-                {
-                    RemoveSelected(ref state);
-                    state.EditText = UI.InsertText(state.EditText.AsReadOnlySpan(), state.CursorIndex, "\n");
-                    state.CursorIndex++;
-                    state.SelectionStart = state.CursorIndex;
-                }
-            }
-            else if (Input.WasButtonPressed(InputCode.KeyTab, scope))
-            {
-                Input.ConsumeButton(InputCode.KeyTab);
-                var newText = new string(state.EditText.AsReadOnlySpan());
-                if (newText != value)
-                {
-                    value = newText;
+                    value = new string(finalText);
                     changed = true;
                 }
-                ClearFocus();
-                state.Focused = 0;
-                state.FocusExited = 1;
-            }
-            else
-            {
-                if (Input.WasButtonPressed(InputCode.KeyLeft, true, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyLeft);
-                    if (state.CursorIndex > 0) state.CursorIndex--;
-                    if (!Input.IsShiftDown(scope)) state.SelectionStart = state.CursorIndex;
-                    state.BlinkTimer = 0;
-                }
-                if (Input.WasButtonPressed(InputCode.KeyRight, true, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyRight);
-                    if (state.CursorIndex < text.Length) state.CursorIndex++;
-                    if (!Input.IsShiftDown(scope)) state.SelectionStart = state.CursorIndex;
-                    state.BlinkTimer = 0;
-                }
-                if (Input.WasButtonPressed(InputCode.KeyHome, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyHome);
-                    state.CursorIndex = 0;
-                    if (!Input.IsShiftDown(scope)) state.SelectionStart = state.CursorIndex;
-                }
-                if (Input.WasButtonPressed(InputCode.KeyEnd, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyEnd);
-                    state.CursorIndex = text.Length;
-                    if (!Input.IsShiftDown(scope)) state.SelectionStart = state.CursorIndex;
-                }
-
-                if (Input.IsCtrlDown(scope) && Input.WasButtonPressed(InputCode.KeyA, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyA);
-                    state.SelectionStart = 0;
-                    state.CursorIndex = text.Length;
-                }
-
-                if (Input.IsCtrlDown(scope) && Input.WasButtonPressed(InputCode.KeyC, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyC);
-                    if (state.CursorIndex != state.SelectionStart)
-                    {
-                        var start = Math.Min(state.CursorIndex, state.SelectionStart);
-                        var length = Math.Abs(state.CursorIndex - state.SelectionStart);
-                        Application.Platform.SetClipboardText(new string(text.Slice(start, length)));
-                    }
-                }
-
-                if (Input.IsCtrlDown(scope) && Input.WasButtonPressed(InputCode.KeyV, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyV);
-                    var clipboard = Application.Platform.GetClipboardText();
-                    if (!string.IsNullOrEmpty(clipboard))
-                    {
-                        RemoveSelected(ref state);
-                        state.EditText = UI.InsertText(state.EditText.AsReadOnlySpan(), state.CursorIndex, clipboard);
-                        state.CursorIndex += clipboard.Length;
-                        state.SelectionStart = state.CursorIndex;
-                    }
-                }
-
-                if (Input.IsCtrlDown(scope) && Input.WasButtonPressed(InputCode.KeyX, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyX);
-                    if (state.CursorIndex != state.SelectionStart)
-                    {
-                        var start = Math.Min(state.CursorIndex, state.SelectionStart);
-                        var length = Math.Abs(state.CursorIndex - state.SelectionStart);
-                        Application.Platform.SetClipboardText(new string(text.Slice(start, length)));
-                        RemoveSelected(ref state);
-                    }
-                }
-
-                if (Input.WasButtonPressed(InputCode.KeyBackspace, true, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyBackspace);
-                    if (state.CursorIndex != state.SelectionStart)
-                        RemoveSelected(ref state);
-                    else if (state.CursorIndex > 0)
-                    {
-                        state.EditText = UI.RemoveText(state.EditText.AsReadOnlySpan(), state.CursorIndex - 1, 1);
-                        state.CursorIndex--;
-                        state.SelectionStart = state.CursorIndex;
-                    }
-                }
-
-                if (Input.WasButtonPressed(InputCode.KeyDelete, true, scope))
-                {
-                    Input.ConsumeButton(InputCode.KeyDelete);
-                    if (state.CursorIndex != state.SelectionStart)
-                        RemoveSelected(ref state);
-                    else if (state.CursorIndex < text.Length)
-                    {
-                        state.EditText = UI.RemoveText(state.EditText.AsReadOnlySpan(), state.CursorIndex, 1);
-                    }
-                }
-
-                var input = Input.GetTextInput(scope);
-                if (!string.IsNullOrEmpty(input))
-                {
-                    RemoveSelected(ref state);
-                    state.EditText = UI.InsertText(state.EditText.AsReadOnlySpan(), state.CursorIndex, input);
-                    state.CursorIndex += input.Length;
-                    state.SelectionStart = state.CursorIndex;
-                }
-
-                for (var i = (int)InputCode.KeyA; i <= (int)InputCode.KeyRightSuper; i++)
-                    Input.ConsumeButton((InputCode)i);
-            }
-
-            var len = state.EditText.Length;
-            state.CursorIndex = Math.Clamp(state.CursorIndex, 0, len);
-            state.SelectionStart = Math.Clamp(state.SelectionStart, 0, len);
-
-            // Track per-frame text changes
-            state.PrevTextHash = state.TextHash;
-            state.TextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
-        }
-        else
-        {
-            if (state.Focused == 1)
-                state.FocusExited = 1;
-            state.Focused = 0;
-        }
-
-        // Visual — always emit border to prevent layout jump
-        var activeBorderWidth = focused ? (focusBorderWidth > 0 ? focusBorderWidth : borderWidth) : borderWidth;
-        var activeBorderColor = focused ? (!focusBorderColor.IsTransparent ? focusBorderColor : borderColor) : borderColor;
-        var activeBorderRadius = focused ? (focusBorderRadius.TopLeft > 0 || focusBorderRadius.TopRight > 0 || focusBorderRadius.BottomLeft > 0 || focusBorderRadius.BottomRight > 0 ? focusBorderRadius : borderRadius) : borderRadius;
-
-        BeginBorder(activeBorderWidth, activeBorderColor, activeBorderRadius);
-        BeginSize(Size.Percent(1), new Size(height));
-        BeginFill(bgColor);
-        BeginPadding(padding);
-        {
-            var overflow = multiLine ? TextOverflow.Wrap : TextOverflow.Overflow;
-            var displayText = focused ? state.EditText : Text(value);
-
-            ref var leaf = ref CreateLeafElement<EditableTextElement>(ElementType.EditableText, withTransform: true);
-            ref var d = ref GetElementData<EditableTextElement>(ref leaf);
-            d.Text = displayText;
-            d.FontSize = fontSize;
-            d.TextColor = textColor;
-            d.CursorColor = cursorColor;
-            d.SelectionColor = selectionColor;
-            d.PlaceholderColor = placeholderColor;
-            d.WidgetId = widgetId;
-            d.MultiLine = multiLine;
-            d.FontAssetIndex = AddAsset(font);
-            d.Overflow = overflow;
-
-            if (displayText.Length == 0 && placeholder.Length > 0)
-            {
-                d.Text = Text(placeholder);
-                d.TextColor = placeholderColor;
-            }
-        }
-        EndPadding();
-        EndFill();
-        EndSize();
-        EndBorder();
-
-        // Commit on focus loss
-        if (state.Focused == 1 && !focused && state.FocusExited == 0)
-        {
-            var newText = new string(state.EditText.AsReadOnlySpan());
-            if (newText != value)
-            {
-                value = newText;
-                changed = true;
             }
             state.Focused = 0;
+            state.FocusExited = 0;
+            state.WasCancelled = 0;
+        }
+
+        if (focused && !HasFocus())
+        {
             state.FocusExited = 1;
+            state.Focused = 0;
         }
 
-        EndWidget();
         return changed;
     }
 
-    private static void RemoveSelected(ref TextBoxState state)
+    private static void HandleTextInput(ref TextBoxState state, Font font, float fontSize,
+        bool multiLine, InputScope scope, bool commitOnEnter)
+    {
+        var editText = state.EditText.AsReadOnlySpan();
+        var ctrl = Input.IsCtrlDown();
+        var shift = Input.IsShiftDown();
+
+        // Escape — cancel
+        if (Input.WasButtonPressed(InputCode.KeyEscape, true, scope))
+        {
+            state.WasCancelled = 1;
+            ClearFocus();
+            return;
+        }
+
+        // Tab — commit and defocus
+        if (Input.WasButtonPressed(InputCode.KeyTab, true, scope))
+        {
+            ClearFocus();
+            return;
+        }
+
+        // Enter
+        if (Input.WasButtonPressed(InputCode.KeyEnter, true, scope))
+        {
+            if (multiLine && !commitOnEnter)
+            {
+                RemoveSelected(ref state);
+                editText = state.EditText.AsReadOnlySpan();
+                state.EditText = UI.InsertText(editText, state.CursorIndex, "\n");
+                state.CursorIndex++;
+                state.SelectionStart = state.CursorIndex;
+                state.TextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
+                state.BlinkTimer = 0;
+            }
+            else
+            {
+                ClearFocus();
+            }
+            return;
+        }
+
+        // Ctrl+A — select all
+        if (ctrl && Input.WasButtonPressed(InputCode.KeyA, true, scope))
+        {
+            state.SelectionStart = 0;
+            state.CursorIndex = editText.Length;
+            return;
+        }
+
+        // Ctrl+C — copy
+        if (ctrl && Input.WasButtonPressed(InputCode.KeyC, true, scope))
+        {
+            if (state.CursorIndex != state.SelectionStart)
+            {
+                var selStart = Math.Min(state.CursorIndex, state.SelectionStart);
+                var selEnd = Math.Max(state.CursorIndex, state.SelectionStart);
+                Application.Platform.SetClipboardText(new string(editText[selStart..selEnd]));
+            }
+            return;
+        }
+
+        // Ctrl+X — cut
+        if (ctrl && Input.WasButtonPressed(InputCode.KeyX, true, scope))
+        {
+            if (state.CursorIndex != state.SelectionStart)
+            {
+                var selStart = Math.Min(state.CursorIndex, state.SelectionStart);
+                var selEnd = Math.Max(state.CursorIndex, state.SelectionStart);
+                Application.Platform.SetClipboardText(new string(editText[selStart..selEnd]));
+                RemoveSelected(ref state);
+                state.TextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
+            }
+            return;
+        }
+
+        // Ctrl+V — paste
+        if (ctrl && Input.WasButtonPressed(InputCode.KeyV, true, scope))
+        {
+            var clipboard = Application.Platform.GetClipboardText();
+            if (clipboard != null && clipboard.Length > 0)
+            {
+                RemoveSelected(ref state);
+                editText = state.EditText.AsReadOnlySpan();
+                state.EditText = UI.InsertText(editText, state.CursorIndex, clipboard);
+                state.CursorIndex += clipboard.Length;
+                state.SelectionStart = state.CursorIndex;
+                state.TextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
+                state.BlinkTimer = 0;
+            }
+            return;
+        }
+
+        // Backspace
+        if (Input.WasButtonPressed(InputCode.KeyBackspace, true, scope))
+        {
+            if (state.CursorIndex != state.SelectionStart)
+            {
+                RemoveSelected(ref state);
+            }
+            else if (state.CursorIndex > 0)
+            {
+                state.EditText = UI.RemoveText(state.EditText.AsReadOnlySpan(), state.CursorIndex - 1, 1);
+                state.CursorIndex--;
+                state.SelectionStart = state.CursorIndex;
+            }
+            state.TextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
+            state.BlinkTimer = 0;
+            return;
+        }
+
+        // Delete
+        if (Input.WasButtonPressed(InputCode.KeyDelete, true, scope))
+        {
+            editText = state.EditText.AsReadOnlySpan();
+            if (state.CursorIndex != state.SelectionStart)
+            {
+                RemoveSelected(ref state);
+            }
+            else if (state.CursorIndex < editText.Length)
+            {
+                state.EditText = UI.RemoveText(editText, state.CursorIndex, 1);
+            }
+            state.TextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
+            state.BlinkTimer = 0;
+            return;
+        }
+
+        // Left arrow
+        if (Input.WasButtonPressed(InputCode.KeyLeft, true, scope))
+        {
+            if (state.CursorIndex > 0)
+                state.CursorIndex--;
+            if (!shift)
+                state.SelectionStart = state.CursorIndex;
+            state.BlinkTimer = 0;
+            return;
+        }
+
+        // Right arrow
+        if (Input.WasButtonPressed(InputCode.KeyRight, true, scope))
+        {
+            editText = state.EditText.AsReadOnlySpan();
+            if (state.CursorIndex < editText.Length)
+                state.CursorIndex++;
+            if (!shift)
+                state.SelectionStart = state.CursorIndex;
+            state.BlinkTimer = 0;
+            return;
+        }
+
+        // Home
+        if (Input.WasButtonPressed(InputCode.KeyHome, true, scope))
+        {
+            state.CursorIndex = 0;
+            if (!shift)
+                state.SelectionStart = state.CursorIndex;
+            state.BlinkTimer = 0;
+            return;
+        }
+
+        // End
+        if (Input.WasButtonPressed(InputCode.KeyEnd, true, scope))
+        {
+            state.CursorIndex = state.EditText.AsReadOnlySpan().Length;
+            if (!shift)
+                state.SelectionStart = state.CursorIndex;
+            state.BlinkTimer = 0;
+            return;
+        }
+
+        // Text input (typed characters)
+        var textInput = Input.GetTextInput(scope);
+        if (textInput.Length > 0)
+        {
+            RemoveSelected(ref state);
+            editText = state.EditText.AsReadOnlySpan();
+            state.EditText = UI.InsertText(editText, state.CursorIndex, textInput);
+            state.CursorIndex += textInput.Length;
+            state.SelectionStart = state.CursorIndex;
+            state.TextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
+            state.BlinkTimer = 0;
+        }
+    }
+
+    internal static void RemoveSelected(ref TextBoxState state)
     {
         if (state.CursorIndex == state.SelectionStart) return;
         var start = Math.Min(state.CursorIndex, state.SelectionStart);
@@ -378,7 +379,6 @@ public static unsafe partial class ElementTree
         ref var state = ref GetStateByWidgetId<TextBoxState>(d.WidgetId);
         var focused = state.Focused != 0;
 
-        // Draw text (color already set correctly by compound widget — placeholder uses PlaceholderColor)
         if (text.Length > 0)
         {
             if (d.Overflow == TextOverflow.Wrap && e.Rect.Width > 0)
@@ -514,7 +514,7 @@ public static unsafe partial class ElementTree
         return TextRender.Measure(text, font, fontSize).X;
     }
 
-    private static int HitTestCharIndex(ReadOnlySpan<char> text, Font font, float fontSize,
+    internal static int HitTestCharIndex(ReadOnlySpan<char> text, Font font, float fontSize,
         bool multiLine, float contentWidth, float relX, float relY)
     {
         if (text.Length == 0) return 0;
