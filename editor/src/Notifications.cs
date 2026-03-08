@@ -113,7 +113,7 @@ public static class Notifications
                 {
                     if (n.Icon != null)
                         UI.Image(n.Icon, EditorStyle.Notifications.NotificationIcon);
-                    UI.Label(
+                    UI.Text(
                         n.Text,
                         n.Type == NotificationType.Error
                             ? EditorStyle.Notifications.NotificationErrorText

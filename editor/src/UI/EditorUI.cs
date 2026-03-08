@@ -41,7 +41,7 @@ internal static partial class EditorUI
 
     private static void ShortcutText(string text, bool selected = false)
     {
-        UI.Label(text, style: selected ? EditorStyle.Control.Text : EditorStyle.Shortcut.Text);
+        UI.Text(text, style: selected ? EditorStyle.Control.Text : EditorStyle.Shortcut.Text);
     }
 
     private static void ShortcutText(InputCode code, bool selected = false) =>
@@ -87,7 +87,7 @@ internal static partial class EditorUI
         {
             ButtonFill(selected, UI.IsHovered(), disabled, toolbar: toolbar);
             using (UI.BeginContainer(EditorStyle.Button.TextContent))
-                UI.Label(text, (disabled ? EditorStyle.Control.DisabledText : EditorStyle.Control.Text) with { AlignX = Align.Center, AlignY = Align.Center});
+                UI.Text(text, (disabled ? EditorStyle.Control.DisabledText : EditorStyle.Control.Text) with { AlignX = Align.Center, AlignY = Align.Center});
             pressed = !disabled && UI.WasPressed();
         }
 
@@ -137,7 +137,7 @@ internal static partial class EditorUI
 
     public static void PopupText(string text, bool hovered = false, bool selected = false, bool disabled = false)
     {
-        UI.Label(
+        UI.Text(
             text,
             style: disabled
                 ? EditorStyle.Control.DisabledText
@@ -309,7 +309,7 @@ internal static partial class EditorUI
 
     public static void ControlPlaceholderText(string text)
     {
-        UI.Label(
+        UI.Text(
             text,
             style: _controlSelected
                 ? EditorStyle.Control.PlaceholderSelectedText
@@ -320,7 +320,7 @@ internal static partial class EditorUI
 
     public static void ControlText(string text)
     {
-        UI.Label(
+        UI.Text(
             text,
             style: _controlDisabled
                 ? EditorStyle.Control.DisabledText
@@ -393,7 +393,7 @@ internal static partial class EditorUI
             for (var blockIndex = 0; blockIndex < blockCount; blockIndex++)
             {
                 using (UI.BeginContainer(EditorStyle.Dopesheet.TimeBlock))
-                    UI.Label(FrameTimeStrings[blockIndex], EditorStyle.Dopesheet.TimeText);
+                    UI.Text(FrameTimeStrings[blockIndex], EditorStyle.Dopesheet.TimeText);
 
                 UI.Container(EditorStyle.Dopesheet.FrameSeparator);
             }

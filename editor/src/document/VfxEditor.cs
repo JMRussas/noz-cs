@@ -158,7 +158,7 @@ internal partial class VfxEditor : DocumentEditor
                             UI.Container(EditorStyle.Inspector.EmitterTabFill);
 
                         using (UI.BeginContainer(new ContainerStyle { Padding = EdgeInsets.LeftRight(8), AlignY = Align.Center }))
-                            UI.Label(Document.GetEmitterName(i), EditorStyle.Inspector.EmitterTabText);
+                            UI.Text(Document.GetEmitterName(i), EditorStyle.Inspector.EmitterTabText);
 
                         if (UI.WasPressed())
                             Document.SelectedEmitterIndex = i;

@@ -103,7 +103,7 @@ public static partial class CommandPalette
                     UI.Image(EditorAssets.Sprites.IconSearch, EditorStyle.Control.Icon);
                    
                 using (UI.BeginFlex())
-                    _text = UI.TextBox(ElementId.Search, _text, EditorStyle.CommandPalette.SearchTextBox, "Search...");
+                    _text = UI.TextInput(ElementId.Search, _text, EditorStyle.CommandPalette.SearchTextBox, "Search...");
             }
 
             UI.Container(EditorStyle.Popup.Separator);
@@ -140,7 +140,7 @@ public static partial class CommandPalette
                             if (cmd.Icon != null)
                                 UI.Image(cmd.Icon);
 
-                        UI.Label(cmd.Name, style: EditorStyle.Control.Text);
+                        UI.Text(cmd.Name, style: EditorStyle.Control.Text);
                         UI.Flex();
 
                         if (cmd.Key != InputCode.None)

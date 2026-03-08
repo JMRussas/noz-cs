@@ -63,7 +63,7 @@ public class GenStyleEditor : DocumentEditor
             var (name, strength) = Document.StyleReferences[i];
             using (Inspector.BeginRow())
             {
-                UI.Label(name, EditorStyle.Text.Primary);
+                UI.Text(name, EditorStyle.Text.Primary);
                 var newStrength = Inspector.SliderProperty(strength, handler: Document);
                 if (MathF.Abs(newStrength - strength) > float.Epsilon)
                     Document.StyleReferences[i] = (name, newStrength);

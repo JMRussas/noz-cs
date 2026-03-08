@@ -225,7 +225,7 @@ public partial class SpriteEditor : DocumentEditor
         {
             var isHovered = UI.IsHovered();
 
-            UI.Label(layer.Name, EditorStyle.Text.Primary);
+            UI.Text(layer.Name, EditorStyle.Text.Primary);
 
             UI.Flex();
 
@@ -295,7 +295,7 @@ public partial class SpriteEditor : DocumentEditor
                     using (UI.BeginContainer(EditorStyle.Dopesheet.TimeBlock))
                     {
                         if (blockIndex > 0)
-                            UI.Label(EditorUI.FrameTimeStrings[blockIndex], EditorStyle.Dopesheet.TimeText);
+                            UI.Text(EditorUI.FrameTimeStrings[blockIndex], EditorStyle.Dopesheet.TimeText);
                     }
                         
                     UI.Container(EditorStyle.Dopesheet.FrameSeparator);
@@ -1847,7 +1847,7 @@ public partial class SpriteEditor : DocumentEditor
                         GenerationState.Running => "Processing...",
                         _ => "Starting..."
                     };
-                    UI.Label(progressText, EditorStyle.Text.Secondary);
+                    UI.Text(progressText, EditorStyle.Text.Secondary);
 
                     // Progress bar
                     if (genImage.GenerationState == GenerationState.Running && genImage.TotalSteps > 0)
@@ -1878,7 +1878,7 @@ public partial class SpriteEditor : DocumentEditor
                 else
                 {
                     if (genImage.GenerationError != null)
-                        UI.Label(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
+                        UI.Text(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
 
                     gen.Strength = Inspector.SliderProperty(gen.Strength, handler: Document);
                     gen.Prompt = Inspector.StringProperty(gen.Prompt, handler: Document, placeholder: "Prompt", multiLine: true);

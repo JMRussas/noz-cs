@@ -11,7 +11,6 @@ internal static partial class Inspector
 
     public struct AutoSection : IDisposable
     {
-        public bool WasPressed;
         readonly void IDisposable.Dispose() => EndSection();
     }
 
@@ -53,8 +52,8 @@ internal static partial class Inspector
     public static AutoSection BeginSection(string name, Sprite? icon = null, Action? content = null, bool isActive = false)
     {
         var sectionId = _nextSectionId++;
-        ref var state = ref UI.GetStateByWidgetId<SectionState>(sectionId);
 
+#if false
         var headerStyle = isActive
             ? EditorStyle.Inspector.SectionHeaderActive
             : EditorStyle.Inspector.SectionHeader;
@@ -67,6 +66,7 @@ internal static partial class Inspector
         bool pressed;
         using (UI.BeginRow(sectionId, headerStyle))
         {
+            ref var state = ref ElementTree.GetWidgetState<SectionState>();
             var chevron = state.Collapsed != 0
                 ? EditorAssets.Sprites.IconFoldoutClosed
                 : EditorAssets.Sprites.IconFoldoutOpen;
@@ -84,9 +84,10 @@ internal static partial class Inspector
                 state.Collapsed = (byte)(state.Collapsed != 0 ? 0 : 1);
         }
 
-        _sectionCollapsed = state.Collapsed != 0;
+        _sectionCollapsed = ElementTree.GetWidgetData<SectionState>(sectionId).Collapsed != 0;
+#endif
 
-        return new AutoSection { WasPressed = pressed };
+        return new AutoSection();
     }
 
     public static UI.AutoRow BeginRow()
@@ -129,7 +130,7 @@ internal static partial class Inspector
                 UI.Image(icon, EditorStyle.Icon.Secondary);
 
             if (name != null)
-                UI.Label(name, EditorStyle.Text.Primary);
+                UI.Text(name, EditorStyle.Text.Primary);
 
             content();
 
@@ -151,7 +152,7 @@ internal static partial class Inspector
 
         static void DropdownContent()
         {
-            UI.Label(_dropdownText!, EditorStyle.Text.Primary);
+            UI.Text(_dropdownText!, EditorStyle.Text.Primary);
 
             if (_propertyHovered)
                 UI.Flex();
@@ -187,9 +188,10 @@ internal static partial class Inspector
         {
             var hovered = UI.IsHovered(propertyId);
 
-            value = multiLine
-                ? UI.TextArea(propertyId, value, hovered ? EditorStyle.Inspector.TextAreaHovered : EditorStyle.Inspector.TextArea, placeholder, handler)
-                : UI.TextBox(propertyId, value, hovered ? EditorStyle.Inspector.TextBoxHovered : EditorStyle.Inspector.TextBox, placeholder, handler);
+            //UI.TextInput(propertyId, value, hovered ? EditorStyle.Inspector.TextAreaHovered : EditorStyle.Inspector.TextArea, placeholder, handler);
+            //value = multiLine
+            //    ? 
+            //    : UI.TextBox(propertyId, value, hovered ? EditorStyle.Inspector.TextBoxHovered : EditorStyle.Inspector.TextBox, placeholder, handler);
         }
 
         return value;
@@ -221,14 +223,14 @@ internal static partial class Inspector
 
             Span<char> hex = stackalloc char[6];
             Strings.ColorHex(_valueColor, hex);
-            UI.Label(hex, EditorStyle.Text.Secondary);
+            UI.Text(hex, EditorStyle.Text.Secondary);
 
             UI.Flex();
 
             using (UI.BeginRow(new ContainerStyle { Width = Size.Fit }))
             {
-                UI.Label(Strings.Number((int)((_valueColor.A / 255.0f) * 100)), EditorStyle.Text.Secondary);
-                UI.Label("%", EditorStyle.Text.Secondary);
+                UI.Text(Strings.Number((int)((_valueColor.A / 255.0f) * 100)), EditorStyle.Text.Secondary);
+                UI.Text("%", EditorStyle.Text.Secondary);
             }
         }
 

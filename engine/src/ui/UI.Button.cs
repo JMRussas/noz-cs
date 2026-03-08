@@ -34,7 +34,7 @@ public static partial class UI
     {
         ElementTree.BeginWidget(id);
 
-        var flags = ElementTree.GetCurrentWidgetFlags();
+        var flags = ElementTree.CurrentWidgetFlags;
         var s = style.Resolve != null ? style.Resolve(style, flags) : style;
 
         ElementTree.BeginSize(new Size2(s.Width, s.Height));
@@ -44,8 +44,8 @@ public static partial class UI
 
         ElementTree.BeginFill(s.Color, s.BorderRadius);
 
-        var hasBadding = !s.Padding.IsZero;
-        if (hasBadding)
+        var hasPadding = !s.Padding.IsZero;
+        if (hasPadding)
             ElementTree.BeginPadding(s.Padding);
 
         ElementTree.BeginAlign(Align.Center);
@@ -60,24 +60,24 @@ public static partial class UI
         if (text != null)
         {
             var font = s.Font ?? _defaultFont!;
-            ElementTree.Label(ElementTree.Text(text), font, s.FontSize, s.ContentColor,
+            ElementTree.Text(text, font, s.FontSize, s.ContentColor,
                 new Align2(Align.Center, Align.Center), TextOverflow.Overflow);
         }
 
-        ElementTree.EndElement(); // row
-        ElementTree.EndElement(); // align
+        ElementTree.EndRow();
+        ElementTree.EndAlign();
 
-        if (hasBadding)
-            ElementTree.EndElement(); // padding
+        if (hasPadding)
+            ElementTree.EndPadding();
 
-        ElementTree.EndElement(); // fill
-        ElementTree.EndElement(); // size
+        ElementTree.EndFill();
+        ElementTree.EndSize();
 
         if (s.BorderWidth > 0)
-            ElementTree.EndElement(); // border
+            ElementTree.EndBorder();
 
-        var pressed = ElementTree.WasPressed();
         ElementTree.EndWidget();
-        return pressed;
+
+        return flags.HasFlag(ElementFlags.Pressed);
     }
 }

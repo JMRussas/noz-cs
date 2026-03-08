@@ -2,9 +2,6 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-// #define NOZ_UI_DEBUG
-// #define NOZ_UI_DEBUG_LINE_DIFF
-
 using NoZ.Platform;
 using System.Diagnostics;
 using System.Numerics;
@@ -20,8 +17,6 @@ public enum ImageStretch : byte
 
 public static partial class UI
 {
-    private const int MaxTextBuffer = 64 * 1024;
-
     public struct AutoContainer : IDisposable { readonly void IDisposable.Dispose() => EndContainer(); }
     public struct AutoColumn : IDisposable { readonly void IDisposable.Dispose() => EndColumn(); }
     public struct AutoRow : IDisposable { readonly void IDisposable.Dispose() => EndRow(); }
@@ -37,21 +32,10 @@ public static partial class UI
     public static Font DefaultFont => _defaultFont!;
     public static UIConfig Config { get; private set; } = new();
 
-    private static NativeArray<char>[] _textBuffers = [new(MaxTextBuffer), new(MaxTextBuffer)];
-    private static int _currentTextBuffer;
-
     private static ushort _frame;
     public static ushort Frame => _frame;
     private static Vector2 _size;
     private static Vector2Int _refSize;
-
-    // ElementTree wrapper stack for Container/Row/Column decomposition
-    // High bit (0x80) = widget was opened, low 7 bits = wrapper element count
-    private static readonly byte[] _etWrapperCounts = new byte[128];
-    private static int _etWrapperIndex;
-
-
-
     public static Vector2 ScreenSize => _size;
 
     public static float UserScale { get; set; } = 1.0f;
@@ -133,18 +117,11 @@ public static partial class UI
 
         Graphics.Driver.DestroyMesh(_mesh.Handle);
 
-        _textBuffers[0].Dispose();
-        _textBuffers[1].Dispose();
-
         ElementTree.Shutdown();
     }
 
-    public static bool IsValidElement(int elementId) => ElementTree.IsWidgetId(elementId);
-
     public static bool IsRow() => ElementTree.IsParentRow();
     public static bool IsColumn() => ElementTree.IsParentColumn();
-
-    private static ref NativeArray<char> GetTextBuffer() => ref _textBuffers[_currentTextBuffer];
 
     public static Rect GetElementRect(int elementId)
     {
@@ -158,62 +135,22 @@ public static partial class UI
         return ElementTree.GetWidgetWorldRect(elementId);
     }
 
-    internal static UnsafeSpan<char> AddText(int length)
-    {
-        ref var textBuffer = ref GetTextBuffer();
-        if (textBuffer.Length + length > textBuffer.Capacity)
-            return UnsafeSpan<char>.Empty;
-        return textBuffer.AddRange(length);
-    }
-
-    internal static UnsafeSpan<char> AddText(ReadOnlySpan<char> text)
-    {
-        ref var textBuffer = ref GetTextBuffer();
-        if (textBuffer.Length + text.Length > textBuffer.Capacity)
-            return UnsafeSpan<char>.Empty;
-        return textBuffer.AddRange(text);
-    }
-
-    internal static UnsafeSpan<char> InsertText(ReadOnlySpan<char> text, int start, ReadOnlySpan<char> insert)
-    {
-        var result = AddText(text.Length + insert.Length);
-        for (int i = 0; i < result.Length; i++)
-            result[i] = ' ';
-        if (start > 0)
-            text[..start].CopyTo(result.AsSpan(0, start));
-        insert.CopyTo(result.AsSpan(start, insert.Length));
-        if (start < text.Length)
-            text[start..].CopyTo(result.AsSpan(start + insert.Length, text.Length - start));
-        return result;
-    }
-
-    public static UnsafeSpan<char> RemoveText(ReadOnlySpan<char> text, int start, int count)
-    {
-        if (text.Length - count <= 0)
-            return UnsafeSpan<char>.Empty;
-
-        var result = AddText(text.Length - count);
-        text[..start].CopyTo(result.AsSpan(0, start));
-        text[(start + count)..].CopyTo(result.AsSpan(start, text.Length - start - count));
-        return result;
-    }
-
-    public static bool IsHovered(int elementId) => ElementTree.IsHoveredById(elementId);
+    public static bool IsHovered(int elementId) => ElementTree.IsHovered(elementId);
     public static bool IsHovered() => ElementTree.IsHovered();
     public static bool HoverEnter() => ElementTree.HoverEnter();
-    public static bool HoverEnter(int elementId) => ElementTree.HoverChangedById(elementId) && ElementTree.IsHoveredById(elementId);
+    public static bool HoverEnter(int elementId) => ElementTree.HoverChanged(elementId) && ElementTree.IsHovered(elementId);
     public static bool HoverExit() => ElementTree.HoverExit();
-    public static bool HoverExit(int elementId) => ElementTree.HoverChangedById(elementId) && !ElementTree.IsHoveredById(elementId);
+    public static bool HoverExit(int elementId) => ElementTree.HoverChanged(elementId) && !ElementTree.IsHovered(elementId);
     public static bool HoverChanged() => ElementTree.HoverChanged();
-    public static bool HoverChanged(int elementId) => ElementTree.HoverChangedById(elementId);
+    public static bool HoverChanged(int elementId) => ElementTree.HoverChanged(elementId);
     public static bool WasPressed() => ElementTree.WasPressed();
-    public static bool WasPressed(int elementId) => ElementTree.WasPressedById(elementId);
+    public static bool WasPressed(int elementId) => ElementTree.WasPressed(elementId);
     public static bool IsDown() => ElementTree.IsDown();
 
     public static void SetDisabled(bool disabled = true) => ElementTree.SetWidgetFlag(ElementFlags.Disabled, disabled);
     public static void SetChecked(bool isChecked = true) => ElementTree.SetWidgetFlag(ElementFlags.Checked, isChecked);
-    public static bool IsDisabled() => ElementTree.HasCurrentWidget() && (ElementTree.GetCurrentWidgetFlags() & ElementFlags.Disabled) != 0;
-    public static bool IsChecked() => ElementTree.HasCurrentWidget() && (ElementTree.GetCurrentWidgetFlags() & ElementFlags.Checked) != 0;
+    public static bool IsDisabled() => ElementTree.IsDisabled();
+    public static bool IsChecked() => ElementTree.IsChecked();
 
     public static void SetCapture(int elementId) => ElementTree.SetCaptureById(elementId);
     public static void SetCapture() => ElementTree.SetCapture();
@@ -221,24 +158,21 @@ public static partial class UI
     public static bool HasCapture() => ElementTree.HasCapture();
     public static void ReleaseCapture() => ElementTree.ReleaseCapture();
 
-    public static ref T GetStateByWidgetId<T>(int widgetId) where T : unmanaged =>
-        ref ElementTree.GetStateByWidgetId<T>(widgetId);
-
-    public static ReadOnlySpan<char> GetElementText(int elementId)
+    public static ReadOnlySpan<char> GetElementText(int id)
     {
-        if (_lastChangedTextId == elementId)
-            return _lastChangedText.AsSpan();
+        //if (_lastChangedTextId == id)
+        //    return _lastChangedText.AsSpan();
 
-        var editText = ElementTree.GetEditableText(elementId);
-        if (editText.Length > 0)
-            return editText;
+        //var editText = ElementTree.GetEditableText(id);
+        //if (editText.Length > 0)
+        //    return editText;
 
         return default;
     }
 
     public static void SetElementText(int elementId, ReadOnlySpan<char> value, bool selectAll = false)
     {
-        ElementTree.SetEditableText(elementId, value, selectAll);
+        //ElementTree.SetEditableText(elementId, value, selectAll);
     }
 
     public static float GetScrollOffset(int elementId) =>
@@ -289,9 +223,6 @@ public static partial class UI
 
         _frame++;
         _refSize = GetRefSize();
-        _etWrapperIndex = 0;
-        _currentTextBuffer = 1 - _currentTextBuffer;
-        _textBuffers[_currentTextBuffer].Clear();
 
         var screenSize = Application.WindowSize.ToVector2();
         var rw = (float)_refSize.X;
@@ -339,112 +270,27 @@ public static partial class UI
         ElementTree.BeginSize(Size.Percent(1), Size.Percent(1));
     }
 
-    // axis: -1=stack(container), 0=row, 1=column
-    private static void BeginContainerImpl(int id, in ContainerStyle style, int axis)
+    internal static void End()
     {
-        int count = 0;
-        bool hasWidget = id != 0;
-        if (hasWidget) ElementTree.BeginWidget(id);
+        ElementTree.EndSize();
+        ElementTree.MouseWorldPosition = MouseWorldPosition;
+        ElementTree.End();
 
-        var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
-        var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
-        var bgColor = resolved.Color;
-        var borderColor = resolved.BorderColor;
-        var borderWidth = resolved.BorderWidth;
+        Graphics.SetCamera(Camera);
+        HandleInput();
 
-        if (style.Margin.L != 0 || style.Margin.R != 0 || style.Margin.T != 0 || style.Margin.B != 0)
-            { ElementTree.BeginMargin(style.Margin); count++; }
-        if (borderWidth > 0)
-            { ElementTree.BeginBorder(borderWidth, borderColor, style.BorderRadius); count++; }
-        ElementTree.BeginSize(style.Size); count++;
-        if (!bgColor.IsTransparent)
-            { ElementTree.BeginFill(bgColor, style.BorderRadius); count++; }
-        if (style.Padding.L != 0 || style.Padding.R != 0 || style.Padding.T != 0 || style.Padding.B != 0)
-            { ElementTree.BeginPadding(style.Padding); count++; }
-        if (style.Clip)
-            { ElementTree.BeginClip(style.BorderRadius); count++; }
-        if (style.Align.X != Align.Min || style.Align.Y != Align.Min)
-            { ElementTree.BeginAlign(style.Align); count++; }
-        if (axis == 0) { ElementTree.BeginRow(style.Spacing); count++; }
-        else if (axis == 1) { ElementTree.BeginColumn(style.Spacing); count++; }
-        _etWrapperCounts[_etWrapperIndex++] = (byte)(count | (hasWidget ? 0x80 : 0));
+        ElementTree.Draw();
+
+#if DEBUG
+        if (Input.IsCtrlDown() && Input.WasButtonPressed(InputCode.KeyF12))
+        {
+            Directory.CreateDirectory("temp");
+            File.WriteAllText("temp/et_dump.txt", ElementTree.DebugDumpTree());
+        }
+#endif
     }
 
-    private static void EndContainerImpl()
-    {
-        var packed = _etWrapperCounts[--_etWrapperIndex];
-        var count = packed & 0x7F;
-        var hasWidget = (packed & 0x80) != 0;
-        for (int i = 0; i < count; i++)
-            ElementTree.EndElement();
-        if (hasWidget) ElementTree.EndWidget();
-    }
 
-    public static AutoContainer BeginContainer(int id=default) =>
-        BeginContainer(id, ContainerStyle.Default);
-
-    public static AutoContainer BeginContainer(int id, in ContainerStyle style)
-    {
-        BeginContainerImpl(id, style, -1);
-        return new AutoContainer();
-    }
-
-    public static AutoContainer BeginContainer(in ContainerStyle style) =>
-        BeginContainer(0, style);
-
-
-    public static void EndContainer() => EndContainerImpl();
-
-    public static void Container(int id=0)
-    {
-        BeginContainer(id:id);
-        EndContainer();
-    }
-
-    public static void Container(int id, ContainerStyle style)
-    {
-        BeginContainer(id, style);
-        EndContainer();
-    }
-
-    public static void Container(ContainerStyle style) =>
-        Container(0, style);
-
-    public static AutoColumn BeginColumn(int id, in ContainerStyle style)
-    {
-        BeginContainerImpl(id, style, 1);
-        return new AutoColumn();
-    }
-
-    public static AutoColumn BeginColumn(int id) =>
-        BeginColumn(id, ContainerStyle.Default);
-
-    public static AutoColumn BeginColumn(in ContainerStyle style) =>
-        BeginColumn(0, style);
-
-    public static AutoColumn BeginColumn() =>
-        BeginColumn(0, ContainerStyle.Default);
-
-
-    public static void EndColumn() => EndContainerImpl();
-
-    public static AutoRow BeginRow(int id, in ContainerStyle style)
-    {
-        BeginContainerImpl(id, style, 0);
-        return new AutoRow();
-    }
-
-    public static AutoRow BeginRow(int id) =>
-        BeginRow(id, ContainerStyle.Default);
-
-    public static AutoRow BeginRow(in ContainerStyle style) =>
-        BeginRow(0, style);
-
-    public static AutoRow BeginRow() =>
-        BeginRow(0, ContainerStyle.Default);
-
-
-    public static void EndRow() => EndContainerImpl();
 
     public static void BeginCenter()
     {
@@ -457,23 +303,21 @@ public static partial class UI
     public static AutoFlex BeginFlex(float flex)
     {
         ElementTree.BeginFlex(flex);
-        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoFlex();
     }
 
-    public static void EndFlex() => EndContainerImpl();
+    public static void EndFlex() => ElementTree.EndFlex();
 
     public static void Flex() => Flex(1.0f);
     public static void Flex(float flex) => ElementTree.Flex(flex);
 
-    public static void Spacer(float size) => ElementTree.Spacer(size, size);
+    public static void Spacer(float size) => ElementTree.Spacer(size);
 
     public static void BeginBorder(BorderStyle style)
     {
         int count = 0;
         if (style.Width > 0)
             { ElementTree.BeginBorder(style.Width, style.Color, style.Radius); count++; }
-        _etWrapperCounts[_etWrapperIndex++] = (byte)count;
     }
 
     public static void EndBorder() => EndContainerImpl();
@@ -481,7 +325,6 @@ public static partial class UI
     public static AutoTransformed BeginTransformed(TransformStyle style)
     {
         ElementTree.BeginTransform(style.Origin, style.Translate, style.Rotate, style.Scale);
-        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoTransformed();
     }
 
@@ -490,7 +333,6 @@ public static partial class UI
     public static AutoOpacity BeginOpacity(float opacity)
     {
         ElementTree.BeginOpacity(opacity);
-        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoOpacity();
     }
 
@@ -499,14 +341,12 @@ public static partial class UI
     public static AutoCursor BeginCursor(Sprite sprite)
     {
         ElementTree.BeginCursor(sprite);
-        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoCursor();
     }
 
     public static AutoCursor BeginCursor(SystemCursor cursor)
     {
         ElementTree.BeginCursor(cursor);
-        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoCursor();
     }
 
@@ -518,9 +358,8 @@ public static partial class UI
     public static AutoScrollable BeginScrollable(int id, in ScrollableStyle style)
     {
         Debug.Assert(id != 0);
-        ElementTree.BeginWidget(id);
+        ElementTree.BeginWidget<ScrollableState>(id);
         ElementTree.BeginScrollable(id, in style);
-        _etWrapperCounts[_etWrapperIndex++] = (byte)(1 | 0x80); // 1 element (scrollable), widget flag
         return new AutoScrollable();
     }
 
@@ -530,7 +369,6 @@ public static partial class UI
     {
         ElementTree.BeginGrid(style.Spacing, style.Columns, style.CellWidth, style.CellHeight,
             style.CellMinWidth, style.CellHeightOffset, style.VirtualCount, style.StartIndex);
-        _etWrapperCounts[_etWrapperIndex++] = 1;
         return new AutoGrid();
     }
 
@@ -585,40 +423,35 @@ public static partial class UI
         ElementTree.EndPopup();
     }
 
-    // :label
-    public static void Label(ReadOnlySpan<char> text) =>
-        Label(text, new LabelStyle());
+    // :text
+    #region Text
 
-    public static void Label(ReadOnlySpan<char> text, LabelStyle style)
+    public static void Text(ReadOnlySpan<char> text) =>
+        Text(text, new LabelStyle());
+
+    public static void Text(string text) => Text(text.AsSpan(), new LabelStyle());
+
+    public static void Text(string text, LabelStyle style) => Text(text.AsSpan(), style);
+
+    public static void Text(ReadOnlySpan<char> text, LabelStyle style)
     {
-        var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
-        var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
+        var resolved = style.Resolve != null ? style.Resolve(style, ElementTree.CurrentWidgetFlags) : style;
         var font = resolved.Font ?? _defaultFont!;
         var fontSize = resolved.FontSize > 0 ? resolved.FontSize : 16f;
-        ElementTree.Label(ElementTree.Text(text), font, fontSize, resolved.Color, resolved.Align, resolved.Overflow);
+        ElementTree.Text(text, font, fontSize, resolved.Color, resolved.Align, resolved.Overflow);
     }
 
-    public static void Label(string text) => Label(text.AsSpan(), new LabelStyle());
-
-    public static void Label(string text, LabelStyle style) => Label(text.AsSpan(), style);
-
-    public static void WrappedLabel(int id, string text, LabelStyle style)
-    {
-        var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
-        var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
-        var font = resolved.Font ?? _defaultFont!;
-        var fontSize = resolved.FontSize > 0 ? resolved.FontSize : 16f;
-        ElementTree.Label(ElementTree.Text(text), font, fontSize, resolved.Color, resolved.Align, TextOverflow.Wrap);
-    }
+    #endregion
 
     // :image
+    #region Image
+
     public static void Image(Sprite? sprite) => Image(sprite, new ImageStyle());
 
     public static void Image(Sprite? sprite, in ImageStyle style)
     {
         if (sprite == null) return;
-        var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
-        var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
+        var resolved = style.Resolve != null ? style.Resolve(style, ElementTree.CurrentWidgetFlags) : style;
         ElementTree.Image(sprite, resolved.Size, resolved.Stretch, resolved.Color, resolved.Scale, resolved.Align);
     }
 
@@ -626,30 +459,12 @@ public static partial class UI
 
     public static void Image(Texture texture, in ImageStyle style)
     {
-        var flags = ElementTree.HasCurrentWidget() ? ElementTree.GetCurrentWidgetFlags() : ElementFlags.None;
-        var resolved = style.Resolve != null ? style.Resolve(style, flags) : style;
+        var resolved = style.Resolve != null ? style.Resolve(style, ElementTree.CurrentWidgetFlags) : style;
         ElementTree.Image(texture, resolved.Size, resolved.Stretch, resolved.Color, resolved.Scale, resolved.Align);
     }
 
-    internal static void End()
-    {
-        ElementTree.EndSize();
-        ElementTree.MouseWorldPosition = MouseWorldPosition;
-        ElementTree.End();
+    #endregion
 
-        Graphics.SetCamera(Camera);
-        HandleInput();
-
-        ElementTree.Draw();
-
-#if DEBUG
-        if (Input.IsCtrlDown() && Input.WasButtonPressed(InputCode.KeyF12))
-        {
-            Directory.CreateDirectory("temp");
-            File.WriteAllText("temp/et_dump.txt", ElementTree.DebugDumpTree());
-        }
-#endif
-    }
 
     public static Rect WorldToSceneLocal(Camera camera, int sceneElementId, Rect worldRect)
     {
@@ -663,12 +478,5 @@ public static partial class UI
             screenRect.Width / viewport.Width * elementRect.Width,
             screenRect.Height / viewport.Height * elementRect.Height
         );
-    }
-
-    [Conditional("NOZ_UI_DEBUG")]
-    private static void LogUI(string msg, int depth=0, Func<bool>? condition = null, (string name, object? value, bool condition)[]? values = null)
-    {
-        if (condition == null || condition())
-            Log.Info($"[UI] {new string(' ', depth)}{msg}{Log.Params(values)}");
     }
 }

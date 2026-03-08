@@ -142,7 +142,7 @@ public struct PopupStyle()
     public Align PopupAlignY { readonly get => PopupAlign.Y; set => PopupAlign.Y = value; }
 }
 
-public struct TextBoxStyle()
+public struct TextInputStyle()
 {
     public Size Height = Size.Default;
     public float FontSize = 16;
@@ -154,25 +154,12 @@ public struct TextBoxStyle()
     public BorderRadius BorderRadius = BorderRadius.Zero;
     public float BorderWidth = 0;
     public Color BorderColor = Color.Transparent;
-    public BorderRadius FocusBorderRadius = BorderRadius.Zero;
-    public float FocusBorderWidth = 0;
-    public Color FocusBorderColor = Color.Transparent;
     public EdgeInsets Padding = EdgeInsets.Zero;
     public bool IsPassword = false;
     public InputScope Scope = InputScope.All;
+    public bool MultiLine = false;
 
-    public BorderStyle Border
-    {
-        readonly get => new() { Radius = BorderRadius, Width = BorderWidth, Color = BorderColor };
-        set { BorderRadius = value.Radius; BorderWidth = value.Width; BorderColor = value.Color; }
-    }
-
-    public BorderStyle FocusBorder
-    {
-        readonly get => new() { Radius = FocusBorderRadius, Width = FocusBorderWidth, Color = FocusBorderColor };
-        set { FocusBorderRadius = value.Radius; FocusBorderWidth = value.Width; FocusBorderColor = value.Color; }
-    }
-
+    public Func<TextInputStyle, ElementFlags, TextInputStyle>? Resolve;
 }
 
 public struct TextAreaStyle()

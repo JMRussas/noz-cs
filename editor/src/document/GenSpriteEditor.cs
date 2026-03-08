@@ -208,7 +208,7 @@ public partial class GenSpriteEditor : DocumentEditor
                     GenerationState.Running => "Processing...",
                     _ => "Starting..."
                 };
-                UI.Label(progressText, EditorStyle.Text.Secondary with { AlignX = Align.Center });
+                UI.Text(progressText, EditorStyle.Text.Secondary with { AlignX = Align.Center });
 
                 using (UI.BeginContainer(new ContainerStyle
                 {
@@ -234,7 +234,7 @@ public partial class GenSpriteEditor : DocumentEditor
         else
         {
             if (genImage.GenerationError != null)
-                UI.Label(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
+                UI.Text(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
 
             if (UI.Button(ElementId.GenerateButton, "Generate", EditorAssets.Sprites.IconAi, EditorStyle.Button.Primary with { Width = Size.Percent(1), MinWidth = 0 }))
                 Document.GenerateAsync();
@@ -279,11 +279,11 @@ public partial class GenSpriteEditor : DocumentEditor
 
             using (var section = Inspector.BeginSection(title, icon: EditorAssets.Sprites.IconLayer, isActive: isActive, content: isActive ? HeaderContent : null))
             {
-                if (section.WasPressed && !isActive)
-                {
-                    Document.ActiveLayerIndex = i;
-                    ClearSelection();
-                }
+                //if (section.WasPressed && !isActive)
+                //{
+                //    Document.ActiveLayerIndex = i;
+                //    ClearSelection();
+                //}
 
                 if (!Inspector.IsSectionCollapsed && isActive)
                 {

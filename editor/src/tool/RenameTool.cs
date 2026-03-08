@@ -55,7 +55,7 @@ public partial class RenameTool(
         using (UI.BeginContainer(EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
         using (UI.BeginContainer(EditorStyle.RenameTool.Content))
         {
-            _currentText = UI.TextBox(ElementId.TextBox, _currentText, EditorStyle.RenameTool.Text with { Scope = Scope });
+            _currentText = UI.TextInput(ElementId.TextBox, _currentText, EditorStyle.RenameTool.Text with { Scope = Scope });
 
             if (UI.HotEnter())
                 UI.SetElementText(ElementId.TextBox, _originalName, selectAll: true);

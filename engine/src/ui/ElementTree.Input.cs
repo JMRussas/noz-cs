@@ -8,6 +8,9 @@ namespace NoZ;
 
 public static unsafe partial class ElementTree
 {
+    private static bool _inputMousePressed;
+    private static bool _inputMouseDown;
+
     private static void HandlePopupAutoClose()
     {
         ClosePopups = false;
@@ -16,8 +19,8 @@ public static unsafe partial class ElementTree
         var anyAutoClose = false;
         for (var i = 0; i < _popupCount; i++)
         {
-            ref var pe = ref GetElement(_popupOffsets[i]);
-            ref var pd = ref GetElementData<PopupElement>(ref pe);
+            ref var pe = ref GetElement(_popups[i]);
+            ref var pd = ref pe.Data.Popup;
             if (pd.AutoClose) { anyAutoClose = true; break; }
         }
         if (!anyAutoClose) return;
@@ -33,11 +36,11 @@ public static unsafe partial class ElementTree
             var clickInsideAutoClosePopup = false;
             for (var i = 0; i < _popupCount; i++)
             {
-                ref var pe = ref GetElement(_popupOffsets[i]);
-                ref var pd = ref GetElementData<PopupElement>(ref pe);
+                ref var pe = ref GetElement(_popups[i]);
+                ref var pd = ref pe.Data.Popup;
                 if (!pd.AutoClose) continue;
 
-                Matrix3x2.Invert(GetTransform(ref pe), out var popupInv);
+                Matrix3x2.Invert(pe.Transform, out var popupInv);
                 var localMouse = Vector2.Transform(MouseWorldPosition, popupInv);
                 if (pe.Rect.Contains(localMouse))
                 {
@@ -59,10 +62,10 @@ public static unsafe partial class ElementTree
     {
         for (var i = 0; i < _popupCount; i++)
         {
-            ref var pe = ref GetElement(_popupOffsets[i]);
-            ref var pd = ref GetElementData<PopupElement>(ref pe);
+            ref var pe = ref GetElement(_popups[i]);
+            ref var pd = ref pe.Data.Popup;
             if (!pd.Interactive) continue;
-            if (IsDescendantOf(offset, _popupOffsets[i]))
+            if (IsDescendantOf(offset, _popups[i]))
                 return true;
         }
         return false;
@@ -72,9 +75,9 @@ public static unsafe partial class ElementTree
     {
         for (var i = 0; i < _popupCount; i++)
         {
-            ref var pe = ref GetElement(_popupOffsets[i]);
-            ref var pd = ref GetElementData<PopupElement>(ref pe);
-            if (!pd.Interactive && IsDescendantOf(offset, _popupOffsets[i]))
+            ref var pe = ref GetElement(_popups[i]);
+            ref var pd = ref pe.Data.Popup;
+            if (!pd.Interactive && IsDescendantOf(offset, _popups[i]))
                 return true;
         }
         return false;
@@ -132,7 +135,7 @@ public static unsafe partial class ElementTree
             }
 
             ref var ce = ref GetElement(cursorOffset);
-            ref var cd = ref GetElementData<CursorElement>(ref ce);
+            ref var cd = ref ce.Data.Cursor;
             if (cd.IsSprite)
                 Cursor.Set((Sprite)_assets[cd.AssetIndex]!);
             else
@@ -154,7 +157,7 @@ public static unsafe partial class ElementTree
 
         if (e.Type == ElementType.Cursor)
         {
-            Matrix3x2.Invert(GetTransform(ref e), out var cursorInv);
+            Matrix3x2.Invert(e.Transform, out var cursorInv);
             var localMouse = Vector2.Transform(MouseWorldPosition, cursorInv);
             if (e.Rect.Contains(localMouse))
                 foundOffset = offset;
@@ -186,6 +189,7 @@ public static unsafe partial class ElementTree
 
     private static void HandleScrollbarDrag()
     {
+#if false
         if (_scrollbarDragging)
         {
             if (!_inputMouseDown)
@@ -195,7 +199,7 @@ public static unsafe partial class ElementTree
                 return;
             }
 
-            ref var state = ref GetStateByWidgetId<ScrollableState>(_scrollbarDragWidgetId);
+            ref var state = ref GetWidgetData<ScrollableState>(_scrollbarDragWidgetId);
             var viewportHeight = GetScrollableViewportHeight(_scrollbarDragWidgetId);
             var maxScroll = Math.Max(0, state.ContentHeight - viewportHeight);
             if (maxScroll <= 0) return;
@@ -204,7 +208,7 @@ public static unsafe partial class ElementTree
             var scrollOffset = FindScrollableOffset(_scrollbarDragWidgetId);
             if (scrollOffset < 0) return;
             ref var e = ref GetElement(scrollOffset);
-            ref var d = ref GetElementData<ScrollableElement>(ref e);
+            ref var d = ref GetElementData<ScrollElement>(ref e);
 
             var trackH = viewportHeight - d.ScrollbarPadding * 2;
             var thumbHeightRatio = viewportHeight / state.ContentHeight;
@@ -224,18 +228,20 @@ public static unsafe partial class ElementTree
 
         // Check for new scrollbar interactions
         FindScrollbarInteraction(0);
+#endif
     }
 
     private static void FindScrollbarInteraction(int offset)
     {
+#if false
         ref var e = ref GetElement(offset);
 
-        if (e.Type == ElementType.Scrollable)
+        if (e.Type == ElementType.Scroll)
         {
-            ref var d = ref GetElementData<ScrollableElement>(ref e);
+            ref var d = ref GetElementData<ScrollElement>(ref e);
             if (d.WidgetId > 0)
             {
-                ref var state = ref GetStateByWidgetId<ScrollableState>(d.WidgetId);
+                ref var state = ref GetWidgetData<ScrollableState>(d.WidgetId);
                 var viewportHeight = e.Rect.Height;
                 var maxScroll = Math.Max(0, state.ContentHeight - viewportHeight);
 
@@ -277,10 +283,12 @@ public static unsafe partial class ElementTree
             FindScrollbarInteraction(childOffset);
             childOffset = child.NextSibling;
         }
+#endif
     }
 
-    private static bool GetScrollbarThumbRect(ref BaseElement e, ref ScrollableElement d, ref ScrollableState state, out Rect thumbRect)
+    private static bool GetScrollbarThumbRect(ref Element e, ref ScrollElement d, ref ScrollableState state, out Rect thumbRect)
     {
+#if false
         thumbRect = Rect.Zero;
         var viewportHeight = e.Rect.Height;
         var maxScroll = Math.Max(0, state.ContentHeight - viewportHeight);
@@ -296,11 +304,14 @@ public static unsafe partial class ElementTree
         var thumbY = trackY + scrollRatio * (trackH - thumbH);
 
         thumbRect = new Rect(trackX, thumbY, d.ScrollbarWidth, thumbH);
+#endif
+            thumbRect = Rect.Zero;
         return true;
     }
 
-    private static bool GetScrollbarTrackRect(ref BaseElement e, ref ScrollableElement d, ref ScrollableState state, out Rect trackRect)
+    private static bool GetScrollbarTrackRect(ref Element e, ref ScrollElement d, ref ScrollableState state, out Rect trackRect)
     {
+#if false
         trackRect = Rect.Zero;
         var viewportHeight = e.Rect.Height;
         var maxScroll = Math.Max(0, state.ContentHeight - viewportHeight);
@@ -313,11 +324,14 @@ public static unsafe partial class ElementTree
         var trackH = viewportHeight - d.ScrollbarPadding * 2;
 
         trackRect = new Rect(trackX, trackY, d.ScrollbarWidth, trackH);
+#endif
+        trackRect = Rect.Zero;
         return true;
     }
 
     private static void HandleScrollableContentDrag()
     {
+#if false
         if (_scrollbarDragging) return;
 
         if (!_inputMouseDown)
@@ -331,7 +345,7 @@ public static unsafe partial class ElementTree
             var deltaY = _lastScrollMouseY - MouseWorldPosition.Y;
             _lastScrollMouseY = MouseWorldPosition.Y;
 
-            ref var state = ref GetStateByWidgetId<ScrollableState>(_activeScrollWidgetId);
+            ref var state = ref GetWidgetData<ScrollableState>(_activeScrollWidgetId);
             var viewportHeight = GetScrollableViewportHeight(_activeScrollWidgetId);
             var maxScroll = Math.Max(0, state.ContentHeight - viewportHeight);
             state.Offset = Math.Clamp(state.Offset + deltaY, 0, maxScroll);
@@ -340,15 +354,17 @@ public static unsafe partial class ElementTree
         {
             FindScrollableContentDragStart(0);
         }
+#endif
     }
 
     private static void FindScrollableContentDragStart(int offset)
     {
+#if false
         ref var e = ref GetElement(offset);
 
-        if (e.Type == ElementType.Scrollable)
+        if (e.Type == ElementType.Scroll)
         {
-            ref var d = ref GetElementData<ScrollableElement>(ref e);
+            ref var d = ref GetElementData<ScrollElement>(ref e);
             if (d.WidgetId > 0)
             {
                 ref var ws = ref _widgetStates[d.WidgetId];
@@ -369,6 +385,7 @@ public static unsafe partial class ElementTree
             FindScrollableContentDragStart(childOffset);
             childOffset = child.NextSibling;
         }
+#endif
     }
 
     private static void HandleScrollableMouseWheel()
@@ -381,6 +398,7 @@ public static unsafe partial class ElementTree
 
     private static bool FindScrollableForWheel(int offset, float scrollDelta)
     {
+#if false
         ref var e = ref GetElement(offset);
 
         // Check children first (deeper scrollables take priority)
@@ -392,16 +410,16 @@ public static unsafe partial class ElementTree
             childOffset = child.NextSibling;
         }
 
-        if (e.Type == ElementType.Scrollable)
+        if (e.Type == ElementType.Scroll)
         {
-            ref var d = ref GetElementData<ScrollableElement>(ref e);
+            ref var d = ref GetElementData<ScrollElement>(ref e);
             if (d.WidgetId > 0)
             {
                 Matrix3x2.Invert(GetTransform(ref e), out var scrollInv);
                 var localMouse = Vector2.Transform(MouseWorldPosition, scrollInv);
                 if (e.Rect.Contains(localMouse))
                 {
-                    ref var state = ref GetStateByWidgetId<ScrollableState>(d.WidgetId);
+                    ref var state = ref GetWidgetData<ScrollableState>(d.WidgetId);
                     var maxScroll = Math.Max(0, state.ContentHeight - e.Rect.Height);
                     state.Offset = Math.Clamp(state.Offset - scrollDelta * d.ScrollSpeed, 0, maxScroll);
                     Input.ConsumeScroll();
@@ -409,6 +427,7 @@ public static unsafe partial class ElementTree
                 }
             }
         }
+#endif
 
         return false;
     }
@@ -420,10 +439,11 @@ public static unsafe partial class ElementTree
 
     private static int FindScrollableOffsetRecursive(int offset, int widgetId)
     {
+#if false
         ref var e = ref GetElement(offset);
-        if (e.Type == ElementType.Scrollable)
+        if (e.Type == ElementType.Scroll)
         {
-            ref var d = ref GetElementData<ScrollableElement>(ref e);
+            ref var d = ref GetElementData<ScrollElement>(ref e);
             if (d.WidgetId == widgetId) return offset;
         }
         var childOffset = (int)e.FirstChild;
@@ -434,6 +454,8 @@ public static unsafe partial class ElementTree
             if (found >= 0) return found;
             childOffset = child.NextSibling;
         }
+#endif
+
         return -1;
     }
 
@@ -447,16 +469,19 @@ public static unsafe partial class ElementTree
 
     internal static float GetScrollOffset(int widgetId)
     {
+#if false
         if (widgetId <= 0) return 0;
-        ref var state = ref GetStateByWidgetId<ScrollableState>(widgetId);
+        ref var state = ref GetWidgetData<ScrollableState>(widgetId);
         return state.Offset;
+#endif
+        return 0;
     }
 
     internal static void SetScrollOffset(int widgetId, float offset)
     {
-        if (widgetId <= 0) return;
-        ref var state = ref GetStateByWidgetId<ScrollableState>(widgetId);
-        state.Offset = offset;
+        //if (widgetId <= 0) return;
+        //ref var state = ref GetWidgetData<ScrollableState>(widgetId);
+        //state.Offset = offset;
     }
 
     private static void HandleSceneInput(int offset)
@@ -465,7 +490,7 @@ public static unsafe partial class ElementTree
 
         if (e.Type == ElementType.Scene)
         {
-            Matrix3x2.Invert(GetTransform(ref e), out var sceneInv);
+            Matrix3x2.Invert(e.Transform, out var sceneInv);
             var localMouse = Vector2.Transform(MouseWorldPosition, sceneInv);
             if (e.Rect.Contains(localMouse))
                 MouseOverScene = true;
@@ -480,8 +505,6 @@ public static unsafe partial class ElementTree
         }
     }
 
-    private static bool _inputMousePressed;
-    private static bool _inputMouseDown;
 
     private static void HandleInputElement(int offset)
     {
@@ -489,46 +512,45 @@ public static unsafe partial class ElementTree
 
         if (e.Type == ElementType.Widget)
         {
-            ref var d = ref GetElementData<WidgetElement>(ref e);
+            ref var d = ref e.Data.Widget;
             if (d.Id > 0 && d.Id < MaxId)
             {
-                ref var ws = ref _widgetStates[d.Id];
-                ws.PrevFlags = ws.Flags;
-                ws.Flags = ElementFlags.None;
+                var prevFlags = d.Flags;
+                d.Flags = ElementFlags.None;
 
                 // Block input for widgets outside popups when popups are open
                 if (_activePopupCount > 0 && !IsInsidePopup(offset))
                 {
-                    ws.LastFrame = _frame;
+                    //ws.LastFrame = _frame;
                     goto recurse;
                 }
                 if (IsInsideNonInteractivePopup(offset))
                 {
-                    ws.LastFrame = _frame;
+                    //ws.LastFrame = _frame;
                     goto recurse;
                 }
 
-                Matrix3x2.Invert(GetTransform(ref e), out var widgetInv);
+                Matrix3x2.Invert(e.Transform, out var widgetInv);
                 var localMouse = Vector2.Transform(MouseWorldPosition, widgetInv);
                 var hovered = e.Rect.Contains(localMouse);
 
                 if (hovered)
-                    ws.Flags |= ElementFlags.Hovered;
+                    d.Flags |= ElementFlags.Hovered;
 
                 if (hovered && _inputMousePressed && (_captureId == 0 || _captureId == d.Id))
-                    ws.Flags |= ElementFlags.Pressed;
+                    d.Flags |= ElementFlags.Pressed;
 
                 var isCaptured = _captureId != 0 && _captureId == d.Id;
                 if (isCaptured ? _inputMouseDown : (hovered && _inputMouseDown))
-                    ws.Flags |= ElementFlags.Down;
+                    d.Flags |= ElementFlags.Down;
 
                 if (_focusId == d.Id)
-                    ws.Flags |= ElementFlags.Focus;
+                    d.Flags |= ElementFlags.Focus;
 
-                if ((ws.Flags & ElementFlags.Hovered) != (ws.PrevFlags & ElementFlags.Hovered))
-                    ws.Flags |= ElementFlags.HoverChanged;
+                if ((d.Flags & ElementFlags.Hovered) != (prevFlags & ElementFlags.Hovered))
+                    d.Flags |= ElementFlags.HoverChanged;
 
-                ws.LastFrame = _frame;
+                //ws.LastFrame = _frame;
             }
         }
 

@@ -86,7 +86,7 @@ public static partial class ConfirmDialog
 
         using (UI.BeginColumn(EditorStyle.Confirm.Root))
         {
-            UI.Label(_message, EditorStyle.Confirm.MessageLabel);
+            UI.Text(_message, EditorStyle.Confirm.MessageLabel);
 
             using (UI.BeginRow(EditorStyle.Confirm.ButtonContainer))
             {

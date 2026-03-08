@@ -17,7 +17,7 @@ public static partial class UI
 
         // Clear hot focus when clicking outside the hot element
         var mousePressed = Input.WasButtonPressedRaw(InputCode.MouseLeft);
-        if (mousePressed && _hotId != 0 && !ElementTree.WasPressedById(_hotId))
+        if (mousePressed && _hotId != 0 && !ElementTree.WasPressed(_hotId))
             ElementTree.ClearFocus();
 
         // Don't consume mouse buttons when hovering over a Scene element (pass-through),

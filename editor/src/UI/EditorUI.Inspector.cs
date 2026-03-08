@@ -17,7 +17,7 @@ internal static partial class EditorUI
     {
         UI.Spacer(EditorStyle.Inspector.SectionGap / 2);
         using (UI.BeginRow(EditorStyle.Inspector.SectionHeader))
-            UI.Label(text, EditorStyle.Inspector.SectionText);
+            UI.Text(text, EditorStyle.Inspector.SectionText);
         UI.Container(EditorStyle.Inspector.Separator);
     }
 
@@ -29,14 +29,14 @@ internal static partial class EditorUI
 
         using (UI.BeginContainer(EditorStyle.Inspector.FieldContainer))
         {
-            if (UI.TextBox(id, buf[..written], EditorStyle.Inspector.TextBox, placeholder ?? "0"))
-            {
-                if (float.TryParse(UI.GetElementText(id), out var parsed))
-                {
-                    value = parsed;
-                    changed = true;
-                }
-            }
+            //if (UI.TextInput(id, buf[..written], EditorStyle.Inspector.TextBox, placeholder ?? "0"))
+            //{
+            //    if (float.TryParse(UI.GetElementText(id), out var parsed))
+            //    {
+            //        value = parsed;
+            //        changed = true;
+            //    }
+            //}
         }
         return changed;
     }
@@ -49,14 +49,14 @@ internal static partial class EditorUI
 
         using (UI.BeginContainer(EditorStyle.Inspector.FieldContainer))
         {
-            if (UI.TextBox(id, buf[..written], EditorStyle.Inspector.TextBox, placeholder ?? "0"))
-            {
-                if (int.TryParse(UI.GetElementText(id), out var parsed))
-                {
-                    value = parsed;
-                    changed = true;
-                }
-            }
+            //if (UI.TextInput(id, buf[..written], EditorStyle.Inspector.TextBox, placeholder ?? "0"))
+            //{
+            //    if (int.TryParse(UI.GetElementText(id), out var parsed))
+            //    {
+            //        value = parsed;
+            //        changed = true;
+            //    }
+            //}
         }
         return changed;
     }
@@ -69,7 +69,7 @@ internal static partial class EditorUI
             //Height = Size.Fit,
             AlignY = Align.Center
         }))
-            UI.Label(label, EditorStyle.Inspector.Label);
+            UI.Text(label, EditorStyle.Inspector.Label);
     }
 
     public static bool RangeField(int id, string label, ref VfxRange value)
@@ -232,15 +232,15 @@ internal static partial class EditorUI
                 // Text input (in a container so TextBox fills width via Percent mode)
                 using (UI.BeginContainer(ContainerStyle.Default))
                 {
-                    if (UI.TextBox(id, (ReadOnlySpan<char>)hex, EditorStyle.Inspector.TextBox, "#fff"))
-                    {
-                        var text = UI.GetElementText(id).ToString();
-                        if (TryParseHexColor(text, out var parsed))
-                        {
-                            color = parsed;
-                            changed = true;
-                        }
-                    }
+                    //if (UI.TextInput(id, (ReadOnlySpan<char>)hex, EditorStyle.Inspector.TextBox, "#fff"))
+                    //{
+                    //    var text = UI.GetElementText(id).ToString();
+                    //    if (TryParseHexColor(text, out var parsed))
+                    //    {
+                    //        color = parsed;
+                    //        changed = true;
+                    //    }
+                    //}
                 }
             }
         }

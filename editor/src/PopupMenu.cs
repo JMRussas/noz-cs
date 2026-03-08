@@ -200,7 +200,7 @@ public static partial class PopupMenu
             if (level == 0 && _title != null)
             {
                 using (UI.BeginContainer(EditorStyle.Popup.TitleItem))
-                    UI.Label(_title, EditorStyle.Popup.Title);
+                    UI.Text(_title, EditorStyle.Popup.Title);
                 UI.Spacer(EditorStyle.Control.Spacing);
                 UI.Container(EditorStyle.Popup.Separator);
             }

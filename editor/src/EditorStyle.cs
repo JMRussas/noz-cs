@@ -527,7 +527,7 @@ public static class EditorStyle
 
         public static readonly ContainerStyle SearchContainer = Popup.Item;
 
-        public static readonly TextBoxStyle SearchTextBox = new()
+        public static readonly TextInputStyle SearchTextBox = new()
         {
             FontSize = Control.TextSize,
             TextColor = Control.Text.Color,
@@ -819,7 +819,7 @@ public static class EditorStyle
             AlignY = Align.Center
         };
 
-        public static readonly TextBoxStyle TextBox = new()
+        public static readonly TextInputStyle TextBox = new()
         {
             Height = ControlHeight,
             FontSize = FontSize,
@@ -829,13 +829,13 @@ public static class EditorStyle
             BorderRadius = BorderRadius,
             BorderWidth = 1,
             BorderColor = Color.Transparent,
-            FocusBorderRadius = BorderRadius,
-            FocusBorderWidth = 1,
-            FocusBorderColor = Palette.FocusRing,
-            Padding = EdgeInsets.Symmetric(2, 8)
+            //FocusBorderRadius = BorderRadius,
+            //FocusBorderWidth = 1,
+            //FocusBorderColor = Palette.FocusRing,
+            Padding = EdgeInsets.Symmetric(2, 8),
         };
 
-        public static readonly TextBoxStyle TextBoxHovered = TextBox with
+        public static readonly TextInputStyle TextBoxHovered = TextBox with
         {
             BorderRadius = BorderRadius,
             BorderWidth = 1,
@@ -1231,7 +1231,7 @@ public static class EditorStyle
             BorderRadius = Popup.Root.BorderRadius, BorderWidth = Popup.Root.BorderWidth, BorderColor = Popup.Root.BorderColor
         };
 
-        public static readonly TextBoxStyle Text = new()
+        public static readonly TextInputStyle Text = new()
         {
             FontSize = 17.0f,
             TextColor = Control.Text.Color,

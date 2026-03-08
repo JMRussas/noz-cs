@@ -129,6 +129,8 @@ public unsafe struct NativeArray<T> : IDisposable
         Length--;
     }
 
+    public void RemoveLast() => RemoveLast(1);
+
     public void RemoveLast(int count)
     {
         Debug.Assert(IsCreated);

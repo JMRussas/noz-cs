@@ -11,9 +11,9 @@ public static unsafe partial class ElementTree
 {
     private static int _drawSortGroup;
 
-    private static void SetElementScissor(ref BaseElement e)
+    private static void SetElementScissor(ref Element e)
     {
-        ref var ltw = ref GetTransform(ref e);
+        ref var ltw = ref e.Transform;
         var topLeft = Vector2.Transform(e.Rect.Position, ltw);
         var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, ltw);
         var screenTopLeft = UI.Camera!.WorldToScreen(topLeft);
@@ -28,7 +28,7 @@ public static unsafe partial class ElementTree
 
     internal static void Draw()
     {
-        if (_elements.Length == 0) return;
+        if (CurrentBuffer.Elements.Length < 2) return;
 
         _drawOpacity = 1.0f;
         _drawSortGroup = 0;
@@ -49,6 +49,7 @@ public static unsafe partial class ElementTree
     private static void DrawElement(int offset)
     {
         ref var e = ref GetElement(offset);
+        ref var t = ref e.Transform;
         var previousOpacity = _drawOpacity;
         var setScissor = false;
 
@@ -56,40 +57,35 @@ public static unsafe partial class ElementTree
         {
             case ElementType.Fill:
             {
-                ref var d = ref GetElementData<FillElement>(ref e);
+                ref var d = ref e.Data.Fill;
                 if (!d.Color.IsTransparent)
-                    DrawTexturedRect(e.Rect, GetTransform(ref e), null, ApplyOpacity(d.Color), d.Radius);
+                    DrawTexturedRect(e.Rect, t, null, ApplyOpacity(d.Color), d.Radius);
                 break;
             }
 
             case ElementType.Border:
             {
-                ref var d = ref GetElementData<BorderElement>(ref e);
+                ref var d = ref e.Data.Border;
                 if (d.Width > 0)
-                    DrawTexturedRect(e.Rect, GetTransform(ref e), null, Color.Transparent,
-                        d.Radius, d.Width, ApplyOpacity(d.Color));
+                    DrawTexturedRect(e.Rect, t, null, Color.Transparent, d.Radius, d.Width, ApplyOpacity(d.Color));
                 break;
             }
 
-            case ElementType.Label:
+            case ElementType.Text:
             {
-                ref var d = ref GetElementData<LabelElement>(ref e);
-                var font = (Font)_assets[d.AssetIndex]!;
-                DrawLabel(ref e, ref d, font);
+                DrawLabel(ref e);
                 break;
             }
 
             case ElementType.Image:
-            {
-                ref var d = ref GetElementData<ImageElement>(ref e);
-                DrawImage(ref e, ref d);
+            {                
+                DrawImage(ref e);
                 break;
             }
 
             case ElementType.Scene:
             {
-                ref var d = ref GetElementData<SceneElement>(ref e);
-                DrawScene(ref e, ref d);
+                DrawScene(ref e);
                 break;
             }
 
@@ -98,15 +94,14 @@ public static unsafe partial class ElementTree
                 break;
 
             case ElementType.Clip:
-            case ElementType.Scrollable:
+            case ElementType.Scroll:
                 SetElementScissor(ref e);
                 setScissor = true;
                 break;
 
             case ElementType.Opacity:
             {
-                ref var d = ref GetElementData<OpacityElement>(ref e);
-                _drawOpacity *= d.Opacity;
+                _drawOpacity *= e.Data.Opacity;
                 break;
             }
         }
@@ -131,7 +126,7 @@ public static unsafe partial class ElementTree
             Graphics.ClearScissor();
 
         // Draw scrollbar outside scissor, after children
-        if (e.Type == ElementType.Scrollable)
+        if (e.Type == ElementType.Scroll)
             DrawScrollbar(ref e);
 
         _drawOpacity = previousOpacity;
@@ -212,8 +207,11 @@ public static unsafe partial class ElementTree
         _indices.Clear();
     }
 
-    private static void DrawLabel(ref BaseElement e, ref LabelElement d, Font font)
+    private static void DrawLabel(ref Element e)
     {
+        ref var d = ref e.Data.Text;
+        ref var t = ref e.Transform;
+        var font = (Font)_assets[d.Font]!;
         var text = d.Text.AsReadOnlySpan();
         var fontSize = d.FontSize;
 
@@ -226,7 +224,7 @@ public static unsafe partial class ElementTree
                 var offsetY = (e.Rect.Height - effectiveHeight) * d.Align.Y.ToFactor();
                 var displayScale = Application.Platform.DisplayScale;
                 offsetY = MathF.Round(offsetY * displayScale) / displayScale;
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + new Vector2(0, offsetY)) * GetTransform(ref e);
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + new Vector2(0, offsetY)) * t;
 
                 using (Graphics.PushState())
                 {
@@ -246,7 +244,7 @@ public static unsafe partial class ElementTree
                     scaledFontSize = fontSize * (e.Rect.Width / textWidth);
 
                 var textOffset = GetTextOffset(text, font, scaledFontSize, e.Rect.Size, d.Align.X, d.Align.Y);
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * GetTransform(ref e);
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * t;
 
                 using (Graphics.PushState())
                 {
@@ -260,7 +258,7 @@ public static unsafe partial class ElementTree
             case TextOverflow.Ellipsis:
             {
                 var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, d.Align.X, d.Align.Y);
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * GetTransform(ref e);
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * t;
 
                 using (Graphics.PushState())
                 {
@@ -274,7 +272,7 @@ public static unsafe partial class ElementTree
             default:
             {
                 var textOffset = GetTextOffset(text, font, fontSize, e.Rect.Size, d.Align.X, d.Align.Y);
-                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * GetTransform(ref e);
+                var transform = Matrix3x2.CreateTranslation(e.Rect.Position + textOffset) * t;
 
                 using (Graphics.PushState())
                 {
@@ -313,9 +311,11 @@ public static unsafe partial class ElementTree
         };
     }
 
-    private static void DrawImage(ref BaseElement e, ref ImageElement d)
+    private static void DrawImage(ref Element e)
     {
-        var asset = _assets[d.AssetIndex];
+        ref var d = ref e.Data.Image;
+        ref var t = ref e.Transform;
+        var asset = _assets[d.Asset];
         if (asset == null) return;
 
         var srcSize = new Vector2(d.Width, d.Height);
@@ -331,13 +331,13 @@ public static unsafe partial class ElementTree
 
             if (sprite.IsSliced)
             {
-                Graphics.SetTransform(GetTransform(ref e));
+                Graphics.SetTransform(t);
                 Graphics.DrawSliced(sprite, new Rect(offset.X, offset.Y, scaledSize.X, scaledSize.Y));
             }
             else
             {
                 offset -= new Vector2(sprite.Bounds.X, sprite.Bounds.Y) * scale;
-                var transform = Matrix3x2.CreateScale(scale * sprite.PixelsPerUnit) * Matrix3x2.CreateTranslation(offset) * GetTransform(ref e);
+                var transform = Matrix3x2.CreateScale(scale * sprite.PixelsPerUnit) * Matrix3x2.CreateTranslation(offset) * t;
                 Graphics.SetTransform(transform);
                 Graphics.DrawFlat(sprite, bone: -1);
             }
@@ -346,19 +346,21 @@ public static unsafe partial class ElementTree
         {
             DrawTexturedRect(
                 new Rect(offset.X, offset.Y, scaledSize.X, scaledSize.Y),
-                GetTransform(ref e),
+                t,
                 texture,
                 ApplyOpacity(d.Color));
         }
     }
 
-    private static void DrawScene(ref BaseElement e, ref SceneElement d)
+    private static void DrawScene(ref Element e)
     {
+        ref var d = ref e.Data.Scene;
         if (_assets[d.AssetIndex] is not (Camera camera, Action draw))
             return;
 
-        var topLeft = Vector2.Transform(e.Rect.Position, GetTransform(ref e));
-        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, GetTransform(ref e));
+        ref var t = ref e.Transform;
+        var topLeft = Vector2.Transform(e.Rect.Position, t);
+        var bottomRight = Vector2.Transform(e.Rect.Position + e.Rect.Size, t);
         var screenTopLeft = UI.Camera!.WorldToScreen(topLeft);
         var screenBottomRight = UI.Camera!.WorldToScreen(bottomRight);
         var rtW = (int)MathF.Ceiling(screenBottomRight.X - screenTopLeft.X);
@@ -393,11 +395,12 @@ public static unsafe partial class ElementTree
         }
     }
 
-    private static void DrawScrollbar(ref BaseElement e)
+    private static void DrawScrollbar(ref Element e)
     {
-        ref var d = ref GetElementData<ScrollableElement>(ref e);
+#if false
+        ref var d = ref e.Data.Scroll;
         if (d.WidgetId <= 0) return;
-        ref var state = ref GetStateByWidgetId<ScrollableState>(d.WidgetId);
+        ref var state = ref GetWidgetData<ScrollableState>(d.WidgetId);
 
         var viewportHeight = e.Rect.Height;
         var maxScroll = Math.Max(0, state.ContentHeight - viewportHeight);
@@ -428,6 +431,7 @@ public static unsafe partial class ElementTree
                 ApplyOpacity(d.ScrollbarThumbColor),
                 BorderRadius.Circular(d.ScrollbarBorderRadius));
         }
+#endif
     }
 
     internal static bool MouseOverScene;
@@ -439,10 +443,10 @@ public static unsafe partial class ElementTree
     internal static string DebugDumpTree()
     {
         var sb = new System.Text.StringBuilder();
-        sb.AppendLine($"ElementTree: {_elements.Length} bytes, Frame={_frame}, Screen={ScreenSize.X:0}x{ScreenSize.Y:0}");
+        sb.AppendLine($"ElementTree: {CurrentBuffer.Elements.Length} elements, Frame={_frame}, Screen={ScreenSize.X:0}x{ScreenSize.Y:0}");
         sb.AppendLine("───────────────────────────────");
 
-        if (_elements.Length == 0)
+        if (CurrentBuffer.Elements.Length == 0)
         {
             sb.AppendLine("(empty)");
             return sb.ToString();
@@ -452,15 +456,15 @@ public static unsafe partial class ElementTree
         return sb.ToString();
     }
 
-    private static void DebugDumpElement(System.Text.StringBuilder sb, int offset, int depth)
+    private static void DebugDumpElement(System.Text.StringBuilder sb, int index, int depth)
     {
-        if (offset < 0 || offset >= _elements.Length) return;
+        if (index < 0 || index >= CurrentBuffer.Elements.Length) return;
         if (depth > 100) { sb.AppendLine($"{new string(' ', depth * 2)}... (depth limit)"); return; }
 
-        ref var e = ref GetElement(offset);
+        ref var e = ref GetElement(index);
         var indent = new string(' ', depth * 2);
 
-        sb.Append($"{indent}[{offset}] {e.Type}");
+        sb.Append($"{indent}[{index}] {e.Type}");
         sb.Append($" {e.Rect.X:0},{e.Rect.Y:0} {e.Rect.Width:0}x{e.Rect.Height:0}");
         sb.Append($" children={e.ChildCount} first={e.FirstChild} next={e.NextSibling}");
 
@@ -468,61 +472,56 @@ public static unsafe partial class ElementTree
         {
             case ElementType.Widget:
             {
-                ref var d = ref GetElementData<WidgetElement>(ref e);
+                ref var d = ref e.Data.Widget;
                 sb.Append($" id={d.Id}");
                 break;
             }
             case ElementType.Size:
             {
-                ref var d = ref GetElementData<SizeElement>(ref e);
-                sb.Append($" size={d.Size}");
+                sb.Append($" size={e.Data.Size}");
                 break;
             }
             case ElementType.Fill:
             {
-                ref var d = ref GetElementData<FillElement>(ref e);
+                ref var d = ref e.Data.Fill;
                 sb.Append($" color=#{(int)(d.Color.R*255):X2}{(int)(d.Color.G*255):X2}{(int)(d.Color.B*255):X2}");
                 break;
             }
             case ElementType.Padding:
             {
-                ref var d = ref GetElementData<PaddingElement>(ref e);
+                ref var d = ref e.Data;
                 sb.Append($" pad={d.Padding.T:0},{d.Padding.R:0},{d.Padding.B:0},{d.Padding.L:0}");
                 break;
             }
             case ElementType.Margin:
             {
-                ref var d = ref GetElementData<MarginElement>(ref e);
+                ref var d = ref e.Data;
                 sb.Append($" margin={d.Margin.T:0},{d.Margin.R:0},{d.Margin.B:0},{d.Margin.L:0}");
                 break;
             }
             case ElementType.Row:
             {
-                ref var d = ref GetElementData<RowElement>(ref e);
-                if (d.Spacing > 0) sb.Append($" spacing={d.Spacing:0}");
+                if (e.Data.Spacing > 0) sb.Append($" spacing={e.Data.Spacing:0}");
                 break;
             }
             case ElementType.Column:
             {
-                ref var d = ref GetElementData<ColumnElement>(ref e);
-                if (d.Spacing > 0) sb.Append($" spacing={d.Spacing:0}");
+                if (e.Data.Spacing > 0) sb.Append($" spacing={e.Data.Spacing:0}");
                 break;
             }
             case ElementType.Flex:
             {
-                ref var d = ref GetElementData<FlexElement>(ref e);
-                if (d.Flex != 1f) sb.Append($" flex={d.Flex}");
+                if (e.Data.Flex != 1f) sb.Append($" flex={e.Data.Flex}");
                 break;
             }
             case ElementType.Align:
             {
-                ref var d = ref GetElementData<AlignElement>(ref e);
-                sb.Append($" align={d.Align.X},{d.Align.Y}");
+                sb.Append($" align={e.Data.Align.X},{e.Data.Align.Y}");
                 break;
             }
-            case ElementType.Label:
+            case ElementType.Text:
             {
-                ref var d = ref GetElementData<LabelElement>(ref e);
+                ref var d = ref e.Data.Text;
                 var text = d.Text.AsReadOnlySpan().ToString();
                 if (text.Length > 40) text = text[..37] + "...";
                 sb.Append($" \"{text}\" size={d.FontSize:0}");
@@ -530,44 +529,42 @@ public static unsafe partial class ElementTree
             }
             case ElementType.Image:
             {
-                ref var d = ref GetElementData<ImageElement>(ref e);
-                var asset = _assets[d.AssetIndex];
+                ref var d = ref e.Data.Image;
+                var asset = _assets[d.Asset];
                 if (asset != null) sb.Append($" asset={asset}");
                 break;
             }
             case ElementType.Border:
             {
-                ref var d = ref GetElementData<BorderElement>(ref e);
+                ref var d = ref e.Data.Border;
                 sb.Append($" width={d.Width:0}");
                 break;
             }
             case ElementType.Opacity:
             {
-                ref var d = ref GetElementData<OpacityElement>(ref e);
-                sb.Append($" opacity={d.Opacity:0.##}");
+                sb.Append($" opacity={e.Data.Opacity:0.##}");
                 break;
             }
             case ElementType.Spacer:
             {
-                ref var d = ref GetElementData<SpacerElement>(ref e);
-                sb.Append($" {d.Size.X:0}x{d.Size.Y:0}");
+                sb.Append($" {e.Data.Spacing}");
                 break;
             }
             case ElementType.Popup:
             {
-                ref var d = ref GetElementData<PopupElement>(ref e);
+                ref var d = ref e.Data.Popup;
                 sb.Append($" anchor={d.AnchorRect.X:0},{d.AnchorRect.Y:0}");
                 break;
             }
             case ElementType.Scene:
             {
-                ref var d = ref GetElementData<SceneElement>(ref e);
+                ref var d = ref e.Data.Scene;
                 sb.Append($" size={d.Size} samples={d.SampleCount}");
                 break;
             }
-            case ElementType.Scrollable:
+            case ElementType.Scroll:
             {
-                ref var d = ref GetElementData<ScrollableElement>(ref e);
+                ref var d = ref e.Data.Scroll;
                 sb.Append($" widgetId={d.WidgetId}");
                 break;
             }
@@ -580,7 +577,7 @@ public static unsafe partial class ElementTree
         for (int i = 0; i < e.ChildCount; i++)
         {
             if (childOffset <= 0 && i > 0) break; // safety
-            if (childOffset >= _elements.Length) break;
+            if (childOffset >= CurrentBuffer.Elements.Length) break;
             DebugDumpElement(sb, childOffset, depth + 1);
             ref var child = ref GetElement(childOffset);
             childOffset = child.NextSibling;

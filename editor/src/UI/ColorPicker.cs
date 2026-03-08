@@ -282,7 +282,7 @@ internal static partial class ColorPicker
 
         foreach (var palette in PaletteManager.Palettes)
         {
-            UI.Label(palette.Label, EditorStyle.Control.Text);
+            UI.Text(palette.Label, EditorStyle.Control.Text);
 
             using var grid = UI.BeginGrid(new GridStyle
             {
