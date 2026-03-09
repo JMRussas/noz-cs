@@ -34,7 +34,10 @@ internal partial class PaletteEditor : DocumentEditor
     {
         using (UI.BeginColumn(WidgetIds.InspectorRoot, EditorStyle.Inspector.Root))
         {
-            EditorUI.SectionHeader($"{Document.ColorCount} colors");
+            UI.Spacer(EditorStyle.Control.Spacing / 2);
+            using (UI.BeginRow(EditorStyle.Inspector.SectionHeader))
+                UI.Text($"{Document.ColorCount} colors", EditorStyle.Inspector.SectionText);
+            UI.Container(EditorStyle.Inspector.Separator);
 
             using (UI.BeginScrollable(WidgetIds.InspectorScroll, new ScrollableStyle
             {

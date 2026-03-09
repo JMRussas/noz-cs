@@ -10,6 +10,7 @@ public struct DropDownStyle()
     public Size Height = Style.Widget.Height;
     public Color Color = Style.Palette.Background;
     public Color ContentColor = Style.Palette.Content;
+    public Color IconColor = Color.Transparent;
     public float FontSize = Style.Widget.FontSize;
     public float IconSize = Style.Widget.IconSize;
     public float ArrowSize = 12.0f;
@@ -59,6 +60,8 @@ public static partial class UI
         if (!s.Padding.IsZero)
             ElementTree.BeginPadding(s.Padding);
 
+        var iconColor = s.IconColor.A > 0 ? s.IconColor : s.ContentColor;
+
         ElementTree.BeginRow(s.Spacing);
 
         if (icon != null)
@@ -67,7 +70,7 @@ public static partial class UI
                 icon,
                 s.IconSize,
                 ImageStretch.Uniform,
-                s.ContentColor,
+                iconColor,
                 1.0f,
                 new Align2(Align.Min, Align.Center));
         }
@@ -92,7 +95,7 @@ public static partial class UI
                 s.ArrowIcon,
                 s.ArrowSize,
                 ImageStretch.Uniform,
-                s.ContentColor,
+                iconColor,
                 1.0f,
                 new Align2(Align.Center, Align.Center));
         }

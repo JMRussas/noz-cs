@@ -364,7 +364,8 @@ public static partial class Workspace
         CollectionUI();
 
         UI.Flex();
-        if (EditorUI.ToggleButton(ElementId.XrayButton, EditorAssets.Sprites.IconXray, isChecked: XrayMode))
+        UI.SetChecked(XrayMode);
+        if (UI.Button(ElementId.XrayButton, EditorAssets.Sprites.IconXray, EditorStyle.Button.ToggleIcon))
         {
             XrayMode = !XrayMode;
             XrayModeChanged?.Invoke(XrayMode);
@@ -401,23 +402,18 @@ public static partial class Workspace
             PopupMenu.Open(ElementId.CollectionButton, [.. items], popupStyle);
         }
 
-        static void Content()
+        UI.SetChecked(EditorUI.IsPopupOpen(ElementId.CollectionButton)); // TODO: migrate to UI.PopupMenu
+        if (UI.Button(ElementId.CollectionButton, () =>
         {
             using var _ = UI.BeginRow(new ContainerStyle{
                 Spacing = EditorStyle.Control.Spacing,
                 Padding = EdgeInsets.Right(EditorStyle.Control.Spacing),
                 MinWidth = 150
             });
-            EditorUI.ControlIcon(EditorAssets.Sprites.IconCollection);
-            EditorUI.ControlText(CollectionManager.VisibleCollection?.Name ?? "None");
+            UI.Image(EditorAssets.Sprites.IconCollection, EditorStyle.Icon.Primary);
+            UI.Text(CollectionManager.VisibleCollection?.Name ?? "None", EditorStyle.Control.Text);
             UI.Spacer(EditorStyle.Control.Spacing);
-        }
-
-        if (EditorUI.Control(
-            ElementId.CollectionButton,
-            selected: EditorUI.IsPopupOpen(ElementId.CollectionButton),
-            toolbar: false,
-            content: Content))
+        }, EditorStyle.Button.Secondary))
             OpenPopup();
     }
 
@@ -443,13 +439,14 @@ public static partial class Workspace
                     using (UI.BeginFlex())
                     {
                         ActiveEditor?.UpdateUI();
-                        ActiveTool?.UpdateUI();
                     }
 
                     Inspector.UpdateUI();
                 }
             }
         }
+
+        ActiveTool?.UpdateUI();
     }
 
     public static void LateUpdate()

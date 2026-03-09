@@ -25,8 +25,10 @@ internal static partial class Inspector
     private static WidgetId _nextSectionId;
     private static bool _sectionCollapsed;
     private static bool _sectionActive;
+    private static bool _wasHeaderPressed;
 
     public static bool IsSectionCollapsed => _sectionCollapsed;
+    public static bool WasHeaderPressed => _wasHeaderPressed;
 
     public static void UpdateUI()
     {
@@ -39,19 +41,22 @@ internal static partial class Inspector
             Workspace.ActiveEditor.InspectorUI();
     }
 
-    public static AutoSection BeginSection(string name, Sprite? icon = null, Action? content = null, bool isActive = false)
+    public static AutoSection BeginSection(
+        string name,
+        Sprite? icon = null,
+        Action? content = null,
+        bool isActive = false,
+        bool collapsed = false)
     {
         var sectionId = _nextSectionId++;
         _sectionActive = isActive;
 
         // Outer section wrapper
         ElementTree.BeginColumn();
-        if (isActive)
-        {
-            ElementTree.BeginBorder(1, EditorStyle.Palette.Primary);
-            ElementTree.BeginPadding(EdgeInsets.All(1));
-            ElementTree.BeginColumn();
-        }
+        var borderColor = isActive ? EditorStyle.Palette.Primary : Color.Transparent;
+        ElementTree.BeginBorder(1, borderColor);
+        ElementTree.BeginPadding(EdgeInsets.All(1));
+        ElementTree.BeginColumn();
 
         // Header (self-contained tree)
         ElementTree.BeginTree();
@@ -59,19 +64,20 @@ internal static partial class Inspector
         var flags = ElementTree.GetWidgetFlags();
         var hovered = flags.HasFlag(WidgetFlags.Hovered);
 
-        if (flags.HasFlag(WidgetFlags.Pressed))
+        _wasHeaderPressed = flags.HasFlag(WidgetFlags.Pressed);
+
+        if (_wasHeaderPressed)
             state.Collapsed = (byte)(state.Collapsed != 0 ? 0 : 1);
 
         var iconColor = isActive ? EditorStyle.Palette.Content : EditorStyle.Palette.HeaderText;
         var headerBg = hovered ? EditorStyle.Palette.Secondary : EditorStyle.Palette.Header;
-        var chevron = state.Collapsed != 0
+        var chevron = (state.Collapsed != 0 || collapsed)
             ? EditorAssets.Sprites.IconFoldoutClosed
             : EditorAssets.Sprites.IconFoldoutOpen;
 
         ElementTree.BeginSize(Size.Default, EditorStyle.Inspector.SectionHeaderHeight);
         ElementTree.BeginFill(headerBg);
         ElementTree.BeginPadding(EdgeInsets.LeftRight(8));
-        ElementTree.BeginAlign(new Align2(Align.Min, Align.Center));
         ElementTree.BeginRow(EditorStyle.Inspector.HeaderGap);
 
         ElementTree.Image(chevron, EditorStyle.Inspector.IconSize, ImageStretch.Uniform, iconColor, 1.0f, new Align2(Align.Center, Align.Center));
@@ -87,7 +93,7 @@ internal static partial class Inspector
 
         ElementTree.EndTree();
 
-        _sectionCollapsed = state.Collapsed != 0;
+        _sectionCollapsed = state.Collapsed != 0 || collapsed;
 
         // Body (only if not collapsed)
         if (!_sectionCollapsed)
@@ -116,12 +122,9 @@ internal static partial class Inspector
 
         _sectionCollapsed = false;
 
-        if (_sectionActive)
-        {
-            ElementTree.EndColumn();
-            ElementTree.EndPadding();
-            ElementTree.EndBorder();
-        }
+        ElementTree.EndColumn();
+        ElementTree.EndPadding();
+        ElementTree.EndBorder();
 
         ElementTree.EndColumn();
         _sectionActive = false;

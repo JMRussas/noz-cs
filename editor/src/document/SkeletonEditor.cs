@@ -107,19 +107,15 @@ internal partial class SkeletonEditor : DocumentEditor
 
         using (UI.BeginRow(new ContainerStyle { Spacing = EditorStyle.Control.Spacing }))
         {
-            var hasSelectableHead = HasSelectedHeadWithParent();
-            if (EditorUI.ToggleButton(
-                ElementId.ConnectedButton,
-                EditorAssets.Sprites.IconConnected,
-                isChecked: Document.CurrentConnected,
-                isEnabled: hasSelectableHead))
+            UI.SetChecked(Document.CurrentConnected);
+            if (UI.Button(ElementId.ConnectedButton, EditorAssets.Sprites.IconConnected, EditorStyle.Button.ToggleIcon))
             {
                 ToggleConnected();
             }
 
-            EditorUI.ToolbarSpacer();
+            UI.Spacer(EditorStyle.Control.Spacing);
 
-            if (EditorUI.Button(ElementId.PreviewButton, EditorAssets.Sprites.IconPreview))
+            if (UI.Button(ElementId.PreviewButton, EditorAssets.Sprites.IconPreview, EditorStyle.Button.IconOnly))
                 _showPreview = !_showPreview;
         }
 

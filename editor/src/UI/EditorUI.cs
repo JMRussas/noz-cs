@@ -1,6 +1,7 @@
 //
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
+// TODO: Migrate popup system to UI.PopupMenu and delete this file
 
 using System.Numerics;
 
@@ -14,17 +15,12 @@ internal static partial class EditorUI
         public static partial WidgetId PopupItem { get; }
     }
 
-    private static readonly string[] OpacityStrings = ["0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%", "90%", "100%"];
-    internal static readonly string[] FrameTimeStrings = ["0", "4", "8", "12", "16", "20", "24", "28", "32", "36", "40", "44", "48", "52", "56", "60"];
-    private static readonly string[] SizeStrings = [.. Enumerable.Range(0, 10).Select(i => i.ToString())];
-    private static readonly float[] OpacityValues = [0.1f, 0.25f, 0.5f, 0.75f, 0.9f, 1.0f];
-
     private static bool _controlHovered = false;
     private static bool _controlSelected = false;
     private static bool _controlDisabled = false;
     private static WidgetId _popupId;
     private static WidgetId _nextPopupItemId;
-    
+
     private static void SetState(bool selected, bool disabled)
     {
         _controlHovered = UI.IsHovered();
@@ -39,125 +35,52 @@ internal static partial class EditorUI
         _controlSelected = false;
     }
 
-    public static bool IsHovered() => _controlHovered;
+    // --- Popup System ---
 
-    private static void ShortcutText(string text, bool selected = false)
+    public static void OpenPopup(WidgetId id) => _popupId = id;
+
+    public static void ClosePopup() => _popupId = WidgetId.None;
+
+    public static void TogglePopup(WidgetId id) =>
+        _popupId = _popupId == id ? WidgetId.None : id;
+
+    public static bool IsPopupOpen(WidgetId id) => _popupId == id;
+
+    public static bool Popup(WidgetId id, Action content, PopupStyle? style = null, Vector2 offset = default)
     {
-        UI.Text(text, style: selected ? EditorStyle.Control.Text : EditorStyle.Shortcut.Text);
-    }
+        if (_popupId != id) return false;
 
-    private static void ShortcutText(InputCode code, bool selected = false) =>
-        ShortcutText(code.ToDisplayString(), selected: selected);
+        _nextPopupItemId = ElementId.PopupItem;
 
-    public static void Shortcut(InputCode code, bool ctrl, bool alt, bool shift, bool selected = false, Align align = Align.Min)
-    {
-        using (UI.BeginRow(EditorStyle.Shortcut.ListContainer with { AlignX = align }))
+        var anchorRect = UI.GetElementWorldRect(id).Translate(offset);
+        using var _ = UI.BeginPopup(
+            ElementId.Popup,
+            style ?? new PopupStyle
+            {
+                AnchorX = Align.Min,
+                AnchorY = Align.Min,
+                PopupAlignX = Align.Min,
+                PopupAlignY = Align.Max,
+                Spacing = 2,
+                ClampToScreen = true,
+                AnchorRect = anchorRect,
+                MinWidth = anchorRect.Width
+            });
+
+        if (UI.IsClosed())
         {
-            if (ctrl)
-                ShortcutText(InputCode.KeyLeftCtrl, selected);
-            if (alt)
-                ShortcutText(InputCode.KeyLeftAlt, selected);
-            if (shift)
-                ShortcutText(InputCode.KeyLeftShift, selected);
-            ShortcutText(code, selected);
-        }
-    }
-
-    public static void Shortcut(Command command, bool selected = false) =>
-        Shortcut(command.Key, command.Ctrl, command.Alt, command.Shift, selected);
-
-    public static void ButtonFill(bool selected, bool hovered, bool disabled, bool toolbar = false)
-    {
-        if (disabled && toolbar)
-            return;
-        if (disabled)
-            UI.Container(EditorStyle.Button.DisabledFill);
-        else if (selected && hovered)
-            UI.Container(EditorStyle.Button.SelectedHoverFill);
-        else if (selected)
-            UI.Container(EditorStyle.Button.SelectedFill);
-        else if (hovered)
-            UI.Container(EditorStyle.Button.HoverFill);
-        else if (!toolbar)
-            UI.Container(EditorStyle.Button.Fill);
-    }
-
-    public static bool Button(WidgetId id, string text, bool selected = false, bool disabled = false, bool toolbar = false)
-    {
-        bool pressed = false;
-        using (UI.BeginContainer(id, EditorStyle.Button.Root))
-        {
-            ButtonFill(selected, UI.IsHovered(), disabled, toolbar: toolbar);
-            using (UI.BeginContainer(EditorStyle.Button.TextContent))
-                UI.Text(text, (disabled ? EditorStyle.Control.DisabledText : EditorStyle.Control.Text) with { AlignX = Align.Center, AlignY = Align.Center});
-            pressed = !disabled && UI.WasPressed();
+            _popupId = WidgetId.None;
+            return false;
         }
 
-        return pressed;
+        using var __ = UI.BeginColumn(EditorStyle.Popup.Root);
+
+        content.Invoke();
+
+        return _popupId == id;
     }
 
-    private static void ButtonIcon(Sprite icon)
-    {
-        using var _ = UI.BeginContainer(EditorStyle.Button.IconContent);
-        if (_controlDisabled)
-            UI.Image(icon, EditorStyle.Control.DisabledIcon);
-        else if (_controlSelected)
-            UI.Image(icon, EditorStyle.Control.SelectedIcon);
-        else if (_controlHovered)
-            UI.Image(icon, EditorStyle.Control.HoveredIcon);
-        else
-            UI.Image(icon, EditorStyle.Control.Icon);
-    }
-
-    public static bool Button(WidgetId id, Action content, bool selected = false, bool disabled = false, bool toolbar = false)
-    {
-        bool pressed = false;
-        using (UI.BeginContainer(id, EditorStyle.Button.RootWithContent))
-        {
-            ButtonFill(selected, UI.IsHovered(), disabled, toolbar: toolbar);
-            using (UI.BeginContainer(EditorStyle.Button.Content))
-                content.Invoke();
-            pressed = UI.WasPressed();
-        }
-
-        return pressed;
-    }
-
-    public static void PopupIcon(Sprite icon, bool hovered = false, bool selected = false, bool disabled = false)
-    {
-        using (UI.BeginContainer(EditorStyle.Control.IconContainer))
-            UI.Image(
-                icon,
-                style: disabled
-                    ? EditorStyle.Control.DisabledIcon
-                    : selected
-                        ? EditorStyle.Control.SelectedIcon
-                        : hovered
-                            ? EditorStyle.Control.HoveredIcon
-                            : EditorStyle.Control.Icon);
-    }
-
-    public static void PopupText(string text, bool hovered = false, bool selected = false, bool disabled = false)
-    {
-        UI.Text(
-            text,
-            style: disabled
-                ? EditorStyle.Control.DisabledText
-                : selected
-                    ? EditorStyle.Control.SelectedText
-                    : hovered
-                        ? EditorStyle.Control.HoveredText
-                        : EditorStyle.Control.Text);
-    }
-
-    private static void PopupItemFill()
-    {
-        if (_controlHovered)
-            UI.Container(EditorStyle.Control.HoverFill);
-    }
-
-    public static bool PopupItem(Action? content = null, bool selected = false, bool disabled = false, bool showIcon=false) =>
-        PopupItem(_nextPopupItemId++, null, null, content, selected, disabled, showIcon: showIcon);
+    // --- Popup Items ---
 
     public static bool PopupItem(string text, Action? content = null, bool selected = false, bool disabled = false) =>
         PopupItem(_nextPopupItemId++, text, content, selected, disabled);
@@ -191,10 +114,11 @@ internal static partial class EditorUI
     {
         var pressed = false;
         using (UI.BeginContainer(id, EditorStyle.Popup.Item))
-        { 
+        {
             SetState(selected, disabled);
 
-            PopupItemFill();
+            if (_controlHovered)
+                UI.Container(EditorStyle.Control.HoverFill);
 
             using (UI.BeginRow(EditorStyle.Popup.ItemContent))
             {
@@ -205,8 +129,7 @@ internal static partial class EditorUI
                 if (text != null)
                     ControlText(text);
 
-                if (content != null)
-                    content?.Invoke();
+                content?.Invoke();
             }
 
             pressed = UI.WasPressed();
@@ -217,72 +140,7 @@ internal static partial class EditorUI
         return pressed;
     }
 
-    public static void OpenPopup(WidgetId id)
-    {
-        _popupId = id;
-    }
-
-    public static void ClosePopup()
-    {
-        _popupId = WidgetId.None;
-    }
-
-    public static void TogglePopup(WidgetId id)
-    {
-        if (_popupId == id)
-            _popupId = WidgetId.None;
-        else
-            _popupId = id;
-    }
-
-    public static bool IsPopupOpen(WidgetId id) =>
-        _popupId == id;
-
-    public static bool Popup(WidgetId id, Action content, PopupStyle? style = null, Vector2 offset = default)
-    {
-        if (_popupId != id) return false;
-
-        _nextPopupItemId = ElementId.PopupItem;
-
-        var anchorRect = UI.GetElementWorldRect(id).Translate(offset);
-        using var _ = UI.BeginPopup(
-            ElementId.Popup,
-            style ?? new PopupStyle
-            {
-                AnchorX = Align.Min,
-                AnchorY = Align.Min,
-                PopupAlignX = Align.Min,
-                PopupAlignY = Align.Max,
-                Spacing = 2,
-                ClampToScreen = true,
-                AnchorRect = anchorRect,
-                MinWidth = anchorRect.Width
-            });
-
-        if (UI.IsClosed())
-        {
-            _popupId = WidgetId.None;
-            return false;
-        }
-
-        using var __ = UI.BeginColumn(EditorStyle.Popup.Root);
-
-        content.Invoke();
-        
-        return _popupId == id;
-    }
-
-    public static void ControlFill(bool ignoreDefaultFill = false)
-    {
-        if (_controlDisabled)
-            UI.Container(EditorStyle.Control.DisabledFill);
-        else if (_controlSelected)
-            UI.Container(EditorStyle.Control.SelectedFill);
-        else if (_controlHovered)
-            UI.Container(EditorStyle.Control.HoverFill);
-        else if (!ignoreDefaultFill)
-            UI.Container(EditorStyle.Control.Fill);
-    }
+    // --- Control helpers (used by popup items and VFX CurveTypeButton) ---
 
     public static bool Control(
         WidgetId id,
@@ -309,17 +167,6 @@ internal static partial class EditorUI
         return pressed;
     }
 
-    public static void ControlPlaceholderText(string text)
-    {
-        UI.Text(
-            text,
-            style: _controlSelected
-                ? EditorStyle.Control.PlaceholderSelectedText
-                : _controlHovered
-                    ? EditorStyle.Control.PlaceholderHoverText
-                    : EditorStyle.Control.PlaceholderText);
-    }
-
     public static void ControlText(string text)
     {
         UI.Text(
@@ -333,7 +180,7 @@ internal static partial class EditorUI
                         : EditorStyle.Control.Text);
     }
 
-    private static void ControlIcon (in ContainerStyle style, Sprite? icon)
+    private static void ControlIcon(in ContainerStyle style, Sprite? icon)
     {
         using var _ = UI.BeginContainer(style);
         if (icon == null) return;
@@ -351,136 +198,4 @@ internal static partial class EditorUI
 
     public static void ControlIcon(Sprite? icon) =>
         ControlIcon(EditorStyle.Control.IconContainer, icon);
-
-    public static void ToolbarSpacer()
-    {
-        UI.Container(EditorStyle.Toolbar.Spacer);
-    }
-
-    private static UI.AutoContainer BeginColorContainer(WidgetId id, bool selected)
-    {
-        var container = UI.BeginContainer(id, new ContainerStyle
-        {
-            Padding = EdgeInsets.All(3),
-            Color = selected ? EditorStyle.Palette.Primary : Color.Transparent,
-            BorderRadius = EditorStyle.Control.BorderRadius
-        });
-
-        if (!selected && UI.IsHovered())
-            UI.Container(EditorStyle.Control.HoverFill with
-            {
-                Margin = EdgeInsets.All(-3)
-            });
-
-        return container;
-    }
-
-    public struct DopeSheetFrame
-    {
-        public int Hold;
-    }
-
-    public static bool DopeSheet(WidgetId baseId, ReadOnlySpan<DopeSheetFrame> frames, ref int currentFrame, int maxFrames, bool isPlaying)
-    {
-        int oldCurrentFrame = currentFrame;
-
-        using var _ = UI.BeginColumn();
-
-        UI.Container(EditorStyle.Dopesheet.LayerSeparator);
-
-        using (UI.BeginRow(EditorStyle.Dopesheet.HeaderContainer))
-        {
-            UI.Container(EditorStyle.Dopesheet.FrameSeparator);
-            var blockCount = maxFrames / 4;
-            for (var blockIndex = 0; blockIndex < blockCount; blockIndex++)
-            {
-                using (UI.BeginContainer(EditorStyle.Dopesheet.TimeBlock))
-                    UI.Text(FrameTimeStrings[blockIndex], EditorStyle.Dopesheet.TimeText);
-
-                UI.Container(EditorStyle.Dopesheet.FrameSeparator);
-            }
-        }
-
-        UI.Container(EditorStyle.Dopesheet.LayerSeparator);
-
-        using (UI.BeginRow(EditorStyle.Dopesheet.FrameContainer))
-        {
-            UI.Container(EditorStyle.Dopesheet.FrameSeparator);
-
-            var slotIndex = 0;
-            var frameIndex = 0;
-            for (; frameIndex < frames.Length; frameIndex++)
-            {
-                var selected = oldCurrentFrame == frameIndex;
-                using (UI.BeginRow(baseId + frameIndex))
-                {
-                    if (UI.WasPressed())
-                        currentFrame = frameIndex;
-
-                    using (UI.BeginContainer(selected
-                        ? EditorStyle.Dopesheet.SelectedFrame
-                        : EditorStyle.Dopesheet.Frame))
-                    {
-                        UI.Container(selected
-                            ? EditorStyle.Dopesheet.SelectedFrameDot
-                            : EditorStyle.Dopesheet.FrameDot);
-
-                    }
-
-                    slotIndex++;
-
-                    int hold = frames[frameIndex].Hold;
-                    if (hold <= 0)
-                    {
-                        UI.Container(EditorStyle.Dopesheet.FrameSeparator);
-                        continue;
-                    }
-
-                    for (int holdIndex = 0; holdIndex < hold && slotIndex < maxFrames; holdIndex++, slotIndex++)
-                    {
-                        using (UI.BeginContainer(selected
-                            ? EditorStyle.Dopesheet.SelectedFrame
-                            : EditorStyle.Dopesheet.Frame))
-                        {
-                            //UI.Container(selected
-                            //    ? EditorStyle.Dopesheet.SelectedFrameDot
-                            //    : EditorStyle.Dopesheet.FrameDot);
-                            //if (UI.WasPressed())
-                            //    currentFrame = slotIndex;
-                        }
-
-                        if (holdIndex < hold - 1)
-                        {
-                            UI.Container(selected
-                                ? EditorStyle.Dopesheet.SelectedHoldSeparator
-                                : EditorStyle.Dopesheet.HoldSeparator);
-                        }
-                    }
-
-                    UI.Container(EditorStyle.Dopesheet.FrameSeparator);
-                }
-            }
-
-            for (; slotIndex < maxFrames; slotIndex++)
-            {
-                UI.Container(slotIndex % 4 == 0
-                    ? EditorStyle.Dopesheet.FourthEmptyFrame
-                    : EditorStyle.Dopesheet.EmptyFrame);
-
-                UI.Container(EditorStyle.Dopesheet.FrameSeparator);
-            }
-        }
-
-        UI.Container(EditorStyle.Dopesheet.LayerSeparator);
-
-        return oldCurrentFrame != currentFrame;
-    }
-
-    public static void PanelSeparator()
-    {
-        if (UI.IsRow())
-            UI.Container(EditorStyle.PanelOld.SeparatorVertical);
-        else if (UI.IsColumn())
-            UI.Container(EditorStyle.PanelOld.SeparatorHorizontal);
-    }
 }

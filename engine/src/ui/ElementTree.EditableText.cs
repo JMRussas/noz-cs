@@ -113,14 +113,17 @@ public static unsafe partial class ElementTree
         {
             _hotId = widgetId;
             state.Focused = 1;
+            state.JustFocused = 1;
             state.EditText = AllocString(d.Text.AsReadOnlySpan());
             state.PrevTextHash = string.GetHashCode(state.EditText.AsReadOnlySpan());
             state.TextHash = state.PrevTextHash;
 
-            var charIndex = HitTestCharIndex(state.EditText.AsReadOnlySpan(), font, d.FontSize,
+            // Select all on focus enter — drag will override if mouse moves to a different char
+            var clickIndex = HitTestCharIndex(state.EditText.AsReadOnlySpan(), font, d.FontSize,
                 d.MultiLine, e.Rect.Width, localMouse.X - e.Rect.X, localMouse.Y - e.Rect.Y);
-            state.CursorIndex = charIndex;
-            state.SelectionStart = charIndex;
+            state.FocusClickIndex = clickIndex;
+            state.SelectionStart = 0;
+            state.CursorIndex = state.EditText.AsReadOnlySpan().Length;
 
             d.Focused = true;
             d.Text = state.EditText;
@@ -136,9 +139,26 @@ public static unsafe partial class ElementTree
         {
             var charIndex = HitTestCharIndex(state.EditText.AsReadOnlySpan(), font, d.FontSize,
                 d.MultiLine, e.Rect.Width, localMouse.X - e.Rect.X, localMouse.Y - e.Rect.Y);
-            state.CursorIndex = charIndex;
-            if (_inputMousePressed)
-                state.SelectionStart = charIndex;
+
+            if (state.JustFocused != 0)
+            {
+                // Only switch from select-all to drag-selection if mouse moved to a different char
+                if (charIndex != state.FocusClickIndex)
+                {
+                    state.SelectionStart = state.FocusClickIndex;
+                    state.CursorIndex = charIndex;
+                    state.JustFocused = 0;
+                }
+                // Otherwise keep select-all
+            }
+            else
+            {
+                state.CursorIndex = charIndex;
+            }
+        }
+        else
+        {
+            state.JustFocused = 0;
         }
 
         // Keyboard and text input
@@ -415,7 +435,8 @@ public static unsafe partial class ElementTree
             {
                 var x0 = MeasureTextWidth(text[..selStart], font, fontSize);
                 var x1 = MeasureTextWidth(text[..selEnd], font, fontSize);
-                var selRect = new Rect(e.Rect.X + x0, e.Rect.Y, x1 - x0, lineHeight);
+                var selY = e.Rect.Y + (e.Rect.Height - lineHeight) * 0.5f;
+                var selRect = new Rect(e.Rect.X + x0, selY, x1 - x0, lineHeight);
                 DrawTexturedRect(selRect, t, null, ApplyOpacity(d.SelectionColor));
             }
         }
@@ -455,8 +476,8 @@ public static unsafe partial class ElementTree
 
         if (!focused) return;
 
-        // cursor
-        if (Time.TotalTime % 1.0f < 0.5f)
+        // cursor (only when no selection)
+        if (d.CursorIndex == d.SelectionStart && Time.TotalTime % 1.0f < 0.5f)
         {
             float cursorX, cursorY;
 
@@ -467,7 +488,7 @@ public static unsafe partial class ElementTree
             else
             {
                 cursorX = MeasureTextWidth(text[..d.CursorIndex], font, fontSize);
-                cursorY = 0;
+                cursorY = (e.Rect.Height - lineHeight) * 0.5f;
             }
 
             var cursorRect = new Rect(e.Rect.X + cursorX, e.Rect.Y + cursorY, 1.5f, lineHeight);

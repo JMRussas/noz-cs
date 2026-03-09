@@ -14,10 +14,12 @@ public class GenStyleDocument : Document
 
     public string Prompt = "";
     public string NegativePrompt = "";
+    public int DefaultSteps = 30;
     public float DefaultStrength = 0.8f;
     public float DefaultGuidanceScale = 6.0f;
     public string RefinePrompt = "";
     public string RefineNegativePrompt = "";
+    public int RefineSteps = 30;
     public float RefineStrength = 0.64f;
     public float RefineGuidanceScale = 6.0f;
     public List<(string TextureName, float Strength)> StyleReferences = new();
@@ -64,6 +66,8 @@ public class GenStyleDocument : Document
                 Prompt = tk.ExpectQuotedString() ?? "";
             else if (tk.ExpectIdentifier("prompt_neg"))
                 NegativePrompt = tk.ExpectQuotedString() ?? "";
+            else if (tk.ExpectIdentifier("steps"))
+                DefaultSteps = tk.ExpectInt(30);
             else if (tk.ExpectIdentifier("strength"))
                 DefaultStrength = tk.ExpectFloat(0.8f);
             else if (tk.ExpectIdentifier("guidance_scale"))
@@ -72,6 +76,8 @@ public class GenStyleDocument : Document
                 RefinePrompt = tk.ExpectQuotedString() ?? "";
             else if (tk.ExpectIdentifier("refine_prompt_neg"))
                 RefineNegativePrompt = tk.ExpectQuotedString() ?? "";
+            else if (tk.ExpectIdentifier("refine_steps"))
+                RefineSteps = tk.ExpectInt(30);
             else if (tk.ExpectIdentifier("refine_strength"))
                 RefineStrength = tk.ExpectFloat(0.64f);
             else if (tk.ExpectIdentifier("refine_guidance_scale"))
@@ -98,12 +104,14 @@ public class GenStyleDocument : Document
             writer.WriteLine($"prompt \"{Prompt.Replace("\"", "\\\"")}\"");
         if (!string.IsNullOrEmpty(NegativePrompt))
             writer.WriteLine($"prompt_neg \"{NegativePrompt.Replace("\"", "\\\"")}\"");
+        writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "steps {0}", DefaultSteps));
         writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "strength {0}", DefaultStrength));
         writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "guidance_scale {0}", DefaultGuidanceScale));
         if (!string.IsNullOrEmpty(RefinePrompt))
             writer.WriteLine($"refine_prompt \"{RefinePrompt.Replace("\"", "\\\"")}\"");
         if (!string.IsNullOrEmpty(RefineNegativePrompt))
             writer.WriteLine($"refine_prompt_neg \"{RefineNegativePrompt.Replace("\"", "\\\"")}\"");
+        writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "refine_steps {0}", RefineSteps));
         writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "refine_strength {0}", RefineStrength));
         writer.WriteLine(string.Format(CultureInfo.InvariantCulture, "refine_guidance_scale {0}", RefineGuidanceScale));
 

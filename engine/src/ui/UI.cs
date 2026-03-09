@@ -172,7 +172,28 @@ public static partial class UI
 
     public static void SetElementText(WidgetId id, ReadOnlySpan<char> value, bool selectAll = false)
     {
-        //ElementTree.SetEditableText(elementId, value, selectAll);
+        if (!ElementTree.IsWidgetValid(id))
+            return;
+
+        ref var state = ref ElementTree.GetWidgetState<EditableTextState>(id);
+        state.EditText = ElementTree.AllocString(value);
+        state.PrevTextHash = string.GetHashCode(value);
+        state.TextHash = state.PrevTextHash;
+        state.Focused = 1;
+        state.JustFocused = 1;
+        state.FocusExited = 0;
+        state.WasCancelled = 0;
+
+        if (selectAll)
+        {
+            state.SelectionStart = 0;
+            state.CursorIndex = value.Length;
+        }
+        else
+        {
+            state.CursorIndex = value.Length;
+            state.SelectionStart = value.Length;
+        }
     }
 
     public static float GetScrollOffset(WidgetId id) =>
@@ -312,6 +333,14 @@ public static partial class UI
     public static void Flex(float flex) => ElementTree.Flex(flex);
 
     public static void Spacer(float size) => ElementTree.Spacer(size);
+
+    public static void Separator(Color color, float thickness = 1)
+    {
+        if (ElementTree.IsParentRow())
+            Container(new ContainerStyle { Width = thickness, Height = Size.Percent(1), Color = color });
+        else
+            Container(new ContainerStyle { Width = Size.Percent(1), Height = thickness, Color = color });
+    }
 
     public static void BeginBorder(BorderStyle style)
     {

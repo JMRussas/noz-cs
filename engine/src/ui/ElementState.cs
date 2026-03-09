@@ -31,6 +31,8 @@ public struct EditableTextState
     public byte Focused;
     public byte FocusExited;
     public byte WasCancelled;
+    public byte JustFocused;
+    public int FocusClickIndex;
 }
 
 public struct ScrollState

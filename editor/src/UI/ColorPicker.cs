@@ -120,10 +120,12 @@ internal static partial class ColorPicker
         {
             UI.Spacer(EditorStyle.Control.Spacing);
 
-            if (EditorUI.ToggleButton(ElementId.ModeNone, EditorAssets.Sprites.IconNofill, _paletteMode == ColorMode.None))
+            UI.SetChecked(_paletteMode == ColorMode.None);
+            if (UI.Button(ElementId.ModeNone, EditorAssets.Sprites.IconNofill, EditorStyle.Button.ToggleIcon))
                 _paletteMode = ColorMode.None;
 
-            if (EditorUI.ToggleButton(ElementId.ModeColor, EditorAssets.Sprites.IconFill, _paletteMode == ColorMode.Color))
+            UI.SetChecked(_paletteMode == ColorMode.Color);
+            if (UI.Button(ElementId.ModeColor, EditorAssets.Sprites.IconFill, EditorStyle.Button.ToggleIcon))
             {
                 _paletteMode = ColorMode.Color;
                 if (_alpha == 0)
@@ -131,12 +133,15 @@ internal static partial class ColorPicker
             }
 
             if (PaletteManager.Palettes.Count > 0)
-                if (EditorUI.ToggleButton(ElementId.ModePalette, EditorAssets.Sprites.IconPalette, _paletteMode == ColorMode.Palette))
+            {
+                UI.SetChecked(_paletteMode == ColorMode.Palette);
+                if (UI.Button(ElementId.ModePalette, EditorAssets.Sprites.IconPalette, EditorStyle.Button.ToggleIcon))
                     _paletteMode = ColorMode.Palette;
+            }
 
             UI.Flex();
 
-            if (EditorUI.Button(ElementId.Close, EditorAssets.Sprites.IconClose))
+            if (UI.Button(ElementId.Close, EditorAssets.Sprites.IconClose, EditorStyle.Button.IconOnly))
             {
                 // Cancel: reset hash to original so IsChanged() returns false
                 UI.NotifyChanged(_originalColor.GetHashCode());

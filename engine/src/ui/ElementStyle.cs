@@ -150,6 +150,7 @@ public enum PlaceholderMode
 
 public struct TextInputStyle()
 {
+    public Size Width = Size.Percent(1);
     public Size Height = Size.Default;
     public float FontSize = 16;
     public Font? Font = null;
@@ -167,6 +168,8 @@ public struct TextInputStyle()
     public PlaceholderMode PlaceholderMode = PlaceholderMode.Inline;
     public float LabelFontSize = 9;
     public Color LabelColor = new(0.47f, 0.47f, 0.47f, 1f);
+    public float IconSize = 14;
+    public Color IconColor = new(0.6f, 0.6f, 0.6f, 1f);
 
     public Func<TextInputStyle, WidgetFlags, TextInputStyle>? Resolve;
 }

@@ -49,15 +49,24 @@ public partial class RenameTool(
 
     public override void UpdateUI()
     {
+        var textStyle = EditorStyle.RenameTool.Text with { Scope = Scope };
+        var font = textStyle.Font ?? UI.DefaultFont;
+        var textSize = TextRender.Measure(_currentText.AsSpan(), font, textStyle.FontSize);
+        var padding = EditorStyle.RenameTool.Content.Padding;
+        var textInputHeight = textStyle.Height.IsFixed ? textStyle.Height.Value : textStyle.FontSize * 1.8f;
+
         var worldPos = _getWorldPosition();
         var screenPos = Workspace.Camera.WorldToScreen(worldPos);
         var uiPos = UI.ScreenToUI(screenPos);
-        uiPos.X -= EditorStyle.RenameTool.Root.Width.Value * 0.5f;
-        uiPos.Y -= EditorStyle.RenameTool.Root.Height.Value * 0.5f;
-        using (UI.BeginContainer(EditorStyle.RenameTool.Root with { Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
-        using (UI.BeginContainer(EditorStyle.RenameTool.Content))
+
+        // Offset so text center aligns with the world position
+        var border = EditorStyle.RenameTool.Content.BorderWidth;
+        uiPos.X -= textSize.X * 0.5f + padding.L + border;
+        uiPos.Y -= textInputHeight * 0.5f + padding.T + border;
+
+        using (UI.BeginContainer(EditorStyle.RenameTool.Content with { AlignX = Align.Min, AlignY = Align.Min, Margin = EdgeInsets.TopLeft(uiPos.Y, uiPos.X) }))
         {
-            _currentText = UI.TextInput(ElementId.TextBox, _currentText, EditorStyle.RenameTool.Text with { Scope = Scope });
+            _currentText = UI.TextInput(ElementId.TextBox, _currentText, textStyle);
 
             if (UI.HotEnter())
                 UI.SetElementText(ElementId.TextBox, _originalName, selectAll: true);

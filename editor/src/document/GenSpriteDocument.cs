@@ -474,6 +474,19 @@ public partial class GenSpriteDocument : Document, IShapeDocument
         return pngBytes;
     }
 
+    private GenerationConfig? GetStyleRefineConfig()
+    {
+        if (Style == null) return null;
+        return new GenerationConfig
+        {
+            Prompt = Style.RefinePrompt,
+            NegativePrompt = Style.RefineNegativePrompt,
+            Steps = Style.RefineSteps,
+            Strength = Style.RefineStrength,
+            GuidanceScale = Style.RefineGuidanceScale,
+        };
+    }
+
     public void GenerateAsync()
     {
         var genLayers = new List<(int Index, GenSpriteLayer Layer)>();
@@ -519,7 +532,7 @@ public partial class GenSpriteDocument : Document, IShapeDocument
 
         var server = EditorApplication.Config?.GenerationServer ?? "http://127.0.0.1:7860";
         var primaryGen = genLayers[0].Layer.Generation;
-        var refine = Refine ?? primaryGen;
+        var refine = Refine ?? GetStyleRefineConfig() ?? primaryGen;
 
         var refinePrompt = string.IsNullOrEmpty(globalPrompt) ? refine.Prompt : $"{refine.Prompt}, {globalPrompt}";
         var refineNegPrompt = refine.NegativePrompt;

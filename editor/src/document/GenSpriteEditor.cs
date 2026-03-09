@@ -13,19 +13,26 @@ public partial class GenSpriteEditor : DocumentEditor
         public static partial WidgetId Root { get; }
         public static partial WidgetId LayerItem { get; }
         public static partial WidgetId GenerateButton { get; }
-        public static partial WidgetId AddLayerButton { get; }
-        public static partial WidgetId RemoveLayerButton { get; }
         public static partial WidgetId ConstraintDropDown { get; }
         public static partial WidgetId StyleDropDown { get; }
+        public static partial WidgetId LayerSteps { get; }
         public static partial WidgetId LayerStrength { get; }
+        public static partial WidgetId LayerGuidanceScale { get; }
         public static partial WidgetId LayerPrompt { get; }
         public static partial WidgetId LayerNegativePrompt { get; }
+        public static partial WidgetId LayerDeleteButton { get; }
+        public static partial WidgetId RefineSteps { get; }
         public static partial WidgetId RefineStrength { get; }
+        public static partial WidgetId RefineGuidanceScale { get; }
         public static partial WidgetId RefinePrompt { get; }
         public static partial WidgetId RefineNegativePrompt { get; }
+        public static partial WidgetId RefineDeleteButton { get; }
         public static partial WidgetId PathNormal { get; }
         public static partial WidgetId PathSubtract { get; }
         public static partial WidgetId PathClip { get; }
+        public static partial WidgetId AddComponentButton { get; }
+        public static partial WidgetId AddComponentPopup { get; }
+        public static partial WidgetId CancelButton { get; }
     }
 
     private readonly Vector2[] _savedPositions = new Vector2[Shape.MaxAnchors];
@@ -112,13 +119,21 @@ public partial class GenSpriteEditor : DocumentEditor
         LayersInspectorUI();
         RefineInspectorUI();
 
+        AddComponentUI();
+
         UI.Flex();
-        GenerateButtonUI();
+
+        var genImage = Document.Generation;
+        if (genImage.IsGenerating)
+            ProgressUI(genImage);
+        else
+            GenerateButtonUI(genImage);
     }
 
     public override void Dispose()
     {
         ClearSelection();
+        // TODO: migrate to UI.PopupMenu
         EditorUI.ClosePopup();
         base.Dispose();
     }
@@ -192,115 +207,166 @@ public partial class GenSpriteEditor : DocumentEditor
         Document.IncrementVersion();
     }
 
-    private void GenerateButtonUI()
+    private void AddComponentUI()
     {
-        var genImage = Document.Generation;
-
-        if (genImage.IsGenerating)
+        using (UI.BeginContainer(new ContainerStyle { Padding = EdgeInsets.Symmetric(10, 16), AlignX = Align.Center }))
         {
-            using (UI.BeginColumn(new ContainerStyle { Spacing = 4, Padding = EdgeInsets.TopBottom(4) }))
+            UI.SetChecked(EditorUI.IsPopupOpen(WidgetIds.AddComponentButton));
+            if (UI.Button(WidgetIds.AddComponentButton, () =>
             {
-                var progressText = genImage.GenerationState switch
-                {
-                    GenerationState.Queued when genImage.QueuePosition > 0 =>
-                        $"Queued (position {genImage.QueuePosition})",
-                    GenerationState.Queued => "Queued...",
-                    GenerationState.Running when genImage.TotalSteps > 0 =>
-                        $"Generating {genImage.CurrentStep}/{genImage.TotalSteps}",
-                    GenerationState.Running => "Processing...",
-                    _ => "Starting..."
-                };
-                UI.Text(progressText, EditorStyle.Text.Secondary with { AlignX = Align.Center });
-
-                using (UI.BeginContainer(new ContainerStyle
-                {
-                    Width = Size.Percent(1),
-                    Height = 4f,
-                    Color = EditorStyle.Palette.PanelSeparator,
-                    BorderRadius = 2f
-                }))
-                {
-                    UI.Container(new ContainerStyle
-                    {
-                        Width = Size.Percent(genImage.GenerationProgress),
-                        Height = 4f,
-                        Color = EditorStyle.Palette.Primary,
-                        BorderRadius = 2f
-                    });
-                }
-
-                if (UI.Button(WidgetIds.GenerateButton, "Cancel", EditorAssets.Sprites.IconDelete, EditorStyle.Button.Secondary with { Width = Size.Percent(1), MinWidth = 0 }))
-                    genImage.CancelGeneration();
-            }
+                UI.Text("+ Add Component", EditorStyle.Control.Text);
+            }, EditorStyle.Button.Secondary))
+                // TODO: migrate to UI.PopupMenu
+                EditorUI.TogglePopup(WidgetIds.AddComponentButton);
         }
-        else
+
+        var hasRefine = Document.Refine != null;
+
+        // TODO: migrate to UI.PopupMenu
+        EditorUI.Popup(WidgetIds.AddComponentButton, () =>
         {
-            if (genImage.GenerationError != null)
-                UI.Text(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
-
-            if (UI.Button(WidgetIds.GenerateButton, "Generate", EditorAssets.Sprites.IconAi, EditorStyle.Button.Primary with { Width = Size.Percent(1), MinWidth = 0 }))
-                Document.GenerateAsync();
-        }
-    }
-
-    private void LayersInspectorUI()
-    {
-        void HeaderContent()
-        {
-            UI.Flex();
-
-            if (EditorUI.SmallButton(WidgetIds.AddLayerButton, EditorAssets.Sprites.IconLayer))
+            // TODO: migrate to UI.PopupMenu
+            if (EditorUI.PopupItem(EditorAssets.Sprites.IconLayer, "Layer"))
             {
+                // TODO: migrate to UI.PopupMenu
+                EditorUI.ClosePopup();
                 Undo.Record(Document);
                 Document.AddLayer();
                 ClearSelection();
                 Document.IncrementVersion();
             }
 
-            if (Document.Layers.Count > 1)
+            // TODO: migrate to UI.PopupMenu
+            if (EditorUI.PopupItem(EditorAssets.Sprites.IconAi, "Refine", disabled: hasRefine))
             {
-                if (EditorUI.SmallButton(WidgetIds.RemoveLayerButton, EditorAssets.Sprites.IconDelete))
+                // TODO: migrate to UI.PopupMenu
+                EditorUI.ClosePopup();
+                Undo.Record(Document);
+                Document.Refine = new GenerationConfig();
+                Document.IncrementVersion();
+            }
+        });
+    }
+
+    private void ProgressUI(GenerationImage genImage)
+    {
+        using (UI.BeginColumn(new ContainerStyle
+        {
+            Padding = EdgeInsets.Symmetric(12, 16),
+            Spacing = 10,
+        }))
+        {
+            UI.Text("PROGRESS", EditorStyle.Inspector.SectionText with
+            {
+                FontSize = EditorStyle.Inspector.LabelFontSize,
+                Color = EditorStyle.Palette.Label,
+            });
+
+            var progressText = genImage.GenerationState switch
+            {
+                GenerationState.Queued when genImage.QueuePosition > 0 =>
+                    $"Queued (position {genImage.QueuePosition})",
+                GenerationState.Queued => "Queued...",
+                GenerationState.Running when genImage.TotalSteps > 0 =>
+                    $"Generating {genImage.CurrentStep}/{genImage.TotalSteps}",
+                GenerationState.Running => "Processing...",
+                _ => "Starting..."
+            };
+
+            using (UI.BeginRow(new ContainerStyle { Spacing = 8 }))
+            {
+                UI.Text(progressText, EditorStyle.Text.Primary with { FontSize = EditorStyle.Inspector.HeaderFontSize });
+                UI.Flex();
+                if (UI.Button(WidgetIds.CancelButton, EditorAssets.Sprites.IconClose, EditorStyle.Button.SmallIconOnly))
+                    genImage.CancelGeneration();
+            }
+
+            using (UI.BeginContainer(new ContainerStyle
+            {
+                Width = Size.Percent(1),
+                Height = 4f,
+                Color = EditorStyle.Palette.Active,
+                BorderRadius = 2f
+            }))
+            {
+                UI.Container(new ContainerStyle
                 {
-                    Undo.Record(Document);
-                    Document.RemoveLayer(Document.ActiveLayerIndex);
-                    ClearSelection();
-                    Document.IncrementVersion();
-                }
+                    Width = Size.Percent(genImage.GenerationProgress),
+                    Height = 4f,
+                    Color = EditorStyle.Palette.Primary,
+                    BorderRadius = 2f
+                });
             }
         }
+    }
 
+    private void GenerateButtonUI(GenerationImage genImage)
+    {
+        if (genImage.GenerationError != null)
+            UI.Text(genImage.GenerationError, EditorStyle.Text.Secondary with { Color = EditorStyle.ErrorColor });
+
+        using (UI.BeginContainer(new ContainerStyle
+        {
+            Padding = EdgeInsets.Symmetric(12, 16),
+        }))
+        {
+            if (UI.Button(WidgetIds.GenerateButton, "Generate", EditorAssets.Sprites.IconAi, EditorStyle.Button.Primary with { Width = Size.Percent(1), MinWidth = 0, Height = 36 }))
+                Document.GenerateAsync();
+        }
+    }
+
+    private void LayersInspectorUI()
+    {
         for (int i = Document.Layers.Count - 1; i >= 0; i--)
         {
             var layer = Document.Layers[i];
             var isActive = Document.ActiveLayerIndex == i;
+            var layerIndex = i;
 
             var prompt = layer.Generation.Prompt;
             var title = string.IsNullOrEmpty(prompt) ? layer.Name
                 : prompt.Length > 28 ? prompt[..28] + "..."
                 : prompt;
 
-            using (var section = Inspector.BeginSection(title, icon: EditorAssets.Sprites.IconLayer, isActive: isActive, content: isActive ? HeaderContent : null))
+            void LayerHeaderContent()
             {
-                //if (section.WasPressed && !isActive)
-                //{
-                //    Document.ActiveLayerIndex = i;
-                //    ClearSelection();
-                //}
+                if (Document.Layers.Count > 1)
+                {
+                    if (UI.Button(WidgetIds.LayerDeleteButton + layerIndex, EditorAssets.Sprites.IconDelete, EditorStyle.Button.SmallIconOnly))
+                    {
+                        Undo.Record(Document);
+                        Document.RemoveLayer(layerIndex);
+                        ClearSelection();
+                        Document.IncrementVersion();
+                    }
+                }
+            }
+
+            using (Inspector.BeginSection(title, icon: EditorAssets.Sprites.IconLayer, isActive: isActive, content: LayerHeaderContent, collapsed: !isActive))
+            {
+                if (Inspector.WasHeaderPressed && !isActive)
+                {
+                    Document.ActiveLayerIndex = layerIndex;
+                    ClearSelection();
+                }
 
                 if (!Inspector.IsSectionCollapsed && isActive)
                 {
                     var gen = layer.Generation;
 
-                    EditorUI.Slider(WidgetIds.LayerStrength + i, ref gen.Strength, 0, 1);
-                    UI.HandleChange(Document);
+                    GenerationParamsUI(
+                        WidgetIds.LayerSteps + i,
+                        WidgetIds.LayerStrength + i,
+                        WidgetIds.LayerGuidanceScale + i,
+                        gen);
 
                     using (Inspector.BeginRow())
                     using (UI.BeginFlex())
-                        gen.Prompt = UI.TextInput(WidgetIds.LayerPrompt + i, gen.Prompt, EditorStyle.Inspector.TextArea, "Prompt", Document);
+                        gen.Prompt = UI.TextInput(WidgetIds.LayerPrompt + i, gen.Prompt, EditorStyle.TextArea, "Prompt", Document);
 
                     using (Inspector.BeginRow())
                     using (UI.BeginFlex())
-                        gen.NegativePrompt = UI.TextInput(WidgetIds.LayerNegativePrompt + i, gen.NegativePrompt, EditorStyle.Inspector.TextArea, "Negative Prompt", Document);
+                        gen.NegativePrompt = UI.TextInput(WidgetIds.LayerNegativePrompt + i, gen.NegativePrompt, EditorStyle.TextArea, "Negative Prompt", Document);
                 }
             }
         }
@@ -311,22 +377,35 @@ public partial class GenSpriteEditor : DocumentEditor
         if (Document.Refine == null)
             return;
 
-        using (Inspector.BeginSection("REFINE"))
+        void RefineHeaderContent()
         {
-            if (!Inspector.IsSectionCollapsed)
+            if (UI.Button(WidgetIds.RefineDeleteButton, EditorAssets.Sprites.IconDelete, EditorStyle.Button.SmallIconOnly))
+            {
+                Undo.Record(Document);
+                Document.Refine = null;
+                Document.IncrementVersion();
+            }
+        }
+
+        using (Inspector.BeginSection("Refine", icon: EditorAssets.Sprites.IconAi, content: RefineHeaderContent))
+        {
+            if (!Inspector.IsSectionCollapsed && Document.Refine != null)
             {
                 var refine = Document.Refine;
 
-                EditorUI.Slider(WidgetIds.RefineStrength, ref refine.Strength, 0, 1);
-                UI.HandleChange(Document);
+                GenerationParamsUI(
+                    WidgetIds.RefineSteps,
+                    WidgetIds.RefineStrength,
+                    WidgetIds.RefineGuidanceScale,
+                    refine);
 
                 using (Inspector.BeginRow())
                 using (UI.BeginFlex())
-                    refine.Prompt = UI.TextInput(WidgetIds.RefinePrompt, refine.Prompt, EditorStyle.Inspector.TextArea, "Refine Prompt", Document);
+                    refine.Prompt = UI.TextInput(WidgetIds.RefinePrompt, refine.Prompt, EditorStyle.TextArea, "Refine Prompt", Document);
 
                 using (Inspector.BeginRow())
                 using (UI.BeginFlex())
-                    refine.NegativePrompt = UI.TextInput(WidgetIds.RefineNegativePrompt, refine.NegativePrompt, EditorStyle.Inspector.TextArea, "Negative Prompt", Document);
+                    refine.NegativePrompt = UI.TextInput(WidgetIds.RefineNegativePrompt, refine.NegativePrompt, EditorStyle.TextArea, "Negative Prompt", Document);
             }
         }
     }
@@ -342,14 +421,79 @@ public partial class GenSpriteEditor : DocumentEditor
                     var shape = CurrentShape;
                     var currentOp = GetSelectedPathOperation(shape);
 
-                    if (EditorUI.ToggleButton(WidgetIds.PathNormal, EditorAssets.Sprites.IconFill, isChecked: currentOp == PathOperation.Normal))
-                        SetPathOperation(PathOperation.Normal);
+                    PathToggle(WidgetIds.PathNormal, EditorAssets.Sprites.IconFill, "Fill", currentOp == PathOperation.Normal, PathOperation.Normal);
+                    PathToggle(WidgetIds.PathSubtract, EditorAssets.Sprites.IconSubtract, "Sub", currentOp == PathOperation.Subtract, PathOperation.Subtract);
+                    PathToggle(WidgetIds.PathClip, EditorAssets.Sprites.IconClip, "Clip", currentOp == PathOperation.Clip, PathOperation.Clip);
+                }
+            }
+        }
+    }
 
-                    if (EditorUI.ToggleButton(WidgetIds.PathSubtract, EditorAssets.Sprites.IconSubtract, isChecked: currentOp == PathOperation.Subtract))
-                        SetPathOperation(PathOperation.Subtract);
+    private void PathToggle(WidgetId id, Sprite icon, string label, bool isChecked, PathOperation op)
+    {
+        var hovered = UI.IsHovered(id);
+        var textColor = isChecked ? EditorStyle.Palette.Content : EditorStyle.Palette.Label;
 
-                    if (EditorUI.ToggleButton(WidgetIds.PathClip, EditorAssets.Sprites.IconClip, isChecked: currentOp == PathOperation.Clip))
-                        SetPathOperation(PathOperation.Clip);
+        using (UI.BeginContainer(id, new ContainerStyle
+        {
+            Width = Size.Percent(1),
+            Height = 32,
+            BorderRadius = 4,
+            Color = isChecked ? EditorStyle.Palette.Active : (hovered ? EditorStyle.Palette.Header : EditorStyle.Palette.Header),
+            AlignX = Align.Center,
+            AlignY = Align.Center,
+            Spacing = 6,
+        }))
+        {
+            UI.Image(icon, new ImageStyle
+            {
+                Size = 14,
+                Color = textColor,
+                Align = Align.Center,
+            });
+            UI.Text(label, new LabelStyle
+            {
+                FontSize = EditorStyle.Inspector.FontSize,
+                Color = textColor,
+                AlignY = Align.Center,
+            });
+
+            if (UI.WasPressed())
+                SetPathOperation(op);
+        }
+    }
+
+    private void GenerationParamsUI(WidgetId stepsId, WidgetId strengthId, WidgetId guidanceId, GenerationConfig gen)
+    {
+        using (UI.BeginRow(new ContainerStyle { Spacing = 4 }))
+        {
+            using (UI.BeginFlex())
+            {
+                var steps = gen.Steps;
+                if (UI.NumberInput(stepsId, ref steps, EditorStyle.TextInput, min: 1, max: 100, icon: EditorAssets.Sprites.IconSort))
+                {
+                    Undo.Record(Document);
+                    gen.Steps = steps;
+                }
+            }
+
+            using (UI.BeginFlex())
+            {
+                var strength = gen.Strength;
+                if (UI.NumberInput(strengthId, ref strength, EditorStyle.TextInput, min: 0f, max: 1f, step: 0.01f, format: "0.00", icon: EditorAssets.Sprites.IconOpacity))
+                {
+                    Undo.Record(Document);
+                    gen.Strength = strength;
+                }
+            }
+
+            using (UI.BeginFlex())
+            {
+                var guidance = gen.GuidanceScale;
+                if (UI.NumberInput(guidanceId, ref guidance, EditorStyle.TextInput, min: 0f, max: 30f, step: 0.1f, format: "0.0", icon: EditorAssets.Sprites.IconConstraint))
+                {
+                    Undo.Record(Document);
+                    gen.GuidanceScale = guidance;
                 }
             }
         }

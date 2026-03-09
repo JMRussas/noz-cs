@@ -54,8 +54,10 @@ internal partial class TextureEditor : DocumentEditor
             using (UI.BeginColumn(EditorStyle.Inspector.Content))
             {
                 var isSprite = Document.IsSprite;
-                if (EditorUI.ToggleField(NextFieldId(), "Sprite", ref isSprite))
+                UI.SetChecked(isSprite);
+                if (UI.Toggle(NextFieldId(), "Sprite", isSprite, EditorStyle.Inspector.Toggle, EditorAssets.Sprites.IconCheck))
                 {
+                    isSprite = !isSprite;
                     Undo.Record(Document);
                     Document.IsSprite = isSprite;
                     AssetManifest.IsModified = true;
@@ -67,8 +69,10 @@ internal partial class TextureEditor : DocumentEditor
                 }
 
                 var isReference = Document.IsEditorOnly;
-                if (EditorUI.ToggleField(NextFieldId(), "Reference", ref isReference))
+                UI.SetChecked(isReference);
+                if (UI.Toggle(NextFieldId(), "Reference", isReference, EditorStyle.Inspector.Toggle, EditorAssets.Sprites.IconCheck))
                 {
+                    isReference = !isReference;
                     Undo.Record(Document);
                     Document.IsEditorOnly = isReference;
                     AssetManifest.IsModified = true;

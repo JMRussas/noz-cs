@@ -81,4 +81,35 @@ public static partial class UI
 
         return flags.HasFlag(WidgetFlags.Pressed);
     }
+
+    public static bool Button(WidgetId id, Action content, in ButtonStyle style)
+    {
+        ElementTree.BeginTree();
+        ElementTree.BeginWidget(id);
+
+        var flags = ElementTree.GetWidgetFlags();
+        var s = style.Resolve != null
+            ? style.Resolve(style, flags)
+            : style;
+
+        ElementTree.BeginSize(new Size2(s.Width, s.Height));
+
+        if (s.BorderWidth > 0)
+            ElementTree.BeginBorder(s.BorderWidth, s.BorderColor, s.BorderRadius);
+
+        ElementTree.BeginFill(s.Color, s.BorderRadius);
+
+        var hasPadding = !s.Padding.IsZero;
+        if (hasPadding)
+            ElementTree.BeginPadding(s.Padding);
+
+        ElementTree.BeginAlign(Align.Center);
+        ElementTree.BeginRow(s.Spacing);
+
+        content();
+
+        ElementTree.EndTree();
+
+        return flags.HasFlag(WidgetFlags.Pressed);
+    }
 }

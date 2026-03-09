@@ -161,13 +161,9 @@ public static class EditorStyle
             Spacing = Spacing
         };
 
-        public static readonly ContainerStyle ContentNoPadding = Content with { Padding = EdgeInsets.Zero };
-
-        // Legacy — prefer using Fill with Resolve
+        // Legacy — used by popup system (EditorUI.cs) and ColorPicker
         public static readonly ContainerStyle HoverFill = Fill with { Color = Palette.Active, Resolve = null };
         public static readonly ContainerStyle SelectedFill = Fill with { Color = Palette.Active, Resolve = null };
-        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Palette.Active, Resolve = null };
-        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent, Resolve = null };
 
         public readonly static LabelStyle Text = new()
         {
@@ -181,7 +177,7 @@ public static class EditorStyle
                 return s;
             },
         };
-        // Legacy — prefer using Text with Resolve
+        // Legacy — used by popup system (EditorUI.cs)
         public readonly static LabelStyle DisabledText = Text with { Color = Palette.DisabledLight, Resolve = null };
         public readonly static LabelStyle HoveredText = Text with { Color = Palette.Content, Resolve = null };
         public readonly static LabelStyle SelectedText = Text with { Color = Palette.Content, Resolve = null };
@@ -199,10 +195,6 @@ public static class EditorStyle
                 return s;
             },
         };
-        // Legacy
-        public readonly static LabelStyle PlaceholderHoverText = PlaceholderText with { Color = Palette.Label, Resolve = null };
-        public readonly static LabelStyle PlaceholderSelectedText = PlaceholderText with { Color = Palette.HeaderText, Resolve = null };
-
         public static readonly ContainerStyle IconContainer = new()
         {
             Width = ContentHeight,
@@ -225,7 +217,7 @@ public static class EditorStyle
 
         public static readonly ImageStyle IconSecondary = Icon with { Color = Palette.Label };
 
-        // Legacy — prefer using Icon with Resolve
+        // Legacy — used by popup system (EditorUI.cs)
         public static readonly ImageStyle SelectedIcon = Icon with { Color = Palette.Content, Resolve = null };
         public static readonly ImageStyle DisabledIcon = Icon with { Color = Palette.DisabledLight, Resolve = null };
         public static readonly ImageStyle HoveredIcon = Icon with { Color = Palette.Content, Resolve = null };
@@ -243,13 +235,6 @@ public static class EditorStyle
         {
             Height = Height,
             Spacing = Spacing
-        };
-
-        public static readonly ContainerStyle RootHovered = Root with
-        {
-            BorderWidth = 1,
-            BorderColor = Palette.FocusRing,
-            BorderRadius = BorderRadius
         };
     }
 
@@ -397,120 +382,76 @@ public static class EditorStyle
             },
         };
 
-        // --- Legacy styles (still used by EditorUI helpers) ---
-
-        public static readonly ContainerStyle Root = new()
-        {
-            Width = Size.Fit,
-            MinWidth = 80.0f,
-            Height = Control.Height
-        };
-
-        public static readonly ContainerStyle RootWithIcon = new()
+        // Toggle icon button (40x40, checked = Active bg, hover = border)
+        public static readonly ButtonStyle ToggleIcon = new()
         {
             Width = Control.Height,
-            Height = Control.Height
-        };
-
-        public static readonly ContainerStyle RootWithContent = new()
-        {
-            Width = Size.Fit,
-            Height = Control.Height
-        };
-
-        public static readonly ContainerStyle Fill = new()
-        {
+            Height = Control.Height,
+            Color = Color.Transparent,
+            ContentColor = Palette.Content,
+            IconSize = Control.IconSize,
             BorderRadius = Control.BorderRadius,
-            Color = Palette.Secondary,
+            Padding = EdgeInsets.All(4),
             Resolve = (s, f) =>
             {
-                if ((f & WidgetFlags.Disabled) != 0) return s with { Color = Color.Transparent };
-                if ((f & WidgetFlags.Checked) != 0) return s with { Color = Palette.Active };
-                if ((f & WidgetFlags.Hovered) != 0) return s with { Color = Palette.Active };
+                if ((f & WidgetFlags.Checked) != 0) s.Color = Palette.Active;
+                if ((f & WidgetFlags.Hovered) != 0) { s.BorderWidth = 1; s.BorderColor = Palette.FocusRing; }
                 return s;
             },
         };
 
-        public static readonly ContainerStyle HoverFill = Fill with { Color = Palette.Active, Resolve = null };
-        public static readonly ContainerStyle SelectedFill = Fill with { Color = Palette.Active, Resolve = null };
-        public static readonly ContainerStyle SelectedHoverFill = Fill with { Color = Palette.Active, Resolve = null };
-        public static readonly ContainerStyle DisabledFill = Fill with { Color = Color.Transparent, Resolve = null };
+        // Small toggle icon button (30x30)
+        public static readonly ButtonStyle SmallToggleIcon = new()
+        {
+            Width = SmallWidget.Height,
+            Height = SmallWidget.Height,
+            Color = Color.Transparent,
+            ContentColor = Palette.Content,
+            IconSize = Control.IconSize * SmallWidget.Scale,
+            BorderRadius = SmallWidget.BorderRadius,
+            Padding = EdgeInsets.All(2),
+            Resolve = (s, f) =>
+            {
+                if ((f & WidgetFlags.Checked) != 0) s.Color = Palette.Active;
+                if ((f & WidgetFlags.Hovered) != 0) { s.BorderWidth = 1; s.BorderColor = Palette.FocusRing; }
+                return s;
+            },
+        };
 
-        public static readonly ContainerStyle TextContent = Control.Content;
-        public static readonly ContainerStyle IconContent = new()
+        // Icon-only button (40x40, hover = Active bg)
+        public static readonly ButtonStyle IconOnly = new()
         {
             Width = Control.Height,
             Height = Control.Height,
-            Padding = EdgeInsets.All(7)
-        };
-        public static readonly ContainerStyle Content = new()
-        {
-            Padding = EdgeInsets.LeftRight(3)
-        };
-
-        public static readonly ContainerStyle Toggle = Control.Root with
-        {
-            Padding = 4,
-            Size = Control.Height
-        };
-
-        public static readonly ContainerStyle ToggleHovered = Control.RootHovered with
-        {
-            Padding = 4,
-            Size = Control.Height
-        };
-
-        public static readonly ContainerStyle ToggleChecked = new ContainerStyle()
-        {
-            Color = Palette.Active,
-            BorderRadius = Control.BorderRadius
-        };
-
-        public static readonly ContainerStyle Icon = new()
-        {
-            Padding = 4,
-            Size = Control.Height,
-        };
-
-        public static readonly ContainerStyle IconHovered = new()
-        {
-            Padding = 4,
-            Color = Palette.Active,
+            Color = Color.Transparent,
+            ContentColor = Palette.Content,
+            IconSize = Control.IconSize,
             BorderRadius = Control.BorderRadius,
-            Size = Control.Height
+            Padding = EdgeInsets.All(4),
+            Resolve = (s, f) =>
+            {
+                if ((f & WidgetFlags.Hovered) != 0) s.Color = Palette.Active;
+                return s;
+            },
         };
 
-        public static readonly ContainerStyle SmallIcon = new()
+        // Small icon-only button (30x30)
+        public static readonly ButtonStyle SmallIconOnly = new()
         {
-            Padding = 2,
-            Size = SmallWidget.Height,
-        };
-
-        public static readonly ContainerStyle SmallIconHovered = new()
-        {
-            Padding = 2,
-            Color = Palette.Active,
+            Width = SmallWidget.Height,
+            Height = SmallWidget.Height,
+            Color = Color.Transparent,
+            ContentColor = Palette.Content,
+            IconSize = Control.IconSize * SmallWidget.Scale,
             BorderRadius = SmallWidget.BorderRadius,
-            Size = SmallWidget.Height
+            Padding = EdgeInsets.All(2),
+            Resolve = (s, f) =>
+            {
+                if ((f & WidgetFlags.Hovered) != 0) s.Color = Palette.Active;
+                return s;
+            },
         };
 
-        public static readonly ContainerStyle SmallToggle = SmallWidget.Root with
-        {
-            Size = SmallWidget.Height,
-            Padding = 2
-        };
-
-        public static readonly ContainerStyle SmallToggleHovered = Control.RootHovered with
-        {
-            Padding = 4,
-            Size = SmallWidget.Height
-        };
-
-        public static readonly ContainerStyle SmallToggleChecked = new()
-        {
-            Color = Palette.Active,
-            BorderRadius = SmallWidget.BorderRadius * 0.8f
-        };
     }
 
     public static DropDownStyle DropDown = new()
@@ -519,6 +460,7 @@ public static class EditorStyle
         Height = Control.Height,
         Color = Palette.PageBG,
         ContentColor = Palette.Content,
+        IconColor = Palette.Label,
         FontSize = Control.TextSize,
         IconSize = Control.IconSize,
         ArrowSize = 14.0f,
@@ -533,10 +475,53 @@ public static class EditorStyle
                 Color = Palette.PageBG,
                 ContentColor = Palette.DisabledLight
             };
-            if ((f & WidgetFlags.Checked) != 0) return s with { Color = Palette.Active };
-            if ((f & WidgetFlags.Hovered) != 0) return s with { Color = Palette.Active };
+            if ((f & WidgetFlags.Checked) != 0) return s with { Color = Palette.Active, IconColor = Palette.HeaderText };
+            if ((f & WidgetFlags.Hovered) != 0) return s with { Color = Palette.Active, IconColor = Palette.HeaderText };
             return s;
         },
+    };
+
+    private static readonly Func<TextInputStyle, WidgetFlags, TextInputStyle> TextInputResolve = (s, f) =>
+    {
+        if (f.HasFlag(WidgetFlags.Hot) || f.HasFlag(WidgetFlags.Hovered))
+            s.BorderColor = Palette.FocusRing;
+        return s;
+    };
+
+    public static readonly TextInputStyle TextInput = new()
+    {
+        Height = Control.Height,
+        FontSize = Control.TextSize,
+        TextColor = Palette.Content,
+        PlaceholderColor = Palette.Placeholder,
+        SelectionColor = Palette.TextSelection,
+        BackgroundColor = Palette.PageBG,
+        BorderRadius = Control.BorderRadius,
+        BorderWidth = 1,
+        BorderColor = Color.Transparent,
+        Padding = EdgeInsets.Symmetric(0, 8),
+        IconSize = Control.IconSize,
+        IconColor = Palette.Label,
+        Resolve = TextInputResolve,
+    };
+
+    public static readonly TextInputStyle TextArea = new()
+    {
+        Height = Control.Height * 3,
+        FontSize = Control.TextSize,
+        TextColor = Palette.Content,
+        PlaceholderColor = Palette.Placeholder,
+        SelectionColor = Palette.TextSelection,
+        BackgroundColor = Palette.PageBG,
+        BorderRadius = Control.BorderRadius,
+        BorderWidth = 1,
+        BorderColor = Color.Transparent,
+        Padding = EdgeInsets.Symmetric(8, 10),
+        MultiLine = true,
+        PlaceholderMode = PlaceholderMode.FloatingLabel,
+        LabelFontSize = 9,
+        LabelColor = Palette.Label,
+        Resolve = TextInputResolve,
     };
 
     public static class List
@@ -809,7 +794,7 @@ public static class EditorStyle
         public const float BodyGap = 6f;
         public const float HeaderGap = 6f;
         public const float LabelWidth = 80f;
-        public const float SectionHeaderHeight = 28f;
+        public const float SectionHeaderHeight = SmallWidget.Height;
 
         public static readonly ContainerStyle Root = Panel with
         {
@@ -892,43 +877,28 @@ public static class EditorStyle
             AlignY = Align.Center
         };
 
-        private static readonly Func<TextInputStyle, WidgetFlags, TextInputStyle> TextInputResolve = (s, f) =>
-        {
-            if (f.HasFlag(WidgetFlags.Hot) || f.HasFlag(WidgetFlags.Hovered))
-                s.BorderColor = Palette.FocusRing;
-            return s;
-        };
+        public static readonly TextInputStyle TextBox = EditorStyle.TextInput;
+        public static readonly TextInputStyle TextArea = EditorStyle.TextArea;
 
-        public static readonly TextInputStyle TextBox = new()
+        public static readonly ToggleStyle Toggle = new()
         {
-            Height = Control.Height,
-            FontSize = FontSize,
-            TextColor = Palette.Content,
-            PlaceholderColor = Palette.Placeholder,
-            SelectionColor = Palette.TextSelection,
-            BorderRadius = BorderRadius,
-            BorderWidth = 1,
+            Size = 24,
+            IconSize = Control.IconSize,
+            Spacing = 8,
+            FontSize = Control.TextSize,
+            BorderRadius = 4,
+            BorderWidth = 0,
+            Color = Palette.PageBG,
+            CheckedColor = Palette.Active,
             BorderColor = Color.Transparent,
-            Padding = EdgeInsets.Symmetric(2, 8),
-            Resolve = TextInputResolve,
-        };
-
-        public static readonly TextInputStyle TextArea = new()
-        {
-            Height = Control.Height * 3,
-            FontSize = FontSize,
-            TextColor = Palette.Content,
-            PlaceholderColor = Palette.Placeholder,
-            SelectionColor = Palette.TextSelection,
-            BorderRadius = BorderRadius,
-            BorderWidth = 1,
-            BorderColor = Color.Transparent,
-            Padding = EdgeInsets.Symmetric(8, 10),
-            MultiLine = true,
-            PlaceholderMode = PlaceholderMode.FloatingLabel,
-            LabelFontSize = 9,
-            LabelColor = Palette.Placeholder,
-            Resolve = TextInputResolve,
+            ContentColor = Palette.Content,
+            CheckColor = Palette.Content,
+            Resolve = (s, f) =>
+            {
+                if ((f & WidgetFlags.Hovered) != 0)
+                    s.Color = Palette.Active;
+                return s;
+            },
         };
 
         public static readonly ContainerStyle FieldContainer = new()
@@ -990,47 +960,16 @@ public static class EditorStyle
         public const float TrackHeight = 6;
         public const float ThumbSize = 14;
 
-        public static readonly ContainerStyle Root = new()
+        public static readonly SliderStyle Style = new()
         {
             Height = Control.Height,
-            MinWidth = 100,
+            TrackHeight = TrackHeight,
+            ThumbSize = ThumbSize,
+            TrackColor = Palette.PageBG,
+            FillColor = Palette.Primary,
+            ThumbColor = Palette.Content,
+            Step = 0.05f,
         };
-
-        public static readonly ContainerStyle Track = new()
-        {
-            Height = TrackHeight,
-            Color = Palette.PageBG,
-            Border = new BorderStyle { Radius = TrackHeight / 2 },
-            AlignY = Align.Center,
-        };
-
-        public static readonly ContainerStyle Fill = new()
-        {
-            Height = TrackHeight,
-            Color = Palette.Primary,
-            Border = new BorderStyle { Radius = TrackHeight / 2 },
-            AlignY = Align.Center,
-        };
-
-        public static readonly ContainerStyle Thumb = new()
-        {
-            Width = ThumbSize,
-            Height = ThumbSize,
-            Color = Palette.Content,
-            Border = new BorderStyle { Radius = ThumbSize / 2 },
-            AlignY = Align.Center,
-            AlignX = Align.Min,
-        };
-    }
-
-    // :animationeditor
-    public static class AnimationEditor
-    {
-    }
-
-    // :skeletoneditor
-    public static class SkeletonEditor
-    {
     }
 
     // :spriteeditor
@@ -1289,6 +1228,7 @@ public static class EditorStyle
         public readonly static ContainerStyle Content = new()
         {
             Width = Size.Fit,
+            Height = Size.Fit,
             AlignX = Align.Center,
             AlignY = Align.Center,
             Color = Popup.FillColor,
@@ -1298,6 +1238,7 @@ public static class EditorStyle
 
         public static readonly TextInputStyle Text = new()
         {
+            Width = Size.Fit,
             FontSize = 17.0f,
             TextColor = Control.Text.Color,
             SelectionColor = Palette.TextSelection

@@ -146,7 +146,16 @@ public static partial class CommandPalette
                         UI.Flex();
 
                         if (cmd.Key != InputCode.None)
-                            EditorUI.Shortcut(cmd, selected: isSelected);
+                        {
+                            var shortcutStyle = isSelected ? EditorStyle.Control.Text : EditorStyle.Shortcut.Text;
+                            using (UI.BeginRow(EditorStyle.Shortcut.ListContainer))
+                            {
+                                if (cmd.Ctrl) UI.Text(InputCode.KeyLeftCtrl.ToDisplayString(), shortcutStyle);
+                                if (cmd.Alt) UI.Text(InputCode.KeyLeftAlt.ToDisplayString(), shortcutStyle);
+                                if (cmd.Shift) UI.Text(InputCode.KeyLeftShift.ToDisplayString(), shortcutStyle);
+                                UI.Text(cmd.Key.ToDisplayString(), shortcutStyle);
+                            }
+                        }
                     }
 
                     if (UI.WasPressed())
