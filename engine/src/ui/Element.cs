@@ -81,6 +81,8 @@ internal struct WidgetElement
 internal struct FillElement
 {
     public Color Color;
+    public Color Color2;
+    public float GradientAngle;
     public BorderRadius Radius;
     public float BorderWidth;
     public Color BorderColor;

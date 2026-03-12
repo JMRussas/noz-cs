@@ -39,6 +39,18 @@ public static unsafe partial class ElementTree
         return e.Index;
     }
 
+    public static int BeginFill(Color color, Color color2, float gradientAngle, BorderRadius radius = default, float borderWidth = 0, Color borderColor = default)
+    {
+        ref var e = ref BeginElement(ElementType.Fill);
+        e.Data.Fill.Color = color;
+        e.Data.Fill.Color2 = color2;
+        e.Data.Fill.GradientAngle = gradientAngle;
+        e.Data.Fill.Radius = radius;
+        e.Data.Fill.BorderWidth = borderWidth;
+        e.Data.Fill.BorderColor = borderColor;
+        return e.Index;
+    }
+
     public static void EndFill() => EndElement(ElementType.Fill);
 
     public static int BeginMargin(EdgeInsets margin)

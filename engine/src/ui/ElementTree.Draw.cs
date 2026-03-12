@@ -58,8 +58,18 @@ public static partial class ElementTree
             case ElementType.Fill:
             {
                 ref var d = ref e.Data.Fill;
-                if (!d.Color.IsTransparent || d.BorderWidth > 0)
-                    DrawTexturedRect(e.Rect, t, null, ApplyOpacity(d.Color), d.Radius, d.BorderWidth, ApplyOpacity(d.BorderColor));
+                if (!d.Color.IsTransparent || !d.Color2.IsTransparent || d.BorderWidth > 0)
+                {
+                    if (d.Color2.IsTransparent)
+                    {
+                        DrawTexturedRect(e.Rect, t, null, ApplyOpacity(d.Color), d.Radius, d.BorderWidth, ApplyOpacity(d.BorderColor));
+                    }
+                    else
+                    {
+                        ResolveGradientCorners(d.Color, d.Color2, d.GradientAngle, out var cTL, out var cTR, out var cBR, out var cBL);
+                        DrawTexturedRect(e.Rect, t, null, ApplyOpacity(cTL), ApplyOpacity(cTR), ApplyOpacity(cBR), ApplyOpacity(cBL), d.Radius, d.BorderWidth, ApplyOpacity(d.BorderColor));
+                    }
+                }
                 break;
             }
 
@@ -129,6 +139,22 @@ public static partial class ElementTree
         Color borderColor = default,
         ushort order = 0)
     {
+        DrawTexturedRect(rect, transform, texture, color, color, color, color, borderRadius, borderWidth, borderColor, order);
+    }
+
+    private static void DrawTexturedRect(
+        in Rect rect,
+        in Matrix3x2 transform,
+        Texture? texture,
+        Color colorTL,
+        Color colorTR,
+        Color colorBR,
+        Color colorBL,
+        BorderRadius borderRadius = default,
+        float borderWidth = 0,
+        Color borderColor = default,
+        ushort order = 0)
+    {
         var vertexOffset = _vertices.Length;
         var indexOffset = _indices.Length;
 
@@ -154,22 +180,22 @@ public static partial class ElementTree
         _vertices.Add(new UIVertex
         {
             Position = p0, UV = new Vector2(0, 0), Normal = rectSize,
-            Color = color, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
+            Color = colorTL, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
         });
         _vertices.Add(new UIVertex
         {
             Position = p1, UV = new Vector2(1, 0), Normal = rectSize,
-            Color = color, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
+            Color = colorTR, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
         });
         _vertices.Add(new UIVertex
         {
             Position = p2, UV = new Vector2(1, 1), Normal = rectSize,
-            Color = color, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
+            Color = colorBR, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
         });
         _vertices.Add(new UIVertex
         {
             Position = p3, UV = new Vector2(0, 1), Normal = rectSize,
-            Color = color, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
+            Color = colorBL, BorderRatio = borderWidth, BorderColor = borderColor, CornerRadii = radii
         });
 
         _indices.Add((ushort)vertexOffset);
@@ -183,6 +209,31 @@ public static partial class ElementTree
         Graphics.SetTexture(texture ?? Graphics.WhiteTexture, filter: texture?.Filter ?? TextureFilter.Point);
         Graphics.SetMesh(_mesh);
         Graphics.DrawElements(6, indexOffset, order: order);
+    }
+
+    // Angle convention: 0 = left-to-right, 90 = top-to-bottom, 180 = right-to-left.
+    // Output order matches vertex winding: TL, TR, BR, BL (clockwise).
+    private static void ResolveGradientCorners(Color c1, Color c2, float angleDeg, out Color tl, out Color tr, out Color br, out Color bl)
+    {
+        var rad = angleDeg * (MathF.PI / 180f);
+        var dx = MathF.Cos(rad);
+        var dy = MathF.Sin(rad);
+
+        // Project each corner onto the gradient axis, normalize to 0..1
+        var dTL = 0f;
+        var dTR = dx;
+        var dBL = dy;
+        var dBR = dx + dy;
+
+        var min = MathF.Min(MathF.Min(dTL, dTR), MathF.Min(dBL, dBR));
+        var max = MathF.Max(MathF.Max(dTL, dTR), MathF.Max(dBL, dBR));
+        var range = max - min;
+        if (range < 0.0001f) range = 1f;
+
+        tl = Color.Mix(c1, c2, (dTL - min) / range);
+        tr = Color.Mix(c1, c2, (dTR - min) / range);
+        br = Color.Mix(c1, c2, (dBR - min) / range);
+        bl = Color.Mix(c1, c2, (dBL - min) / range);
     }
 
     internal static void Flush()
