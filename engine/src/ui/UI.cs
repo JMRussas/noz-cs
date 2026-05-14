@@ -225,7 +225,12 @@ public static partial class UI
     public static Vector2 ScreenToUI(Vector2 screenPos) =>
         screenPos / Graphics.RenderSize.ToVector2() * _size;
 
-    public static bool IsClosed() => ElementTree.ClosePopups;
+    public static bool IsClosed()
+    {
+        var from = ElementTree.CloseFromPopupLevel;
+        if (from < 0) return false;
+        return ElementTree.PopupCount - 1 >= from;
+    }
 
     internal static void Begin()
     {

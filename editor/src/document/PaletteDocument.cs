@@ -43,13 +43,11 @@ public class PaletteDocument : Document
 
     public override void Load()
     {
-        ShouldExport = false;
         ParsePalFile();
     }
 
     public override void LoadMetadata(PropertySet meta)
     {
-        ShouldExport = false;
     }
 
     public override void Reload()

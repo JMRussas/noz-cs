@@ -12,8 +12,8 @@ public struct VfxDocFloatCurve
 {
     public VfxRange Start;
     public VfxRange End;
-    public VfxCurveType EaseInType;
-    public VfxCurveType EaseOutType;
+    public VfxCurveType CurveType;
+    public VfxEaseType EaseType;
     public float WindowBegin;
     public float WindowEnd;
 
@@ -26,26 +26,26 @@ public struct VfxDocFloatCurve
         for (var i = 0; i < VfxCurveLut.Samples; i++)
         {
             var t = i / (float)(VfxCurveLut.Samples - 1);
-            c.Lut[i] = VfxDocument.SampleAuthored(EaseInType, EaseOutType, WindowBegin, WindowEnd, t);
+            c.Lut[i] = VfxDocument.SampleAuthored(CurveType, EaseType, WindowBegin, WindowEnd, t);
         }
         return c;
     }
 
     public static bool operator ==(VfxDocFloatCurve a, VfxDocFloatCurve b) =>
         a.Start == b.Start && a.End == b.End
-        && a.EaseInType == b.EaseInType && a.EaseOutType == b.EaseOutType
+        && a.CurveType == b.CurveType && a.EaseType == b.EaseType
         && a.WindowBegin == b.WindowBegin && a.WindowEnd == b.WindowEnd;
     public static bool operator !=(VfxDocFloatCurve a, VfxDocFloatCurve b) => !(a == b);
     public override bool Equals(object? obj) => obj is VfxDocFloatCurve c && this == c;
-    public override int GetHashCode() => HashCode.Combine(Start, End, EaseInType, EaseOutType, WindowBegin, WindowEnd);
+    public override int GetHashCode() => HashCode.Combine(Start, End, CurveType, EaseType, WindowBegin, WindowEnd);
 }
 
 public struct VfxDocColorCurve
 {
     public VfxColorRange Start;
     public VfxColorRange End;
-    public VfxCurveType EaseInType;
-    public VfxCurveType EaseOutType;
+    public VfxCurveType CurveType;
+    public VfxEaseType EaseType;
     public float WindowBegin;
     public float WindowEnd;
 
@@ -57,18 +57,18 @@ public struct VfxDocColorCurve
         for (var i = 0; i < VfxCurveLut.Samples; i++)
         {
             var t = i / (float)(VfxCurveLut.Samples - 1);
-            c.Lut[i] = VfxDocument.SampleAuthored(EaseInType, EaseOutType, WindowBegin, WindowEnd, t);
+            c.Lut[i] = VfxDocument.SampleAuthored(CurveType, EaseType, WindowBegin, WindowEnd, t);
         }
         return c;
     }
 
     public static bool operator ==(VfxDocColorCurve a, VfxDocColorCurve b) =>
         a.Start == b.Start && a.End == b.End
-        && a.EaseInType == b.EaseInType && a.EaseOutType == b.EaseOutType
+        && a.CurveType == b.CurveType && a.EaseType == b.EaseType
         && a.WindowBegin == b.WindowBegin && a.WindowEnd == b.WindowEnd;
     public static bool operator !=(VfxDocColorCurve a, VfxDocColorCurve b) => !(a == b);
     public override bool Equals(object? obj) => obj is VfxDocColorCurve c && this == c;
-    public override int GetHashCode() => HashCode.Combine(Start, End, EaseInType, EaseOutType, WindowBegin, WindowEnd);
+    public override int GetHashCode() => HashCode.Combine(Start, End, CurveType, EaseType, WindowBegin, WindowEnd);
 }
 
 public class VfxDocParticle
@@ -624,9 +624,9 @@ public class VfxDocument : Document
             writer.WriteLine();
             writer.WriteLine("particle \"default.particle\" {");
             writer.WriteLine("  duration [0.5, 1.0]");
-            writer.WriteLine("  size 0.5=>[0.0, 0.1]:easeout");
+            writer.WriteLine("  size 0.5=>[0.0, 0.1]:quadratic out");
             writer.WriteLine("  speed [20, 40]=>[5, 10]:linear");
-            writer.WriteLine("  opacity 1.0=>0.0:easeout");
+            writer.WriteLine("  opacity 1.0=>0.0:quadratic out");
             writer.WriteLine("}");
             writer.WriteLine();
             writer.WriteLine("emitter \"default\" {");
@@ -1076,48 +1076,31 @@ public class VfxDocument : Document
             writer.Write(curve.Lut[i]);
     }
 
-    // --- LUT bake (called at parse time and at export time) ---
-
-    // Computes the authored curve value at normalized lifetime t in [0,1].
-    // No ease set:  identity Linear (so Start==End degenerate curves bake harmlessly).
-    // Single-in:    monotonic 0→1 rise across the window, shaped by easeInType (applied as-is).
-    // Single-out:   monotonic 0→1 rise across the window, shaped by easeOutType with the
-    //               Penner-style decelerating feel (1 - curve(1 - u)).
-    // Dual:         S-curve from 0 to 1 — easeInType shapes the first half [0..0.5 value],
-    //               easeOutType shapes the second half [0.5..1 value]. Linear+Linear = Linear,
-    //               Quadratic+Quadratic = classic ease-in-out quad. To get a pulse (rise+fall),
-    //               use a single-sided ease with End < Start, or use Bell.
     internal static float SampleAuthored(
-        VfxCurveType easeInType, VfxCurveType easeOutType,
+        VfxCurveType curveType, VfxEaseType easeType,
         float windowBegin, float windowEnd,
         float t)
     {
-        var hasEaseIn = easeInType != VfxCurveType.None;
-        var hasEaseOut = easeOutType != VfxCurveType.None;
-
-        if (!hasEaseIn && !hasEaseOut)
-            return t;
+        if (easeType == VfxEaseType.None) return t;
 
         if (t <= windowBegin) return 0f;
 
         var span = windowEnd - windowBegin;
         if (span <= 0f) return 0f;
 
+        if (t >= windowEnd) return 1f;
+
         var u = (t - windowBegin) / span;
 
-        if (hasEaseIn && hasEaseOut)
+        return easeType switch
         {
-            if (t >= windowEnd) return 1f;
-            if (u < 0.5f)
-                return EvaluateAlgebraic(easeInType, u * 2f) * 0.5f;
-            var v = (u - 0.5f) * 2f;
-            return 0.5f + (1f - EvaluateAlgebraic(easeOutType, 1f - v)) * 0.5f;
-        }
-
-        if (t >= windowEnd) return 1f;
-        if (hasEaseIn)
-            return EvaluateAlgebraic(easeInType, u);
-        return 1f - EvaluateAlgebraic(easeOutType, 1f - u);
+            VfxEaseType.In => EvaluateAlgebraic(curveType, u),
+            VfxEaseType.Out => 1f - EvaluateAlgebraic(curveType, 1f - u),
+            VfxEaseType.InOut => u < 0.5f
+                ? EvaluateAlgebraic(curveType, u * 2f) * 0.5f
+                : 0.5f + (1f - EvaluateAlgebraic(curveType, (1f - u) * 2f)) * 0.5f,
+            _ => t,
+        };
     }
 
     private const float BackOvershoot = 1.70158f;
@@ -1134,7 +1117,6 @@ public class VfxDocument : Document
             VfxCurveType.Cubic => t * t * t,
             VfxCurveType.Quartic => t * t * t * t,
             VfxCurveType.Sine => 1f - MathF.Cos(t * MathF.PI * 0.5f),
-            VfxCurveType.SmoothStep => t * t * (3f - 2f * t),
             VfxCurveType.Back => t * t * ((BackOvershoot + 1f) * t - BackOvershoot),
             VfxCurveType.Elastic => EvaluateElastic(t),
             VfxCurveType.Bounce => 1f - EvaluateBounceOut(1f - t),
@@ -1275,47 +1257,61 @@ public class VfxDocument : Document
         if (!ParseFloatValue(ref tk, out curve.End)) return defaultValue;
 
         if (tk.ExpectDelimiter(':'))
-            ParseCurveSpec(ref tk, ref curve.EaseInType, ref curve.EaseOutType,
+            ParseCurveSpec(ref tk, ref curve.CurveType, ref curve.EaseType,
                 ref curve.WindowBegin, ref curve.WindowEnd);
 
         return curve;
     }
 
-    // Parses the suffix after `:` — supports:
-    //   :type                — ease-in only
-    //   :type@(b,e)          — ease-in only, windowed
-    //   :,type@(b,e)         — ease-out only (optionally windowed)
-    //   :inType,outType@(..) — dual ease (pulse, optionally windowed)
-    // Absent sides remain VfxCurveType.None.
     private static void ParseCurveSpec(
         ref Tokenizer tk,
-        ref VfxCurveType easeInType, ref VfxCurveType easeOutType,
+        ref VfxCurveType curveType, ref VfxEaseType easeType,
         ref float windowBegin, ref float windowEnd)
     {
-        // Leading comma → out-only (no in side).
         if (tk.ExpectDelimiter(','))
         {
             if (!TryReadType(ref tk, out var outType))
                 return;
-            easeOutType = outType;
+            curveType = outType;
+            easeType = VfxEaseType.Out;
             TryReadWindow(ref tk, ref windowBegin, ref windowEnd);
             return;
         }
 
-        if (!TryReadType(ref tk, out var firstType))
+        if (!TryReadIdentifier(ref tk, out var firstName))
             return;
 
-        easeInType = firstType;
+        var firstAsDirection = ParseEaseDirection(firstName);
+        if (firstAsDirection != null)
+        {
+            easeType = firstAsDirection.Value;
+            if (TryReadIdentifier(ref tk, out var typeName))
+                curveType = ParseCurveType(typeName);
+            TryReadWindow(ref tk, ref windowBegin, ref windowEnd);
+            return;
+        }
+
+        curveType = ParseCurveType(firstName);
+        easeType = VfxEaseType.In;
 
         if (tk.ExpectDelimiter(','))
         {
-            // Dual-ease form: easeInType, easeOutType
-            if (!TryReadType(ref tk, out var secondType))
-                return;
-            easeOutType = secondType;
+            if (TryReadIdentifier(ref tk, out _))
+                easeType = VfxEaseType.InOut;
+        }
+        else if (TryReadIdentifier(ref tk, out var directionName))
+        {
+            var dir = ParseEaseDirection(directionName);
+            if (dir != null)
+                easeType = dir.Value;
         }
 
         TryReadWindow(ref tk, ref windowBegin, ref windowEnd);
+    }
+
+    private static bool TryReadIdentifier(ref Tokenizer tk, out string name)
+    {
+        return tk.ExpectIdentifier(out name);
     }
 
     private static bool TryReadType(ref Tokenizer tk, out VfxCurveType type)
@@ -1324,6 +1320,15 @@ public class VfxDocument : Document
         type = ParseCurveType(name);
         return true;
     }
+
+    private static VfxEaseType? ParseEaseDirection(string name) => name.ToLowerInvariant() switch
+    {
+        "in" or "easein" => VfxEaseType.In,
+        "out" or "easeout" => VfxEaseType.Out,
+        "inout" or "easeinout" => VfxEaseType.InOut,
+        "none" => VfxEaseType.None,
+        _ => null,
+    };
 
     private static bool TryReadWindow(ref Tokenizer tk, ref float windowBegin, ref float windowEnd)
     {
@@ -1375,7 +1380,7 @@ public class VfxDocument : Document
         if (!ParseColorValue(ref tk, out curve.End)) return defaultValue;
 
         if (tk.ExpectDelimiter(':'))
-            ParseCurveSpec(ref tk, ref curve.EaseInType, ref curve.EaseOutType,
+            ParseCurveSpec(ref tk, ref curve.CurveType, ref curve.EaseType,
                 ref curve.WindowBegin, ref curve.WindowEnd);
 
         return curve;
@@ -1405,13 +1410,12 @@ public class VfxDocument : Document
 
     private static VfxCurveType ParseCurveType(string name) => name.ToLowerInvariant() switch
     {
-        "none" => VfxCurveType.None,
         "linear" => VfxCurveType.Linear,
         "quadratic" => VfxCurveType.Quadratic,
         "cubic" => VfxCurveType.Cubic,
         "quartic" => VfxCurveType.Quartic,
         "sine" => VfxCurveType.Sine,
-        "smoothstep" => VfxCurveType.SmoothStep,
+        "smoothstep" => VfxCurveType.Quadratic,
         "back" => VfxCurveType.Back,
         "elastic" => VfxCurveType.Elastic,
         "bounce" => VfxCurveType.Bounce,
@@ -1445,7 +1449,7 @@ public class VfxDocument : Document
         if (c.Start.Min == c.End.Min && c.Start.Max == c.End.Max)
             return start;
 
-        return $"{start}=>{end}:{FormatCurveSuffix(c.EaseInType, c.EaseOutType, c.WindowBegin, c.WindowEnd)}";
+        return $"{start}=>{end}:{FormatCurveSuffix(c.CurveType, c.EaseType, c.WindowBegin, c.WindowEnd)}";
     }
 
     internal static string FormatColorCurve(VfxDocColorCurve c)
@@ -1456,25 +1460,21 @@ public class VfxDocument : Document
         if (c.Start.Min == c.End.Min && c.Start.Max == c.End.Max)
             return start;
 
-        return $"{start}=>{end}:{FormatCurveSuffix(c.EaseInType, c.EaseOutType, c.WindowBegin, c.WindowEnd)}";
+        return $"{start}=>{end}:{FormatCurveSuffix(c.CurveType, c.EaseType, c.WindowBegin, c.WindowEnd)}";
     }
 
     private static string FormatCurveSuffix(
-        VfxCurveType easeInType, VfxCurveType easeOutType,
+        VfxCurveType curveType, VfxEaseType easeType,
         float windowBegin, float windowEnd)
     {
-        var hasEaseIn = easeInType != VfxCurveType.None;
-        var hasEaseOut = easeOutType != VfxCurveType.None;
-
-        string body;
-        if (hasEaseIn && hasEaseOut)
-            body = $"{FormatCurveType(easeInType)},{FormatCurveType(easeOutType)}";
-        else if (hasEaseIn)
-            body = FormatCurveType(easeInType);
-        else if (hasEaseOut)
-            body = $",{FormatCurveType(easeOutType)}";
-        else
-            body = "linear"; // Start != End but no ease — degenerate; pick a placeholder for round-trip.
+        string body = easeType switch
+        {
+            VfxEaseType.None => "none",
+            VfxEaseType.In => FormatCurveType(curveType),
+            VfxEaseType.Out => $"{FormatCurveType(curveType)} out",
+            VfxEaseType.InOut => $"{FormatCurveType(curveType)} inout",
+            _ => "linear",
+        };
 
         if (windowBegin != 0f || windowEnd != 1f)
             return $"{body}@({FormatFloat(windowBegin)}, {FormatFloat(windowEnd)})";
@@ -1506,13 +1506,11 @@ public class VfxDocument : Document
 
     internal static string FormatCurveType(VfxCurveType type) => type switch
     {
-        VfxCurveType.None => "none",
         VfxCurveType.Linear => "linear",
         VfxCurveType.Quadratic => "quadratic",
         VfxCurveType.Cubic => "cubic",
         VfxCurveType.Quartic => "quartic",
         VfxCurveType.Sine => "sine",
-        VfxCurveType.SmoothStep => "smoothstep",
         VfxCurveType.Back => "back",
         VfxCurveType.Elastic => "elastic",
         VfxCurveType.Bounce => "bounce",

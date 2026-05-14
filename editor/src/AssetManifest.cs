@@ -120,6 +120,10 @@ public static class AssetManifest
             if (doc.Def.Type == AssetType.Atlas)
                 continue;
 
+            // Palette assets are never runtime-loadable; their colors are inlined in the Palettes section.
+            if (doc.Def.Type == PaletteDocument.PaletteAssetType)
+                continue;
+
             entries.Add((doc.Def.Type, doc));
         }
 
@@ -347,16 +351,16 @@ public static class AssetManifest
         }
 
         // Palettes class with expanded colors
-        var palettes = PaletteManager.Palettes;
-        if (palettes.Count > 0)
+        var exportedPalettes = PaletteManager.Palettes.Where(p => p.SourceDocument?.ShouldExport != false).ToList();
+        if (exportedPalettes.Count > 0)
         {
             writer.WriteLine();
             writer.WriteLine("    public static class Palettes");
             writer.WriteLine("    {");
 
-            for (int p = 0; p < palettes.Count; p++)
+            for (int p = 0; p < exportedPalettes.Count; p++)
             {
-                var palette = palettes[p];
+                var palette = exportedPalettes[p];
                 var paletteName = ToPascalCase(palette.Id);
 
                 if (p > 0) writer.WriteLine();
@@ -377,7 +381,6 @@ public static class AssetManifest
                         ? ToPascalCase(colorName)
                         : $"Color{c}";
 
-                    // Handle duplicate names by appending index
                     if (!usedNames.Add(fieldName))
                         fieldName = $"{fieldName}{c}";
 

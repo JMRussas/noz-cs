@@ -60,6 +60,8 @@ public static unsafe partial class ElementTree
     private static int _popupCount;
     private static int _activePopupCount;
     internal static bool ClosePopups { get; private set; }
+    internal static int CloseFromPopupLevel { get; private set; } = -1;
+    internal static int PopupCount => _popupCount;
     internal static int ActivePopupCount => _activePopupCount;
 
     // Input state

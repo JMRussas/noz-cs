@@ -784,6 +784,7 @@ public static partial class Workspace
 
         ActiveEditor?.UpdateOverlayUI();
         ColorPicker.Update();
+        CurveEditorPopup.Update();
         DrawRenameUI();
         SettingsPopup.Update();
     }

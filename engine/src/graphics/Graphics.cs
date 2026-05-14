@@ -32,7 +32,7 @@ public static unsafe partial class Graphics
     private static readonly ProfilerCounter s_counterIndices = new("Graphics.Indices");
     private static readonly ProfilerCounter s_counterCommands = new("Graphics.Commands");
 
-    private const int MaxRenderPasses = 16;
+    private const int MaxRenderPasses = 64;
     private const int MaxSortGroups = 1526;
     private const int MaxStateStack = 16;
     private const int MaxVertices = 65536;

@@ -2,7 +2,6 @@
 //  NoZ - Copyright(c) 2026 NoZ Games, LLC
 //
 
-using System.Linq;
 using System.Numerics;
 
 namespace NoZ.Editor;
@@ -413,7 +412,7 @@ internal partial class VfxEditor
 
         // Addable particle groups
         if (AddableSection("SIZE", particle.Size != VfxDocFloatCurve.One, FieldId.SectionSize, FieldId.AddSize, FieldId.RemoveSize,
-            () => { particle.Size = new VfxDocFloatCurve { Start = new VfxRange(0.5f, 0.5f), End = new VfxRange(0f, 0.1f), EaseOutType = VfxCurveType.Quadratic, WindowEnd = 1f }; },
+            () => { particle.Size = new VfxDocFloatCurve { Start = new VfxRange(0.5f, 0.5f), End = new VfxRange(0f, 0.1f), CurveType = VfxCurveType.Quadratic, EaseType = VfxEaseType.Out, WindowEnd = 1f }; },
             () => { particle.Size = VfxDocFloatCurve.One; }))
         {
             var size = particle.Size;
@@ -426,7 +425,7 @@ internal partial class VfxEditor
         }
 
         if (AddableSection("SPEED", particle.Speed != VfxDocFloatCurve.Zero, FieldId.SectionSpeed, FieldId.AddSpeed, FieldId.RemoveSpeed,
-            () => { particle.Speed = new VfxDocFloatCurve { Start = new VfxRange(10, 20), End = new VfxRange(0, 5), EaseInType = VfxCurveType.Linear, WindowEnd = 1f }; },
+            () => { particle.Speed = new VfxDocFloatCurve { Start = new VfxRange(10, 20), End = new VfxRange(0, 5), CurveType = VfxCurveType.Linear, EaseType = VfxEaseType.In, WindowEnd = 1f }; },
             () => { particle.Speed = VfxDocFloatCurve.Zero; }))
         {
             var speed = particle.Speed;
@@ -439,7 +438,7 @@ internal partial class VfxEditor
         }
 
         if (AddableSection("COLOR", particle.Color != VfxDocColorCurve.White, FieldId.SectionColor, FieldId.AddColor, FieldId.RemoveColor,
-            () => { particle.Color = new VfxDocColorCurve { Start = new VfxColorRange(Color.White, Color.White), End = new VfxColorRange(Color.Yellow, Color.Yellow), EaseInType = VfxCurveType.Linear, WindowEnd = 1f }; },
+            () => { particle.Color = new VfxDocColorCurve { Start = new VfxColorRange(Color.White, Color.White), End = new VfxColorRange(Color.Yellow, Color.Yellow), CurveType = VfxCurveType.Linear, EaseType = VfxEaseType.In, WindowEnd = 1f }; },
             () => { particle.Color = VfxDocColorCurve.White; }))
         {
             var color = particle.Color;
@@ -453,7 +452,7 @@ internal partial class VfxEditor
         }
 
         if (AddableSection("OPACITY", particle.Opacity != VfxDocFloatCurve.One, FieldId.SectionOpacity, FieldId.AddOpacity, FieldId.RemoveOpacity,
-            () => { particle.Opacity = new VfxDocFloatCurve { Start = VfxRange.One, End = VfxRange.Zero, EaseOutType = VfxCurveType.Quadratic, WindowEnd = 1f }; },
+            () => { particle.Opacity = new VfxDocFloatCurve { Start = VfxRange.One, End = VfxRange.Zero, CurveType = VfxCurveType.Quadratic, EaseType = VfxEaseType.Out, WindowEnd = 1f }; },
             () => { particle.Opacity = VfxDocFloatCurve.One; }))
         {
             var opacity = particle.Opacity;
@@ -672,15 +671,16 @@ internal partial class VfxEditor
         return changed;
     }
 
-    // Float curve field — always shows Ease In, Ease Out, Window. End row appears when either ease is set.
+    // Float curve field — Start row, optional End row, then a clickable curve thumbnail
+    // that opens the curve editor popup (ease in/out + window). End row appears when ease is set.
     // Each FloatInput consumes two adjacent widget IDs (scrub handle + text input).
     // baseId+0,+1: startMin, +2: startRandom, +3,+4: startMax,
     // +5,+6: endMin, +7: endRandom, +8,+9: endMax,
-    // +10: easeInDropdown, +11: easeOutDropdown, +12,+13: windowBegin, +14,+15: windowEnd, +16: state
+    // +10: curveThumbnail, +16: state
     private bool FloatCurveField(WidgetId baseId, string label, ref VfxDocFloatCurve curve)
     {
         var changed = false;
-        var hasEase = curve.EaseInType != VfxCurveType.None || curve.EaseOutType != VfxCurveType.None;
+        var hasEase = curve.EaseType != VfxEaseType.None;
         ref var state = ref BeginFieldState(baseId + 16,
             dataCurve: hasEase,
             dataRandomStart: curve.Start.Min != curve.Start.Max,
@@ -729,29 +729,14 @@ internal partial class VfxEditor
             curve.End = curve.Start;
         }
 
-        // Ease In row
-        if (EaseRow(baseId + 10, "Ease In", ref curve.EaseInType))
+        // Curve thumbnail row — opens the curve editor popup
+        using (Inspector.BeginProperty("Curve"))
+        using (UI.BeginRow(CurveRowStyle))
         {
-            if (curve.EaseInType != VfxCurveType.None && curve.End == curve.Start)
-                curve.End = curve.Start; // user can edit End now that the row is visible
-            changed = true;
-        }
-
-        // Ease Out row
-        if (EaseRow(baseId + 11, "Ease Out", ref curve.EaseOutType))
-            changed = true;
-
-        // Window row — only when a curve is active
-        if (curve.EaseInType != VfxCurveType.None || curve.EaseOutType != VfxCurveType.None)
-        {
-            using (Inspector.BeginProperty("Window"))
-            using (UI.BeginRow(ValueRowStyle))
+            if (CurveEditorPopup.Draw(baseId + 10, ref curve))
             {
-                var wb = FloatInput(baseId + 12, curve.WindowBegin);
-                if (wb != curve.WindowBegin) { curve.WindowBegin = Math.Clamp(wb, 0f, 1f); changed = true; }
-                var we = FloatInput(baseId + 14, curve.WindowEnd);
-                if (we != curve.WindowEnd) { curve.WindowEnd = Math.Clamp(we, 0f, 1f); changed = true; }
-                if (curve.WindowEnd < curve.WindowBegin) curve.WindowEnd = curve.WindowBegin;
+                changed = true;
+                UI.HandleChange(Document);
             }
         }
 
@@ -760,11 +745,11 @@ internal partial class VfxEditor
 
     // Color curve field — same layout as float curves. ColorInput uses 1 ID; FloatInput uses 2.
     // baseId+0: startMin, +1: startRandom, +2: startMax, +3: endMin, +4: endRandom, +5: endMax,
-    // +6: easeInDropdown, +7: easeOutDropdown, +8,+9: windowBegin, +10,+11: windowEnd, +12: state
+    // +6: curveThumbnail, +12: state
     private bool ColorCurveField(WidgetId baseId, string label, ref VfxDocColorCurve curve)
     {
         var changed = false;
-        var hasEase = curve.EaseInType != VfxCurveType.None || curve.EaseOutType != VfxCurveType.None;
+        var hasEase = curve.EaseType != VfxEaseType.None;
         ref var state = ref BeginFieldState(baseId + 12,
             dataCurve: hasEase,
             dataRandomStart: curve.Start.Min != curve.Start.Max,
@@ -811,40 +796,17 @@ internal partial class VfxEditor
             curve.End = curve.Start;
         }
 
-        if (EaseRow(baseId + 6, "Ease In", ref curve.EaseInType))
-            changed = true;
-        if (EaseRow(baseId + 7, "Ease Out", ref curve.EaseOutType))
-            changed = true;
-
-        if (curve.EaseInType != VfxCurveType.None || curve.EaseOutType != VfxCurveType.None)
-        {
-            using (Inspector.BeginProperty("Window"))
-            using (UI.BeginRow(ValueRowStyle))
-            {
-                var wb = FloatInput(baseId + 8, curve.WindowBegin);
-                if (wb != curve.WindowBegin) { curve.WindowBegin = Math.Clamp(wb, 0f, 1f); changed = true; }
-                var we = FloatInput(baseId + 10, curve.WindowEnd);
-                if (we != curve.WindowEnd) { curve.WindowEnd = Math.Clamp(we, 0f, 1f); changed = true; }
-                if (curve.WindowEnd < curve.WindowBegin) curve.WindowEnd = curve.WindowBegin;
-            }
-        }
-
-        return changed;
-    }
-
-    // One labelled row with the curve type dropdown. Picking "None" disables the side.
-    private static bool EaseRow(WidgetId dropdownId, string label, ref VfxCurveType type)
-    {
-        var changed = false;
-        using (Inspector.BeginProperty(label))
+        // Curve thumbnail row — opens the curve editor popup
+        using (Inspector.BeginProperty("Curve"))
         using (UI.BeginRow(CurveRowStyle))
         {
-            if (CurveTypeDropdown(dropdownId, ref type, out var newType))
+            if (CurveEditorPopup.Draw(baseId + 6, ref curve))
             {
-                type = newType;
                 changed = true;
+                UI.HandleChange(Document);
             }
         }
+
         return changed;
     }
 
@@ -938,52 +900,6 @@ internal partial class VfxEditor
                MathEx.Approximately(a.G, b.G) &&
                MathEx.Approximately(a.B, b.B) &&
                MathEx.Approximately(a.A, b.A);
-    }
-
-    // --- Curve Type Dropdown ---
-
-    private static readonly (string Name, VfxCurveType Type)[] CurveTypeOptions =
-        Enum.GetValues<VfxCurveType>()
-            .Select(t => (Enum.GetName(t)!, t))
-            .ToArray();
-
-    private static bool _curveChanged;
-    private static VfxCurveType _curveNewType;
-    private static WidgetId _curveChangedId;
-
-    private static bool CurveTypeDropdown(WidgetId id, ref VfxCurveType curveType, out VfxCurveType newType)
-    {
-        // Check first: the popup handler fires AFTER this method during PopupMenu.UpdateUI()
-        if (_curveChanged && _curveChangedId == id)
-        {
-            _curveChanged = false;
-            newType = _curveNewType;
-            return true;
-        }
-
-        newType = curveType;
-
-        var currentName = "None";
-        foreach (var opt in CurveTypeOptions)
-            if (opt.Type == curveType) { currentName = opt.Name; break; }
-
-        UI.DropDown(id, () =>
-        {
-            var items = new PopupMenuItem[CurveTypeOptions.Length];
-            for (var i = 0; i < CurveTypeOptions.Length; i++)
-            {
-                var opt = CurveTypeOptions[i];
-                items[i] = PopupMenuItem.Item(opt.Name, () =>
-                {
-                    _curveChanged = true;
-                    _curveChangedId = id;
-                    _curveNewType = opt.Type;
-                });
-            }
-            return items;
-        }, text: currentName);
-
-        return false;
     }
 
 }

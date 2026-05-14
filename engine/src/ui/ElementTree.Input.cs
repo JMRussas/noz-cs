@@ -16,6 +16,7 @@ public static unsafe partial class ElementTree
     private static void HandlePopupAutoClose()
     {
         ClosePopups = false;
+        CloseFromPopupLevel = -1;
         if (_popupCount == 0) return;
 
         var anyAutoClose = false;
@@ -30,52 +31,71 @@ public static unsafe partial class ElementTree
         if (Input.WasButtonPressedRaw(InputCode.KeyEscape))
         {
             ClosePopups = true;
+            CloseFromPopupLevel = 0;
             Input.ConsumeButton(InputCode.KeyEscape);
         }
 
         if (_inputMousePressed)
         {
-            var clickInsideAutoClosePopup = false;
+            int innermostContainingLevel = -1;
 
-            // Check if hovered widget is inside any auto-close popup
             if (_hoveredWidget != WidgetId.None && _widgets.ContainsKey(_hoveredWidget))
             {
                 var widgetIdx = _widgets[_hoveredWidget].Ptr->Index;
-                for (var i = 0; i < _popupCount; i++)
+                for (var i = _popupCount - 1; i >= 0; i--)
                 {
-                    ref var pe = ref GetElement(_popups[i]);
-                    ref var pd = ref pe.Data.Popup;
-                    if (!pd.AutoClose) continue;
                     if (IsDescendantOf(widgetIdx, _popups[i]))
                     {
-                        clickInsideAutoClosePopup = true;
+                        innermostContainingLevel = i;
                         break;
                     }
                 }
             }
 
-            // Fallback: check popup rect directly
-            if (!clickInsideAutoClosePopup)
+            if (innermostContainingLevel < 0)
             {
-                for (var i = 0; i < _popupCount; i++)
+                for (var i = _popupCount - 1; i >= 0; i--)
                 {
                     ref var pe = ref GetElement(_popups[i]);
-                    ref var pd = ref pe.Data.Popup;
-                    if (!pd.AutoClose) continue;
-
                     Matrix3x2.Invert(pe.Transform, out var popupInv);
                     var localMouse = Vector2.Transform(MouseWorldPosition, popupInv);
                     if (pe.Rect.Contains(localMouse))
                     {
-                        clickInsideAutoClosePopup = true;
+                        innermostContainingLevel = i;
                         break;
                     }
                 }
             }
 
-            if (!clickInsideAutoClosePopup)
+            int closeFromLevel = -1;
+            if (innermostContainingLevel < 0)
             {
-                ClosePopups = true;
+                closeFromLevel = 0;
+                for (var i = 0; i < _popupCount; i++)
+                {
+                    ref var pd2 = ref GetElement(_popups[i]).Data.Popup;
+                    if (!pd2.AutoClose) { closeFromLevel = i + 1; }
+                    else break;
+                }
+                if (closeFromLevel >= _popupCount) closeFromLevel = -1;
+            }
+            else if (innermostContainingLevel < _popupCount - 1)
+            {
+                closeFromLevel = innermostContainingLevel + 1;
+                for (var i = closeFromLevel; i < _popupCount; i++)
+                {
+                    ref var pd2 = ref GetElement(_popups[i]).Data.Popup;
+                    if (!pd2.AutoClose) { closeFromLevel = i + 1; }
+                    else break;
+                }
+                if (closeFromLevel >= _popupCount) closeFromLevel = -1;
+            }
+
+            if (closeFromLevel >= 0)
+            {
+                CloseFromPopupLevel = closeFromLevel;
+                if (closeFromLevel == 0)
+                    ClosePopups = true;
                 _inputMousePressed = false;
                 Input.ConsumeButton(InputCode.MouseLeft);
                 Input.ConsumeButton(InputCode.Pen);

@@ -11,17 +11,23 @@ namespace NoZ;
 
 public enum VfxCurveType : byte
 {
-    None = 0,       // no ease on this side (default — bypasses the window for this side)
-    Linear,         // t
-    Quadratic,      // t²
-    Cubic,          // t³
-    Quartic,        // t⁴
-    Sine,           // 1 - cos(t·π/2)
-    SmoothStep,     // smoothstep S-curve (3t² - 2t³)
-    Back,           // overshoots past 1 before settling
-    Elastic,        // springy oscillation
-    Bounce,         // bouncing decay
-    Bell,           // sin(t·π) — pulse shape (peaks at 0.5, not 0→1)
+    Linear = 0,
+    Quadratic,
+    Cubic,
+    Quartic,
+    Sine,
+    Back,
+    Elastic,
+    Bounce,
+    Bell,
+}
+
+public enum VfxEaseType : byte
+{
+    None = 0,
+    In,
+    Out,
+    InOut,
 }
 
 [InlineArray(Samples)]

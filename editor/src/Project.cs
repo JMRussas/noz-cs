@@ -238,7 +238,7 @@ public static class Project
         if (_sourcePaths.Count == 0)
             return null;
 
-        var typeName = (Asset.GetDef(assetType)?.Name ?? assetType.ToString()).ToLowerInvariant();
+        var typeName = (Asset.GetDef(assetType)?.Name ?? GetDef(assetType)?.Name ?? assetType.ToString()).ToLowerInvariant();
         name = name ?? MakeCanonicalName($"new_{typeName}");
         name = GenerateUniqueName(assetType, name);
 
