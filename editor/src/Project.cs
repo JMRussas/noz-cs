@@ -338,12 +338,23 @@ public static class Project
 
         if (!doc.Loaded)
         {
-            doc.Loaded = true;
-            doc.Load();
-            doc.LoadMetadata();
-            doc.PostLoad();
-            doc.PostLoaded = true;
-            NotifyDocumentAdded(doc);
+            try
+            {
+                doc.Loaded = true;
+                doc.Load();
+                doc.LoadMetadata();
+                doc.PostLoad();
+                doc.PostLoaded = true;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"Failed to load '{doc.Name}' after export: {ex.Message}");
+                doc.Loaded = false;
+            }
+            finally
+            {
+                NotifyDocumentAdded(doc);
+            }
         }
     }
 
@@ -700,15 +711,23 @@ public static class Project
     {
         var def = ResolveDef(path);
         if (def == null)
+        {
+            Log.Info($"[hotload] QueueExport: no def for {path}");
             return;
+        }
 
         var name = MakeCanonicalName(path);
         var doc = Find(def.Type, name);
         if (doc == null)
         {
             doc = Create(path);
+            Log.Info($"[hotload] QueueExport: created doc {def.Type}/{name} (watching={_watching}, created={doc != null})");
             if (doc != null && _watching)
                 DocumentAdded?.Invoke(doc);
+        }
+        else
+        {
+            Log.Info($"[hotload] QueueExport: existing doc {def.Type}/{name}");
         }
         QueueExport(doc);
     }
@@ -780,6 +799,7 @@ public static class Project
     {
         if (System.IO.Path.GetExtension(path) == ".meta")
         {
+            Log.Info($"[hotload] HandleFileChange meta -> {path[..^5]}");
             _watcherQueue.Enqueue(path[..^5]);
             return;
         }
@@ -787,11 +807,13 @@ public static class Project
         if (IsAuxiliaryFile(path))
         {
             var parentPath = GetAuxiliaryParentPath(path);
+            Log.Info($"[hotload] HandleFileChange aux {path} -> parent {parentPath ?? "<null>"}");
             if (parentPath != null)
                 _watcherQueue.Enqueue(parentPath);
             return;
         }
 
+        Log.Info($"[hotload] HandleFileChange primary: {path}");
         _watcherQueue.Enqueue(path);
         _reloadQueue.Enqueue(path);
     }
@@ -801,6 +823,9 @@ public static class Project
 
     public static void UpdateExports()
     {
+        if (_reloadQueue.Count > 0 || _watcherQueue.Count > 0)
+            Log.Info($"[hotload] UpdateExports drain: reload={_reloadQueue.Count} watcher={_watcherQueue.Count}");
+
         while (_reloadQueue.TryDequeue(out var path))
         {
             var def = ResolveDef(path);
@@ -835,6 +860,7 @@ public static class Project
         if (OperatingSystem.IsIOS())
             return;
 
+        Log.Info($"[hotload] StartWatching: {path}");
         var watcher = new FileSystemWatcher(path)
         {
             IncludeSubdirectories = true,
@@ -844,7 +870,23 @@ public static class Project
         watcher.Changed += OnWatcherEvent;
         watcher.Created += OnWatcherEvent;
         watcher.Renamed += OnWatcherEvent;
+        watcher.Error += OnWatcherError;
         _watchers.Add(watcher);
+    }
+
+    private static void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        Log.Warning($"[hotload] watcher error: {e.GetException().Message} — rescanning all source paths");
+        if (sender is FileSystemWatcher w)
+            RescanDirectory(w.Path);
+    }
+
+    private static void RescanDirectory(string absoluteDir)
+    {
+        if (!Directory.Exists(absoluteDir))
+            return;
+        foreach (var file in Directory.EnumerateFiles(absoluteDir, "*", SearchOption.AllDirectories))
+            HandleFileChange(ToRelative(file));
     }
 
     private static void StopWatching()
@@ -860,10 +902,19 @@ public static class Project
     private static string ToRelative(string absolutePath)
     {
         if (absolutePath.StartsWith(Path, StringComparison.OrdinalIgnoreCase))
-            return absolutePath[Path.Length..].Replace('\\', '/');
+            return absolutePath[Path.Length..].Replace('\\', '/').TrimStart('/');
         return absolutePath.Replace('\\', '/');
     }
 
-    private static void OnWatcherEvent(object sender, FileSystemEventArgs e) =>
+    private static void OnWatcherEvent(object sender, FileSystemEventArgs e)
+    {
+        Log.Info($"[hotload] watcher {e.ChangeType}: {e.FullPath}");
+        if (Directory.Exists(e.FullPath))
+        {
+            Log.Info($"[hotload] directory event, rescanning {e.FullPath}");
+            RescanDirectory(e.FullPath);
+            return;
+        }
         HandleFileChange(ToRelative(e.FullPath));
+    }
 }

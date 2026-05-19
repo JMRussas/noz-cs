@@ -863,13 +863,27 @@ public class SoundDocument : Document, IWaveformSource
         using var reader = new BinaryReader(fileStream);
 
         var riff = Encoding.ASCII.GetString(reader.ReadBytes(4));
-        if (riff != "RIFF") return;
+        if (riff != "RIFF")
+            return;
         reader.ReadUInt32();
         var wave = Encoding.ASCII.GetString(reader.ReadBytes(4));
-        if (wave != "WAVE") return;
+        if (wave != "WAVE")
+            return;
 
-        var fmt = Encoding.ASCII.GetString(reader.ReadBytes(4));
-        if (fmt != "fmt ") return;
+        var fmt = "";
+        while (fileStream.Position < fileStream.Length)
+        {
+            fmt = Encoding.ASCII.GetString(reader.ReadBytes(4));
+            if (fmt == "fmt ")
+                break;
+
+            var junkSize = reader.ReadUInt32();
+            fileStream.Seek(junkSize, SeekOrigin.Current);
+        }
+
+        if (fmt != "fmt ")
+            return;
+
         var fmtSize = reader.ReadUInt32();
         var audioFormat = reader.ReadUInt16();
         var numChannels = reader.ReadUInt16();
@@ -902,6 +916,16 @@ public class SoundDocument : Document, IWaveformSource
 
         var pcmData = reader.ReadBytes((int)dataSize);
         Samples = ConvertToFloat(pcmData, bitsPerSample);
+
+        if (ChannelCount == 2)
+        {
+            ChannelCount = 1;
+            var mono = new float[Samples.Length / 2];
+            for (var i = 0; i < mono.Length; i++)
+                mono[i] = Samples[i * 2];
+
+            Samples = mono;
+        }
     }
 
     private static float[] ConvertToFloat(byte[] pcm, int bitsPerSample)
