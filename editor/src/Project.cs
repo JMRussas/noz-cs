@@ -703,7 +703,14 @@ public static class Project
             return;
 
         var name = MakeCanonicalName(path);
-        QueueExport(Find(def.Type, name) ?? Create(path));
+        var doc = Find(def.Type, name);
+        if (doc == null)
+        {
+            doc = Create(path);
+            if (doc != null && _watching)
+                DocumentAdded?.Invoke(doc);
+        }
+        QueueExport(doc);
     }
 
     private static ushort ReadAssetVersion(string path)
