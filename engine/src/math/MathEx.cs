@@ -343,4 +343,28 @@ public static class MathEx
     public static float RandomSNorm() => RandomRange(-1f, 1f);
     public static float RandomSign() => ((int)(Random01() + 0.5f)) * 2 - 1;
     public static float RandomSNormRange(float min, float max) => RandomRange(min, max) * RandomSign();
+
+    public static Vector2 RotateTowards(Vector2 from, Vector2 to, float maxRadians)
+    {
+        var dot = float.Clamp(Vector2.Dot(from, to), -1f, 1f);
+        var angle = MathF.Acos(dot);
+        if (angle < 1e-6f) return to;
+            
+        if (dot < -0.99f)
+        {
+            Vector2 worldUp = new Vector2(0, 1);
+            float cross = from.X * worldUp.Y - from.Y * worldUp.X; // from × up
+            float sign = cross >= 0 ? 1f : -1f;
+            
+            float c = MathF.Cos(maxRadians);
+            float s = MathF.Sin(maxRadians) * sign;
+            return new Vector2(from.X * c - from.Y * s, from.X * s + from.Y * c);
+        }
+
+        var t = float.Min(1f, maxRadians / angle);
+        var sinAngle = MathF.Sin(angle);
+        var a = MathF.Sin((1 - t) * angle) / sinAngle;
+        var b = MathF.Sin(t * angle) / sinAngle;
+        return from * a + to * b;
+    }
 }

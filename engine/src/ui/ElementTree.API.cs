@@ -367,8 +367,8 @@ public static unsafe partial class ElementTree
         d.UV = new Rect(
             sourceRect.X / image.ImageWidth,
             sourceRect.Y / image.ImageHeight,
-            (sourceRect.X + sourceRect.Width) / image.ImageWidth,
-            (sourceRect.Y + sourceRect.Height) / image.ImageHeight);
+            sourceRect.Width / image.ImageWidth,
+            sourceRect.Height / image.ImageHeight);
         d.Asset = AddObject(image);
         EndElement(ElementType.Image);
         return e.Index;
