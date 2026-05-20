@@ -111,6 +111,7 @@ public static unsafe partial class Graphics
     private static byte _rtPassIndex;
     private static Matrix4x4[] _passProjections = new Matrix4x4[MaxRenderPasses];
     private static RenderTexture? _activeRenderTexture;
+    public static bool IsRenderTexturePassActive => _activeRenderTexture != null;
     private static int _rtPassCount;
     private static (nuint Handle, Color ClearColor)[] _rtPasses = new (nuint, Color)[MaxRenderPasses];
     private static NativeArray<float> _boneData;

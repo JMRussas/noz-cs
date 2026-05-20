@@ -670,21 +670,36 @@ public static partial class ElementTree
         Graphics.SetTransform(Matrix3x2.Identity);
         Graphics.SetViewport(0, 0, rt.Width, rt.Height);
         UI.SceneViewport = new RectInt(0, 0, rt.Width, rt.Height);
-        draw();
-        UI.SceneViewport = null;
 
-        // PostProcess.Shader() calls during draw() end/begin RT passes internally.
-        // If post-processing happened, take the final result; otherwise end normally.
         RenderTexture? blitRT;
-        if (PostProcess.IsActive)
+        try
         {
-            Graphics.EndPass();
-            blitRT = PostProcess.TakeResult();
+            draw();
+
+            // PostProcess.Shader() calls during draw() end/begin RT passes internally.
+            // If post-processing happened, take the final result; otherwise end normally.
+            if (PostProcess.IsActive)
+            {
+                Graphics.EndPass();
+                blitRT = PostProcess.TakeResult();
+            }
+            else
+            {
+                Graphics.EndPass();
+                blitRT = rt;
+            }
         }
-        else
+        catch (Exception ex)
         {
-            Graphics.EndPass();
-            blitRT = rt;
+            Log.Error($"Exception in DrawScene draw callback: {ex}");
+            if (Graphics.IsRenderTexturePassActive)
+                Graphics.EndPass();
+            PostProcess.ForceReset();
+            blitRT = null;
+        }
+        finally
+        {
+            UI.SceneViewport = null;
         }
 
         if (null == blitRT) return;

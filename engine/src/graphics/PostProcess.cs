@@ -26,6 +26,13 @@ public static class PostProcess
 
     internal static bool IsActive => _active;
 
+    internal static void ForceReset()
+    {
+        _sceneRT = null;
+        _currentRT = null;
+        _active = false;
+    }
+
     internal static void SetSceneRT(RenderTexture rt)
     {
         _sceneRT = rt;

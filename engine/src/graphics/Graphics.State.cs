@@ -77,6 +77,13 @@ public static unsafe partial class Graphics
 
     private static void ResetState()
     {
+        if (_activeRenderTexture != null)
+        {
+            Log.Warning("Recovering from leaked render pass - previous frame threw between BeginPass and EndPass");
+            _activeRenderTexture = null;
+            PostProcess.ForceReset();
+        }
+
         _stateStackDepth = 0;
         _currentBatchState = 0;
         CurrentState.Transform = Matrix3x2.Identity;
