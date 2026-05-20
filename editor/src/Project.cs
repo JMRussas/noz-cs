@@ -711,23 +711,15 @@ public static class Project
     {
         var def = ResolveDef(path);
         if (def == null)
-        {
-            Log.Info($"[hotload] QueueExport: no def for {path}");
             return;
-        }
 
         var name = MakeCanonicalName(path);
         var doc = Find(def.Type, name);
         if (doc == null)
         {
             doc = Create(path);
-            Log.Info($"[hotload] QueueExport: created doc {def.Type}/{name} (watching={_watching}, created={doc != null})");
             if (doc != null && _watching)
                 DocumentAdded?.Invoke(doc);
-        }
-        else
-        {
-            Log.Info($"[hotload] QueueExport: existing doc {def.Type}/{name}");
         }
         QueueExport(doc);
     }
@@ -767,7 +759,10 @@ public static class Project
         try
         {
             if (!File.Exists(doc.Path))
+            {
+                doc.IsQueuedForExport = false;
                 return;
+            }
 
             if (_watching && !IsFileReady(doc.Path))
             {
@@ -789,10 +784,12 @@ public static class Project
             OnDocumentExported(doc);
             doc.SilentExport = false;
             AssetManifest.IsModified = true;
+            doc.IsQueuedForExport = false;
         }
         catch (Exception ex)
         {
             Log.Error($"Failed to export '{doc.Name}': {ex.Message}");
+            doc.IsQueuedForExport = false;
         }
     }
 
@@ -800,7 +797,6 @@ public static class Project
     {
         if (System.IO.Path.GetExtension(path) == ".meta")
         {
-            Log.Info($"[hotload] HandleFileChange meta -> {path[..^5]}");
             _watcherQueue.Enqueue(path[..^5]);
             return;
         }
@@ -808,13 +804,11 @@ public static class Project
         if (IsAuxiliaryFile(path))
         {
             var parentPath = GetAuxiliaryParentPath(path);
-            Log.Info($"[hotload] HandleFileChange aux {path} -> parent {parentPath ?? "<null>"}");
             if (parentPath != null)
                 _watcherQueue.Enqueue(parentPath);
             return;
         }
 
-        Log.Info($"[hotload] HandleFileChange primary: {path}");
         _watcherQueue.Enqueue(path);
         _reloadQueue.Enqueue(path);
     }
@@ -824,9 +818,6 @@ public static class Project
 
     public static void UpdateExports()
     {
-        if (_reloadQueue.Count > 0 || _watcherQueue.Count > 0)
-            Log.Info($"[hotload] UpdateExports drain: reload={_reloadQueue.Count} watcher={_watcherQueue.Count}");
-
         while (_reloadQueue.TryDequeue(out var path))
         {
             var def = ResolveDef(path);
@@ -848,8 +839,11 @@ public static class Project
         while (_exportQueue.Count > 0)
         {
             var doc = _exportQueue.Dequeue();
-            doc.IsQueuedForExport = false;
-            if (doc.IsDisposed) continue;
+            if (doc.IsDisposed)
+            {
+                doc.IsQueuedForExport = false;
+                continue;
+            }
             Export(doc);
         }
 
@@ -861,7 +855,6 @@ public static class Project
         if (OperatingSystem.IsIOS())
             return;
 
-        Log.Info($"[hotload] StartWatching: {path}");
         var watcher = new FileSystemWatcher(path)
         {
             IncludeSubdirectories = true,
@@ -877,7 +870,7 @@ public static class Project
 
     private static void OnWatcherError(object sender, ErrorEventArgs e)
     {
-        Log.Warning($"[hotload] watcher error: {e.GetException().Message} — rescanning all source paths");
+        Log.Warning($"FileSystemWatcher error: {e.GetException().Message} — rescanning");
         if (sender is FileSystemWatcher w)
             RescanDirectory(w.Path);
     }
@@ -886,8 +879,13 @@ public static class Project
     {
         if (!Directory.Exists(absoluteDir))
             return;
+        var cutoff = DateTime.UtcNow.AddSeconds(-10);
         foreach (var file in Directory.EnumerateFiles(absoluteDir, "*", SearchOption.AllDirectories))
+        {
+            if (File.GetLastWriteTimeUtc(file) < cutoff)
+                continue;
             HandleFileChange(ToRelative(file));
+        }
     }
 
     private static void StopWatching()
@@ -909,10 +907,8 @@ public static class Project
 
     private static void OnWatcherEvent(object sender, FileSystemEventArgs e)
     {
-        Log.Info($"[hotload] watcher {e.ChangeType}: {e.FullPath}");
         if (Directory.Exists(e.FullPath))
         {
-            Log.Info($"[hotload] directory event, rescanning {e.FullPath}");
             RescanDirectory(e.FullPath);
             return;
         }
