@@ -785,6 +785,7 @@ public static class Project
 
             Log.Info($"Exported {(Asset.GetDef(doc.Def.Type)?.Name ?? doc.Def.Type.ToString()).ToLowerInvariant()}/{doc.Name}");
             OnExported?.Invoke(doc);
+            Asset.ReloadByName(doc.Def.Type, doc.Name);
             OnDocumentExported(doc);
             doc.SilentExport = false;
             AssetManifest.IsModified = true;

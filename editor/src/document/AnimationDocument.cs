@@ -12,7 +12,8 @@ namespace NoZ.Editor;
 public enum AnimationFlags : byte
 {
     None = 0,
-    Looping = 1 << 0
+    Looping = 1 << 0,
+    Additive = 1 << 1
 }
 
 public class AnimationBoneData
@@ -41,12 +42,16 @@ public class AnimationFrameData
     }
 }
 
-internal class AnimationDocument : Document
+internal partial class AnimationDocument : Document
 {
     public const string Extension = ".anim";
 
     public override bool CanSave => true;
 
+    private static partial class WidgetIds
+    {
+        public static partial WidgetId AdditiveToggle { get; }
+    }
 
     public const int MaxFrames = 64;
     private const float BoundsPadding = 0.1f;
@@ -81,6 +86,18 @@ internal class AnimationDocument : Document
                 Flags |= AnimationFlags.Looping;
             else
                 Flags &= ~AnimationFlags.Looping;
+        }
+    }
+
+    public bool IsAdditive
+    {
+        get => (Flags & AnimationFlags.Additive) != 0;
+        set
+        {
+            if (value)
+                Flags |= AnimationFlags.Additive;
+            else
+                Flags &= ~AnimationFlags.Additive;
         }
     }
 
@@ -790,11 +807,32 @@ internal class AnimationDocument : Document
         Flags = AnimationFlags.None;
         if (meta.GetBool("animation", "loop", true))
             Flags |= AnimationFlags.Looping;
+        if (meta.GetBool("animation", "additive", false))
+            Flags |= AnimationFlags.Additive;
     }
 
     public override void SaveMetadata(PropertySet meta)
     {
         meta.SetBool("animation", "loop", IsLooping);
+        meta.SetBool("animation", "additive", IsAdditive);
+    }
+
+    public override void InspectorUI()
+    {
+        base.InspectorUI();
+
+        using var section = Inspector.BeginSection("ANIMATION");
+        if (Inspector.IsSectionCollapsed) return;
+
+        using (Inspector.BeginProperty("Additive"))
+        {
+            var additive = UI.Toggle(WidgetIds.AdditiveToggle, IsAdditive, EditorStyle.Inspector.Toggle);
+            if (UI.WasChanged())
+            {
+                Undo.Record(this);
+                IsAdditive = additive;
+            }
+        }
     }
 
     public override void Clone(Document source)
@@ -1024,9 +1062,18 @@ internal class AnimationDocument : Document
             {
                 var bind = Skeleton.Bones[boneIndex].Transform;
                 var absTransform = f.Transforms[boneIndex];
-                writer.Write(bind.Position.X + absTransform.Position.X);
-                writer.Write(bind.Position.Y + absTransform.Position.Y);
-                writer.Write(bind.Rotation + absTransform.Rotation);
+                if (IsAdditive)
+                {
+                    writer.Write(absTransform.Position.X);
+                    writer.Write(absTransform.Position.Y);
+                    writer.Write(absTransform.Rotation);
+                }
+                else
+                {
+                    writer.Write(bind.Position.X + absTransform.Position.X);
+                    writer.Write(bind.Position.Y + absTransform.Position.Y);
+                    writer.Write(bind.Rotation + absTransform.Rotation);
+                }
                 writer.Write(absTransform.Scale.X);
                 writer.Write(absTransform.Scale.Y);
             }

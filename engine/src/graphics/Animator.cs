@@ -82,9 +82,9 @@ public class Animator
         _time = normalizedTime * animation.Duration;
     }
 
-    public void Update() => Update(NoZ.Time.DeltaTime);
+    public void Update(Animator[]? add = null) => Update(NoZ.Time.DeltaTime, add);
 
-    public void Update(float dt)
+    public void Update(float dt, Animator[]? add = null)
     {
         if (_animation == null)
             return;
@@ -109,19 +109,10 @@ public class Animator
                 _blendFromAnimation = null;
         }
 
-        UpdateBoneTransforms();
+        UpdateBoneTransforms(add);
     }
 
-    public void Evaluate(float normalizedTime)
-    {
-        if (_animation == null)
-            return;
-
-        _time = normalizedTime * _animation.Duration;
-        UpdateBoneTransforms();
-    }
-
-    private void UpdateBoneTransforms()
+    private void UpdateBoneTransforms(Animator[]? add)
     {
         if (_animation == null)
             return;
@@ -138,6 +129,22 @@ public class Animator
             for (var i = 0; i < _skeleton.BoneCount; i++)
                 _poseA[i] = AnimationTransform.Lerp(_poseB[i], _poseA[i], blendT);
         }
+
+        for (var i = 0; i < add?.Length; i++)
+        {
+            var addPose = add[i]._poseA;
+            for (int b = 0; b < _skeleton.BoneCount; b++)
+            {
+                ref var baseTransform = ref _poseA[b];
+                ref var addTransform = ref addPose[b];
+                baseTransform = new AnimationTransform
+                {
+                    Position = baseTransform.Position + addTransform.Position,
+                    Rotation = baseTransform.Rotation + addTransform.Rotation,
+                    Scale = baseTransform.Scale * addTransform.Scale
+                };                
+            }
+        }            
 
         CalculateBoneMatrices(_poseA);
     }

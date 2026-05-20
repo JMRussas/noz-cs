@@ -11,7 +11,8 @@ namespace NoZ;
 public enum AnimationFlags : byte
 {
     None = 0,
-    Looping = 1 << 0
+    Looping = 1 << 0,
+    Additive = 1 << 1
 }
 
 public struct AnimationBone
@@ -71,6 +72,7 @@ public class Animation : Asset
     public int[] StateValues { get; private set; } = [];
 
     public bool IsLooping => (Flags & AnimationFlags.Looping) != 0;
+    public bool IsAdditive => (Flags & AnimationFlags.Additive) != 0;
 
     private Animation(string name) : base(AssetType.Animation, name)
     {
