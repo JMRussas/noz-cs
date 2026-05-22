@@ -13,6 +13,7 @@ public partial class VectorSpriteEditor : SpriteEditor
         public static partial WidgetId Root { get; }
         public static partial WidgetId LayerToggle { get; }
         public static partial WidgetId ExitEditMode { get; }
+        public static partial WidgetId IsolationToggle { get; }
         public static partial WidgetId InspectorToggle { get; }
         public static partial WidgetId TileButton { get; }
         public static partial WidgetId SubtractButton { get; }
@@ -1418,6 +1419,9 @@ public partial class VectorSpriteEditor : SpriteEditor
 
         if (UI.Button(WidgetIds.ExitEditMode, EditorAssets.Sprites.IconEdit, EditorStyle.Button.ToggleIcon, isSelected: true))  
             Workspace.EndEdit();
+
+        if (UI.Button(WidgetIds.IsolationToggle, EditorAssets.Sprites.IconIsolate, EditorStyle.Button.ToggleIcon, isSelected: Workspace.Isolation))  
+            Workspace.ToggleIsolation();
 
         UI.Flex();
 
