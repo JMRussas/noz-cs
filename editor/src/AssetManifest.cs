@@ -159,7 +159,7 @@ public static class AssetManifest
         writer.WriteLine();
         writer.WriteLine($"namespace {config.CsNamespace};");
         writer.WriteLine();
-        writer.WriteLine($"public static class {config.CsClass}");
+        writer.WriteLine($"public static partial class {config.CsClass}");
         writer.WriteLine("{");
         var documentsByType = manifestEntries
             .GroupBy(e => e.Type)
