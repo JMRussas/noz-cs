@@ -157,6 +157,7 @@ public class Asset : IDisposable {
 
         try
         {
+            resourceSuffix = resourceSuffix.Replace('/', '.').Replace('\\', '.');
             var names = assembly.GetManifestResourceNames();
             foreach (var name in names)
             {

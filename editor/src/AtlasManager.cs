@@ -11,6 +11,8 @@ namespace NoZ.Editor;
 internal struct AtlasSpriteRect
 {
     public SpriteDocument? Source; // null = freed slot, available for reclaim
+    public SpriteGroup? ExportGroup; // null = composite document sprite
+    public bool IsBasePart;
     public RectInt Rect;
     public ushort FrameIndex;
     public ushort Layer;
@@ -241,13 +243,23 @@ public static class AtlasManager
     }
 
     internal static bool TryGetEntry(SpriteDocument sprite, out AtlasSpriteRect[] frames, out ushort layer)
+        => TryGetEntry(sprite, new SpriteAtlasPart(null, false), out frames, out layer);
+
+    internal static bool TryGetEntry(
+        SpriteDocument sprite,
+        SpriteAtlasPart atlasPart,
+        out AtlasSpriteRect[] frames,
+        out ushort layer)
     {
         var group = GroupOf(sprite);
         var collected = new List<AtlasSpriteRect>(sprite.AtlasFrameCount);
         ushort foundLayer = 0;
         foreach (var rect in group.Rects)
         {
-            if (rect.Source != sprite) continue;
+            if (rect.Source != sprite ||
+                rect.ExportGroup != atlasPart.Group ||
+                rect.IsBasePart != atlasPart.IsBase)
+                continue;
             collected.Add(rect);
             foundLayer = rect.Layer;
         }
@@ -270,28 +282,31 @@ public static class AtlasManager
         var atlasSize = EditorApplication.Config.AtlasSize;
         var frameCount = sprite.AtlasFrameCount;
 
-        for (ushort frameIndex = 0; frameIndex < frameCount; frameIndex++)
+        foreach (var atlasPart in sprite.GetAtlasParts())
         {
-            if (HasRectFor(group, sprite, frameIndex)) continue;
-
-            var size = sprite.GetFrameAtlasSize(frameIndex);
-            if (size == Vector2Int.Zero) continue;
-
-            if (TryReclaimFreed(group, sprite, frameIndex, size)) continue;
-            if (TryPackIntoExistingLayer(group, sprite, frameIndex, size)) continue;
-
-            // Out of space in existing layers. Repack to consolidate freed slots if any
-            // exist; otherwise grow into a new layer.
-            if (HasFreedSpace(group))
+            for (ushort frameIndex = 0; frameIndex < frameCount; frameIndex++)
             {
-                group.NeedsFullRepack = true;
-                return false;
-            }
+                if (HasRectFor(group, sprite, atlasPart.Group, atlasPart.IsBase, frameIndex)) continue;
 
-            if (!AddNewLayer(group, atlasSize, sprite, frameIndex, size))
-            {
-                Log.Error($"Sprite '{sprite.Name}' frame {frameIndex} too large to pack ({size.X}x{size.Y})");
-                return false;
+                var size = sprite.GetFrameAtlasSize(frameIndex);
+                if (size == Vector2Int.Zero) continue;
+
+                if (TryReclaimFreed(group, sprite, atlasPart.Group, atlasPart.IsBase, frameIndex, size)) continue;
+                if (TryPackIntoExistingLayer(group, sprite, atlasPart.Group, atlasPart.IsBase, frameIndex, size)) continue;
+
+                // Out of space in existing layers. Repack to consolidate freed slots if any
+                // exist; otherwise grow into a new layer.
+                if (HasFreedSpace(group))
+                {
+                    group.NeedsFullRepack = true;
+                    return false;
+                }
+
+                if (!AddNewLayer(group, atlasSize, sprite, atlasPart.Group, atlasPart.IsBase, frameIndex, size))
+                {
+                    Log.Error($"Sprite '{sprite.GetAtlasAssetName(atlasPart.Group, atlasPart.IsBase)}' frame {frameIndex} too large to pack ({size.X}x{size.Y})");
+                    return false;
+                }
             }
         }
         return true;
@@ -300,14 +315,18 @@ public static class AtlasManager
     private static bool RetargetSpriteRects(Group group, SpriteDocument sprite)
     {
         var frameCount = sprite.AtlasFrameCount;
+        var atlasParts = sprite.GetAtlasParts().ToHashSet();
         var rects = CollectionsMarshal.AsSpan(group.Rects);
         for (int i = 0; i < rects.Length; i++)
         {
             ref var rect = ref rects[i];
             if (rect.Source != sprite) continue;
-            if (rect.FrameIndex >= frameCount)
+            if (!atlasParts.Contains(new SpriteAtlasPart(rect.ExportGroup, rect.IsBasePart)) ||
+                rect.FrameIndex >= frameCount)
             {
                 rect.Source = null;
+                rect.ExportGroup = null;
+                rect.IsBasePart = false;
                 continue;
             }
             var size = sprite.GetFrameAtlasSize(rect.FrameIndex);
@@ -318,10 +337,19 @@ public static class AtlasManager
         return AllocateSpriteIncremental(group, sprite);
     }
 
-    private static bool HasRectFor(Group group, SpriteDocument sprite, ushort frameIndex)
+    private static bool HasRectFor(
+        Group group,
+        SpriteDocument sprite,
+        SpriteGroup? exportGroup,
+        bool isBasePart,
+        ushort frameIndex)
     {
         foreach (var rect in group.Rects)
-            if (rect.Source == sprite && rect.FrameIndex == frameIndex) return true;
+            if (rect.Source == sprite &&
+                rect.ExportGroup == exportGroup &&
+                rect.IsBasePart == isBasePart &&
+                rect.FrameIndex == frameIndex)
+                return true;
         return false;
     }
 
@@ -332,7 +360,13 @@ public static class AtlasManager
         return false;
     }
 
-    private static bool TryReclaimFreed(Group group, SpriteDocument sprite, ushort frameIndex, in Vector2Int size)
+    private static bool TryReclaimFreed(
+        Group group,
+        SpriteDocument sprite,
+        SpriteGroup? exportGroup,
+        bool isBasePart,
+        ushort frameIndex,
+        in Vector2Int size)
     {
         var rects = CollectionsMarshal.AsSpan(group.Rects);
         var bestIndex = -1;
@@ -353,11 +387,19 @@ public static class AtlasManager
 
         ref var slot = ref rects[bestIndex];
         slot.Source = sprite;
+        slot.ExportGroup = exportGroup;
+        slot.IsBasePart = isBasePart;
         slot.FrameIndex = frameIndex;
         return true;
     }
 
-    private static bool TryPackIntoExistingLayer(Group group, SpriteDocument sprite, ushort frameIndex, in Vector2Int size)
+    private static bool TryPackIntoExistingLayer(
+        Group group,
+        SpriteDocument sprite,
+        SpriteGroup? exportGroup,
+        bool isBasePart,
+        ushort frameIndex,
+        in Vector2Int size)
     {
         for (int i = 0; i < group.Packers.Count; i++)
         {
@@ -366,6 +408,8 @@ public static class AtlasManager
                 group.Rects.Add(new AtlasSpriteRect
                 {
                     Source = sprite,
+                    ExportGroup = exportGroup,
+                    IsBasePart = isBasePart,
                     Rect = rect,
                     FrameIndex = frameIndex,
                     Layer = (ushort)i,
@@ -376,7 +420,14 @@ public static class AtlasManager
         return false;
     }
 
-    private static bool AddNewLayer(Group group, int atlasSize, SpriteDocument sprite, ushort frameIndex, in Vector2Int size)
+    private static bool AddNewLayer(
+        Group group,
+        int atlasSize,
+        SpriteDocument sprite,
+        SpriteGroup? exportGroup,
+        bool isBasePart,
+        ushort frameIndex,
+        in Vector2Int size)
     {
         var packer = new RectPacker(atlasSize, atlasSize);
         var image = new PixelData<Color32>(atlasSize, atlasSize);
@@ -389,6 +440,8 @@ public static class AtlasManager
         group.Rects.Add(new AtlasSpriteRect
         {
             Source = sprite,
+            ExportGroup = exportGroup,
+            IsBasePart = isBasePart,
             Rect = rect,
             FrameIndex = frameIndex,
             Layer = (ushort)(group.Packers.Count - 1),
@@ -441,23 +494,26 @@ public static class AtlasManager
 
         foreach (var sprite in group.Sources)
         {
-            for (ushort frameIndex = 0; frameIndex < sprite.AtlasFrameCount; frameIndex++)
+            foreach (var atlasPart in sprite.GetAtlasParts())
             {
-                var size = sprite.GetFrameAtlasSize(frameIndex);
-                if (size == Vector2Int.Zero) continue;
-
-                if (!TryPackIntoExistingLayer(group, sprite, frameIndex, size) &&
-                    !AddNewLayer(group, atlasSize, sprite, frameIndex, size))
+                for (ushort frameIndex = 0; frameIndex < sprite.AtlasFrameCount; frameIndex++)
                 {
-                    Log.Error($"Sprite '{sprite.Name}' frame {frameIndex} too large to pack ({size.X}x{size.Y})");
-                    continue;
-                }
+                    var size = sprite.GetFrameAtlasSize(frameIndex);
+                    if (size == Vector2Int.Zero) continue;
 
-                rectCount++;
-                ref readonly var rect = ref CollectionsMarshal.AsSpan(group.Rects)[group.Rects.Count - 1];
-                swRasterize.Start();
-                sprite.Rasterize(group.Layers[rect.Layer], in rect, padding);
-                swRasterize.Stop();
+                    if (!TryPackIntoExistingLayer(group, sprite, atlasPart.Group, atlasPart.IsBase, frameIndex, size) &&
+                        !AddNewLayer(group, atlasSize, sprite, atlasPart.Group, atlasPart.IsBase, frameIndex, size))
+                    {
+                        Log.Error($"Sprite '{sprite.GetAtlasAssetName(atlasPart.Group, atlasPart.IsBase)}' frame {frameIndex} too large to pack ({size.X}x{size.Y})");
+                        continue;
+                    }
+
+                    rectCount++;
+                    ref readonly var rect = ref CollectionsMarshal.AsSpan(group.Rects)[group.Rects.Count - 1];
+                    swRasterize.Start();
+                    sprite.Rasterize(group.Layers[rect.Layer], in rect, padding);
+                    swRasterize.Stop();
+                }
             }
         }
 
@@ -476,14 +532,18 @@ public static class AtlasManager
         var capacity = atlasSize * atlasSize * 4 * group.Layers.Count + 64 * 1024;
 
         using var ms = new MemoryStream(capacity);
-        SerializeAtlas(group, padding, ms);
+        SerializeAtlas(group, padding, ms, includeMultiSpriteComposites: true);
         group.LastSerialized = ms.ToArray();
 
         using var loadStream = new MemoryStream(group.LastSerialized);
         group.Atlas.LoadFromStream(loadStream, group.Name);
     }
 
-    private static void SerializeAtlas(Group group, int padding, Stream output)
+    private static void SerializeAtlas(
+        Group group,
+        int padding,
+        Stream output,
+        bool includeMultiSpriteComposites)
     {
         var atlasSize = (float)EditorApplication.Config.AtlasSize;
 
@@ -492,7 +552,12 @@ public static class AtlasManager
         foreach (var rect in group.Rects)
         {
             if (rect.Source == null) continue;
-            var name = rect.Source.Name;
+            if (!includeMultiSpriteComposites &&
+                rect.ExportGroup == null &&
+                !rect.IsBasePart &&
+                rect.Source.IsMultiSprite)
+                continue;
+            var name = rect.Source.GetAtlasAssetName(rect.ExportGroup, rect.IsBasePart);
             if (!frameLists.TryGetValue(name, out var entry))
             {
                 entry = (rect.Layer, new List<Atlas.Frame>());
@@ -570,10 +635,16 @@ public static class AtlasManager
     {
         if (group.NeedsFullRepack || group.UploadPending) IncrementalUpdate(group);
         if (group.NeedsFullRepack) FullPack(group);
-        if (group.LastSerialized == null) return;
 
         var outputDir = Path.Combine(Project.OutputPath, "atlas");
         Directory.CreateDirectory(outputDir);
-        File.WriteAllBytes(Path.Combine(outputDir, group.Name), group.LastSerialized);
+
+        using var stream = new MemoryStream();
+        SerializeAtlas(
+            group,
+            EditorApplication.Config.AtlasPadding,
+            stream,
+            includeMultiSpriteComposites: false);
+        File.WriteAllBytes(Path.Combine(outputDir, group.Name), stream.ToArray());
     }
 }

@@ -7,6 +7,15 @@ using SixLabors.ImageSharp.PixelFormats;
 
 namespace NoZ.Editor;
 
+internal readonly record struct SpriteExportPart(
+    SpriteGroup? Group,
+    string FileName,
+    string AssetName);
+
+internal readonly record struct SpriteAtlasPart(
+    SpriteGroup? Group,
+    bool IsBase);
+
 public abstract partial class SpriteDocument : Document, ISkeletonAttachment
 {
     public const string Extension = ".sprite";
@@ -27,6 +36,7 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
     public string? BoneName;
     private string? _sortOrderId;
     private Sprite? _sprite;
+    private readonly Dictionary<SpriteAtlasPart, Sprite> _partSprites = [];
     private Texture? _standaloneTexture;
     public float Depth;
 
@@ -110,6 +120,81 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
                 total += 1 + child.Hold;
             return total;
         }
+    }
+
+    internal IReadOnlyList<SpriteExportPart> GetExportParts()
+    {
+        var result = new List<SpriteExportPart>();
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        usedNames.Add(Name);
+        CollectExportParts(Root, result, usedNames);
+
+        if (result.Count > 0)
+            result.Insert(0, new SpriteExportPart(null, Name, $"{Name}/{Name}"));
+
+        return result;
+    }
+
+    internal bool IsMultiSprite
+    {
+        get
+        {
+            var isMultiSprite = false;
+            Root.ForEach(group =>
+            {
+                if (group != Root && group.IsSprite)
+                    isMultiSprite = true;
+            });
+            return isMultiSprite;
+        }
+    }
+
+    private void CollectExportParts(
+        SpriteNode parent,
+        List<SpriteExportPart> result,
+        HashSet<string> usedNames)
+    {
+        foreach (var child in parent.Children)
+        {
+            if (child is not SpriteGroup group)
+                continue;
+
+            if (group.IsSprite)
+            {
+                var baseName = Project.MakeCanonicalName(group.Name);
+                if (string.IsNullOrEmpty(baseName))
+                    baseName = "sprite";
+
+                var fileName = baseName;
+                for (var suffix = 2; !usedNames.Add(fileName); suffix++)
+                    fileName = $"{baseName}_{suffix}";
+
+                result.Add(new SpriteExportPart(group, fileName, $"{Name}/{fileName}"));
+            }
+
+            CollectExportParts(group, result, usedNames);
+        }
+    }
+
+    internal IEnumerable<SpriteAtlasPart> GetAtlasParts()
+    {
+        // Keep the composite entry in the editor atlas so the document still previews
+        // as a whole. Multi-sprite metadata only exposes the assigned group entries.
+        yield return new SpriteAtlasPart(null, false);
+        foreach (var part in GetExportParts())
+            yield return new SpriteAtlasPart(part.Group, part.Group == null);
+    }
+
+    internal string GetAtlasAssetName(SpriteGroup? group, bool isBase)
+    {
+        if (group == null && !isBase)
+            return Name;
+
+        foreach (var part in GetExportParts())
+            if (part.Group == group)
+                return part.AssetName;
+
+        return Name;
     }
 
     public Sprite? Sprite
@@ -384,6 +469,30 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
 
     public void DrawSprite(ReadOnlySpan<Matrix3x2> bindPose, ReadOnlySpan<Matrix3x2> animatedPose, in Matrix3x2 baseTransform, int frame = 0, Color? tint = null)
     {
+        if (IsMultiSprite)
+        {
+            foreach (var part in GetExportParts())
+            {
+                var atlasPart = new SpriteAtlasPart(part.Group, part.Group == null);
+                var spritePart = GetPartSprite(atlasPart, part.AssetName);
+                if (spritePart == null)
+                    continue;
+
+                var boneIndex = part.Group != null ? ResolveGroupBone(part.Group) : BoneIndex;
+                var sortOrder = part.Group != null ? ResolveGroupSortOrder(part.Group) : SortOrder;
+                DrawSkinnedSprite(
+                    spritePart,
+                    boneIndex,
+                    sortOrder,
+                    bindPose,
+                    animatedPose,
+                    baseTransform,
+                    frame,
+                    tint);
+            }
+            return;
+        }
+
         var sprite = Sprite;
         if (sprite == null)
         {
@@ -391,18 +500,39 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
             return;
         }
 
-        using (Graphics.PushState())
-        {
-            Graphics.SetShader(EditorAssets.Shaders.Sprite);
-            Graphics.SetColor(tint ?? Color.White);
+        DrawSkinnedSprite(
+            sprite,
+            BoneIndex,
+            SortOrder,
+            bindPose,
+            animatedPose,
+            baseTransform,
+            frame,
+            tint);
+    }
 
-            var transform = BoneIndex >= 0 && BoneIndex < bindPose.Length
-                ? bindPose[BoneIndex] * animatedPose[BoneIndex] * baseTransform
-                : baseTransform;
-            Graphics.SetTextureFilter(TextureFilter);
-            Graphics.SetTransform(transform);
-            Graphics.Draw(sprite, SortOrder, frame: frame);
-        }
+    private void DrawSkinnedSprite(
+        Sprite sprite,
+        int boneIndex,
+        byte sortOrder,
+        ReadOnlySpan<Matrix3x2> bindPose,
+        ReadOnlySpan<Matrix3x2> animatedPose,
+        in Matrix3x2 baseTransform,
+        int frame,
+        Color? tint)
+    {
+        using var _ = Graphics.PushState();
+        Graphics.SetShader(EditorAssets.Shaders.Sprite);
+        Graphics.SetColor(tint ?? Color.White);
+
+        var transform = boneIndex >= 0 &&
+                        boneIndex < bindPose.Length &&
+                        boneIndex < animatedPose.Length
+            ? bindPose[boneIndex] * animatedPose[boneIndex] * baseTransform
+            : baseTransform;
+        Graphics.SetTextureFilter(TextureFilter);
+        Graphics.SetTransform(transform);
+        Graphics.Draw(sprite, sortOrder, frame: frame);
     }
 
     public override void Clone(Document source)
@@ -685,6 +815,24 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
             return;
         }
 
+        _sprite = CreateEditorSprite(Name, rects, layer);
+    }
+
+    private Sprite? GetPartSprite(SpriteAtlasPart atlasPart, string assetName)
+    {
+        if (_partSprites.TryGetValue(atlasPart, out var sprite))
+            return sprite;
+
+        if (!AtlasManager.TryGetEntry(this, atlasPart, out var rects, out var layer))
+            return null;
+
+        sprite = CreateEditorSprite(assetName, rects, layer);
+        _partSprites.Add(atlasPart, sprite);
+        return sprite;
+    }
+
+    private Sprite CreateEditorSprite(string name, AtlasSpriteRect[] rects, ushort layer)
+    {
         var atlasAsset = ShouldExport ? AtlasManager.GameAtlas : AtlasManager.EditorAtlas;
         var atlasSize = (float)EditorApplication.Config.AtlasSize;
         var padding = EditorApplication.Config.AtlasPadding;
@@ -711,8 +859,8 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
             MathF.Round(Edges.B * ppu),
             MathF.Round(Edges.R * ppu));
 
-        _sprite = Sprite.Create(
-            name: Name,
+        return Sprite.Create(
+            name: name,
             bounds: RasterBounds,
             pixelsPerUnit: ppu,
             boneIndex: -1,
@@ -729,6 +877,9 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
     {
         _sprite?.Dispose();
         _sprite = null;
+        foreach (var sprite in _partSprites.Values)
+            sprite.Dispose();
+        _partSprites.Clear();
         _standaloneTexture?.Dispose();
         _standaloneTexture = null;
     }
@@ -756,6 +907,11 @@ public abstract partial class SpriteDocument : Document, ISkeletonAttachment
     public override void Dispose()
     {
         Root.Dispose();
+        _sprite?.Dispose();
+        _sprite = null;
+        foreach (var sprite in _partSprites.Values)
+            sprite.Dispose();
+        _partSprites.Clear();
         _standaloneTexture?.Dispose();
         _standaloneTexture = null;
         base.Dispose();

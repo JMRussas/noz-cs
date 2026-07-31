@@ -902,8 +902,16 @@ public class SkeletonDocument : Document
     {
         foreach (var doc in Project.Documents)
         {
-            if (doc is SpriteDocument sprite && sprite.Skeleton.Value == this && sprite.BoneName == oldName)
+            if (doc is not SpriteDocument sprite || sprite.Skeleton.Value != this)
+                continue;
+
+            if (sprite.BoneName == oldName)
                 sprite.BoneName = newName;
+            sprite.Root.ForEach(group =>
+            {
+                if (group.BoneName == oldName)
+                    group.BoneName = newName;
+            });
         }
 
         BoneRenamed?.Invoke(this, boneIndex, oldName, newName);

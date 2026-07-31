@@ -576,6 +576,11 @@ public abstract partial class SpriteEditor
             Undo.Record(Document);
             _renameNode.Name = _renameText;
             OnOutlinerChanged();
+            if (_renameNode is SpriteGroup { IsSprite: true })
+            {
+                AtlasManager.UpdateSource(Document);
+                AssetManifest.IsModified = true;
+            }
         }
         _renameNode = null;
     }

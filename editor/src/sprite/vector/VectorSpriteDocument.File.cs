@@ -60,6 +60,10 @@ public partial class VectorSpriteDocument
                 group.Visible = tk.ExpectBool();
             else if (tk.ExpectIdentifier("locked"))
                 group.Locked = tk.ExpectBool();
+            else if (tk.ExpectIdentifier("bone"))
+                group.BoneName = tk.ExpectQuotedString();
+            else if (tk.ExpectIdentifier("sort"))
+                group.SortOrderId = tk.ExpectQuotedString();
             else if (tk.ExpectIdentifier("group"))
                 ParseGroup(ref tk, group);
             else if (tk.ExpectIdentifier("path"))
@@ -286,6 +290,10 @@ public partial class VectorSpriteDocument
             writer.WriteLine($"{propIndent}visible false");
         if (group.Locked)
             writer.WriteLine($"{propIndent}locked true");
+        if (group.BoneName != null)
+            writer.WriteLine($"{propIndent}bone \"{group.BoneName}\"");
+        if (group.SortOrderId != null)
+            writer.WriteLine($"{propIndent}sort \"{group.SortOrderId}\"");
 
         foreach (var child in group.Children)
         {

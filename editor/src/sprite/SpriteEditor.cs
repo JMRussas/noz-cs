@@ -8,6 +8,12 @@ namespace NoZ.Editor;
 
 public abstract partial class SpriteEditor(SpriteDocument document) : DocumentEditor(document)
 {
+    private static partial class WidgetIds
+    {
+        public static partial WidgetId GroupBoneDropDown { get; }
+        public static partial WidgetId GroupSortOrder { get; }
+    }
+
     public new SpriteDocument Document => (SpriteDocument)base.Document;
 
     protected abstract bool IsNodeSelected(SpriteNode node);
@@ -58,5 +64,81 @@ public abstract partial class SpriteEditor(SpriteDocument document) : DocumentEd
     {
         dragNodes.Clear();
         dragNodes.Add(clickedNode);
+    }
+
+    protected void GroupInspectorUI()
+    {
+        SpriteGroup? selectedGroup = null;
+        var selectedCount = 0;
+        Document.Root.ForEach(group =>
+        {
+            if (group == Document.Root || !IsNodeSelected(group))
+                return;
+            selectedGroup = group;
+            selectedCount++;
+        });
+
+        if (selectedCount != 1 || selectedGroup == null)
+            return;
+
+        var group = selectedGroup;
+        using var _ = Inspector.BeginSection("GROUP SPRITE");
+        if (Inspector.IsSectionCollapsed)
+            return;
+
+        if (Document.Skeleton.IsResolved)
+        {
+            using (Inspector.BeginProperty("Bone"))
+            {
+                var skeleton = Document.Skeleton.Value!;
+                UI.DropDown(WidgetIds.GroupBoneDropDown, () =>
+                {
+                    var items = new List<PopupMenuItem>();
+                    for (var i = 0; i < skeleton.BoneCount; i++)
+                    {
+                        var boneName = skeleton.Bones[i].Name;
+                        items.Add(new PopupMenuItem
+                        {
+                            Label = boneName,
+                            Handler = () =>
+                            {
+                                Undo.Record(Document);
+                                group.BoneName = boneName;
+                                OnGroupSpriteChanged();
+                            }
+                        });
+                    }
+                    items.Add(new PopupMenuItem
+                    {
+                        Label = "None",
+                        Handler = () =>
+                        {
+                            Undo.Record(Document);
+                            group.BoneName = null;
+                            OnGroupSpriteChanged();
+                        }
+                    });
+                    return [.. items];
+                }, group.BoneName ?? "None", EditorAssets.Sprites.IconBone);
+            }
+        }
+
+        using (Inspector.BeginProperty("Sort Order"))
+        {
+            EditorUI.SortOrderDropDown(WidgetIds.GroupSortOrder, group.SortOrderId, id =>
+            {
+                Undo.Record(Document);
+                group.SortOrderId = id;
+                OnGroupSpriteChanged();
+            });
+        }
+    }
+
+    private void OnGroupSpriteChanged()
+    {
+        Document.IncrementVersion();
+        AtlasManager.UpdateSource(Document);
+        AssetManifest.IsModified = true;
+        Document.Skeleton.Value?.UpdateSprites();
     }
 }

@@ -16,6 +16,7 @@ public partial class PixelEditor
 
     public override void InspectorUI()
     {
+        GroupInspectorUI();
         SpriteInspectorUI();
         EdgesInspectorUI();
         TilingInspectorUI();

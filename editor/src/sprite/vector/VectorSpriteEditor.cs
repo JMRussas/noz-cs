@@ -1356,6 +1356,7 @@ public partial class VectorSpriteEditor : SpriteEditor
 
     public override void InspectorUI()
     {
+        GroupInspectorUI();
         EdgesInspectorUI();
         OutlineInspectorUI();
         PathInspectorUI();

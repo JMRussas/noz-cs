@@ -19,8 +19,8 @@ public partial class VectorSpriteDocument
         var w = RasterBounds.Size.X;
         var h = RasterBounds.Size.Y;
 
-        var sourceLayer = Root;
-        if (IsAnimated)
+        var sourceLayer = rect.ExportGroup ?? Root;
+        if (rect.ExportGroup == null && IsAnimated)
         {
             var frameIdx = GetFrameAtTimeSlot(rect.FrameIndex);
             if (frameIdx >= 0 && frameIdx < Root.Children.Count &&
@@ -49,7 +49,15 @@ public partial class VectorSpriteDocument
                 RasterBounds.Width * invDpi,
                 RasterBounds.Height * invDpi);
 
-            RasterizeLayer(sourceLayer, image, rasterRect, sourceOffset, dpi, clipRect, this);
+            RasterizeLayer(
+                sourceLayer,
+                image,
+                rasterRect,
+                sourceOffset,
+                dpi,
+                clipRect,
+                this,
+                excludeExportGroups: rect.IsBasePart || rect.ExportGroup != null);
 
             image.BleedColors(rasterRect);
 
@@ -75,7 +83,15 @@ public partial class VectorSpriteDocument
                 new Vector2Int(w + padding2, h + padding2));
             var sourceOffset = -RasterBounds.Position + new Vector2Int(padding, padding);
 
-            RasterizeLayer(sourceLayer, image, targetRect, sourceOffset, dpi, clipRect: null, outlineSource: this);
+            RasterizeLayer(
+                sourceLayer,
+                image,
+                targetRect,
+                sourceOffset,
+                dpi,
+                clipRect: null,
+                outlineSource: this,
+                excludeExportGroups: rect.IsBasePart || rect.ExportGroup != null);
 
             image.BleedColors(targetRect);
         }
@@ -88,10 +104,11 @@ public partial class VectorSpriteDocument
         Vector2Int sourceOffset,
         int dpi,
         Rect? clipRect = null,
-        VectorSpriteDocument? outlineSource = null)
+        VectorSpriteDocument? outlineSource = null,
+        bool excludeExportGroups = false)
     {
         var results = new List<LayerPathResult>();
-        SpriteGroupProcessor.ProcessLayer(layer, results);
+        SpriteGroupProcessor.ProcessLayer(layer, results, excludeExportGroups);
 
         if (outlineSource != null && outlineSource.TryBuildOutlineResult(results, out var outline))
             results.Insert(0, outline);

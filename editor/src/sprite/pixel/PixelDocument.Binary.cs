@@ -11,7 +11,7 @@ public partial class PixelDocument
     public const string BinaryExtension = ".pixel";
 
     private const uint BinaryMagic = 0x5850_5A4E; // "NZPX" little-endian
-    private const byte BinaryVersion = 1;
+    private const byte BinaryVersion = 2;
     private const byte NodeKindLayer = 0;
     private const byte NodeKindGroup = 1;
 
@@ -29,8 +29,8 @@ public partial class PixelDocument
         using var stream = File.OpenRead(Path);
         using var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: false);
 
-        ReadBinaryHeader(reader);
-        ReadBinaryTree(reader);
+        var version = ReadBinaryHeader(reader);
+        ReadBinaryTree(reader, version);
 
         UpdateBounds();
         Loaded = true;
@@ -47,8 +47,8 @@ public partial class PixelDocument
         using (var stream = File.OpenRead(Path))
         using (var reader = new BinaryReader(stream, Encoding.UTF8, leaveOpen: false))
         {
-            ReadBinaryHeader(reader);
-            ReadBinaryTree(reader);
+            var version = ReadBinaryHeader(reader);
+            ReadBinaryTree(reader, version);
         }
 
         Skeleton.Resolve();
@@ -95,14 +95,14 @@ public partial class PixelDocument
         writer.Write((byte)(IsAnimated ? 1 : 0));
     }
 
-    private void ReadBinaryHeader(BinaryReader reader)
+    private byte ReadBinaryHeader(BinaryReader reader)
     {
         var magic = reader.ReadUInt32();
         if (magic != BinaryMagic)
             throw new InvalidDataException($"Invalid .pixel magic in {Path}: 0x{magic:X8}");
 
         var version = reader.ReadByte();
-        if (version != BinaryVersion)
+        if (version is < 1 or > BinaryVersion)
             throw new InvalidDataException($"Unsupported .pixel version in {Path}: {version}");
 
         _ = reader.ReadByte(); // flags, reserved
@@ -128,6 +128,7 @@ public partial class PixelDocument
 
         var spriteFlags = reader.ReadByte();
         IsAnimated = (spriteFlags & 0x01) != 0;
+        return version;
     }
 
     private void WriteBinaryTree(BinaryWriter writer)
@@ -160,6 +161,8 @@ public partial class PixelDocument
                 writer.Write(parentIdx);
                 writer.Write(group.Name);
                 writer.Write(group.Hold);
+                writer.Write(group.BoneName ?? "");
+                writer.Write(group.SortOrderId ?? "");
             }
         }
     }
@@ -175,7 +178,7 @@ public partial class PixelDocument
         }
     }
 
-    private void ReadBinaryTree(BinaryReader reader)
+    private void ReadBinaryTree(BinaryReader reader, byte version)
     {
         Root.Clear();
 
@@ -200,7 +203,15 @@ public partial class PixelDocument
             }
             else if (kind == NodeKindGroup)
             {
-                node = new SpriteGroup { Name = name, Hold = hold };
+                var boneName = version >= 2 ? reader.ReadString() : "";
+                var sortOrderId = version >= 2 ? reader.ReadString() : "";
+                node = new SpriteGroup
+                {
+                    Name = name,
+                    Hold = hold,
+                    BoneName = string.IsNullOrEmpty(boneName) ? null : boneName,
+                    SortOrderId = string.IsNullOrEmpty(sortOrderId) ? null : sortOrderId,
+                };
             }
             else
             {

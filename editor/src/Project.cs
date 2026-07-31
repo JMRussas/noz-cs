@@ -439,8 +439,7 @@ public static class Project
         doc.Name = canonicalName;
         doc.IncrementVersion();
 
-        if (File.Exists(oldTargetPath))
-            File.Delete(oldTargetPath);
+        DeleteExportTarget(oldTargetPath);
 
         foreach (var other in _documents)
         {
@@ -557,6 +556,14 @@ public static class Project
         var filename = System.IO.Path.GetFileNameWithoutExtension(doc.Path);
         var safeName = MakeCanonicalName(filename);
         return CombinePath(CombinePath(_outputPath, typeName), safeName);
+    }
+
+    private static void DeleteExportTarget(string path)
+    {
+        if (File.Exists(path))
+            File.Delete(path);
+        else if (Directory.Exists(path))
+            Directory.Delete(path, recursive: true);
     }
 
     private static string CombinePath(string a, string b) =>
@@ -683,9 +690,13 @@ public static class Project
 
         if (!force)
         {
-            bool targetExists = File.Exists(targetPath);
+            bool targetExists = File.Exists(targetPath) || Directory.Exists(targetPath);
             if (targetExists)
             {
+                if (doc is SpriteDocument sprite &&
+                    sprite.IsMultiSprite != Directory.Exists(targetPath))
+                    force = true;
+
                 // Force export if the binary's version doesn't match the engine's expected version
                 var assetDef = Asset.GetDef(doc.Def.Type);
                 if (assetDef is { Version: > 0 } && ReadAssetVersion(targetPath) != assetDef.Version)
@@ -693,7 +704,7 @@ public static class Project
 
                 if (!force)
                 {
-                    var targetTime = File.GetLastWriteTimeUtc(targetPath);
+                    var targetTime = GetExportTargetWriteTime(targetPath);
                     var sourceTime = File.GetLastWriteTimeUtc(doc.Path);
                     var metaTime = File.Exists(metaPath) ? File.GetLastWriteTimeUtc(metaPath) : DateTime.MinValue;
 
@@ -728,6 +739,14 @@ public static class Project
     {
         try
         {
+            if (Directory.Exists(path))
+            {
+                var firstFile = Directory.EnumerateFiles(path).FirstOrDefault();
+                if (firstFile == null)
+                    return 0;
+                path = firstFile;
+            }
+
             using var stream = File.OpenRead(path);
             using var reader = new BinaryReader(stream);
             if (stream.Length < 12) return 0;
@@ -739,6 +758,21 @@ public static class Project
         {
             return 0;
         }
+    }
+
+    private static DateTime GetExportTargetWriteTime(string path)
+    {
+        if (File.Exists(path))
+            return File.GetLastWriteTimeUtc(path);
+
+        var latest = Directory.GetLastWriteTimeUtc(path);
+        foreach (var file in Directory.EnumerateFiles(path))
+        {
+            var time = File.GetLastWriteTimeUtc(file);
+            if (time > latest)
+                latest = time;
+        }
+        return latest;
     }
 
     private static bool IsFileReady(string path)
@@ -780,7 +814,15 @@ public static class Project
 
             Log.Info($"Exported {(Asset.GetDef(doc.Def.Type)?.Name ?? doc.Def.Type.ToString()).ToLowerInvariant()}/{doc.Name}");
             OnExported?.Invoke(doc);
-            Asset.ReloadByName(doc.Def.Type, doc.Name);
+            if (doc is SpriteDocument sprite && sprite.IsMultiSprite)
+            {
+                foreach (var part in sprite.GetExportParts())
+                    Asset.ReloadByName(doc.Def.Type, part.AssetName);
+            }
+            else
+            {
+                Asset.ReloadByName(doc.Def.Type, doc.Name);
+            }
             OnDocumentExported(doc);
             doc.SilentExport = false;
             AssetManifest.IsModified = true;

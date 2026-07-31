@@ -6,6 +6,10 @@ namespace NoZ.Editor;
 
 public static class AssetManifest
 {
+    private readonly record struct SpriteManifestPart(
+        SpriteExportPart Export,
+        string MemberName);
+
     public static bool IsModified { get; set; }
 
     public static void Generate(bool force=false)
@@ -232,6 +236,12 @@ public static class AssetManifest
         // Static classes grouped by type, each with Load() and Unload() methods
         foreach (var group in documentsByType)
         {
+            if (group.Key == AssetType.Sprite)
+            {
+                WriteCsSpritesClass(writer, group.Docs);
+                continue;
+            }
+
             var typeName = GetAssetTypeName(group.Key);
             var pluralName = Pluralize(typeName);
             var runtimeType = Asset.GetDef(group.Key)?.RuntimeType.Name ?? "Asset";
@@ -251,17 +261,12 @@ public static class AssetManifest
 
             // Load method
             writer.WriteLine();
-            var isSprite = group.Key == AssetType.Sprite;
-            writer.WriteLine(isSprite
-                ? "        public static void Load(Atlas atlas)"
-                : "        public static void Load()");
+            writer.WriteLine("        public static void Load()");
             writer.WriteLine("        {");
             foreach (var doc in orderedDocs)
             {
                 var fieldName = ToPascalCase(doc.Name);
-                writer.WriteLine(isSprite
-                    ? $"            {fieldName}.Load(Names.{fieldName}, atlas);"
-                    : $"            {fieldName}.Load(Names.{fieldName});");
+                writer.WriteLine($"            {fieldName}.Load(Names.{fieldName});");
             }
             writer.WriteLine("        }");
 
@@ -446,6 +451,126 @@ public static class AssetManifest
         Log.Info($"Generated {path}");
     }
 
+    private static void WriteCsSpritesClass(StreamWriter writer, IReadOnlyList<Document> documents)
+    {
+        var sprites = documents
+            .Cast<SpriteDocument>()
+            .OrderBy(d => d.Name)
+            .ToList();
+
+        foreach (var sprite in sprites)
+            EnsureSpriteLoaded(sprite);
+
+        writer.WriteLine();
+        writer.WriteLine("    public static class Sprites");
+        writer.WriteLine("    {");
+
+        foreach (var sprite in sprites)
+        {
+            var parts = GetSpriteManifestParts(sprite);
+            var spriteName = ToPascalCase(sprite.Name);
+            if (parts.Count == 0)
+            {
+                writer.WriteLine($"        public static readonly Sprite {spriteName} = new();");
+                continue;
+            }
+
+            writer.WriteLine($"        public static class {spriteName}");
+            writer.WriteLine("        {");
+            foreach (var part in parts)
+                writer.WriteLine($"            public static readonly Sprite {part.MemberName} = new();");
+
+            writer.WriteLine();
+            writer.WriteLine("            public static void Load(Atlas atlas)");
+            writer.WriteLine("            {");
+            foreach (var part in parts)
+                writer.WriteLine($"                {part.MemberName}.Load(\"{part.Export.AssetName}\", atlas);");
+            writer.WriteLine("            }");
+
+            writer.WriteLine();
+            writer.WriteLine("            public static void Reload()");
+            writer.WriteLine("            {");
+            foreach (var part in parts)
+                writer.WriteLine($"                {part.MemberName}.Reload();");
+            writer.WriteLine("            }");
+
+            writer.WriteLine();
+            writer.WriteLine("            public static void Unload()");
+            writer.WriteLine("            {");
+            foreach (var part in parts)
+                writer.WriteLine($"                {part.MemberName}.Dispose();");
+            writer.WriteLine("            }");
+            writer.WriteLine("        }");
+        }
+
+        writer.WriteLine();
+        writer.WriteLine("        public static void Load(Atlas atlas)");
+        writer.WriteLine("        {");
+        foreach (var sprite in sprites)
+        {
+            var spriteName = ToPascalCase(sprite.Name);
+            if (sprite.IsMultiSprite)
+                writer.WriteLine($"            {spriteName}.Load(atlas);");
+            else
+                writer.WriteLine($"            {spriteName}.Load(Names.{spriteName}, atlas);");
+        }
+        writer.WriteLine("        }");
+
+        writer.WriteLine();
+        writer.WriteLine("        public static void Reload()");
+        writer.WriteLine("        {");
+        foreach (var sprite in sprites)
+        {
+            var spriteName = ToPascalCase(sprite.Name);
+            writer.WriteLine($"            {spriteName}.Reload();");
+        }
+        writer.WriteLine("        }");
+
+        writer.WriteLine();
+        writer.WriteLine("        public static void Unload()");
+        writer.WriteLine("        {");
+        foreach (var sprite in sprites)
+        {
+            var spriteName = ToPascalCase(sprite.Name);
+            writer.WriteLine(sprite.IsMultiSprite
+                ? $"            {spriteName}.Unload();"
+                : $"            {spriteName}.Dispose();");
+        }
+        writer.WriteLine("        }");
+        writer.WriteLine("    }");
+    }
+
+    private static void EnsureSpriteLoaded(SpriteDocument sprite)
+    {
+        if (!sprite.Loaded)
+            sprite.Load();
+    }
+
+    private static IReadOnlyList<SpriteManifestPart> GetSpriteManifestParts(SpriteDocument sprite)
+    {
+        var result = new List<SpriteManifestPart>();
+        var usedMemberNames = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "Load",
+            "Reload",
+            "Unload",
+            ToCSharpIdentifier(sprite.Name),
+        };
+
+        foreach (var part in sprite.GetExportParts())
+        {
+            var baseName = part.Group == null
+                ? "Base"
+                : ToCSharpIdentifier(part.FileName);
+            var memberName = baseName;
+            for (var suffix = 2; !usedMemberNames.Add(memberName); suffix++)
+                memberName = $"{baseName}{suffix}";
+            result.Add(new SpriteManifestPart(part, memberName));
+        }
+
+        return result;
+    }
+
     private static void GenerateLua(EditorConfig config)
     {
         var path = Path.Combine(Project.Path, config.GenerateLua!);
@@ -480,6 +605,20 @@ public static class AssetManifest
 
             foreach (var doc in group.Docs.OrderBy(d => d.Name))
             {
+                if (doc is SpriteDocument sprite)
+                {
+                    EnsureSpriteLoaded(sprite);
+                    var parts = GetSpriteManifestParts(sprite);
+                    if (parts.Count > 0)
+                    {
+                        writer.WriteLine($"    {ToPascalCase(doc.Name)} = {{");
+                        foreach (var part in parts)
+                            writer.WriteLine($"        {part.MemberName} = \"{part.Export.AssetName}\",");
+                        writer.WriteLine("    },");
+                        continue;
+                    }
+                }
+
                 var constName = ToPascalCase(doc.Name);
                 writer.WriteLine($"    {constName} = \"{doc.Name}\",");
             }

@@ -33,7 +33,10 @@ internal static class SpriteGroupProcessor
         return false;
     }
 
-    internal static void ProcessLayer(SpriteGroup layer, List<LayerPathResult> output)
+    internal static void ProcessLayer(
+        SpriteGroup layer,
+        List<LayerPathResult> output,
+        bool excludeExportGroups = false)
     {
         if (!layer.Visible) return;
 
@@ -50,7 +53,9 @@ internal static class SpriteGroupProcessor
             // Child layer: capture output into results so parent subtract/clip can affect it
             if (child is SpriteGroup childLayer)
             {
-                ProcessLayer(childLayer, results);
+                if (excludeExportGroups && childLayer.IsSprite)
+                    continue;
+                ProcessLayer(childLayer, results, excludeExportGroups);
                 continue;
             }
 

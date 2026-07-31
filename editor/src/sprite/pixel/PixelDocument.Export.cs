@@ -23,7 +23,15 @@ public partial class PixelDocument
             rect.Rect.Position + new Vector2Int(padding, padding),
             new Vector2Int(w, h));
 
-        RasterizePixelLayersRecursive(Root, image, rasterRect, srcX, srcY, w, h);
+        RasterizePixelLayersRecursive(
+            rect.ExportGroup ?? Root,
+            image,
+            rasterRect,
+            srcX,
+            srcY,
+            w,
+            h,
+            excludeExportGroups: rect.IsBasePart || rect.ExportGroup != null);
 
         image.BleedColors(rasterRect);
         for (var p = padding - 1; p >= 0; p--)
@@ -59,15 +67,26 @@ public partial class PixelDocument
 
     private static void RasterizePixelLayersRecursive(
         SpriteNode parent, PixelData<Color32> image, RectInt rasterRect,
-        int srcX, int srcY, int w, int h)
+        int srcX, int srcY, int w, int h,
+        bool excludeExportGroups = false)
     {
         foreach (var child in parent.Children)
         {
             if (!child.Visible) continue;
 
-            if (child.IsExpandable)
+            if (child is SpriteGroup group)
             {
-                RasterizePixelLayersRecursive(child, image, rasterRect, srcX, srcY, w, h);
+                if (excludeExportGroups && group.IsSprite)
+                    continue;
+                RasterizePixelLayersRecursive(
+                    child,
+                    image,
+                    rasterRect,
+                    srcX,
+                    srcY,
+                    w,
+                    h,
+                    excludeExportGroups);
                 continue;
             }
 

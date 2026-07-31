@@ -18,7 +18,7 @@ public class Sprite : Asset, IImage
     float IImage.ImageWidth => Bounds.Width;
     float IImage.ImageHeight => Bounds.Height;
 
-    public const ushort Version = 13;
+    public const ushort Version = 14;
     public const int MaxFrames = 64;
 
     public RectInt Bounds { get; private set; }
