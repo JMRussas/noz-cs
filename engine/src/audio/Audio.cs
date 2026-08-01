@@ -33,9 +33,9 @@ public static class Audio
         return new(Driver.Play(sound.PlatformHandle, volume, pitch, loop));
     }
 
-    public static SoundHandle Play(Sound[] sounds, float volume = 1f, float pitch = 1f, bool loop = false)
+    public static SoundHandle Play(Sound[]? sounds, float volume = 1f, float pitch = 1f, bool loop = false)
     {
-        if (sounds.Length == 0) return default;
+        if (sounds == null || sounds.Length == 0) return default;
         var sound = sounds[Random.Shared.Next(sounds.Length)];
         return Play(sound, volume, pitch, loop);
     }
