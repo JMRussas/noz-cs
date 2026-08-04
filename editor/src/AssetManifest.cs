@@ -33,9 +33,11 @@ public static class AssetManifest
     private static string GetAssetTypeName(AssetType type)
         => Asset.GetDef(type)?.Name ?? type.ToString();
 
-    // Lower = loaded earlier. Vfx and Scene reference sprites at Load time, so they must load after.
+    // Lower = loaded earlier. Animations reference skeletons, while Vfx and Scene
+    // reference sprites at Load time, so dependencies must load first.
     private static int GetLoadPriority(AssetType type)
     {
+        if (type == AssetType.Skeleton) return -1;
         if (type == AssetType.Vfx) return 99;
         if (type == AssetType.Scene) return 100;
         return 0;
@@ -171,6 +173,11 @@ public static class AssetManifest
             .ThenBy(g => g.Key.ToString())
             .Select(g => new { Key = g.Key, Docs = g.Select(e => e.Doc).ToList() })
             .ToList();
+        var generatedSkeletons = documentsByType
+            .Where(g => g.Key == AssetType.Skeleton)
+            .SelectMany(g => g.Docs)
+            .Select(d => d.Name)
+            .ToHashSet(StringComparer.Ordinal);
 
         // We emit a single Atlas asset whenever there are exported sprites.
         var hasSprites = documentsByType.Any(g => g.Key == AssetType.Sprite);
@@ -256,7 +263,25 @@ public static class AssetManifest
             foreach (var doc in orderedDocs)
             {
                 var fieldName = ToPascalCase(doc.Name);
-                writer.WriteLine($"        public static readonly {runtimeType} {fieldName} = new();");
+                if (doc is AnimationDocument animation)
+                {
+                    if (!animation.Loaded)
+                        animation.Load();
+
+                    if (animation.Skeleton == null)
+                        throw new InvalidOperationException($"Animation '{animation.Name}' does not reference a skeleton.");
+                    if (!generatedSkeletons.Contains(animation.Skeleton.Name))
+                        throw new InvalidOperationException(
+                            $"Animation '{animation.Name}' references skeleton '{animation.Skeleton.Name}', " +
+                            "which is not included in the generated manifest.");
+
+                    var skeletonFieldName = ToPascalCase(animation.Skeleton.Name);
+                    writer.WriteLine($"        public static readonly {runtimeType} {fieldName} = new(Skeletons.{skeletonFieldName});");
+                }
+                else
+                {
+                    writer.WriteLine($"        public static readonly {runtimeType} {fieldName} = new();");
+                }
             }
 
             // Load method

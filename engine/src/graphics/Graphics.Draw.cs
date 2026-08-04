@@ -8,7 +8,6 @@ namespace NoZ;
 
 public static partial class Graphics
 {
-
     public static void Draw(in Rect rect, ushort order = 0, int bone = -1) =>
         Draw(rect.X, rect.Y, rect.Width, rect.Height, order: order, bone: bone);
 

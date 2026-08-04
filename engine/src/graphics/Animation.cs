@@ -56,6 +56,7 @@ public struct AnimationTransform
 
 public class Animation : Asset
 {
+    public Skeleton Skeleton { get; }
     public int BoneCount { get; private set; }
     public int TransformCount { get; private set; }
     public int FrameCount { get; private set; }
@@ -76,9 +77,20 @@ public class Animation : Asset
 
     private Animation(string name) : base(AssetType.Animation, name)
     {
+        // Animations loaded through the generic asset API do not have manifest
+        // context available to resolve their skeleton.
+        Skeleton = null!;
     }
 
-    public Animation() : base(AssetType.Animation) { }
+    private Animation(string name, Skeleton skeleton) : base(AssetType.Animation, name)
+    {
+        Skeleton = skeleton;
+    }
+
+    public Animation(Skeleton skeleton) : base(AssetType.Animation)
+    {
+        Skeleton = skeleton ?? throw new ArgumentNullException(nameof(skeleton));
+    }
 
     internal static void RegisterDef()
     {
@@ -159,7 +171,7 @@ public class Animation : Asset
         AnimationTransform[] transforms,
         AnimationFlags flags)
     {
-        var animation = new Animation(name)
+        var animation = new Animation(name, skeleton)
         {
             BoneCount = skeleton.BoneCount,
             FrameCount = frameCount,
@@ -199,5 +211,24 @@ public class Animation : Asset
     public ref AnimationFrame GetFrame(int frameIndex)
     {
         return ref Frames[Math.Clamp(frameIndex, 0, FrameCount)];
+    }
+    
+    public void Sample(float time, Span<AnimationTransform> pose)
+    {
+        var frameFloat = time * FrameRate;
+        var frameIndex = (int)frameFloat;
+        var frameFraction = frameFloat - frameIndex;
+
+        ref var frame = ref GetFrame(frameIndex);
+
+        for (var boneIndex = 0; boneIndex < BoneCount; boneIndex++)
+        {
+            var skeletonBoneIndex = Bones[boneIndex].Index;
+            ref var transform0 = ref GetTransform(boneIndex, frame.Transform0);
+            ref var transform1 = ref GetTransform(boneIndex, frame.Transform1);
+
+            var t = frame.Fraction0 + (frame.Fraction1 - frame.Fraction0) * frameFraction;
+            pose[skeletonBoneIndex] = AnimationTransform.Lerp(transform0, transform1, t);
+        }        
     }
 }

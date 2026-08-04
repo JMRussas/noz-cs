@@ -381,7 +381,7 @@ public static unsafe partial class Graphics
         {
             Pass = (byte)_currentPass,
             GlobalsIndex = GetOrAddGlobals(currentProjection),
-            Shader = CurrentState.Shader?.Handle ?? nuint.Zero,
+            Shader = CurrentState.Shader?.Native ?? nuint.Zero,
             BlendMode = CurrentState.BlendMode,
             Viewport = CurrentState.Viewport,
             ScissorEnabled = CurrentState.ScissorEnabled,

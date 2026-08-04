@@ -56,13 +56,13 @@ public class Atlas : Asset
         for (int i = 0; i < LayerCount; i++)
             layerData[i] = reader.ReadBytes(layerSize);
 
-        if (Handle != nuint.Zero)
+        if (Native != nuint.Zero)
         {
-            Graphics.Driver.DestroyTexture(Handle);
-            Handle = nuint.Zero;
+            Graphics.Driver.DestroyTexture(Native);
+            Native = nuint.Zero;
         }
         if (LayerCount > 0 && Graphics.Driver != null)
-            Handle = Graphics.Driver.CreateTextureArray(Width, Height, layerData, Format, Filter, Name);
+            Native = Graphics.Driver.CreateTextureArray(Width, Height, layerData, Format, Filter, Name);
 
         _entries.Clear();
         var entryCount = reader.ReadUInt16();
@@ -136,22 +136,22 @@ public class Atlas : Asset
             Clamp = TextureClamp.Clamp,
         };
         if (Graphics.Driver != null)
-            atlas.Handle = Graphics.Driver.CreateTextureArray(width, height, [layerData], atlas.Format, atlas.Filter, name);
+            atlas.Native = Graphics.Driver.CreateTextureArray(width, height, [layerData], atlas.Format, atlas.Filter, name);
         return atlas;
     }
 
     public void UpdateLayer(int layer, ReadOnlySpan<byte> data)
     {
-        if (Handle == nuint.Zero) return;
-        Graphics.Driver.UpdateTextureLayer(Handle, layer, data);
+        if (Native == nuint.Zero) return;
+        Graphics.Driver.UpdateTextureLayer(Native, layer, data);
     }
 
     public override void Dispose()
     {
-        if (Handle != nuint.Zero)
+        if (Native != nuint.Zero)
         {
-            Graphics.Driver.DestroyTexture(Handle);
-            Handle = nuint.Zero;
+            Graphics.Driver.DestroyTexture(Native);
+            Native = nuint.Zero;
         }
         _entries.Clear();
         _frames = [];

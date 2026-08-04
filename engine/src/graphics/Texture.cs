@@ -26,7 +26,7 @@ public class Texture : Asset, ITexture
 
     float IImage.ImageWidth => Width;
     float IImage.ImageHeight => Height;
-    nuint ITexture.Handle => this.Handle;
+    nuint ITexture.Handle => this.Native;
 
     private Texture(string name, bool isArray) : base(AssetType.Texture, name)
     {
@@ -38,7 +38,7 @@ public class Texture : Asset, ITexture
         Width = width;
         Height = height;
         Format = format;
-        Handle = handle;
+        Native = handle;
     }
 
     public Texture() : base(AssetType.Texture) { }
@@ -118,9 +118,9 @@ public class Texture : Asset, ITexture
 
     public void Upload()
     {
-        if (Handle != nuint.Zero)
-            Graphics.Driver.DestroyTexture(Handle);
-        Handle = Graphics.Driver.CreateTexture(Width, Height, Data, Format, Filter, name: Name);
+        if (Native != nuint.Zero)
+            Graphics.Driver.DestroyTexture(Native);
+        Native = Graphics.Driver.CreateTexture(Width, Height, Data, Format, Filter, name: Name);
     }
 
     public static Texture? CreateArray(string name, int width, int height, byte[][] layerData,
@@ -138,7 +138,7 @@ public class Texture : Asset, ITexture
             Format = format,
             Filter = filter,
             Clamp = TextureClamp.Clamp,
-            Handle = handle
+            Native = handle
         };
 
         texture.Register();
@@ -147,30 +147,30 @@ public class Texture : Asset, ITexture
 
     public void Update(ReadOnlySpan<byte> data)
     {
-        if (Handle == nuint.Zero)
+        if (Native == nuint.Zero)
             return;
-        Graphics.Driver.UpdateTexture(Handle, new Vector2Int(Width, Height), data);
+        Graphics.Driver.UpdateTexture(Native, new Vector2Int(Width, Height), data);
     }
 
     public void Update(ReadOnlySpan<byte> data, in RectInt region, int srcWidth = -1)
     {
-        if (Handle == nuint.Zero)
+        if (Native == nuint.Zero)
             return;
-        Graphics.Driver.UpdateTextureRegion(Handle, region, data, srcWidth);
+        Graphics.Driver.UpdateTextureRegion(Native, region, data, srcWidth);
     }
 
     public void Update(in RectInt region)
     {
-        if (Handle == nuint.Zero)
+        if (Native == nuint.Zero)
             return;
-        Graphics.Driver.UpdateTextureRegion(Handle, region, Data, Width);
+        Graphics.Driver.UpdateTextureRegion(Native, region, Data, Width);
     }
 
     public void UpdateLayer(int layer, ReadOnlySpan<byte> data)
     {
-        if (Handle == nuint.Zero)
+        if (Native == nuint.Zero)
             return;
-        Graphics.Driver.UpdateTextureLayer(Handle, layer, data);
+        Graphics.Driver.UpdateTextureLayer(Native, layer, data);
     }
 
     internal static void RegisterDef()
@@ -202,10 +202,10 @@ public class Texture : Asset, ITexture
 
         Data.Dispose();
 
-        if (Handle != nuint.Zero)
+        if (Native != nuint.Zero)
         {
-            Graphics.Driver.DestroyTexture(Handle);
-            Handle = nuint.Zero;
+            Graphics.Driver.DestroyTexture(Native);
+            Native = nuint.Zero;
         }
 
         base.Dispose();

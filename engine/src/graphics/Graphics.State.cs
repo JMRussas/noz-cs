@@ -211,7 +211,7 @@ public static unsafe partial class Graphics
     public static void SetTexture(Atlas? atlas, int slot = 0)
     {
         Debug.Assert(slot is >= 0 and < MaxTextures);
-        var handle = atlas?.Handle ?? nuint.Zero;
+        var handle = atlas?.Native ?? nuint.Zero;
         if (CurrentState.Textures[slot] == handle) return;
         CurrentState.Textures[slot] = handle;
         _batchStateDirty = true;
@@ -249,46 +249,6 @@ public static unsafe partial class Graphics
     {
         CurrentState.BlendMode = blendMode;
         _batchStateDirty = true;
-    }
-
-    public static int CurrentBoneIndex => CurrentState.BoneIndex;
-
-    public static void SetBones(Animator animator) =>
-        SetBones(animator.Skeleton, animator.BoneTransforms);
-
-    public static void SetBones(Skeleton skeleton, ReadOnlySpan<Matrix3x2> transforms) =>
-        SetBones(skeleton.BindPoses.AsReadonlySpan(), transforms);
-
-    public static void SetBones(ReadOnlySpan<Matrix3x2> skeleton, ReadOnlySpan<Matrix3x2> transforms)
-    {
-        Debug.Assert(skeleton.Length <= Skeleton.MaxBones);
-        Debug.Assert(transforms.Length == skeleton.Length);
-
-        // BoneIndex is flat index: row * 64, so vertex bone index + BoneIndex = flat index
-        CurrentState.BoneIndex = (ushort)(_boneRow * Skeleton.MaxBones);
-
-        // Write transforms to the current row in _boneData
-        // Each bone is 2 texels (8 floats): [M11,M12,M31,0], [M21,M22,M32,0]
-        var rowOffset = _boneRow * BoneTextureWidth * 4;
-        ref readonly var viewTransform = ref CurrentState.Transform;
-        for (var i = 0; i < transforms.Length; i++)
-        {
-            ref readonly var mm = ref transforms[i];
-            var m = skeleton[i] * mm * viewTransform;
-            var texelOffset = rowOffset + i * 8;
-            // Texel 0: M11, M12, M31, 0
-            _boneData[texelOffset + 0] = m.M11;
-            _boneData[texelOffset + 1] = m.M12;
-            _boneData[texelOffset + 2] = m.M31;
-            _boneData[texelOffset + 3] = 0;
-            // Texel 1: M21, M22, M32, 0
-            _boneData[texelOffset + 4] = m.M21;
-            _boneData[texelOffset + 5] = m.M22;
-            _boneData[texelOffset + 6] = m.M32;
-            _boneData[texelOffset + 7] = 0;
-        }
-
-        _boneRow++;
     }
 
     public static void SetScissor(int x, int y, int width, int height) =>

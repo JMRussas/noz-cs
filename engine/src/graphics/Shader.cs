@@ -68,7 +68,7 @@ public class Shader : Asset
         Source = source;
         Bindings = bindings;
         VertexFormatHash = vertexFormatHash;
-        Handle = Graphics.Driver.CreateShader(Name, source, source, bindings);
+        Native = Graphics.Driver.CreateShader(Name, source, source, bindings);
     }
 
     private static Asset? Load(Stream stream, string name)
@@ -81,10 +81,10 @@ public class Shader : Asset
 
     public override void Dispose()
     {
-        if (Handle != nuint.Zero)
+        if (Native != nuint.Zero)
         {
-            Graphics.Driver.DestroyShader(Handle);
-            Handle = nuint.Zero;
+            Graphics.Driver.DestroyShader(Native);
+            Native = nuint.Zero;
         }
 
         base.Dispose();

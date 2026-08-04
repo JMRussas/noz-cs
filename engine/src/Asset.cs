@@ -3,30 +3,39 @@
 //
 
 using System.Diagnostics;
-using System.Reflection;
 
 namespace NoZ;
 
+public struct AssetHandle<T> where T : Asset
+{
+    public int Index;
+    public static implicit operator T(AssetHandle<T> handle) => Asset.Get<T>(handle.Index);
+    public static implicit operator AssetHandle<T>(T asset) => new() { 
+        Index = asset.Index
+        };
+    public readonly bool HasValue() => Index > 0;
+}
+
 public class Asset : IDisposable {
     internal AssetDef Def { get; }
-    protected internal nuint Handle { get; protected set; }
+    protected internal nuint Native { get; protected set; }
     public string Name { get; private set; }
     public StringId Id { get; private set; }
+    public int Index { get; private set; }
     private static readonly Dictionary<AssetType, AssetDef> Defs = new();
     private static readonly Dictionary<(AssetType, string), Asset> _registry = new();
+    private static readonly List<Asset> _all = new(128) { null! };
 
     protected internal Asset(AssetType type, string name)
     {
         Id = StringId.Get(name);
         Name = name;
-        Def = GetDef(type) ?? throw new InvalidOperationException($"No AssetDef registered for type {type}");
+        Def = GetDef(type) ?? throw new InvalidOperationException($"No AssetDef registered for type {type}");                
+        Index = _all.Count;
+        _all.Add(this);
     }
 
-    protected internal Asset(AssetType type)
-    {
-        Name = string.Empty;
-        Def = GetDef(type) ?? throw new InvalidOperationException($"No AssetDef registered for type {type}");
-    }
+    protected internal Asset(AssetType type) : this(type, string.Empty) { }
 
     protected virtual void Load(BinaryReader reader) { }
 
@@ -123,7 +132,7 @@ public class Asset : IDisposable {
     public static T? Get<T>(AssetType type, nuint handle) where T : Asset
     {
         foreach (var asset in _registry.Values)
-            if (asset.Def.Type == type && asset.Handle == handle)
+            if (asset.Def.Type == type && asset.Native == handle)
                 return asset as T;
 
         return null;
@@ -274,6 +283,8 @@ public class Asset : IDisposable {
     public virtual void Dispose()
     {
     }
+
+    public static T Get<T>(int index) where T : Asset => (T)_all[index];
 }
 
 public static class AssetExtensions
