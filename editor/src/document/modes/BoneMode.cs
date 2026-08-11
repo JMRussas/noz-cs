@@ -273,7 +273,7 @@ internal partial class BoneMode : EditorMode<SkeletonEditor>
         if (!_isRenaming) return;
 
         var bone = Editor.Document.Bones[_renameBoneIndex];
-        var worldPos = bone.NamePosition;
+        var worldPos = (bone.HeadWorld + bone.TailWorld) * 0.5f + Editor.Document.Position;
         var screenPos = Workspace.Camera.WorldToScreen(worldPos);
         var uiPos = UI.ScreenToUI(screenPos);
 

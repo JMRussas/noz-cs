@@ -250,11 +250,6 @@ internal partial class SkeletonEditor : DocumentEditor
         Document.IncrementVersion();
     }
 
-    public override void UpdateUI()
-    {
-        Mode?.DrawUI();
-    }
-
     public override void UpdateOverlayUI()
     {
         using (FloatingToolbar.Begin())
@@ -267,6 +262,10 @@ internal partial class SkeletonEditor : DocumentEditor
             if (FloatingToolbar.Button(ElementId.PreviewButton, EditorAssets.Sprites.IconPreview, isSelected: _showPreview))
                 _showPreview = !_showPreview;
         }
+
+        // Mode UI uses screen-space positions, so draw it at the root overlay level
+        // instead of relative to the scene viewport's layout origin.
+        Mode?.DrawUI();
     }
 
     private bool IsBoneSelected(int boneIndex) => Document.Bones[boneIndex].IsSelected;

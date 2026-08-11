@@ -109,6 +109,7 @@ public partial class VectorSpriteEditor : SpriteEditor
             new Command("Export to PNG",        ExportToPng,                [new KeyBinding(InputCode.KeyE, ctrl:true, shift:true)]),
             new Command("Toggle Rasterization Preview", TogglePreviewRasterize, [InputCode.KeyF6]),
             new Command("Frame Selection",      FrameSelection,             [new KeyBinding(InputCode.KeyF)]),
+            new Command("Group",                GroupSelected,              [InputCode.KeyG]),
         ];
 
         SetMode(new TransformMode());
@@ -222,8 +223,8 @@ public partial class VectorSpriteEditor : SpriteEditor
                 enabled: () => hasPath && vMode),
 
             PopupMenuItem.Separator(),
-            PopupMenuItem.Item("Group", GroupSelected,
-                enabled: () => hasPath && vMode),
+            PopupMenuItem.Item("Group", GroupSelected, InputCode.KeyG,
+                enabled: () => hasSelection && vMode),
 
             PopupMenuItem.Separator(),
             PopupMenuItem.Submenu("Boolean", showIcons: false),
@@ -240,30 +241,45 @@ public partial class VectorSpriteEditor : SpriteEditor
 
     private void GroupSelected()
     {
-        if (_selectedPaths.Count == 0) return;
+        if (CurrentMode != SpriteEditMode.Transform) return;
+
+        // A selected node may be nested several groups deep. Group its top-level
+        // ancestor instead so all members have ActiveRoot as their common parent
+        // and existing group hierarchies remain intact.
+        var selectedNodes = HasLayerSelection
+            ? _selectedLayers.Cast<SpriteNode>()
+            : _selectedPaths.Cast<SpriteNode>();
+        var topLevelNodes = new HashSet<SpriteNode>();
+        foreach (var selected in selectedNodes)
+        {
+            var node = selected;
+            while (node.Parent != null && node.Parent != ActiveRoot)
+                node = node.Parent;
+
+            if (node.Parent == ActiveRoot)
+                topLevelNodes.Add(node);
+        }
+
+        // Use tree order rather than selection order so the grouped content keeps
+        // the same stacking order it had before grouping.
+        var members = ActiveRoot.Children.Where(topLevelNodes.Contains).ToList();
+        if (members.Count == 0) return;
 
         Undo.Record(Document);
 
-        var layer = new SpriteGroup { Name = "Group" };
+        var group = new SpriteGroup { Name = "Group" };
 
-        // Insert the new layer at the position of the first selected path
-        var firstPath = _selectedPaths[0];
-        var parent = firstPath.Parent ?? Document.Root;
-        var insertIndex = parent.Children.IndexOf(firstPath);
-        if (insertIndex < 0) insertIndex = 0;
-        parent.Insert(insertIndex, layer);
+        var insertIndex = ActiveRoot.Children.IndexOf(members[0]);
+        ActiveRoot.Insert(insertIndex, group);
 
-        // Move all selected paths into the new layer
-        foreach (var path in _selectedPaths)
-            path.RemoveFromParent();
-        foreach (var path in _selectedPaths)
-            layer.Add(path);
+        foreach (var member in members)
+            member.RemoveFromParent();
+        foreach (var member in members)
+            group.Add(member);
 
-        // Select the new layer
         Document.Root.ClearSelection();
-        Document.Root.ClearSelection();
-        layer.IsSelected = true;
-        layer.Expanded = true;
+        group.IsSelected = true;
+        group.Expanded = true;
         RebuildSelectedPaths();
         MarkDirty();
     }

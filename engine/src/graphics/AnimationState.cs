@@ -41,13 +41,13 @@ public struct AnimationState
         {
             var blendAnimation = (Animation)_blendAnimation;
             _blendTime += dt;
+            _blendElapsed += dt;
             if (blendAnimation.IsLooping)
                 _blendTime %= blendAnimation.Duration;
             else
                 _blendTime = MathF.Min(_blendTime, blendAnimation.Duration);
 
-            var blendElapsed = _blendTime;
-            if (blendElapsed >= _blendDuration)
+            if (_blendElapsed >= _blendDuration)
                 _blendAnimation = default;
         }
     }
