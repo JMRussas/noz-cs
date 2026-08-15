@@ -196,6 +196,34 @@ public static partial class EditorApplication
         return true;
     }
 
+    // Headless equivalent of LoadProject for CLI asset builds. Mirrors the same
+    // ordering but skips everything that needs a window, GPU or user settings.
+    // Callers are responsible for Project.Shutdown.
+    public static bool LoadProjectHeadless(string projectPath, string editorPath)
+    {
+        EditorPath = editorPath;
+        Application.RegisterAssetTypes();
+
+        Config = EditorConfig.Load(Path.Combine(projectPath, "editor.cfg"))!;
+        if (Config == null)
+        {
+            Log.Warning("editor.cfg not found");
+            return false;
+        }
+
+        CollectionManager.Init(Config);
+        Project.Init(projectPath, Config);
+        PaletteManager.Init();
+        Project.LoadAll();
+        PaletteManager.DiscoverPalettes();
+        AtlasManager.Init();
+        Project.InitExports();
+        AssetManifest.Generate(force: true);
+        Project.PostLoad();
+
+        return true;
+    }
+
     public static void Shutdown()
     {
         SaveConfig();

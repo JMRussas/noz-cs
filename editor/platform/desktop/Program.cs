@@ -86,8 +86,12 @@ public static class Program
             }
         }
 
-        Project.Init(projectPath, config);
-        Project.InitExports();
+        // Use the headless project load so a CLI import matches the GUI: palettes and
+        // collections initialized, documents loaded, atlases packed, assets exported and
+        // the generated asset manifest (config.GenerateCs) written.
+        if (!EditorApplication.LoadProjectHeadless(projectPath, editorPath))
+            return;
+
         Project.Shutdown();
     }
 

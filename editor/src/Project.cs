@@ -56,6 +56,11 @@ public static class Project
 
         Directory.CreateDirectory(_outputPath);
 
+        // Document defs construct engine assets (Atlas), so the engine asset types
+        // must be registered first. The GUI path gets this via Application.Init, but
+        // the CLI import path does not. Idempotent.
+        Application.RegisterAssetTypes();
+
         ShaderDocument.RegisterDef();
         SoundDocument.RegisterDef();
         SpriteDocument.RegisterDef();
